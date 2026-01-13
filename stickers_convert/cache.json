@@ -1,0 +1,157 @@
+{
+  "converted": {
+    "animasyon": {
+      "video1.mp4": {
+        "hash": "fb387e00ea44a98b7227bc70d3dcb884",
+        "output": "sticker_01.webp",
+        "size_kb": 211.615234375,
+        "animated": true
+      },
+      "video2.gif": {
+        "hash": "b462a0b996be0398a6691c585dda14df",
+        "output": "sticker_02.webp",
+        "size_kb": 141.41015625,
+        "animated": true
+      },
+      "video3.gif": {
+        "hash": "cb9ebf45501b41ae3a000ddaea1b8933",
+        "output": "sticker_03.webp",
+        "size_kb": 129.12890625,
+        "animated": true
+      },
+      "video4.gif": {
+        "hash": "93ce1f0abb907fb8516acef2572e3c99",
+        "output": "sticker_04.webp",
+        "size_kb": 129.990234375,
+        "animated": true
+      }
+    },
+    "recep_ivedik": {
+      "video1.mp4": {
+        "hash": "f45ac8831b4e7b64deab15d7693a389d",
+        "output": "sticker_01.webp",
+        "size_kb": 335.4609375,
+        "animated": true
+      },
+      "video10.mp4": {
+        "hash": "e60351b1d7ee0edbfbd99a74694b20c9",
+        "output": "sticker_02.webp",
+        "size_kb": 289.59765625,
+        "animated": true
+      },
+      "video11.mp4": {
+        "hash": "8a34dcacaa6b8a5df6a9425f77a424b0",
+        "output": "sticker_03.webp",
+        "size_kb": 428.03515625,
+        "animated": true
+      },
+      "video12.mp4": {
+        "hash": "8e8666a5754623adcc1a949b7371e465",
+        "output": "sticker_04.webp",
+        "size_kb": 484.458984375,
+        "animated": true
+      },
+      "video13.mp4": {
+        "hash": "29e78e65795629543ffaeab1e83ffb3e",
+        "output": "sticker_05.webp",
+        "size_kb": 386.943359375,
+        "animated": true
+      },
+      "video14.mp4": {
+        "hash": "2cc7d168922827aabc98033fb87a4192",
+        "output": "sticker_06.webp",
+        "size_kb": 330.326171875,
+        "animated": true
+      },
+      "video15.mp4": {
+        "hash": "a2f8f8d0b0e211512e54d53269ac615e",
+        "output": "sticker_07.webp",
+        "size_kb": 475.126953125,
+        "animated": true
+      },
+      "video2.mp4": {
+        "hash": "1da6a50369017183ee81df2d354498c1",
+        "output": "sticker_08.webp",
+        "size_kb": 232.064453125,
+        "animated": true
+      },
+      "video3.mp4": {
+        "hash": "a4d1e9ae52a4e1636fd78f3744f15156",
+        "output": "sticker_09.webp",
+        "size_kb": 376.189453125,
+        "animated": true
+      },
+      "video4.mp4": {
+        "hash": "29ca457e3116a4d180034669f0c82609",
+        "output": "sticker_10.webp",
+        "size_kb": 134.8203125,
+        "animated": true
+      },
+      "video5.mp4": {
+        "hash": "616ff39248e264ea622d447dbe34e8a0",
+        "output": "sticker_11.webp",
+        "size_kb": 378.599609375,
+        "animated": true
+      },
+      "video6.mp4": {
+        "hash": "038cd6ca55370e0423ee8fd9328d8420",
+        "output": "sticker_12.webp",
+        "size_kb": 400.0,
+        "animated": true
+      },
+      "video7.mp4": {
+        "hash": "b3be4b0417b3276b5329007deeec8740",
+        "output": "sticker_13.webp",
+        "size_kb": 374.9375,
+        "animated": true
+      },
+      "video8.mp4": {
+        "hash": "7f0d93e6b3441194ff7fcce3ebe8706b",
+        "output": "sticker_14.webp",
+        "size_kb": 361.185546875,
+        "animated": true
+      },
+      "video9.mp4": {
+        "hash": "8c8c254519e63cb924d43ac73d8b4485",
+        "output": "sticker_15.webp",
+        "size_kb": 309.767578125,
+        "animated": true
+      }
+    }
+  },
+  "uploaded": {
+    "animasyon": {
+      "video1.mp4": "https://storage.googleapis.com/sticky-dcd20.firebasestorage.app/stickers/animasyon/sticker_01.webp",
+      "video2.gif": "https://storage.googleapis.com/sticky-dcd20.firebasestorage.app/stickers/animasyon/sticker_02.webp",
+      "video3.gif": "https://storage.googleapis.com/sticky-dcd20.firebasestorage.app/stickers/animasyon/sticker_03.webp",
+      "video4.gif": "https://storage.googleapis.com/sticky-dcd20.firebasestorage.app/stickers/animasyon/sticker_04.webp"
+    },
+    "recep_ivedik": {
+      "video1.mp4": "https://storage.googleapis.com/sticky-dcd20.firebasestorage.app/stickers/recep_ivedik/sticker_01.webp",
+      "video10.mp4": "https://storage.googleapis.com/sticky-dcd20.firebasestorage.app/stickers/recep_ivedik/sticker_02.webp",
+      "video11.mp4": "https://storage.googleapis.com/sticky-dcd20.firebasestorage.app/stickers/recep_ivedik/sticker_03.webp",
+      "video12.mp4": "https://storage.googleapis.com/sticky-dcd20.firebasestorage.app/stickers/recep_ivedik/sticker_04.webp",
+      "video13.mp4": "https://storage.googleapis.com/sticky-dcd20.firebasestorage.app/stickers/recep_ivedik/sticker_05.webp",
+      "video14.mp4": "https://storage.googleapis.com/sticky-dcd20.firebasestorage.app/stickers/recep_ivedik/sticker_06.webp",
+      "video15.mp4": "https://storage.googleapis.com/sticky-dcd20.firebasestorage.app/stickers/recep_ivedik/sticker_07.webp",
+      "video2.mp4": "https://storage.googleapis.com/sticky-dcd20.firebasestorage.app/stickers/recep_ivedik/sticker_08.webp",
+      "video3.mp4": "https://storage.googleapis.com/sticky-dcd20.firebasestorage.app/stickers/recep_ivedik/sticker_09.webp",
+      "video4.mp4": "https://storage.googleapis.com/sticky-dcd20.firebasestorage.app/stickers/recep_ivedik/sticker_10.webp",
+      "video5.mp4": "https://storage.googleapis.com/sticky-dcd20.firebasestorage.app/stickers/recep_ivedik/sticker_11.webp",
+      "video6.mp4": "https://storage.googleapis.com/sticky-dcd20.firebasestorage.app/stickers/recep_ivedik/sticker_12.webp",
+      "video7.mp4": "https://storage.googleapis.com/sticky-dcd20.firebasestorage.app/stickers/recep_ivedik/sticker_13.webp",
+      "video8.mp4": "https://storage.googleapis.com/sticky-dcd20.firebasestorage.app/stickers/recep_ivedik/sticker_14.webp",
+      "video9.mp4": "https://storage.googleapis.com/sticky-dcd20.firebasestorage.app/stickers/recep_ivedik/sticker_15.webp"
+    }
+  },
+  "tray": {
+    "animasyon_tray": {
+      "url": "https://storage.googleapis.com/sticky-dcd20.firebasestorage.app/stickers/animasyon/tray.webp",
+      "hash": "a0a50f6b9f665e47f44b3097bfbacab0"
+    },
+    "recep_ivedik_tray": {
+      "url": "https://storage.googleapis.com/sticky-dcd20.firebasestorage.app/stickers/recep_ivedik/tray.webp",
+      "hash": "fb16b44ce03ef68731aef3fdea3e46a7"
+    }
+  }
+}

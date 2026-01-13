@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "643314832062",
+    "project_id": "sticky-dcd20",
+    "storage_bucket": "sticky-dcd20.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:643314832062:android:48a0146becd797934d04ef",
+        "android_client_info": {
+          "package_name": "com.sticly"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBQYpPuPxhBJcPFLCMCTE3F2PqlzeFWkzM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

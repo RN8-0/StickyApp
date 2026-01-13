@@ -1,40 +1,100 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical">
+
+    <!-- Toolbar with App name and logo -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:background="#25D366"
-        android:padding="16dp">
-        <TextView android:id="@+id/name"
+        android:background="@color/primary"
+        android:paddingBottom="12dp">
+
+        <!-- Top bar: Back button + App name + Logo -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingHorizontal="4dp">
+
+            <ImageButton
+                android:id="@+id/btnBack"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:background="?selectableItemBackgroundBorderless"
+                android:src="@drawable/ic_back"
+                android:contentDescription="Back" />
+
+            <View
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:layout_marginStart="4dp"
+                android:background="@drawable/ic_logo_white" />
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="8dp"
+                android:text="@string/app_name"
+                android:textColor="@color/white"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+            <ImageView
+                android:id="@+id/installedIcon"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:layout_marginEnd="12dp"
+                android:src="@drawable/ic_check"
+                android:visibility="gone" />
+
+        </LinearLayout>
+
+        <!-- Category name (pack name) -->
+        <TextView
+            android:id="@+id/name"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:textSize="24sp"
-            android:textStyle="bold"
-            android:textColor="#FFFFFF" />
-        <TextView android:id="@+id/pub"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:textSize="16sp"
-            android:textColor="#FFFFFF"
-            android:layout_marginTop="8dp" />
+            android:paddingHorizontal="16dp"
+            android:textSize="15sp"
+            android:textColor="#E0FFFFFF" />
+
     </LinearLayout>
+
+    <!-- Stickers Grid -->
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/rv"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
-        android:padding="8dp" />
-    <Button android:id="@+id/btn"
+        android:padding="8dp"
+        android:clipToPadding="false" />
+
+    <!-- Button container -->
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Add to WhatsApp"
-        android:backgroundTint="#25D366"
-        android:textColor="#FFFFFF"
-        android:layout_margin="16dp"
+        android:orientation="vertical"
         android:padding="16dp"
-        android:textSize="18sp" />
+        android:background="?android:colorBackground">
+
+        <!-- Single Action Button -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnAction"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:text="@string/add_to_whatsapp"
+            android:textColor="#FFFFFF"
+            android:textSize="16sp"
+            android:textAllCaps="false"
+            app:backgroundTint="@color/primary"
+            app:cornerRadius="28dp" />
+
+    </LinearLayout>
+
 </LinearLayout>

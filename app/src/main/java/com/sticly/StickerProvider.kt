@@ -5,6 +5,8 @@ import android.content.res.AssetFileDescriptor
 import android.database.Cursor
 import android.database.MatrixCursor
 import android.net.Uri
+import android.os.ParcelFileDescriptor
+import java.io.File
 
 class StickerProvider : ContentProvider() {
 
@@ -52,10 +54,15 @@ class StickerProvider : ContentProvider() {
         private const val STICKERS_CODE = 3
         private const val STICKERS_ASSET = "stickers_asset"
         private const val STICKERS_ASSET_CODE = 4
+
+        private const val CACHE_DIR = "sticker_cache"
     }
 
     private lateinit var authority: String
     private val uriMatcher = UriMatcher(UriMatcher.NO_MATCH)
+
+    // Cache for Firebase packs
+    private var cachedPacks: List<Pack>? = null
 
     override fun onCreate(): Boolean {
         authority = "${context!!.packageName}.stickers"
@@ -66,6 +73,64 @@ class StickerProvider : ContentProvider() {
         uriMatcher.addURI(authority, "$STICKERS_ASSET/*/*", STICKERS_ASSET_CODE)
 
         return true
+    }
+
+    private fun getAllPacks(): List<Pack> {
+        // Önce lokal paketleri yükle
+        val localPacks = Loader.load(context!!)
+
+        // Cache'deki Firebase paketlerini yükle
+        val firebasePacks = getFirebasePacksFromCache()
+
+        // Birleştir (aynı ID varsa Firebase versiyonu öncelikli)
+        val allPacks = mutableMapOf<String, Pack>()
+        localPacks.forEach { allPacks[it.id] = it }
+        firebasePacks.forEach { allPacks[it.id] = it }
+
+        return allPacks.values.toList()
+    }
+
+    private fun getFirebasePacksFromCache(): List<Pack> {
+        val cacheDir = File(context!!.cacheDir, CACHE_DIR)
+        if (!cacheDir.exists()) return emptyList()
+
+        val packs = mutableListOf<Pack>()
+
+        cacheDir.listFiles()?.filter { it.isDirectory }?.forEach { packDir ->
+            val packId = packDir.name
+            val stickerFiles = packDir.listFiles()?.filter {
+                it.name.endsWith(".webp") && it.name != "tray.webp"
+            }?.sortedBy { it.name } ?: emptyList()
+
+            if (stickerFiles.size >= 3) {
+                val stickers = stickerFiles.map { file ->
+                    Sticker(
+                        file = file.name,
+                        emojis = listOf("😀"),
+                        url = ""
+                    )
+                }
+
+                val trayFile = File(packDir, "tray.webp")
+                val trayName = if (trayFile.exists()) "tray.webp" else stickerFiles.firstOrNull()?.name ?: ""
+
+                packs.add(Pack(
+                    id = packId,
+                    name = packId.replace("_", " ").replaceFirstChar { it.uppercase() },
+                    pub = "Sticly",
+                    tray = trayName,
+                    stickers = stickers,
+                    trayUrl = "",
+                    isPremium = false
+                ))
+            }
+        }
+
+        return packs
+    }
+
+    private fun getPack(identifier: String): Pack? {
+        return getAllPacks().find { it.id == identifier }
     }
 
     override fun query(uri: Uri, projection: Array<String>?, selection: String?,
@@ -80,7 +145,7 @@ class StickerProvider : ContentProvider() {
 
     private fun getAllStickerPacks(): Cursor {
         val cursor = MatrixCursor(METADATA_COLUMNS)
-        Loader.load(context!!).forEach { pack ->
+        getAllPacks().forEach { pack ->
             cursor.addRow(arrayOf(
                 pack.id,
                 pack.name,
@@ -94,7 +159,7 @@ class StickerProvider : ContentProvider() {
                 pack.license,
                 pack.version,
                 if (pack.avoidCache) 1 else 0,
-                0
+                1  // ANIMATED_STICKER_PACK = 1 (animasyonlu)
             ))
         }
         return cursor
@@ -102,7 +167,7 @@ class StickerProvider : ContentProvider() {
 
     private fun getSingleStickerPack(identifier: String): Cursor {
         val cursor = MatrixCursor(METADATA_COLUMNS)
-        Loader.get(context!!, identifier)?.let { pack ->
+        getPack(identifier)?.let { pack ->
             cursor.addRow(arrayOf(
                 pack.id,
                 pack.name,
@@ -116,7 +181,7 @@ class StickerProvider : ContentProvider() {
                 pack.license,
                 pack.version,
                 if (pack.avoidCache) 1 else 0,
-                0
+                1  // ANIMATED_STICKER_PACK = 1 (animasyonlu)
             ))
         }
         return cursor
@@ -124,10 +189,10 @@ class StickerProvider : ContentProvider() {
 
     private fun getStickersForPack(identifier: String): Cursor {
         val cursor = MatrixCursor(STICKER_COLUMNS)
-        Loader.get(context!!, identifier)?.stickers?.forEach { sticker ->
+        getPack(identifier)?.stickers?.forEach { sticker ->
             cursor.addRow(arrayOf(
                 sticker.file,
-                sticker.emojis?.joinToString(",") ?: ""
+                sticker.emojis?.joinToString(",") ?: "😀"
             ))
         }
         return cursor
@@ -142,6 +207,14 @@ class StickerProvider : ContentProvider() {
         val identifier = pathSegments[1]
         val fileName = pathSegments[2]
 
+        // Önce cache klasöründe ara (Firebase stickerleri)
+        val cacheFile = File(context!!.cacheDir, "$CACHE_DIR/$identifier/$fileName")
+        if (cacheFile.exists()) {
+            val pfd = ParcelFileDescriptor.open(cacheFile, ParcelFileDescriptor.MODE_READ_ONLY)
+            return AssetFileDescriptor(pfd, 0, cacheFile.length())
+        }
+
+        // Cache'de yoksa assets klasöründe ara (lokal stickerleri)
         return try {
             context!!.assets.openFd("$identifier/$fileName")
         } catch (e: Exception) {

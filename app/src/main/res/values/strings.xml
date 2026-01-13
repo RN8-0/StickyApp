@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Sticky</string>
+    <string name="search_hint">Paket ara…</string>
+    <string name="theme">Tema</string>
+    <string name="faq">Sıkça Sorulan Sorular</string>
+    <string name="about">Hakkında</string>
+    <string name="theme_system">Sistem (Varsayılan)</string>
+    <string name="theme_light">Aydınlık</string>
+    <string name="theme_dark">Karanlık</string>
+    <string name="about_title">Sticky Hakkında</string>
+    <string name="about_message">Sticky v1.0\n\nWhatsApp için sticker paketleri uygulaması.\n\nGeliştirici: Sticky Team</string>
+    <string name="faq_title">Sıkça Sorulan Sorular</string>
+    <string name="faq_content">Sticker nasıl eklenir?\nBir paket seçin ve \"WhatsApp\'a Ekle\" butonuna tıklayın.\n\nSticker neden eklenmiyor?\nWhatsApp\'ın güncel olduğundan emin olun.\n\nKaç sticker ekleyebilirim?\nİstediğiniz kadar paket ekleyebilirsiniz.</string>
+    <string name="ok">Tamam</string>
+    <string name="cancel">İptal</string>
+
+    <!-- Drawer Menu -->
+    <string name="contact_us">Bize Ulaşın</string>
+    <string name="rate_us">Bizi Puanlayın</string>
+    <string name="premium">Premium</string>
+    <string name="suggest_sticker">Sticker Öner</string>
+    <string name="share_app">Paylaş</string>
+    <string name="privacy_policy">Gizlilik Politikası</string>
+    <string name="notification_settings">Bildirim Ayarları</string>
+
+    <!-- Contact Us -->
+    <string name="contact_title">Bize Ulaşın</string>
+    <string name="contact_subtitle">Sorularınız veya önerileriniz için bize yazın</string>
+    <string name="contact_name_hint">Adınız</string>
+    <string name="contact_email_hint">E-posta adresiniz</string>
+    <string name="contact_subject_hint">Konu</string>
+    <string name="contact_message_hint">Mesajınız</string>
+    <string name="send">Gönder</string>
+    <string name="sending">Gönderiliyor…</string>
+    <string name="message_sent">Mesajınız başarıyla gönderildi!</string>
+    <string name="message_error">Mesaj gönderilemedi. Lütfen tekrar deneyin.</string>
+    <string name="fill_all_fields">Lütfen tüm alanları doldurun.</string>
+    <string name="invalid_email">Geçerli bir e-posta adresi girin.</string>
+
+    <!-- Premium -->
+    <string name="premium_title">Premium Üyelik</string>
+    <string name="premium_description">Tek seferlik satın alım ile:\n\n• Reklamsız deneyim\n• Premium sticker paketleri\n• Öncelikli destek</string>
+    <string name="premium_price">₺49.99</string>
+    <string name="buy_premium">Satın Al</string>
+    <string name="premium_active">Premium Aktif</string>
+    <string name="premium_purchased">Premium satın alındı!</string>
+
+    <!-- Suggest Sticker -->
+    <string name="suggest_title">Sticker Öner</string>
+    <string name="suggest_hint">Hangi sticker paketini görmek istersiniz?</string>
+    <string name="suggestion_sent">Öneriniz için teşekkürler!</string>
+
+    <!-- Share -->
+    <string name="share_text">Sticky uygulamasını deneyin! WhatsApp için harika stickerlar: https://play.google.com/store/apps/details?id=com.sticly</string>
+
+    <!-- Privacy -->
+    <string name="privacy_title">Gizlilik Politikası</string>
+    <string name="privacy_content">Gizlilik Politikası\n\nBu uygulama, kullanıcı deneyimini iyileştirmek için bazı bilgileri toplayabilir.\n\nToplanan Veriler:\n• Cihaz bilgileri\n• Uygulama kullanım istatistikleri\n\nVerileriniz üçüncü taraflarla paylaşılmaz.\n\nSorularınız için: privacy@sticky.com</string>
+
+    <!-- Notifications -->
+    <string name="notifications_title">Bildirim Ayarları</string>
+    <string name="notification_new_packs">Yeni sticker paketleri</string>
+    <string name="notification_new_packs_desc">Yeni paket eklendiğinde bildirim al</string>
+    <string name="notifications_saved">Ayarlar kaydedildi</string>
+
+    <!-- Internet -->
+    <string name="no_internet_title">İnternet Bağlantısı Yok</string>
+    <string name="no_internet_message">Bu uygulama internet bağlantısı gerektirir. Lütfen bağlantınızı kontrol edin.</string>
+    <string name="retry">Tekrar Dene</string>
+    <string name="exit">Çıkış</string>
+
+    <!-- Sticker Pack -->
+    <string name="add_to_whatsapp">WhatsApp\'a Ekle</string>
+    <string name="remove_from_whatsapp">WhatsApp\'tan Kaldır</string>
+    <string name="confirm_remove">Kaldır</string>
+    <string name="pack_added">Paket WhatsApp\'a eklendi!</string>
+    <string name="pack_removed">Paket kaldırıldı</string>
+    <string name="installed">Yüklü</string>
+    <string name="unlock_premium">Premium\'u Aç</string>
+    <string name="premium_required_title">Premium Gerekli</string>
+    <string name="premium_required_message">Bu sticker paketine erişmek için Premium üyelik gereklidir.\n\nPremium ile:\n• Tüm sticker paketlerine erişim\n• Reklamsız deneyim\n• Öncelikli destek</string>
+</resources>
