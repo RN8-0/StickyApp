@@ -48,6 +48,7 @@ except ImportError:
 # Ayarlar
 SCRIPT_DIR = Path(__file__).parent
 STICKERS_DIR = SCRIPT_DIR / "stickers"
+PREMIUM_STICKERS_DIR = SCRIPT_DIR / "premium_stickers"
 OUTPUT_DIR = SCRIPT_DIR / "output"
 CACHE_FILE = SCRIPT_DIR / "cache.json"
 
@@ -442,15 +443,23 @@ def get_sticker_files(pack_dir: Path) -> list:
 
 
 def get_local_pack_ids() -> set:
-    """Lokaldeki paket ID'lerini al"""
-    if not STICKERS_DIR.exists():
-        return set()
-
+    """Lokaldeki paket ID'lerini al (hem normal hem premium)"""
     pack_ids = set()
-    for d in STICKERS_DIR.iterdir():
-        if d.is_dir():
-            pack_id = d.name.lower().replace(" ", "_").replace("-", "_")
-            pack_ids.add(pack_id)
+
+    # Normal paketler
+    if STICKERS_DIR.exists():
+        for d in STICKERS_DIR.iterdir():
+            if d.is_dir():
+                pack_id = d.name.lower().replace(" ", "_").replace("-", "_")
+                pack_ids.add(pack_id)
+
+    # Premium paketler
+    if PREMIUM_STICKERS_DIR.exists():
+        for d in PREMIUM_STICKERS_DIR.iterdir():
+            if d.is_dir():
+                pack_id = d.name.lower().replace(" ", "_").replace("-", "_")
+                pack_ids.add(pack_id)
+
     return pack_ids
 
 
@@ -511,12 +520,13 @@ def cleanup_deleted_packs(bucket, db, cache: dict, local_pack_ids: set):
     save_cache(cache)
 
 
-def process_pack(pack_dir: Path, bucket, db, cache: dict):
+def process_pack(pack_dir: Path, bucket, db, cache: dict, is_premium: bool = False):
     """Bir paket klasörünü işle"""
     pack_name = pack_dir.name
     pack_id = pack_name.lower().replace(" ", "_").replace("-", "_")
+    pack_type = "🌟 PREMIUM" if is_premium else "📦 NORMAL"
 
-    print(f"\n Paket: {pack_name}")
+    print(f"\n {pack_type} Paket: {pack_name}")
 
     # Sticker dosyalarını bul
     files = get_sticker_files(pack_dir)
@@ -697,7 +707,7 @@ def process_pack(pack_dir: Path, bucket, db, cache: dict):
         "tray_image_file": tray_name,
         "tray_url": tray_url,
         "stickers": stickers,
-        "is_premium": False,
+        "isPremium": is_premium,  # Premium klasöründen geliyorsa True
         "animated_sticker_pack": has_animated,
         "created_at": datetime.now().isoformat(),
         "sticker_count": len(stickers)
@@ -730,6 +740,7 @@ def main():
 
     OUTPUT_DIR.mkdir(exist_ok=True)
     STICKERS_DIR.mkdir(exist_ok=True)
+    PREMIUM_STICKERS_DIR.mkdir(exist_ok=True)
 
     # Lokaldeki paketleri bul
     local_pack_ids = get_local_pack_ids()
@@ -737,34 +748,61 @@ def main():
     # Silinen paketleri temizle
     cleanup_deleted_packs(bucket, db, cache, local_pack_ids)
 
-    # Paket klasörlerini bul
-    pack_dirs = [d for d in STICKERS_DIR.iterdir() if d.is_dir()]
+    # Normal ve premium paket klasörlerini bul
+    normal_pack_dirs = [d for d in STICKERS_DIR.iterdir() if d.is_dir()]
+    premium_pack_dirs = [d for d in PREMIUM_STICKERS_DIR.iterdir() if d.is_dir()]
 
-    if not pack_dirs:
-        print(f"\n Paket klasörü bulunamadı!")
+    total_packs = len(normal_pack_dirs) + len(premium_pack_dirs)
+
+    if total_packs == 0:
+        print(f"\n ❌ Paket klasörü bulunamadı!")
         print(f"\n   Klasör yapısı:")
-        print(f"   stickers/")
+        print(f"   stickers/              ← Normal paketler")
         print(f"   ├── kategori-adi/")
         print(f"   │   ├── tray.png   (opsiyonel - kapak resmi)")
         print(f"   │   ├── 01.mp4")
         print(f"   │   ├── 02.gif")
         print(f"   │   └── 03.png")
         print(f"   └── diger-kategori/")
+        print(f"\n   premium_stickers/      ← Premium paketler")
+        print(f"   ├── premium-kategori/")
+        print(f"   │   ├── tray.png")
+        print(f"   │   └── stickers...")
         sys.exit(1)
 
-    print(f"\n {len(pack_dirs)} paket bulundu")
+    print(f"\n 📦 {len(normal_pack_dirs)} normal paket bulundu")
+    print(f" 🌟 {len(premium_pack_dirs)} premium paket bulundu")
+    print(f" 📊 Toplam: {total_packs} paket")
 
     successful = 0
-    for pack_dir in sorted(pack_dirs):
-        result = process_pack(pack_dir, bucket, db, cache)
-        if result:
-            successful += 1
+
+    # Normal paketleri işle
+    if normal_pack_dirs:
+        print(f"\n{'='*60}")
+        print(f" NORMAL PAKETLER İŞLENİYOR")
+        print(f"{'='*60}")
+        for pack_dir in sorted(normal_pack_dirs):
+            result = process_pack(pack_dir, bucket, db, cache, is_premium=False)
+            if result:
+                successful += 1
+
+    # Premium paketleri işle
+    if premium_pack_dirs:
+        print(f"\n{'='*60}")
+        print(f" 🌟 PREMIUM PAKETLER İŞLENİYOR 🌟")
+        print(f"{'='*60}")
+        for pack_dir in sorted(premium_pack_dirs):
+            result = process_pack(pack_dir, bucket, db, cache, is_premium=True)
+            if result:
+                successful += 1
 
     save_cache(cache)
 
     print("\n" + "=" * 60)
-    print(f" TAMAMLANDI: {successful}/{len(pack_dirs)} paket")
-    print(f" Çıktı: {OUTPUT_DIR}")
+    print(f" ✅ TAMAMLANDI: {successful}/{total_packs} paket başarılı")
+    print(f" 📦 Normal: {len(normal_pack_dirs)} paket")
+    print(f" 🌟 Premium: {len(premium_pack_dirs)} paket")
+    print(f" 📁 Çıktı: {OUTPUT_DIR}")
     print("=" * 60)
 
 
