@@ -1,16 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Karanlık tema için çok koyu yeşil tonları -->
-    <color name="primary">#0D3D1F</color>
-    <color name="primary_dark">#082615</color>
-    <color name="accent">#0D3D1F</color>
+    <!-- Modern Dark Theme - Daha az koyu, daha canlı -->
+    <color name="primary">#25D366</color>
+    <color name="primary_dark">#1DA851</color>
+    <color name="accent">#34E87E</color>
     <color name="white">#FFFFFF</color>
-    <color name="search_bg">#1A1A1A</color>
-    <color name="text_primary">#E0E0E0</color>
-    <color name="text_secondary">#9E9E9E</color>
-    <color name="background">#0A0A0A</color>
-    <color name="surface">#121212</color>
-    <color name="remove_red">#CF6679</color>
-    <color name="premium_gold">#FFD700</color>
-    <color name="card_bg">#1A1A1A</color>
+    <color name="search_bg">#2A2F32</color>
+    <color name="text_primary">#E8EAED</color>
+    <color name="text_secondary">#9AA0A6</color>
+    <color name="background">#0B141A</color>
+    <color name="surface">#1F2C34</color>
+    <color name="remove_red">#F28B82</color>
+    <color name="premium_gold">#FDD663</color>
+    <color name="card_bg">#1F2C34</color>
+    <color name="chat_pattern_dark">#0D1418</color>
+    <color name="chat_pattern_light">#1A2329</color>
 </resources>

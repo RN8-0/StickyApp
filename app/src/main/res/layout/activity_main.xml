@@ -79,6 +79,7 @@
             android:id="@+id/rv"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
+            android:background="@drawable/chat_wallpaper_pattern"
             android:clipToPadding="false"
             android:padding="8dp" />
 
