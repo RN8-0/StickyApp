@@ -54,6 +54,14 @@ class DetailsActivity : AppCompatActivity() {
         setupUI(pack)
     }
 
+    override fun onResume() {
+        super.onResume()
+        // WhatsApp'tan geri döndüğümüzde buton durumunu güncelle
+        if (::btnAction.isInitialized) {
+            updateButton()
+        }
+    }
+
     private fun loadPackFromFirebase() {
         lifecycleScope.launch {
             try {
@@ -266,17 +274,31 @@ class DetailsActivity : AppCompatActivity() {
             return
         }
 
-        try {
-            val i = Intent().apply {
-                action = "com.whatsapp.intent.action.ENABLE_STICKER_PACK"
-                putExtra("sticker_pack_id", pack.id)
-                putExtra("sticker_pack_authority", "$packageName.stickers")
-                putExtra("sticker_pack_name", pack.name)
+        // Kaldırma onayı
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("Paketi Kaldır")
+            .setMessage("${pack.name} sticker paketini WhatsApp'tan kaldırmak istediğinizden emin misiniz?")
+            .setPositiveButton("Kaldır") { _, _ ->
+                // Lokal durumu güncelle
+                PreferencesHelper.removeInstalledPack(this, packId)
+                updateButton()
+                Toast.makeText(this, R.string.pack_removed, Toast.LENGTH_SHORT).show()
+
+                // WhatsApp'ı aç (kullanıcı manuel kaldırabilsin)
+                try {
+                    val i = Intent().apply {
+                        action = "com.whatsapp.intent.action.ENABLE_STICKER_PACK"
+                        putExtra("sticker_pack_id", pack.id)
+                        putExtra("sticker_pack_authority", "$packageName.stickers")
+                        putExtra("sticker_pack_name", pack.name)
+                    }
+                    startActivity(i)
+                } catch (e: Exception) {
+                    // Hata durumunda sessizce devam et
+                }
             }
-            startActivityForResult(i, REQUEST_REMOVE)
-        } catch (e: Exception) {
-            Toast.makeText(this, "WhatsApp yüklü değil", Toast.LENGTH_SHORT).show()
-        }
+            .setNegativeButton("İptal", null)
+            .show()
     }
 
     private fun downloadAndAddToWhatsApp(pack: Pack) {
@@ -321,30 +343,16 @@ class DetailsActivity : AppCompatActivity() {
         super.onActivityResult(req, res, data)
         btnAction.isEnabled = true
 
-        when (req) {
-            REQUEST_ADD -> {
-                if (res == Activity.RESULT_OK) {
-                    PreferencesHelper.addInstalledPack(this, packId)
-                    updateButton()
-                    Toast.makeText(this, R.string.pack_added, Toast.LENGTH_SHORT).show()
+        if (req == REQUEST_ADD) {
+            if (res == Activity.RESULT_OK) {
+                PreferencesHelper.addInstalledPack(this, packId)
+                updateButton()
+                Toast.makeText(this, R.string.pack_added, Toast.LENGTH_SHORT).show()
 
-                    if (!PreferencesHelper.isPremium(this)) {
-                        AdManager.showInterstitial(this)
-                    }
-                } else {
-                    updateButton()
+                if (!PreferencesHelper.isPremium(this)) {
+                    AdManager.showInterstitial(this)
                 }
-            }
-            REQUEST_REMOVE -> {
-                if (res == Activity.RESULT_OK) {
-                    PreferencesHelper.removeInstalledPack(this, packId)
-                    updateButton()
-                    Toast.makeText(this, R.string.pack_removed, Toast.LENGTH_SHORT).show()
-                } else {
-                    updateButton()
-                }
-            }
-            else -> {
+            } else {
                 updateButton()
             }
         }
@@ -352,6 +360,5 @@ class DetailsActivity : AppCompatActivity() {
 
     companion object {
         private const val REQUEST_ADD = 200
-        private const val REQUEST_REMOVE = 201
     }
 }
