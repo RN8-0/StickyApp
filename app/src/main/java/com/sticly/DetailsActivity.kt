@@ -268,21 +268,15 @@ class DetailsActivity : AppCompatActivity() {
     }
 
     private fun removeFromWhatsApp(pack: Pack) {
-        // WhatsApp kontrolü
-        if (!isWhatsAppInstalled()) {
-            Toast.makeText(this, R.string.whatsapp_not_installed, Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        // Kaldırma onayı
+        // Kaldırma onayı - WhatsApp ekranı açılmadan direkt kaldır
         androidx.appcompat.app.AlertDialog.Builder(this)
             .setTitle(R.string.remove_pack_title)
             .setMessage(R.string.remove_pack_message)
             .setPositiveButton(R.string.confirm_remove) { _, _ ->
-                // Lokal durumu güncelle
+                // Sadece lokal durumu güncelle - WhatsApp'ı AÇMA!
                 PreferencesHelper.removeInstalledPack(this, packId)
                 updateButton()
-                // Toast kaldırıldı - buton değişikliği yeterli bilgi veriyor
+                // Görsel geri bildirim: Buton anında yeşile döner
             }
             .setNegativeButton(R.string.cancel, null)
             .show()
