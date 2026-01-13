@@ -46,7 +46,7 @@ class DetailsActivity : AppCompatActivity() {
         var pack = Loader.get(this, packId)
 
         if (pack == null) {
-            Toast.makeText(this, "Paket yükleniyor...", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, R.string.pack_loading, Toast.LENGTH_SHORT).show()
             loadPackFromFirebase()
             return
         }
@@ -70,11 +70,11 @@ class DetailsActivity : AppCompatActivity() {
                 if (pack != null) {
                     setupUI(pack)
                 } else {
-                    Toast.makeText(this@DetailsActivity, "Paket bulunamadı", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this@DetailsActivity, R.string.pack_not_found, Toast.LENGTH_SHORT).show()
                     finish()
                 }
             } catch (e: Exception) {
-                Toast.makeText(this@DetailsActivity, "Paket yüklenemedi", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@DetailsActivity, R.string.pack_load_failed, Toast.LENGTH_SHORT).show()
                 finish()
             }
         }
@@ -246,16 +246,16 @@ class DetailsActivity : AppCompatActivity() {
         // WhatsApp kontrolü
         if (!isWhatsAppInstalled()) {
             androidx.appcompat.app.AlertDialog.Builder(this)
-                .setTitle("WhatsApp Yüklü Değil")
-                .setMessage("Bu özelliği kullanabilmek için cihazınızda WhatsApp yüklü olmalıdır.\n\nWhatsApp'ı yüklemek ister misiniz?")
-                .setPositiveButton("Play Store'a Git") { _, _ ->
+                .setTitle(R.string.whatsapp_not_installed_title)
+                .setMessage(R.string.whatsapp_not_installed_message)
+                .setPositiveButton(R.string.play_store) { _, _ ->
                     try {
                         startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse("market://details?id=com.whatsapp")))
                     } catch (e: Exception) {
                         startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://play.google.com/store/apps/details?id=com.whatsapp")))
                     }
                 }
-                .setNegativeButton("İptal", null)
+                .setNegativeButton(R.string.cancel, null)
                 .show()
             return
         }
@@ -270,40 +270,27 @@ class DetailsActivity : AppCompatActivity() {
     private fun removeFromWhatsApp(pack: Pack) {
         // WhatsApp kontrolü
         if (!isWhatsAppInstalled()) {
-            Toast.makeText(this, "WhatsApp yüklü değil", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, R.string.whatsapp_not_installed, Toast.LENGTH_SHORT).show()
             return
         }
 
         // Kaldırma onayı
         androidx.appcompat.app.AlertDialog.Builder(this)
-            .setTitle("Paketi Kaldır")
-            .setMessage("${pack.name} sticker paketini WhatsApp'tan kaldırmak istediğinizden emin misiniz?")
-            .setPositiveButton("Kaldır") { _, _ ->
+            .setTitle(R.string.remove_pack_title)
+            .setMessage(R.string.remove_pack_message)
+            .setPositiveButton(R.string.confirm_remove) { _, _ ->
                 // Lokal durumu güncelle
                 PreferencesHelper.removeInstalledPack(this, packId)
                 updateButton()
-                Toast.makeText(this, R.string.pack_removed, Toast.LENGTH_SHORT).show()
-
-                // WhatsApp'ı aç (kullanıcı manuel kaldırabilsin)
-                try {
-                    val i = Intent().apply {
-                        action = "com.whatsapp.intent.action.ENABLE_STICKER_PACK"
-                        putExtra("sticker_pack_id", pack.id)
-                        putExtra("sticker_pack_authority", "$packageName.stickers")
-                        putExtra("sticker_pack_name", pack.name)
-                    }
-                    startActivity(i)
-                } catch (e: Exception) {
-                    // Hata durumunda sessizce devam et
-                }
+                // Toast kaldırıldı - buton değişikliği yeterli bilgi veriyor
             }
-            .setNegativeButton("İptal", null)
+            .setNegativeButton(R.string.cancel, null)
             .show()
     }
 
     private fun downloadAndAddToWhatsApp(pack: Pack) {
         btnAction.isEnabled = false
-        btnAction.text = "İndiriliyor..."
+        btnAction.text = getString(R.string.downloading)
 
         lifecycleScope.launch {
             try {
@@ -311,12 +298,12 @@ class DetailsActivity : AppCompatActivity() {
                 if (success) {
                     sendToWhatsApp(pack)
                 } else {
-                    Toast.makeText(this@DetailsActivity, "İndirme başarısız", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this@DetailsActivity, R.string.download_failed, Toast.LENGTH_SHORT).show()
                     btnAction.isEnabled = true
                     updateButton()
                 }
             } catch (e: Exception) {
-                Toast.makeText(this@DetailsActivity, "Hata: ${e.message}", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@DetailsActivity, getString(R.string.error, e.message), Toast.LENGTH_SHORT).show()
                 btnAction.isEnabled = true
                 updateButton()
             }
@@ -333,7 +320,7 @@ class DetailsActivity : AppCompatActivity() {
             }
             startActivityForResult(i, REQUEST_ADD)
         } catch (e: Exception) {
-            Toast.makeText(this, "WhatsApp yüklü değil", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, R.string.whatsapp_not_installed, Toast.LENGTH_SHORT).show()
             btnAction.isEnabled = true
             updateButton()
         }

@@ -74,10 +74,22 @@
     <string name="add_to_whatsapp">WhatsApp\'a Ekle</string>
     <string name="remove_from_whatsapp">WhatsApp\'tan Kaldır</string>
     <string name="confirm_remove">Kaldır</string>
-    <string name="pack_added">Paket WhatsApp\'a eklendi!</string>
+    <string name="pack_added">Paket eklendi!</string>
     <string name="pack_removed">Paket kaldırıldı</string>
     <string name="installed">Yüklü</string>
     <string name="unlock_premium">Premium\'u Aç</string>
     <string name="premium_required_title">Premium Gerekli</string>
     <string name="premium_required_message">Bu sticker paketine erişmek için Premium üyelik gereklidir.\n\nPremium ile:\n• Tüm sticker paketlerine erişim\n• Reklamsız deneyim\n• Öncelikli destek</string>
+    <string name="whatsapp_not_installed_title">WhatsApp Yüklü Değil</string>
+    <string name="whatsapp_not_installed_message">Bu özelliği kullanabilmek için cihazınızda WhatsApp yüklü olmalıdır.\n\nWhatsApp\'ı yüklemek ister misiniz?</string>
+    <string name="whatsapp_not_installed">WhatsApp yüklü değil</string>
+    <string name="remove_pack_title">Paketi Kaldır</string>
+    <string name="remove_pack_message">Bu sticker paketini kaldırmak istediğinizden emin misiniz?</string>
+    <string name="play_store">Play Store\'a Git</string>
+    <string name="downloading">İndiriliyor…</string>
+    <string name="download_failed">İndirme başarısız</string>
+    <string name="error">Hata: %s</string>
+    <string name="pack_loading">Paket yükleniyor…</string>
+    <string name="pack_not_found">Paket bulunamadı</string>
+    <string name="pack_load_failed">Paket yüklenemedi</string>
 </resources>
