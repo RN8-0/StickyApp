@@ -123,10 +123,8 @@ class DetailsActivity : AppCompatActivity() {
         val isCurrentlyInstalled = PreferencesHelper.isPackInstalled(this, packId)
 
         if (isCurrentlyInstalled) {
-            // Kaldır
-            PreferencesHelper.removeInstalledPack(this, packId)
-            updateButton()
-            Toast.makeText(this, R.string.pack_removed, Toast.LENGTH_SHORT).show()
+            // Kaldır - WhatsApp'a intent gönder
+            removeFromWhatsApp(pack)
         } else {
             // Ekle
             addToWhatsApp(pack)
@@ -221,11 +219,63 @@ class DetailsActivity : AppCompatActivity() {
             .show()
     }
 
+    private fun isWhatsAppInstalled(): Boolean {
+        val packageManager = packageManager
+        return try {
+            packageManager.getPackageInfo("com.whatsapp", 0)
+            true
+        } catch (e: Exception) {
+            try {
+                packageManager.getPackageInfo("com.whatsapp.w4b", 0)
+                true
+            } catch (e2: Exception) {
+                false
+            }
+        }
+    }
+
     private fun addToWhatsApp(pack: Pack) {
+        // WhatsApp kontrolü
+        if (!isWhatsAppInstalled()) {
+            androidx.appcompat.app.AlertDialog.Builder(this)
+                .setTitle("WhatsApp Yüklü Değil")
+                .setMessage("Bu özelliği kullanabilmek için cihazınızda WhatsApp yüklü olmalıdır.\n\nWhatsApp'ı yüklemek ister misiniz?")
+                .setPositiveButton("Play Store'a Git") { _, _ ->
+                    try {
+                        startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse("market://details?id=com.whatsapp")))
+                    } catch (e: Exception) {
+                        startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://play.google.com/store/apps/details?id=com.whatsapp")))
+                    }
+                }
+                .setNegativeButton("İptal", null)
+                .show()
+            return
+        }
+
         if (pack.trayUrl.isNotEmpty() || pack.stickers.any { it.url.isNotEmpty() }) {
             downloadAndAddToWhatsApp(pack)
         } else {
             sendToWhatsApp(pack)
+        }
+    }
+
+    private fun removeFromWhatsApp(pack: Pack) {
+        // WhatsApp kontrolü
+        if (!isWhatsAppInstalled()) {
+            Toast.makeText(this, "WhatsApp yüklü değil", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        try {
+            val i = Intent().apply {
+                action = "com.whatsapp.intent.action.ENABLE_STICKER_PACK"
+                putExtra("sticker_pack_id", pack.id)
+                putExtra("sticker_pack_authority", "$packageName.stickers")
+                putExtra("sticker_pack_name", pack.name)
+            }
+            startActivityForResult(i, REQUEST_REMOVE)
+        } catch (e: Exception) {
+            Toast.makeText(this, "WhatsApp yüklü değil", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -261,7 +311,7 @@ class DetailsActivity : AppCompatActivity() {
             }
             startActivityForResult(i, REQUEST_ADD)
         } catch (e: Exception) {
-            Toast.makeText(this, "WhatsApp not found", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "WhatsApp yüklü değil", Toast.LENGTH_SHORT).show()
             btnAction.isEnabled = true
             updateButton()
         }
@@ -271,20 +321,37 @@ class DetailsActivity : AppCompatActivity() {
         super.onActivityResult(req, res, data)
         btnAction.isEnabled = true
 
-        if (req == REQUEST_ADD && res == Activity.RESULT_OK) {
-            PreferencesHelper.addInstalledPack(this, packId)
-            updateButton()
-            Toast.makeText(this, R.string.pack_added, Toast.LENGTH_SHORT).show()
+        when (req) {
+            REQUEST_ADD -> {
+                if (res == Activity.RESULT_OK) {
+                    PreferencesHelper.addInstalledPack(this, packId)
+                    updateButton()
+                    Toast.makeText(this, R.string.pack_added, Toast.LENGTH_SHORT).show()
 
-            if (!PreferencesHelper.isPremium(this)) {
-                AdManager.showInterstitial(this)
+                    if (!PreferencesHelper.isPremium(this)) {
+                        AdManager.showInterstitial(this)
+                    }
+                } else {
+                    updateButton()
+                }
             }
-        } else {
-            updateButton()
+            REQUEST_REMOVE -> {
+                if (res == Activity.RESULT_OK) {
+                    PreferencesHelper.removeInstalledPack(this, packId)
+                    updateButton()
+                    Toast.makeText(this, R.string.pack_removed, Toast.LENGTH_SHORT).show()
+                } else {
+                    updateButton()
+                }
+            }
+            else -> {
+                updateButton()
+            }
         }
     }
 
     companion object {
         private const val REQUEST_ADD = 200
+        private const val REQUEST_REMOVE = 201
     }
 }
