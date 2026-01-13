@@ -33,20 +33,24 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(s: Bundle?) {
         applyTheme()
         super.onCreate(s)
-
-        // Internet kontrolu
-        if (!NetworkUtils.isOnline(this)) {
-            showNoInternetDialog()
-            return
-        }
-
         setContentView(R.layout.activity_main)
 
-        // Billing Manager
-        billingManager = BillingManager(this) { isPurchased ->
-            if (isPurchased) {
-                Toast.makeText(this, R.string.premium_purchased, Toast.LENGTH_SHORT).show()
+        // Internet kontrolu - uyarı ver ama uygulamayı engelleme
+        if (!NetworkUtils.isOnline(this)) {
+            showNoInternetDialog()
+            // Lokal içerik ile devam et
+        }
+
+        // Billing Manager (emulatörde çalışmayabilir)
+        try {
+            billingManager = BillingManager(this) { isPurchased ->
+                if (isPurchased) {
+                    Toast.makeText(this, R.string.premium_purchased, Toast.LENGTH_SHORT).show()
+                }
             }
+        } catch (e: Exception) {
+            // Billing servisi kullanılamıyor (emulator vb.)
+            e.printStackTrace()
         }
 
         drawer = findViewById(R.id.drawer)
@@ -161,18 +165,27 @@ class MainActivity : AppCompatActivity() {
     private fun showNoInternetDialog() {
         AlertDialog.Builder(this)
             .setTitle(R.string.no_internet_title)
-            .setMessage(R.string.no_internet_message)
-            .setCancelable(false)
+            .setMessage("İnternet bağlantısı bulunamadı. Bazı özellikler çalışmayabilir.\n\nLokal sticker paketleri kullanılabilir.")
+            .setCancelable(true)
             .setPositiveButton(R.string.retry) { _, _ ->
-                recreate()
+                if (NetworkUtils.isOnline(this)) {
+                    recreate()
+                } else {
+                    Toast.makeText(this, "Hala internet bağlantısı yok", Toast.LENGTH_SHORT).show()
+                }
             }
-            .setNegativeButton(R.string.exit) { _, _ ->
-                finish()
+            .setNegativeButton(R.string.ok) { dialog, _ ->
+                dialog.dismiss()
             }
             .show()
     }
 
     private fun loadPacksFromFirebase() {
+        // İnternet yoksa Firebase'i deneme
+        if (!NetworkUtils.isOnline(this)) {
+            return
+        }
+
         lifecycleScope.launch {
             try {
                 val firebasePacks = StickerRepository.loadPacks(this@MainActivity)
