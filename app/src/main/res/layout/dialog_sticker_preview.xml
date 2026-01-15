@@ -1,26 +1,41 @@
 <?xml version="1.0" encoding="utf-8"?>
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
-    android:layout_height="wrap_content"
+    android:layout_height="match_parent"
     android:background="@android:color/transparent"
-    android:padding="24dp">
+    android:gravity="center">
 
-    <com.google.android.material.card.MaterialCardView
-        xmlns:app="http://schemas.android.com/apk/res-auto"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+    <ImageView
+        android:id="@+id/previewImage"
+        android:layout_width="300dp"
+        android:layout_height="300dp"
         android:layout_gravity="center"
-        app:cardCornerRadius="24dp"
-        app:cardElevation="8dp">
+        android:scaleType="fitCenter" />
 
-        <ImageView
-            android:id="@+id/previewImage"
-            android:layout_width="match_parent"
-            android:layout_height="280dp"
-            android:scaleType="fitCenter"
-            android:padding="16dp"
-            android:background="?android:colorBackground" />
+    <!-- Lock overlay for premium stickers -->
+    <ImageView
+        android:id="@+id/lockOverlay"
+        android:layout_width="64dp"
+        android:layout_height="64dp"
+        android:layout_gravity="center"
+        android:src="@drawable/ic_lock"
+        android:visibility="gone"
+        app:tint="@android:color/white" />
 
-    </com.google.android.material.card.MaterialCardView>
+    <!-- Unlock hint text -->
+    <TextView
+        android:id="@+id/unlockHint"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_horizontal|bottom"
+        android:layout_marginBottom="100dp"
+        android:text="@string/tap_to_unlock"
+        android:textColor="@android:color/white"
+        android:textSize="14sp"
+        android:visibility="gone"
+        android:background="@drawable/bg_hint_rounded"
+        android:paddingHorizontal="16dp"
+        android:paddingVertical="8dp" />
 
 </FrameLayout>

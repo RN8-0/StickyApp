@@ -17,18 +17,29 @@ import androidx.drawerlayout.widget.DrawerLayout
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.google.android.material.switchmaterial.SwitchMaterial
 import com.google.android.material.textfield.TextInputEditText
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var drawer: DrawerLayout
     private lateinit var rv: RecyclerView
+    private lateinit var loadingOverlay: View
+    private lateinit var swipeRefresh: SwipeRefreshLayout
     private lateinit var adapter: PackAdapter
+    private lateinit var btnFilter: ImageButton
     private var allPacks: List<Pack> = emptyList()
     private var billingManager: BillingManager? = null
+    private var currentFilter: FilterType = FilterType.ALL
+    private var currentSearchQuery: String = ""
+
+    enum class FilterType { ALL, INSTALLED, PREMIUM, FAVORITES }
 
     override fun onCreate(s: Bundle?) {
         applyTheme()
@@ -55,9 +66,16 @@ class MainActivity : AppCompatActivity() {
 
         drawer = findViewById(R.id.drawer)
         rv = findViewById(R.id.rv)
+        loadingOverlay = findViewById(R.id.loadingOverlay)
+        swipeRefresh = findViewById(R.id.swipeRefresh)
         val menuBtn = findViewById<ImageButton>(R.id.menuBtn)
         val searchBox = findViewById<EditText>(R.id.searchBox)
         val btnTheme = findViewById<ImageButton>(R.id.btnTheme)
+        btnFilter = findViewById(R.id.btnFilter)
+
+        // Pull to Refresh ayarları
+        swipeRefresh.setColorSchemeResources(R.color.accent, R.color.primary)
+        swipeRefresh.setOnRefreshListener { refreshPacks() }
 
         // Menu items
         val navFaq = findViewById<LinearLayout>(R.id.navFaq)
@@ -134,14 +152,19 @@ class MainActivity : AppCompatActivity() {
         // Setup RecyclerView with linear layout (list)
         rv.layoutManager = LinearLayoutManager(this)
 
-        // Önce lokal paketleri göster (hızlı yükleme)
-        allPacks = Loader.load(this)
-        adapter = PackAdapter(allPacks) {
-            startActivity(Intent(this, DetailsActivity::class.java).putExtra("id", it.id))
-        }
+        // Boş adapter oluştur
+        allPacks = emptyList()
+        adapter = PackAdapter(allPacks, { pack ->
+            startActivity(Intent(this, DetailsActivity::class.java).putExtra("id", pack.id))
+        }, {
+            // Favori değiştiğinde, eğer favoriler filtresindeyse listeyi güncelle
+            if (currentFilter == FilterType.FAVORITES) {
+                applyFilters()
+            }
+        })
         rv.adapter = adapter
 
-        // Firebase'den paketleri yükle (async)
+        // Firebase'den paketleri yükle
         loadPacksFromFirebase()
 
         // Search functionality
@@ -149,9 +172,40 @@ class MainActivity : AppCompatActivity() {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
             override fun afterTextChanged(s: Editable?) {
-                filterPacks(s?.toString() ?: "")
+                currentSearchQuery = s?.toString() ?: ""
+                applyFilters()
             }
         })
+
+        // Arama yapıldığında (enter tuşu) geçmişe kaydet
+        searchBox.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH) {
+                val query = searchBox.text.toString().trim()
+                if (query.isNotEmpty()) {
+                    PreferencesHelper.addSearchHistory(this, query)
+                }
+                // Klavyeyi kapat
+                val imm = getSystemService(INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
+                imm.hideSoftInputFromWindow(searchBox.windowToken, 0)
+                true
+            } else false
+        }
+
+        // Arama kutusuna focus gelince geçmiş aramaları göster
+        searchBox.setOnFocusChangeListener { _, hasFocus ->
+            if (hasFocus && searchBox.text.isNullOrEmpty()) {
+                showSearchHistory(searchBox)
+            }
+        }
+
+        searchBox.setOnClickListener {
+            if (searchBox.text.isNullOrEmpty()) {
+                showSearchHistory(searchBox)
+            }
+        }
+
+        // Filter button click
+        btnFilter.setOnClickListener { showFilterMenu(it) }
     }
 
     override fun onResume() {
@@ -181,32 +235,154 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun loadPacksFromFirebase() {
-        // İnternet yoksa Firebase'i deneme
-        if (!NetworkUtils.isOnline(this)) {
-            return
-        }
-
         lifecycleScope.launch {
             try {
                 val firebasePacks = StickerRepository.loadPacks(this@MainActivity)
                 if (firebasePacks.isNotEmpty()) {
+                    // Geçerli paket ID'lerini al
+                    val validPackIds = firebasePacks.map { it.id }.toSet()
+
+                    // Eski/geçersiz cache'leri temizle
+                    StickerRepository.cleanupInvalidCache(this@MainActivity, validPackIds)
+
+                    // Her paket için cache'i güncelle (eski çıkartmaları sil)
+                    firebasePacks.forEach { pack ->
+                        StickerRepository.updatePackCache(this@MainActivity, pack)
+                    }
+
                     allPacks = firebasePacks
                     adapter.updateList(allPacks)
                 }
+                // Yükleme tamamlandı - overlay'i gizle, listeyi göster
+                showContent()
             } catch (e: Exception) {
-                // Firebase yüklenemezse lokal paketler zaten gösteriliyor
                 e.printStackTrace()
+                // Hata durumunda da overlay'i gizle
+                showContent()
             }
         }
     }
 
-    private fun filterPacks(query: String) {
-        val filtered = if (query.isEmpty()) {
-            allPacks
-        } else {
-            allPacks.filter { it.name.contains(query, ignoreCase = true) }
+    private fun showContent() {
+        loadingOverlay.animate()
+            .alpha(0f)
+            .setDuration(300)
+            .withEndAction {
+                loadingOverlay.visibility = View.GONE
+                swipeRefresh.visibility = View.VISIBLE
+                swipeRefresh.alpha = 0f
+                swipeRefresh.animate().alpha(1f).setDuration(200).start()
+            }
+            .start()
+    }
+
+    private fun refreshPacks() {
+        lifecycleScope.launch {
+            try {
+                val firebasePacks = StickerRepository.loadPacks(this@MainActivity)
+                if (firebasePacks.isNotEmpty()) {
+                    val validPackIds = firebasePacks.map { it.id }.toSet()
+                    StickerRepository.cleanupInvalidCache(this@MainActivity, validPackIds)
+                    firebasePacks.forEach { pack ->
+                        StickerRepository.updatePackCache(this@MainActivity, pack)
+                    }
+                    allPacks = firebasePacks
+                    applyFilters()
+                    Toast.makeText(this@MainActivity, "Paketler güncellendi", Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                Toast.makeText(this@MainActivity, "Güncelleme başarısız", Toast.LENGTH_SHORT).show()
+            } finally {
+                swipeRefresh.isRefreshing = false
+            }
         }
+    }
+
+    private fun applyFilters() {
+        var filtered = allPacks
+
+        // Önce filtre tipine göre filtrele
+        filtered = when (currentFilter) {
+            FilterType.ALL -> filtered
+            FilterType.INSTALLED -> filtered.filter { PreferencesHelper.isPackInstalled(this, it.id) }
+            FilterType.PREMIUM -> filtered.filter { it.isPremium }
+            FilterType.FAVORITES -> filtered.filter { PreferencesHelper.isPackFavorite(this, it.id) }
+        }
+
+        // Sonra arama sorgusuna göre filtrele
+        if (currentSearchQuery.isNotEmpty()) {
+            filtered = filtered.filter { it.name.contains(currentSearchQuery, ignoreCase = true) }
+        }
+
         adapter.updateList(filtered)
+    }
+
+    private fun showFilterMenu(anchor: View) {
+        val popup = PopupMenu(this, anchor)
+        popup.menu.add(0, 0, 0, R.string.filter_all)
+        popup.menu.add(0, 1, 1, R.string.filter_favorites)
+        popup.menu.add(0, 2, 2, R.string.filter_installed)
+        popup.menu.add(0, 3, 3, R.string.filter_premium)
+
+        popup.setOnMenuItemClickListener { item ->
+            currentFilter = when (item.itemId) {
+                0 -> FilterType.ALL
+                1 -> FilterType.FAVORITES
+                2 -> FilterType.INSTALLED
+                3 -> FilterType.PREMIUM
+                else -> FilterType.ALL
+            }
+            applyFilters()
+            updateFilterIcon()
+            true
+        }
+
+        popup.show()
+    }
+
+    private fun updateFilterIcon() {
+        // Filtre aktifse ikonu vurgula
+        val isFilterActive = currentFilter != FilterType.ALL
+        val tintColor = if (isFilterActive) {
+            getColor(R.color.accent)
+        } else {
+            getColor(android.R.color.white)
+        }
+        btnFilter.setColorFilter(tintColor)
+    }
+
+    private fun showSearchHistory(searchBox: EditText) {
+        val history = PreferencesHelper.getSearchHistory(this)
+        if (history.isEmpty()) return
+
+        val popup = PopupMenu(this, searchBox)
+
+        // Son aramalar başlığı
+        popup.menu.add(0, -1, 0, getString(R.string.recent_searches)).isEnabled = false
+
+        // Arama geçmişi
+        history.forEachIndexed { index, query ->
+            popup.menu.add(0, index, index + 1, query)
+        }
+
+        // Geçmişi temizle
+        popup.menu.add(0, 999, history.size + 2, getString(R.string.clear_history))
+
+        popup.setOnMenuItemClickListener { item ->
+            when {
+                item.itemId == 999 -> {
+                    PreferencesHelper.clearSearchHistory(this)
+                    Toast.makeText(this, "Arama geçmişi temizlendi", Toast.LENGTH_SHORT).show()
+                }
+                item.itemId >= 0 && item.itemId < history.size -> {
+                    searchBox.setText(history[item.itemId])
+                    searchBox.setSelection(searchBox.text.length)
+                }
+            }
+            true
+        }
+
+        popup.show()
     }
 
     private fun applyTheme() {
@@ -323,9 +499,15 @@ class MainActivity : AppCompatActivity() {
 
     private fun sendSuggestionToFirebase(suggestion: String) {
         val db = FirebaseFirestore.getInstance()
+        val now = Date()
+        val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale("tr", "TR"))
+        val timeFormat = SimpleDateFormat("HH:mm:ss", Locale("tr", "TR"))
+
         val data = hashMapOf(
             "suggestion" to suggestion,
-            "timestamp" to System.currentTimeMillis()
+            "timestamp" to System.currentTimeMillis(),
+            "date" to dateFormat.format(now),
+            "time" to timeFormat.format(now)
         )
 
         db.collection("suggestions")

@@ -41,7 +41,8 @@
     <!-- Premium -->
     <string name="premium_title">Premium Üyelik</string>
     <string name="premium_description">Tek seferlik satın alım ile:\n\n• Reklamsız deneyim\n• Premium sticker paketleri\n• Öncelikli destek</string>
-    <string name="premium_price">₺49.99</string>
+    <string name="premium_price">₺69,99</string>
+    <string name="sticker_price">₺7,99</string>
     <string name="buy_premium">Satın Al</string>
     <string name="premium_active">Premium Aktif</string>
     <string name="premium_purchased">Premium satın alındı!</string>
@@ -76,6 +77,7 @@
     <string name="confirm_remove">Kaldır</string>
     <string name="pack_added">Paket eklendi!</string>
     <string name="pack_removed">Paket kaldırıldı</string>
+    <string name="pack_removed_from_whatsapp">Çıkartma WhatsApp\'tan kaldırıldı</string>
     <string name="installed">Yüklü</string>
     <string name="unlock_premium">Premium\'u Aç</string>
     <string name="premium_required_title">Premium Gerekli</string>
@@ -92,4 +94,46 @@
     <string name="pack_loading">Paket yükleniyor…</string>
     <string name="pack_not_found">Paket bulunamadı</string>
     <string name="pack_load_failed">Paket yüklenemedi</string>
+
+    <!-- Premium Promo Dialog -->
+    <string name="premium_promo_title">Reklamsız Deneyim</string>
+    <string name="premium_promo_message">Reklamların bazen can sıkıcı olabildiğinin farkındayız.\n\nUygulamamızı geliştirebilmek ve yeni çıkartmalar ekleyebilmek için küçük de olsa bir gelire ihtiyacımız var.\n\nReklamsız kullanım ve tüm premium çıkartmalar için tek seferlik Premium Üyelik alabilirsin 💙</string>
+    <string name="get_premium">Premium Üyelik Al</string>
+    <string name="maybe_later">Belki Sonra</string>
+
+    <!-- Premium Preview -->
+    <string name="tap_to_unlock">Premium\'u açmak için dokun</string>
+
+    <!-- WhatsApp Sticker Removal Info -->
+    <string name="whatsapp_removal_info_title">Bilgilendirme</string>
+    <string name="whatsapp_removal_info_message">Çıkartma paketi uygulamamızdan kaldırıldı.\n\nWhatsApp\'tan da kaldırmak için:\nWhatsApp → Ayarlar → Çıkartmalar → Çıkartmalarım bölümünden manuel olarak silebilirsiniz.\n\n(WhatsApp API\'si otomatik silmeyi desteklememektedir)</string>
+
+    <!-- Filter -->
+    <string name="filter">Filtrele</string>
+    <string name="filter_all">Tümü</string>
+    <string name="filter_installed">Yüklü</string>
+    <string name="filter_premium">Premium</string>
+    <string name="filter_favorites">Favoriler</string>
+
+    <!-- Badges -->
+    <string name="new_badge">YENİ</string>
+    <string name="add_to_favorites">Favorilere ekle</string>
+    <string name="added_to_favorites">Favorilere eklendi</string>
+    <string name="removed_from_favorites">Favorilerden kaldırıldı</string>
+    <string name="download_count">%d kişi ekledi</string>
+
+    <!-- Categories -->
+    <string name="filter_category">Kategori</string>
+    <string name="category_all">Tüm Kategoriler</string>
+    <string name="category_funny">Komik</string>
+    <string name="category_romantic">Romantik</string>
+    <string name="category_sports">Spor</string>
+    <string name="category_series">Dizi/Film</string>
+    <string name="category_animals">Hayvanlar</string>
+    <string name="category_memes">Memeler</string>
+
+    <!-- Search -->
+    <string name="recent_searches">Son Aramalar</string>
+    <string name="popular_searches">Popüler Aramalar</string>
+    <string name="clear_history">Geçmişi Temizle</string>
 </resources>

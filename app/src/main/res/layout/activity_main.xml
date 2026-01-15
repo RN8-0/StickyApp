@@ -57,12 +57,14 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:padding="12dp"
-            android:background="@color/primary">
+            android:background="@color/primary"
+            android:gravity="center_vertical">
 
             <EditText
                 android:id="@+id/searchBox"
-                android:layout_width="match_parent"
+                android:layout_width="0dp"
                 android:layout_height="44dp"
+                android:layout_weight="1"
                 android:background="@drawable/search_bg"
                 android:drawableStart="@drawable/ic_search"
                 android:drawablePadding="12dp"
@@ -72,16 +74,64 @@
                 android:textSize="14sp"
                 android:maxLines="1"
                 android:imeOptions="actionSearch" />
+
+            <ImageButton
+                android:id="@+id/btnFilter"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:layout_marginStart="8dp"
+                android:background="@drawable/search_bg"
+                android:src="@drawable/ic_filter"
+                android:padding="10dp"
+                android:scaleType="fitCenter"
+                android:contentDescription="@string/filter" />
         </LinearLayout>
 
-        <!-- Sticker Packs List -->
-        <androidx.recyclerview.widget.RecyclerView
-            android:id="@+id/rv"
+        <!-- Content Container -->
+        <FrameLayout
             android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:background="@drawable/chat_wallpaper_pattern"
-            android:clipToPadding="false"
-            android:padding="8dp" />
+            android:layout_height="match_parent">
+
+            <!-- Pull to Refresh + Sticker Packs List -->
+            <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+                android:id="@+id/swipeRefresh"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:visibility="gone">
+
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/rv"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:background="@drawable/chat_wallpaper_pattern"
+                    android:clipToPadding="false"
+                    android:padding="8dp" />
+
+            </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
+
+            <!-- Loading Overlay -->
+            <LinearLayout
+                android:id="@+id/loadingOverlay"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="@color/primary"
+                android:gravity="center"
+                android:orientation="vertical">
+
+                <View
+                    android:layout_width="120dp"
+                    android:layout_height="120dp"
+                    android:background="@drawable/ic_logo_white" />
+
+                <ProgressBar
+                    android:layout_width="36dp"
+                    android:layout_height="36dp"
+                    android:layout_marginTop="32dp"
+                    android:indeterminateTint="@android:color/white" />
+
+            </LinearLayout>
+
+        </FrameLayout>
 
     </LinearLayout>
 

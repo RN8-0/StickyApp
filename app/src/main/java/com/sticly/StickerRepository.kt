@@ -6,6 +6,9 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.storage.FirebaseStorage
 import com.google.gson.Gson
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -27,29 +30,33 @@ object StickerRepository {
      * Firebase Storage'dan tüm paketleri yükler
      */
     suspend fun loadPacks(context: Context): List<Pack> = withContext(Dispatchers.IO) {
+        // Helper: Paketleri karışık sırala (ID hash'ine göre tutarlı sıralama)
+        // Her açılışta aynı sırada kalır, yeni paket eklenince hash'ine göre yerleşir
+        fun shufflePacks(packs: List<Pack>) = packs.sortedBy { it.id.hashCode() }
+
         try {
             // Önce Firestore'dan contents.json'u çek
             val packsFromFirestore = loadPacksFromFirestore()
             if (packsFromFirestore.isNotEmpty()) {
                 Log.d(TAG, "Loaded ${packsFromFirestore.size} packs from Firestore")
-                return@withContext packsFromFirestore
+                return@withContext shufflePacks(packsFromFirestore)
             }
 
             // Firestore boşsa Storage'dan contents.json'u çek
             val packsFromStorage = loadPacksFromStorage(context)
             if (packsFromStorage.isNotEmpty()) {
                 Log.d(TAG, "Loaded ${packsFromStorage.size} packs from Storage")
-                return@withContext packsFromStorage
+                return@withContext shufflePacks(packsFromStorage)
             }
 
             // Her ikisi de boşsa lokal assets'ten yükle (fallback)
             Log.d(TAG, "Loading from local assets (fallback)")
-            return@withContext Loader.load(context)
+            return@withContext shufflePacks(Loader.load(context))
 
         } catch (e: Exception) {
             Log.e(TAG, "Error loading packs: ${e.message}")
             // Hata durumunda lokal assets'ten yükle
-            return@withContext Loader.load(context)
+            return@withContext shufflePacks(Loader.load(context))
         }
     }
 
@@ -57,36 +64,87 @@ object StickerRepository {
      * Firestore'dan paket listesini yükler
      */
     private suspend fun loadPacksFromFirestore(): List<Pack> {
-        return try {
-            val snapshot = firestore.collection("sticker_packs")
-                .get()
-                .await()
+        val allPacks = mutableListOf<Pack>()
 
-            snapshot.documents.mapNotNull { doc ->
+        try {
+            Log.d(TAG, "Loading packs from Firestore...")
+
+            // Normal paketleri yükle (stickers koleksiyonu)
+            try {
+                val stickersSnapshot = firestore.collection("stickers").get().await()
+                Log.d(TAG, "Stickers collection: ${stickersSnapshot.documents.size} documents")
+                stickersSnapshot.documents.mapNotNull { doc ->
+                    parsePackDocument(doc, isPremiumOverride = false)
+                }.let { allPacks.addAll(it) }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading stickers collection: ${e.message}")
+            }
+
+            // Premium paketleri yükle (premium_stickers koleksiyonu)
+            try {
+                val premiumSnapshot = firestore.collection("premium_stickers").get().await()
+                Log.d(TAG, "Premium_stickers collection: ${premiumSnapshot.documents.size} documents")
+                premiumSnapshot.documents.mapNotNull { doc ->
+                    parsePackDocument(doc, isPremiumOverride = true)
+                }.let { allPacks.addAll(it) }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading premium_stickers collection: ${e.message}")
+            }
+
+            // Eski koleksiyonu da kontrol et (geriye uyumluluk)
+            if (allPacks.isEmpty()) {
                 try {
-                    val data = doc.data ?: return@mapNotNull null
-                    Pack(
-                        id = doc.id,
-                        name = data["name"] as? String ?: "",
-                        pub = data["publisher"] as? String ?: "",
-                        email = data["publisher_email"] as? String ?: "",
-                        privacy = data["privacy_policy_website"] as? String ?: "",
-                        license = data["license_agreement_website"] as? String ?: "",
-                        version = data["image_data_version"] as? String ?: "1",
-                        avoidCache = data["avoid_cache"] as? Boolean ?: false,
-                        tray = data["tray_image_file"] as? String ?: "",
-                        trayUrl = data["tray_url"] as? String ?: "",
-                        stickers = parseStickers(data["stickers"]),
-                        isPremium = data["is_premium"] as? Boolean ?: false
-                    )
+                    val oldSnapshot = firestore.collection("sticker_packs").get().await()
+                    Log.d(TAG, "Old sticker_packs collection: ${oldSnapshot.documents.size} documents")
+                    oldSnapshot.documents.mapNotNull { doc ->
+                        parsePackDocument(doc, isPremiumOverride = null)
+                    }.let { allPacks.addAll(it) }
                 } catch (e: Exception) {
-                    Log.e(TAG, "Error parsing pack: ${e.message}")
-                    null
+                    Log.e(TAG, "Error loading sticker_packs collection: ${e.message}")
                 }
             }
+
+            Log.d(TAG, "Total packs loaded: ${allPacks.size}")
+
         } catch (e: Exception) {
             Log.e(TAG, "Error loading from Firestore: ${e.message}")
-            emptyList()
+        }
+
+        return allPacks
+    }
+
+    private fun parsePackDocument(doc: com.google.firebase.firestore.DocumentSnapshot, isPremiumOverride: Boolean?): Pack? {
+        return try {
+            val data = doc.data ?: return null
+            val stickers = parseStickers(data["stickers"])
+            val isPremium = isPremiumOverride ?: (data["isPremium"] as? Boolean ?: false)
+
+            Log.d(TAG, "Pack ${doc.id}: ${stickers.size} stickers, isPremium: $isPremium")
+            if (stickers.isNotEmpty()) {
+                Log.d(TAG, "First sticker URL: ${stickers.first().url.take(80)}...")
+            }
+
+            Pack(
+                id = doc.id,
+                name = data["name"] as? String ?: "",
+                pub = data["publisher"] as? String ?: "",
+                email = data["publisher_email"] as? String ?: "",
+                privacy = data["privacy_policy_website"] as? String ?: "",
+                license = data["license_agreement_website"] as? String ?: "",
+                version = data["image_data_version"] as? String ?: "1",
+                avoidCache = data["avoid_cache"] as? Boolean ?: false,
+                tray = data["tray_image_file"] as? String ?: "",
+                trayUrl = data["tray_url"] as? String ?: "",
+                stickers = stickers,
+                isPremium = isPremium,
+                storagePath = data["storagePath"] as? String ?: if (isPremium) "premium_stickers" else "stickers",
+                createdAt = data["created_at"] as? String ?: "",
+                category = data["category"] as? String ?: "",
+                downloadCount = (data["download_count"] as? Long)?.toInt() ?: 0
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "Error parsing pack ${doc.id}: ${e.message}")
+            null
         }
     }
 
@@ -121,11 +179,12 @@ object StickerRepository {
 
             // URL'leri ekle
             response.packs.map { pack ->
+                val storagePath = pack.storagePath
                 pack.copy(
-                    trayUrl = getDownloadUrl("$STORAGE_PATH/${pack.id}/${pack.tray}"),
+                    trayUrl = getDownloadUrl("$storagePath/${pack.id}/${pack.tray}"),
                     stickers = pack.stickers.map { sticker ->
                         sticker.copy(
-                            url = getDownloadUrl("$STORAGE_PATH/${pack.id}/${sticker.file}")
+                            url = getDownloadUrl("$storagePath/${pack.id}/${sticker.file}")
                         )
                     }
                 )
@@ -153,13 +212,15 @@ object StickerRepository {
      */
     suspend fun loadPackUrls(pack: Pack): Pack = withContext(Dispatchers.IO) {
         try {
+            val storagePath = pack.storagePath
+
             val trayUrl = if (pack.trayUrl.isEmpty()) {
-                getDownloadUrl("$STORAGE_PATH/${pack.id}/${pack.tray}")
+                getDownloadUrl("$storagePath/${pack.id}/${pack.tray}")
             } else pack.trayUrl
 
             val stickersWithUrls = pack.stickers.map { sticker ->
                 if (sticker.url.isEmpty()) {
-                    sticker.copy(url = getDownloadUrl("$STORAGE_PATH/${pack.id}/${sticker.file}"))
+                    sticker.copy(url = getDownloadUrl("$storagePath/${pack.id}/${sticker.file}"))
                 } else sticker
             }
 
@@ -173,46 +234,96 @@ object StickerRepository {
     /**
      * Sticker dosyasını cache'e indirir ve yolunu döner
      */
-    suspend fun downloadStickerToCache(context: Context, packId: String, fileName: String): File? =
-        withContext(Dispatchers.IO) {
-            try {
-                val cacheDir = File(context.cacheDir, "$CACHE_DIR/$packId")
-                if (!cacheDir.exists()) cacheDir.mkdirs()
+    suspend fun downloadStickerToCache(
+        context: Context,
+        packId: String,
+        fileName: String,
+        storagePath: String = STORAGE_PATH
+    ): File? = withContext(Dispatchers.IO) {
+        try {
+            val cacheDir = File(context.cacheDir, "$CACHE_DIR/$packId")
+            if (!cacheDir.exists()) cacheDir.mkdirs()
 
-                val localFile = File(cacheDir, fileName)
+            val localFile = File(cacheDir, fileName)
 
-                // Zaten cache'de varsa tekrar indirme
-                if (localFile.exists() && localFile.length() > 0) {
-                    return@withContext localFile
-                }
-
-                val storageRef = storage.reference.child("$STORAGE_PATH/$packId/$fileName")
-                storageRef.getFile(localFile).await()
-
-                localFile
-            } catch (e: Exception) {
-                Log.e(TAG, "Error downloading sticker: ${e.message}")
-                null
+            // Zaten cache'de varsa tekrar indirme
+            if (localFile.exists() && localFile.length() > 0) {
+                return@withContext localFile
             }
+
+            val storageRef = storage.reference.child("$storagePath/$packId/$fileName")
+            storageRef.getFile(localFile).await()
+
+            localFile
+        } catch (e: Exception) {
+            Log.e(TAG, "Error downloading sticker: ${e.message}")
+            null
         }
+    }
 
     /**
      * Tüm paketi cache'e indirir (WhatsApp'a eklemek için gerekli)
+     * Paralel indirme ile hızlandırılmış versiyon
      */
     suspend fun downloadPackToCache(context: Context, pack: Pack): Boolean =
         withContext(Dispatchers.IO) {
             try {
-                // Tray image
-                downloadStickerToCache(context, pack.id, pack.tray)
+                val storagePath = pack.storagePath
 
-                // Tüm stickerlar
-                pack.stickers.forEach { sticker ->
-                    downloadStickerToCache(context, pack.id, sticker.file)
+                coroutineScope {
+                    // Tray image - ayrı olarak başlat
+                    val trayJob = async {
+                        downloadStickerToCache(context, pack.id, pack.tray, storagePath)
+                    }
+
+                    // Tüm stickerları paralel olarak indir (maksimum 6 eşzamanlı)
+                    val stickerJobs = pack.stickers.map { sticker ->
+                        async {
+                            downloadStickerToCache(context, pack.id, sticker.file, storagePath)
+                        }
+                    }
+
+                    // Hepsini bekle
+                    trayJob.await()
+                    stickerJobs.awaitAll()
                 }
 
                 true
             } catch (e: Exception) {
                 Log.e(TAG, "Error downloading pack: ${e.message}")
+                false
+            }
+        }
+
+    /**
+     * İlk N çıkartmayı öncelikli olarak indir (hızlı görüntüleme için)
+     */
+    suspend fun downloadFirstStickers(context: Context, pack: Pack, count: Int = 6): Boolean =
+        withContext(Dispatchers.IO) {
+            try {
+                val storagePath = pack.storagePath
+
+                coroutineScope {
+                    // Tray image
+                    val trayJob = async {
+                        downloadStickerToCache(context, pack.id, pack.tray, storagePath)
+                    }
+
+                    // İlk N sticker'ı paralel olarak indir
+                    val firstStickers = pack.stickers.take(count)
+                    val stickerJobs = firstStickers.map { sticker ->
+                        async {
+                            downloadStickerToCache(context, pack.id, sticker.file, storagePath)
+                        }
+                    }
+
+                    trayJob.await()
+                    stickerJobs.awaitAll()
+                }
+
+                true
+            } catch (e: Exception) {
+                Log.e(TAG, "Error downloading first stickers: ${e.message}")
                 false
             }
         }
@@ -237,6 +348,80 @@ object StickerRepository {
 
         return pack.stickers.all { sticker ->
             File(cacheDir, sticker.file).exists()
+        }
+    }
+
+    /**
+     * Belirli bir paketin cache'ini temizler
+     */
+    fun clearPackCache(context: Context, packId: String) {
+        try {
+            val cacheDir = File(context.cacheDir, "$CACHE_DIR/$packId")
+            if (cacheDir.exists()) {
+                cacheDir.deleteRecursively()
+                Log.d(TAG, "Cleared cache for pack: $packId")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error clearing cache for pack $packId: ${e.message}")
+        }
+    }
+
+    /**
+     * Tüm sticker cache'ini temizler
+     */
+    fun clearAllCache(context: Context) {
+        try {
+            val cacheDir = File(context.cacheDir, CACHE_DIR)
+            if (cacheDir.exists()) {
+                cacheDir.deleteRecursively()
+                Log.d(TAG, "Cleared all sticker cache")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error clearing all cache: ${e.message}")
+        }
+    }
+
+    /**
+     * Cache'deki eski/geçersiz dosyaları temizler
+     * Sadece Firestore'daki paketlere ait olmayan cache klasörlerini siler
+     */
+    fun cleanupInvalidCache(context: Context, validPackIds: Set<String>) {
+        try {
+            val cacheDir = File(context.cacheDir, CACHE_DIR)
+            if (!cacheDir.exists()) return
+
+            cacheDir.listFiles()?.forEach { packDir ->
+                if (packDir.isDirectory && packDir.name !in validPackIds) {
+                    packDir.deleteRecursively()
+                    Log.d(TAG, "Removed invalid cache: ${packDir.name}")
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error cleaning up cache: ${e.message}")
+        }
+    }
+
+    /**
+     * Paketin cache'ini günceller - eski dosyaları siler, yeni dosyaları tutar
+     */
+    fun updatePackCache(context: Context, pack: Pack) {
+        try {
+            val cacheDir = File(context.cacheDir, "$CACHE_DIR/${pack.id}")
+            if (!cacheDir.exists()) return
+
+            // Geçerli dosya isimleri
+            val validFiles = mutableSetOf(pack.tray)
+            pack.stickers.forEach { validFiles.add(it.file) }
+
+            // Cache'deki dosyaları kontrol et ve geçersiz olanları sil
+            cacheDir.listFiles()?.forEach { file ->
+                if (file.name !in validFiles) {
+                    file.delete()
+                    Log.d(TAG, "Removed outdated cache file: ${file.name}")
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error updating pack cache: ${e.message}")
         }
     }
 }

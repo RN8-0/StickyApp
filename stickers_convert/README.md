@@ -59,8 +59,9 @@ mkdir stickers/kategori-adi
 
 ### 3. Script'i Çalıştır
 ```bash
-cd /home/arain/Desktop/StickyApp/stickers_convert
-source venv/bin/activate
+cd stickers_convert
+source venv/bin/activate   # Linux/macOS
+# veya: venv\Scripts\activate   # Windows
 python3 upload_stickers.py
 ```
 

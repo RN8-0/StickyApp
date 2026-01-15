@@ -1,33 +1,35 @@
 <?xml version="1.0" encoding="utf-8"?>
-<com.google.android.material.card.MaterialCardView
+<FrameLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_margin="4dp"
-    app:cardCornerRadius="12dp"
-    app:cardElevation="2dp">
+    android:layout_margin="2dp">
 
-    <FrameLayout
+    <ImageView
+        android:id="@+id/img"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content">
+        android:layout_height="120dp"
+        android:scaleType="fitCenter" />
 
-        <ImageView
-            android:id="@+id/img"
-            android:layout_width="match_parent"
-            android:layout_height="100dp"
-            android:scaleType="centerInside"
-            android:padding="8dp" />
+    <!-- Circular Progress Bar - yükleme sırasında gösterilir -->
+    <ProgressBar
+        android:id="@+id/progressBar"
+        style="?android:attr/progressBarStyle"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:layout_gravity="center"
+        android:indeterminate="false"
+        android:max="100"
+        android:progress="0"
+        android:visibility="gone" />
 
-        <!-- Kilit ikonu - premium kilitli stickerlar için -->
-        <ImageView
-            android:id="@+id/lockIcon"
-            android:layout_width="32dp"
-            android:layout_height="32dp"
-            android:layout_gravity="center"
-            android:src="@drawable/ic_lock"
-            android:visibility="gone" />
+    <!-- Kilit ikonu - premium kilitli stickerlar için -->
+    <ImageView
+        android:id="@+id/lockIcon"
+        android:layout_width="32dp"
+        android:layout_height="32dp"
+        android:layout_gravity="center"
+        android:src="@drawable/ic_lock"
+        android:visibility="gone" />
 
-    </FrameLayout>
-
-</com.google.android.material.card.MaterialCardView>
+</FrameLayout>

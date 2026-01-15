@@ -10,6 +10,9 @@ import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.textfield.TextInputEditText
 import com.google.firebase.firestore.FirebaseFirestore
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class ContactActivity : AppCompatActivity() {
 
@@ -71,12 +74,18 @@ class ContactActivity : AppCompatActivity() {
         progressBar.visibility = View.VISIBLE
 
         val db = FirebaseFirestore.getInstance()
+        val now = Date()
+        val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale("tr", "TR"))
+        val timeFormat = SimpleDateFormat("HH:mm:ss", Locale("tr", "TR"))
+
         val data = hashMapOf(
             "name" to name,
             "email" to email,
             "subject" to subject,
             "message" to message,
             "timestamp" to System.currentTimeMillis(),
+            "date" to dateFormat.format(now),
+            "time" to timeFormat.format(now),
             "status" to "unread"
         )
 
@@ -95,11 +104,13 @@ class ContactActivity : AppCompatActivity() {
                 // Go back
                 finish()
             }
-            .addOnFailureListener {
+            .addOnFailureListener { e ->
                 progressBar.visibility = View.GONE
                 btnSend.isEnabled = true
                 btnSend.text = getString(R.string.send)
-                Toast.makeText(this, R.string.message_error, Toast.LENGTH_SHORT).show()
+                // Hatayı logla ve göster
+                android.util.Log.e("ContactActivity", "Mesaj gönderilemedi: ${e.message}", e)
+                Toast.makeText(this, "Hata: ${e.message}", Toast.LENGTH_LONG).show()
             }
     }
 }

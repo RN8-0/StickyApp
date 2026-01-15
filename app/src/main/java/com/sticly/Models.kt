@@ -15,7 +15,11 @@ data class Pack(
     @SerializedName("stickers") val stickers: List<Sticker> = emptyList(),
     // Firebase alanları
     val trayUrl: String = "",
-    val isPremium: Boolean = false
+    val isPremium: Boolean = false,
+    val storagePath: String = "stickers",  // Firebase Storage klasör yolu (stickers veya premium_stickers)
+    val createdAt: String = "",  // Oluşturulma tarihi (ISO format)
+    val category: String = "",   // Kategori (komik, romantik, spor, dizi_film, vb.)
+    val downloadCount: Int = 0   // İndirme/ekleme sayısı
 )
 
 data class Sticker(

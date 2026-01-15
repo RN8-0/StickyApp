@@ -4,7 +4,6 @@
 
 ### Kullanıcı Deneyimi
 - **Taç Simgesi**: Premium paketlerin sağında sarı taç simgesi görünür
-- **Kilit Sistemi**: Premium kullanıcı olmayanlar sadece ilk 3 sticker'ı görebilir
 - **Görsel Kilit**: Kilitli sticker'ların üzerinde kilit simgesi ve soluk görünüm
 - **Reklamsız**: Premium üyeler reklamsız deneyim yaşar
 
@@ -51,7 +50,7 @@ Desteklenen formatlar:
 
 ### Adım 2: Klasör Oluştur
 ```bash
-cd /home/arain/Desktop/StickyApp/stickers_convert/premium_stickers
+cd stickers_convert/premium_stickers
 mkdir "Premium Hayvanlar"
 ```
 
@@ -73,7 +72,8 @@ premium_stickers/
 
 ### Adım 4: Script'i Çalıştır
 ```bash
-cd /home/arain/Desktop/StickyApp/stickers_convert
+cd stickers_convert
+source venv/bin/activate   # Linux/macOS
 python3 upload_stickers.py
 ```
 

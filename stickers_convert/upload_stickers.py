@@ -11,7 +11,7 @@ Desteklenen formatlar:
 - Özel tray (kapak) resmi desteği
 - Silinen dosyaları Firebase'den otomatik temizleme
 - Cache sistemi (aynı dosya tekrar işlenmez)
-- Otomatik arka plan silme (resimler için)
+- Otomatik arka plan silme (SADECE resimler için - video ve GIF'lere uygulanmaz)
 
 Kullanım: python3 upload_stickers.py
 """
@@ -153,6 +153,43 @@ def is_tray_file(file_path: Path) -> bool:
     return name == 'tray'
 
 
+def get_image_dimensions(file_path: Path) -> tuple:
+    """Resim dosyasının boyutlarını döndür (width, height)"""
+    try:
+        from PIL import Image
+        with Image.open(file_path) as img:
+            return img.size
+    except:
+        return (0, 0)
+
+
+def get_video_dimensions(file_path: Path) -> tuple:
+    """Video/GIF dosyasının boyutlarını döndür (width, height)"""
+    try:
+        result = subprocess.run(
+            ["ffprobe", "-v", "error", "-select_streams", "v:0",
+             "-show_entries", "stream=width,height",
+             "-of", "csv=s=x:p=0", str(file_path)],
+            capture_output=True, text=True
+        )
+        if result.stdout.strip():
+            width, height = map(int, result.stdout.strip().split('x'))
+            return (width, height)
+    except:
+        pass
+    return (0, 0)
+
+
+def is_already_correct_size(file_path: Path, file_type: str) -> bool:
+    """Dosya zaten 512x512 mi kontrol et"""
+    if file_type in ['video', 'animated_gif']:
+        width, height = get_video_dimensions(file_path)
+    else:
+        width, height = get_image_dimensions(file_path)
+
+    return width == STICKER_SIZE and height == STICKER_SIZE
+
+
 def remove_background_from_image(input_path: Path) -> Path:
     """Resimden arka planı sil, geçici dosya döndür"""
     if not REMBG_AVAILABLE or not REMOVE_BACKGROUND:
@@ -227,49 +264,76 @@ def remove_background_from_gif(input_path: Path) -> Path:
 
 
 def convert_video_to_sticker(input_path: Path, output_path: Path) -> bool:
-    """Video/Animated GIF'i animated WebP'ye dönüştür (GIF için arka plan silme dahil)"""
-    temp_path = None
+    """Video/Animated GIF'i animated WebP'ye dönüştür (arka plan silme yok - sadece dönüştürme)"""
     try:
         processed_path = input_path
 
-        # GIF ise arka planı sil
-        if input_path.suffix.lower() == '.gif':
-            processed_path = remove_background_from_gif(input_path)
-            if processed_path != input_path:
-                temp_path = processed_path
+        # Boyut kontrolü: Eğer zaten 512x512 ise, resize yapma
+        width, height = get_video_dimensions(input_path)
+        is_correct_size = (width == STICKER_SIZE and height == STICKER_SIZE)
 
-        cmd = [
-            "ffmpeg", "-y", "-i", str(processed_path),
-            "-t", str(MAX_DURATION),
-            "-vf", f"scale={STICKER_SIZE}:{STICKER_SIZE}:force_original_aspect_ratio=decrease,"
-                   f"pad={STICKER_SIZE}:{STICKER_SIZE}:(ow-iw)/2:(oh-ih)/2:color=0x00000000,"
-                   f"fps={FPS}",
-            "-loop", "0",
-            "-c:v", "libwebp",
-            "-lossless", "0",
-            "-quality", "70",
-            "-an",
-            str(output_path)
-        ]
+        # Video/GIF için arka plan silme yapılmıyor - direkt dönüştürülüyor
+
+        # 512x512 ise resize filtresi kullanma
+        if is_correct_size:
+            cmd = [
+                "ffmpeg", "-y", "-i", str(processed_path),
+                "-t", str(MAX_DURATION),
+                "-vf", f"fps={FPS}",
+                "-loop", "0",
+                "-c:v", "libwebp",
+                "-lossless", "0",
+                "-quality", "70",
+                "-an",
+                str(output_path)
+            ]
+        else:
+            # Normal resize işlemi
+            cmd = [
+                "ffmpeg", "-y", "-i", str(processed_path),
+                "-t", str(MAX_DURATION),
+                "-vf", f"scale={STICKER_SIZE}:{STICKER_SIZE}:force_original_aspect_ratio=decrease,"
+                       f"pad={STICKER_SIZE}:{STICKER_SIZE}:(ow-iw)/2:(oh-ih)/2:color=0x00000000,"
+                       f"fps={FPS}",
+                "-loop", "0",
+                "-c:v", "libwebp",
+                "-lossless", "0",
+                "-quality", "70",
+                "-an",
+                str(output_path)
+            ]
         subprocess.run(cmd, capture_output=True, check=True)
 
         # Boyut kontrolü ve kalite düşürme
         size_kb = output_path.stat().st_size / 1024
         if size_kb > MAX_FILE_SIZE_KB:
             for quality, fps in [(50, 8), (35, 6), (25, 5)]:
-                cmd = [
-                    "ffmpeg", "-y", "-i", str(processed_path),
-                    "-t", str(MAX_DURATION),
-                    "-vf", f"scale={STICKER_SIZE}:{STICKER_SIZE}:force_original_aspect_ratio=decrease,"
-                           f"pad={STICKER_SIZE}:{STICKER_SIZE}:(ow-iw)/2:(oh-ih)/2:color=0x00000000,"
-                           f"fps={fps}",
-                    "-loop", "0",
-                    "-c:v", "libwebp",
-                    "-lossless", "0",
-                    "-quality", str(quality),
-                    "-an",
-                    str(output_path)
-                ]
+                if is_correct_size:
+                    cmd = [
+                        "ffmpeg", "-y", "-i", str(processed_path),
+                        "-t", str(MAX_DURATION),
+                        "-vf", f"fps={fps}",
+                        "-loop", "0",
+                        "-c:v", "libwebp",
+                        "-lossless", "0",
+                        "-quality", str(quality),
+                        "-an",
+                        str(output_path)
+                    ]
+                else:
+                    cmd = [
+                        "ffmpeg", "-y", "-i", str(processed_path),
+                        "-t", str(MAX_DURATION),
+                        "-vf", f"scale={STICKER_SIZE}:{STICKER_SIZE}:force_original_aspect_ratio=decrease,"
+                               f"pad={STICKER_SIZE}:{STICKER_SIZE}:(ow-iw)/2:(oh-ih)/2:color=0x00000000,"
+                               f"fps={fps}",
+                        "-loop", "0",
+                        "-c:v", "libwebp",
+                        "-lossless", "0",
+                        "-quality", str(quality),
+                        "-an",
+                        str(output_path)
+                    ]
                 subprocess.run(cmd, capture_output=True, check=True)
                 size_kb = output_path.stat().st_size / 1024
                 if size_kb <= MAX_FILE_SIZE_KB:
@@ -278,40 +342,72 @@ def convert_video_to_sticker(input_path: Path, output_path: Path) -> bool:
         return True
     except subprocess.CalledProcessError:
         return False
-    finally:
-        # Geçici dosyayı temizle
-        if temp_path and temp_path.exists():
-            try:
-                temp_path.unlink()
-            except:
-                pass
 
 
 def convert_image_to_sticker(input_path: Path, output_path: Path) -> bool:
     """Resmi statik WebP'ye dönüştür (arka plan silme dahil)"""
     temp_path = None
     try:
+        # Boyut kontrolü: Eğer zaten 512x512 ise ve WebP ise, sadece kopyala
+        width, height = get_image_dimensions(input_path)
+        is_correct_size = (width == STICKER_SIZE and height == STICKER_SIZE)
+        is_webp = input_path.suffix.lower() == '.webp'
+
+        # Eğer zaten 512x512 WebP ve arka plan silme kapalıysa, direkt kopyala
+        if is_correct_size and is_webp and not REMOVE_BACKGROUND:
+            import shutil
+            shutil.copy2(input_path, output_path)
+            return True
+
         # Arka planı sil (aktifse)
         processed_path = remove_background_from_image(input_path)
         if processed_path != input_path:
             temp_path = processed_path  # Temizlenmesi gereken geçici dosya
 
-        cmd = [
-            "ffmpeg", "-y", "-i", str(processed_path),
-            "-vf", f"scale={STICKER_SIZE}:{STICKER_SIZE}:force_original_aspect_ratio=decrease,"
-                   f"pad={STICKER_SIZE}:{STICKER_SIZE}:(ow-iw)/2:(oh-ih)/2:color=0x00000000",
-            "-c:v", "libwebp",
-            "-lossless", "0",
-            "-quality", "90",
-            str(output_path)
-        ]
+        # Eğer 512x512 ise ama format dönüşümü gerekiyorsa, resize etme
+        if is_correct_size:
+            cmd = [
+                "ffmpeg", "-y", "-i", str(processed_path),
+                "-c:v", "libwebp",
+                "-lossless", "0",
+                "-quality", "90",
+                str(output_path)
+            ]
+        else:
+            # Normal resize işlemi
+            cmd = [
+                "ffmpeg", "-y", "-i", str(processed_path),
+                "-vf", f"scale={STICKER_SIZE}:{STICKER_SIZE}:force_original_aspect_ratio=decrease,"
+                       f"pad={STICKER_SIZE}:{STICKER_SIZE}:(ow-iw)/2:(oh-ih)/2:color=0x00000000",
+                "-c:v", "libwebp",
+                "-lossless", "0",
+                "-quality", "90",
+                str(output_path)
+            ]
         subprocess.run(cmd, capture_output=True, check=True)
 
         # Boyut kontrolü
         size_kb = output_path.stat().st_size / 1024
         if size_kb > MAX_FILE_SIZE_KB:
             for quality in [70, 50, 35]:
-                cmd[cmd.index("-quality") + 1] = str(quality)
+                if is_correct_size:
+                    cmd = [
+                        "ffmpeg", "-y", "-i", str(processed_path),
+                        "-c:v", "libwebp",
+                        "-lossless", "0",
+                        "-quality", str(quality),
+                        str(output_path)
+                    ]
+                else:
+                    cmd = [
+                        "ffmpeg", "-y", "-i", str(processed_path),
+                        "-vf", f"scale={STICKER_SIZE}:{STICKER_SIZE}:force_original_aspect_ratio=decrease,"
+                               f"pad={STICKER_SIZE}:{STICKER_SIZE}:(ow-iw)/2:(oh-ih)/2:color=0x00000000",
+                        "-c:v", "libwebp",
+                        "-lossless", "0",
+                        "-quality", str(quality),
+                        str(output_path)
+                    ]
                 subprocess.run(cmd, capture_output=True, check=True)
                 size_kb = output_path.stat().st_size / 1024
                 if size_kb <= MAX_FILE_SIZE_KB:
@@ -413,12 +509,27 @@ def init_firebase():
     return storage.bucket(), firestore.client()
 
 
-def upload_to_storage(bucket, local_path: Path, remote_path: str) -> str:
+def upload_to_storage(bucket, local_path: Path, remote_path: str, force_refresh: bool = False) -> str:
     """Firebase Storage'a yükle ve URL döndür"""
     blob = bucket.blob(remote_path)
+
+    # Eğer force_refresh ise, önce blob'u sil (cache temizlemek için)
+    if force_refresh:
+        try:
+            blob.delete()
+        except:
+            pass
+        blob = bucket.blob(remote_path)
+
+    # Cache-control header'ı ekle - browser cache'ini engelle
+    blob.cache_control = "no-cache, no-store, must-revalidate"
     blob.upload_from_filename(str(local_path), content_type="image/webp")
     blob.make_public()
-    return blob.public_url
+
+    # Cache busting için timestamp ekle
+    import time
+    timestamp = int(time.time())
+    return f"{blob.public_url}?v={timestamp}"
 
 
 def delete_from_storage(bucket, remote_path: str):
@@ -467,12 +578,23 @@ def cleanup_deleted_packs(bucket, db, cache: dict, local_pack_ids: set):
     """Silinen paketleri Firebase'den temizle"""
     print("\n Silinen paketler kontrol ediliyor...")
 
-    # Firestore'daki paketleri al
+    # Her iki koleksiyondaki paketleri al
+    firebase_pack_ids = set()
     try:
+        # Normal paketler
+        docs = db.collection("stickers").stream()
+        for doc in docs:
+            firebase_pack_ids.add(doc.id)
+        # Premium paketler
+        docs = db.collection("premium_stickers").stream()
+        for doc in docs:
+            firebase_pack_ids.add(doc.id)
+        # Eski koleksiyon (geriye uyumluluk)
         docs = db.collection("sticker_packs").stream()
-        firebase_pack_ids = {doc.id for doc in docs}
+        for doc in docs:
+            firebase_pack_ids.add(doc.id)
     except:
-        firebase_pack_ids = set()
+        pass
 
     # Silinen paketleri bul
     deleted_packs = firebase_pack_ids - local_pack_ids
@@ -484,19 +606,21 @@ def cleanup_deleted_packs(bucket, db, cache: dict, local_pack_ids: set):
     for pack_id in deleted_packs:
         print(f"   Siliniyor: {pack_id}...", end=" ")
 
-        # Firestore'dan sil
-        try:
-            db.collection("sticker_packs").document(pack_id).delete()
-        except:
-            pass
+        # Firestore'dan sil (her üç koleksiyondan)
+        for collection in ["stickers", "premium_stickers", "sticker_packs"]:
+            try:
+                db.collection(collection).document(pack_id).delete()
+            except:
+                pass
 
-        # Storage'dan sil
-        try:
-            blobs = bucket.list_blobs(prefix=f"stickers/{pack_id}/")
-            for blob in blobs:
-                blob.delete()
-        except:
-            pass
+        # Storage'dan sil (hem stickers hem premium_stickers klasörlerinden)
+        for folder in ["stickers", "premium_stickers"]:
+            try:
+                blobs = bucket.list_blobs(prefix=f"{folder}/{pack_id}/")
+                for blob in blobs:
+                    blob.delete()
+            except:
+                pass
 
         # Cache'den sil
         if pack_id in cache.get("converted", {}):
@@ -525,6 +649,9 @@ def process_pack(pack_dir: Path, bucket, db, cache: dict, is_premium: bool = Fal
     pack_name = pack_dir.name
     pack_id = pack_name.lower().replace(" ", "_").replace("-", "_")
     pack_type = "🌟 PREMIUM" if is_premium else "📦 NORMAL"
+
+    # Firebase Storage klasör yolu - premium için ayrı klasör
+    storage_folder = "premium_stickers" if is_premium else "stickers"
 
     print(f"\n {pack_type} Paket: {pack_name}")
 
@@ -592,7 +719,7 @@ def process_pack(pack_dir: Path, bucket, db, cache: dict, is_premium: bool = Fal
             if file_key in cache["uploaded"][pack_id]:
                 url = cache["uploaded"][pack_id][file_key]
             else:
-                remote_path = f"stickers/{pack_id}/{sticker_name}"
+                remote_path = f"{storage_folder}/{pack_id}/{sticker_name}"
                 url = upload_to_storage(bucket, sticker_path, remote_path)
                 cache["uploaded"][pack_id][file_key] = url
 
@@ -622,7 +749,7 @@ def process_pack(pack_dir: Path, bucket, db, cache: dict, is_premium: bool = Fal
                 "animated": is_animated
             }
 
-            remote_path = f"stickers/{pack_id}/{sticker_name}"
+            remote_path = f"{storage_folder}/{pack_id}/{sticker_name}"
             url = upload_to_storage(bucket, sticker_path, remote_path)
             cache["uploaded"][pack_id][file_key] = url
 
@@ -661,11 +788,12 @@ def process_pack(pack_dir: Path, bucket, db, cache: dict, is_premium: bool = Fal
             print(f"   Tray: Atlandı (özel)")
             tray_url = cached_tray.get("url", "")
         else:
-            print(f"   Tray: {custom_tray.name} kullanılıyor...", end=" ")
+            print(f"   Tray: {custom_tray.name} kullanılıyor (GÜNCELLEME)...", end=" ")
             if create_tray_image(custom_tray, tray_path):
                 print("OK")
-                remote_path = f"stickers/{pack_id}/{tray_name}"
-                tray_url = upload_to_storage(bucket, tray_path, remote_path)
+                remote_path = f"{storage_folder}/{pack_id}/{tray_name}"
+                # Tray değişti - force_refresh=True ile yükle (CDN cache temizle)
+                tray_url = upload_to_storage(bucket, tray_path, remote_path, force_refresh=True)
                 if "tray" not in cache:
                     cache["tray"] = {}
                 cache["tray"][tray_cache_key] = {"url": tray_url, "hash": custom_tray_hash}
@@ -678,24 +806,38 @@ def process_pack(pack_dir: Path, bucket, db, cache: dict, is_premium: bool = Fal
         if isinstance(cached_tray, str):
             cached_tray = {"url": cached_tray, "hash": "auto"}
 
-        if cached_tray and tray_path.exists():
+        # Otomatik tray için de kaynak dosyanın hash'ini kontrol et
+        first_file_hash = get_file_hash(files[0]) if files else "auto"
+        if cached_tray and cached_tray.get("hash") == first_file_hash and tray_path.exists():
             print(f"   Tray: Atlandı (otomatik)")
             tray_url = cached_tray.get("url", "")
         else:
             print(f"   Tray: Otomatik oluşturuluyor...", end=" ")
             if create_tray_image(files[0], tray_path):
                 print("OK")
-                remote_path = f"stickers/{pack_id}/{tray_name}"
-                tray_url = upload_to_storage(bucket, tray_path, remote_path)
+                remote_path = f"{storage_folder}/{pack_id}/{tray_name}"
+                # Tray değişti - force_refresh=True ile yükle (CDN cache temizle)
+                tray_url = upload_to_storage(bucket, tray_path, remote_path, force_refresh=True)
                 if "tray" not in cache:
                     cache["tray"] = {}
-                cache["tray"][tray_cache_key] = {"url": tray_url, "hash": "auto"}
+                cache["tray"][tray_cache_key] = {"url": tray_url, "hash": first_file_hash}
             else:
                 print("HATA")
                 tray_url = stickers[0]["url"]
                 tray_name = stickers[0]["image_file"]
 
-    # Firestore'a kaydet
+    # Firestore'a kaydet - premium ve normal için ayrı koleksiyonlar
+    # Mevcut created_at'ı koru (varsa)
+    existing_doc = db.collection("premium_stickers" if is_premium else "stickers").document(pack_id).get()
+    existing_created_at = ""
+    existing_download_count = 0
+    existing_category = ""
+    if existing_doc.exists:
+        data = existing_doc.to_dict()
+        existing_created_at = data.get("created_at", "")
+        existing_download_count = data.get("download_count", 0)
+        existing_category = data.get("category", "")
+
     pack_data = {
         "name": pack_name.replace("_", " ").replace("-", " ").title(),
         "publisher": PUBLISHER,
@@ -707,14 +849,20 @@ def process_pack(pack_dir: Path, bucket, db, cache: dict, is_premium: bool = Fal
         "tray_image_file": tray_name,
         "tray_url": tray_url,
         "stickers": stickers,
-        "isPremium": is_premium,  # Premium klasöründen geliyorsa True
+        "isPremium": is_premium,
+        "storagePath": storage_folder,
         "animated_sticker_pack": has_animated,
-        "created_at": datetime.now().isoformat(),
-        "sticker_count": len(stickers)
+        "created_at": existing_created_at if existing_created_at else datetime.now().strftime("%Y-%m-%d"),
+        "sticker_count": len(stickers),
+        "category": existing_category,  # Kategori manuel ayarlanmalı (Firebase Console'dan)
+        "download_count": existing_download_count  # İndirme sayısı korunur
     }
 
-    print(f"   Firebase'e kaydediliyor...", end=" ")
-    db.collection("sticker_packs").document(pack_id).set(pack_data)
+    # Koleksiyon adını belirle - premium için ayrı koleksiyon
+    collection_name = "premium_stickers" if is_premium else "stickers"
+
+    print(f"   Firebase'e kaydediliyor ({collection_name})...", end=" ")
+    db.collection(collection_name).document(pack_id).set(pack_data)
     print("OK")
 
     save_cache(cache)
