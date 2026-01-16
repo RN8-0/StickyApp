@@ -1,19 +1,15 @@
 #!/usr/bin/env python3
 """
-Sticker Otomatik Dönüştürücü ve Firebase Yükleyici
-===================================================
-Desteklenen formatlar:
-- Video: MP4, MOV, AVI, MKV, WEBM, MPEG, GIF (animasyonlu)
-- Resim: PNG, JPG, JPEG, WEBP, BMP (statik sticker)
+Sticly - Sticker Yonetim Paneli
+================================
+Google Drive entegrasyonlu, menu tabanli sticker yonetim araci.
 
-Özellikler:
-- Otomatik format dönüşümü
-- Özel tray (kapak) resmi desteği
-- Silinen dosyaları Firebase'den otomatik temizleme
-- Cache sistemi (aynı dosya tekrar işlenmez)
-- Otomatik arka plan silme (SADECE resimler için - video ve GIF'lere uygulanmaz)
-
-Kullanım: python3 upload_stickers.py
+Ozellikler:
+- Google Drive'dan sticker cekme/yukleme
+- Firebase Storage ve Firestore senkronizasyonu
+- Tray (kapak) resmi guncelleme
+- Istatistik goruntuleme
+- GitHub senkronizasyonu
 """
 
 import os
@@ -22,37 +18,59 @@ import subprocess
 import json
 import hashlib
 import tempfile
+import shutil
 from pathlib import Path
 from datetime import datetime
 from io import BytesIO
+import pickle
 
-# Firebase Admin SDK
-try:
-    import firebase_admin
-    from firebase_admin import credentials, storage, firestore
-except ImportError:
-    print("Firebase Admin SDK yüklü değil!")
-    print("   Çalıştır: pip install firebase-admin")
-    sys.exit(1)
+# ============================================================================
+# LOGO VE ARAYUZ
+# ============================================================================
 
-# Arka plan silme için rembg
-try:
-    from rembg import remove as remove_bg
-    from PIL import Image
-    REMBG_AVAILABLE = True
-except ImportError:
-    REMBG_AVAILABLE = False
-    print("⚠️  rembg yüklü değil - arka plan silme devre dışı")
-    print("   Yüklemek için: pip install rembg")
+LOGO = """
+███████╗████████╗██╗ ██████╗██╗  ██╗   ██╗
+██╔════╝╚══██╔══╝██║██╔════╝██║  ╚██╗ ██╔╝
+███████╗   ██║   ██║██║     ██║   ╚████╔╝
+╚════██║   ██║   ██║██║     ██║    ╚██╔╝
+███████║   ██║   ██║╚██████╗███████╗██║
+╚══════╝   ╚═╝   ╚═╝ ╚═════╝╚══════╝╚═╝
+        Sticker Yonetim Paneli v2.0
+"""
 
-# Ayarlar
+MENU = """
+╔════════════════════════════════════════════════════════════╗
+║                      ANA MENU                              ║
+╠════════════════════════════════════════════════════════════╣
+║  [1] Tray (Kapak) Fotograflarini Guncelle                  ║
+║  [2] Stickerlari Guncelle (Drive -> Firebase)              ║
+║  [3] Sticker Paket Adlarini Guncelle                       ║
+║  [4] GitHub Reposunu Guncelle                              ║
+║  [5] Istatistik Ekrani                                     ║
+║  [6] Drive'dan Yerel'e Stickerlari Indir                   ║
+║  [7] Yerel'den Drive'a Stickerlari Yukle                   ║
+║  [8] Tam Senkronizasyon (Tum islemler)                     ║
+╠════════════════════════════════════════════════════════════╣
+║  [0] Cikis                                                 ║
+╚════════════════════════════════════════════════════════════╝
+"""
+
+# ============================================================================
+# YAPILANDIRMA
+# ============================================================================
+
 SCRIPT_DIR = Path(__file__).parent
 STICKERS_DIR = SCRIPT_DIR / "stickers"
 PREMIUM_STICKERS_DIR = SCRIPT_DIR / "premium_stickers"
 OUTPUT_DIR = SCRIPT_DIR / "output"
 CACHE_FILE = SCRIPT_DIR / "cache.json"
+CREDENTIALS_FILE = SCRIPT_DIR / "credentials.json"
+TOKEN_FILE = SCRIPT_DIR / "token.pickle"
 
-# Service Account Key'i otomatik bul
+# Google Drive klasor adi
+DRIVE_FOLDER_NAME = "SticlyStickers"
+
+# Firebase ayarlari
 SERVICE_ACCOUNT_KEY = None
 for f in SCRIPT_DIR.glob("*.json"):
     if "firebase-adminsdk" in f.name:
@@ -74,7 +92,7 @@ PUBLISHER_EMAIL = "contact@sticly.com"
 PRIVACY_POLICY = ""
 LICENSE = ""
 
-# Arka plan silme ayarı (True = aktif, False = devre dışı)
+# Arka plan silme ayari
 REMOVE_BACKGROUND = True
 
 # Desteklenen formatlar
@@ -83,9 +101,45 @@ IMAGE_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.webp', '.bmp'}
 GIF_EXTENSION = '.gif'
 ALL_EXTENSIONS = VIDEO_EXTENSIONS | IMAGE_EXTENSIONS | {GIF_EXTENSION}
 
+# Global degiskenler
+_firebase_initialized = False
+_bucket = None
+_db = None
+_drive_service = None
+_rembg_available = None
+
+# ============================================================================
+# YARDIMCI FONKSIYONLAR
+# ============================================================================
+
+def clear_screen():
+    """Ekrani temizle"""
+    os.system('cls' if os.name == 'nt' else 'clear')
+
+def print_header(title):
+    """Baslik yazdir"""
+    print("\n" + "=" * 60)
+    print(f"  {title}")
+    print("=" * 60)
+
+def print_success(msg):
+    print(f" [OK] {msg}")
+
+def print_error(msg):
+    print(f" [HATA] {msg}")
+
+def print_warning(msg):
+    print(f" [!] {msg}")
+
+def print_info(msg):
+    print(f" [*] {msg}")
+
+def wait_enter():
+    """Enter'a basilmasini bekle"""
+    input("\n Devam etmek icin Enter'a basin...")
 
 def load_cache() -> dict:
-    """Cache dosyasını yükle"""
+    """Cache dosyasini yukle"""
     if CACHE_FILE.exists():
         try:
             with open(CACHE_FILE, "r") as f:
@@ -94,21 +148,18 @@ def load_cache() -> dict:
             pass
     return {"converted": {}, "uploaded": {}, "tray": {}}
 
-
 def save_cache(cache: dict):
-    """Cache dosyasını kaydet"""
+    """Cache dosyasini kaydet"""
     with open(CACHE_FILE, "w") as f:
         json.dump(cache, f, indent=2, ensure_ascii=False)
 
-
 def get_file_hash(file_path: Path) -> str:
-    """Dosyanın MD5 hash'ini al"""
+    """Dosyanin MD5 hash'ini al"""
     hash_md5 = hashlib.md5()
     with open(file_path, "rb") as f:
         for chunk in iter(lambda: f.read(4096), b""):
             hash_md5.update(chunk)
     return hash_md5.hexdigest()
-
 
 def check_ffmpeg():
     """FFmpeg kurulu mu kontrol et"""
@@ -118,9 +169,215 @@ def check_ffmpeg():
     except (subprocess.CalledProcessError, FileNotFoundError):
         return False
 
+def check_rembg():
+    """rembg kurulu mu kontrol et"""
+    global _rembg_available
+    if _rembg_available is not None:
+        return _rembg_available
+    try:
+        from rembg import remove as remove_bg
+        from PIL import Image
+        _rembg_available = True
+    except ImportError:
+        _rembg_available = False
+    return _rembg_available
+
+# ============================================================================
+# GOOGLE DRIVE ENTEGRASYONU
+# ============================================================================
+
+def init_drive():
+    """Google Drive API'yi baslat"""
+    global _drive_service
+
+    if _drive_service is not None:
+        return _drive_service
+
+    try:
+        from google.oauth2.credentials import Credentials
+        from google_auth_oauthlib.flow import InstalledAppFlow
+        from google.auth.transport.requests import Request
+        from googleapiclient.discovery import build
+    except ImportError:
+        print_error("Google API kutuphaneleri yuklu degil!")
+        print("   Calistir: pip install google-api-python-client google-auth-httplib2 google-auth-oauthlib")
+        return None
+
+    SCOPES = ['https://www.googleapis.com/auth/drive']
+    creds = None
+
+    # Token var mi kontrol et
+    if TOKEN_FILE.exists():
+        with open(TOKEN_FILE, 'rb') as token:
+            creds = pickle.load(token)
+
+    # Token gecersiz veya yok
+    if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+        else:
+            if not CREDENTIALS_FILE.exists():
+                print_error(f"credentials.json bulunamadi!")
+                print(f"   1. Google Cloud Console'a git")
+                print(f"   2. APIs & Services > Credentials")
+                print(f"   3. OAuth 2.0 Client ID olustur (Desktop app)")
+                print(f"   4. JSON indir ve su konuma koy:")
+                print(f"      {CREDENTIALS_FILE}")
+                return None
+
+            flow = InstalledAppFlow.from_client_secrets_file(
+                str(CREDENTIALS_FILE), SCOPES)
+            creds = flow.run_local_server(port=0)
+
+        # Token'i kaydet
+        with open(TOKEN_FILE, 'wb') as token:
+            pickle.dump(creds, token)
+
+    _drive_service = build('drive', 'v3', credentials=creds)
+    return _drive_service
+
+def get_or_create_drive_folder(service, folder_name, parent_id=None):
+    """Drive'da klasor bul veya olustur"""
+    query = f"name='{folder_name}' and mimeType='application/vnd.google-apps.folder' and trashed=false"
+    if parent_id:
+        query += f" and '{parent_id}' in parents"
+
+    results = service.files().list(q=query, spaces='drive', fields='files(id, name)').execute()
+    folders = results.get('files', [])
+
+    if folders:
+        return folders[0]['id']
+
+    # Klasor olustur
+    file_metadata = {
+        'name': folder_name,
+        'mimeType': 'application/vnd.google-apps.folder'
+    }
+    if parent_id:
+        file_metadata['parents'] = [parent_id]
+
+    folder = service.files().create(body=file_metadata, fields='id').execute()
+    return folder.get('id')
+
+def upload_file_to_drive(service, file_path: Path, parent_id: str, file_name: str = None):
+    """Dosyayi Drive'a yukle"""
+    from googleapiclient.http import MediaFileUpload
+
+    if file_name is None:
+        file_name = file_path.name
+
+    # Ayni isimde dosya var mi kontrol et
+    query = f"name='{file_name}' and '{parent_id}' in parents and trashed=false"
+    results = service.files().list(q=query, spaces='drive', fields='files(id)').execute()
+    existing = results.get('files', [])
+
+    media = MediaFileUpload(str(file_path), resumable=True)
+
+    if existing:
+        # Guncelle
+        file = service.files().update(fileId=existing[0]['id'], media_body=media).execute()
+    else:
+        # Yeni yukle
+        file_metadata = {'name': file_name, 'parents': [parent_id]}
+        file = service.files().create(body=file_metadata, media_body=media, fields='id').execute()
+
+    return file.get('id')
+
+def download_file_from_drive(service, file_id: str, dest_path: Path):
+    """Drive'dan dosya indir"""
+    from googleapiclient.http import MediaIoBaseDownload
+    import io
+
+    request = service.files().get_media(fileId=file_id)
+    fh = io.BytesIO()
+    downloader = MediaIoBaseDownload(fh, request)
+
+    done = False
+    while not done:
+        status, done = downloader.next_chunk()
+
+    dest_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(dest_path, 'wb') as f:
+        fh.seek(0)
+        f.write(fh.read())
+
+def list_drive_folder(service, folder_id: str):
+    """Klasordeki dosyalari listele"""
+    results = service.files().list(
+        q=f"'{folder_id}' in parents and trashed=false",
+        spaces='drive',
+        fields='files(id, name, mimeType, size)'
+    ).execute()
+    return results.get('files', [])
+
+# ============================================================================
+# FIREBASE ENTEGRASYONU
+# ============================================================================
+
+def init_firebase():
+    """Firebase'i baslat"""
+    global _firebase_initialized, _bucket, _db
+
+    if _firebase_initialized:
+        return _bucket, _db
+
+    try:
+        import firebase_admin
+        from firebase_admin import credentials, storage, firestore
+    except ImportError:
+        print_error("Firebase Admin SDK yuklu degil!")
+        print("   Calistir: pip install firebase-admin")
+        return None, None
+
+    if SERVICE_ACCOUNT_KEY is None or not SERVICE_ACCOUNT_KEY.exists():
+        print_error("Service Account Key bulunamadi!")
+        print(f"   Bu klasore firebase-adminsdk iceren JSON dosyasi koy:")
+        print(f"   {SCRIPT_DIR}/")
+        return None, None
+
+    cred = credentials.Certificate(str(SERVICE_ACCOUNT_KEY))
+    firebase_admin.initialize_app(cred, {'storageBucket': STORAGE_BUCKET})
+
+    _bucket = storage.bucket()
+    _db = firestore.client()
+    _firebase_initialized = True
+
+    return _bucket, _db
+
+def upload_to_storage(bucket, local_path: Path, remote_path: str, force_refresh: bool = False) -> str:
+    """Firebase Storage'a yukle ve URL dondur"""
+    blob = bucket.blob(remote_path)
+
+    if force_refresh:
+        try:
+            blob.delete()
+        except:
+            pass
+        blob = bucket.blob(remote_path)
+
+    blob.cache_control = "no-cache, no-store, must-revalidate"
+    blob.upload_from_filename(str(local_path), content_type="image/webp")
+    blob.make_public()
+
+    import time
+    timestamp = int(time.time())
+    return f"{blob.public_url}?v={timestamp}"
+
+def delete_from_storage(bucket, remote_path: str):
+    """Firebase Storage'dan sil"""
+    try:
+        blob = bucket.blob(remote_path)
+        blob.delete()
+        return True
+    except:
+        return False
+
+# ============================================================================
+# DONUSTURME FONKSIYONLARI
+# ============================================================================
 
 def is_animated_gif(file_path: Path) -> bool:
-    """GIF'in animasyonlu olup olmadığını kontrol et"""
+    """GIF'in animasyonlu olup olmadigini kontrol et"""
     try:
         result = subprocess.run(
             ["ffprobe", "-v", "error", "-select_streams", "v:0",
@@ -133,11 +390,9 @@ def is_animated_gif(file_path: Path) -> bool:
     except:
         return False
 
-
 def get_file_type(file_path: Path) -> str:
-    """Dosya tipini belirle: 'video', 'image', 'animated_gif'"""
+    """Dosya tipini belirle"""
     ext = file_path.suffix.lower()
-
     if ext in VIDEO_EXTENSIONS:
         return 'video'
     elif ext == GIF_EXTENSION:
@@ -146,25 +401,12 @@ def get_file_type(file_path: Path) -> str:
         return 'image'
     return None
 
-
 def is_tray_file(file_path: Path) -> bool:
-    """Dosya tray dosyası mı kontrol et"""
-    name = file_path.stem.lower()
-    return name == 'tray'
-
-
-def get_image_dimensions(file_path: Path) -> tuple:
-    """Resim dosyasının boyutlarını döndür (width, height)"""
-    try:
-        from PIL import Image
-        with Image.open(file_path) as img:
-            return img.size
-    except:
-        return (0, 0)
-
+    """Dosya tray dosyasi mi kontrol et"""
+    return file_path.stem.lower() == 'tray'
 
 def get_video_dimensions(file_path: Path) -> tuple:
-    """Video/GIF dosyasının boyutlarını döndür (width, height)"""
+    """Video/GIF boyutlarini dondur"""
     try:
         result = subprocess.run(
             ["ffprobe", "-v", "error", "-select_streams", "v:0",
@@ -179,239 +421,71 @@ def get_video_dimensions(file_path: Path) -> tuple:
         pass
     return (0, 0)
 
-
-def is_already_correct_size(file_path: Path, file_type: str) -> bool:
-    """Dosya zaten 512x512 mi kontrol et"""
-    if file_type in ['video', 'animated_gif']:
-        width, height = get_video_dimensions(file_path)
-    else:
-        width, height = get_image_dimensions(file_path)
-
-    return width == STICKER_SIZE and height == STICKER_SIZE
-
-
-def has_transparency(image_path: Path) -> bool:
-    """Resmin şeffaf arka planı var mı kontrol et"""
+def get_image_dimensions(file_path: Path) -> tuple:
+    """Resim boyutlarini dondur"""
     try:
-        with Image.open(image_path) as img:
-            if img.mode != 'RGBA':
-                return False
-            # Alpha kanalını kontrol et
-            alpha = img.split()[-1]
-            # Tamamen opak olmayan pikseller var mı?
-            extrema = alpha.getextrema()
-            # Eğer min değer 255'ten küçükse şeffaf piksel var
-            return extrema[0] < 255
+        from PIL import Image
+        with Image.open(file_path) as img:
+            return img.size
     except:
-        return False
-
-
-def check_and_fix_tray_backgrounds(cache: dict) -> int:
-    """Tüm tray dosyalarını kontrol et, arka planı silinmemişse sil"""
-    if not REMBG_AVAILABLE or not REMOVE_BACKGROUND:
-        return 0
-
-    fixed_count = 0
-    processed_trays = cache.get("processed_trays", {})
-
-    # Normal ve premium paket klasörlerini tara
-    all_pack_dirs = []
-    if STICKERS_DIR.exists():
-        all_pack_dirs.extend([d for d in STICKERS_DIR.iterdir() if d.is_dir()])
-    if PREMIUM_STICKERS_DIR.exists():
-        all_pack_dirs.extend([d for d in PREMIUM_STICKERS_DIR.iterdir() if d.is_dir()])
-
-    for pack_dir in all_pack_dirs:
-        tray_file = find_custom_tray(pack_dir)
-        if not tray_file:
-            continue
-
-        # Sadece resim dosyalarını işle (GIF hariç)
-        if tray_file.suffix.lower() not in IMAGE_EXTENSIONS:
-            continue
-
-        file_hash = get_file_hash(tray_file)
-        cache_key = str(tray_file)
-
-        # Daha önce işlenmiş mi?
-        if cache_key in processed_trays and processed_trays[cache_key] == file_hash:
-            continue
-
-        # Şeffaflık var mı kontrol et
-        if has_transparency(tray_file):
-            # Zaten şeffaf, cache'e ekle
-            processed_trays[cache_key] = file_hash
-            continue
-
-        # Arka planı sil
-        print(f"   🖼️  Tray arka planı siliniyor: {pack_dir.name}/{tray_file.name}...", end=" ")
-        try:
-            with Image.open(tray_file) as img:
-                if img.mode != 'RGBA':
-                    img = img.convert('RGBA')
-                output = remove_bg(img)
-                # Orijinal dosyanın üzerine yaz (PNG olarak)
-                new_path = tray_file.with_suffix('.png')
-                output.save(new_path, 'PNG')
-                # Eğer orijinal PNG değilse, eski dosyayı sil
-                if tray_file.suffix.lower() != '.png' and tray_file.exists():
-                    tray_file.unlink()
-                # Yeni hash'i kaydet
-                new_hash = get_file_hash(new_path)
-                processed_trays[str(new_path)] = new_hash
-                fixed_count += 1
-                print("OK")
-        except Exception as e:
-            print(f"HATA: {e}")
-
-    cache["processed_trays"] = processed_trays
-    return fixed_count
-
+        return (0, 0)
 
 def remove_background_from_image(input_path: Path) -> Path:
-    """Resimden arka planı sil, geçici dosya döndür"""
-    if not REMBG_AVAILABLE or not REMOVE_BACKGROUND:
+    """Resimden arka plani sil"""
+    if not check_rembg() or not REMOVE_BACKGROUND:
         return input_path
 
     try:
-        # Resmi aç
+        from rembg import remove as remove_bg
+        from PIL import Image
+
         with Image.open(input_path) as img:
-            # RGBA'ya çevir (şeffaflık için)
             if img.mode != 'RGBA':
                 img = img.convert('RGBA')
-
-            # Arka planı sil
             output = remove_bg(img)
-
-            # Geçici dosyaya kaydet
             temp_file = tempfile.NamedTemporaryFile(suffix='.png', delete=False)
             output.save(temp_file.name, 'PNG')
             return Path(temp_file.name)
     except Exception as e:
-        print(f"Arka plan silme hatası: {e}")
+        print_warning(f"Arka plan silme hatasi: {e}")
         return input_path
-
-
-def remove_background_from_gif(input_path: Path) -> Path:
-    """Animasyonlu GIF'in her karesinden arka planı sil"""
-    if not REMBG_AVAILABLE or not REMOVE_BACKGROUND:
-        return input_path
-
-    try:
-        with Image.open(input_path) as gif:
-            # GIF mi kontrol et
-            if not hasattr(gif, 'n_frames') or gif.n_frames <= 1:
-                return remove_background_from_image(input_path)
-
-            frames = []
-            durations = []
-
-            # Her kareyi işle
-            for frame_idx in range(min(gif.n_frames, 30)):  # Max 30 kare
-                gif.seek(frame_idx)
-
-                # Kare süresini al
-                duration = gif.info.get('duration', 100)
-                durations.append(duration)
-
-                # Kareyi RGBA'ya çevir
-                frame = gif.convert('RGBA')
-
-                # Arka planı sil
-                frame_no_bg = remove_bg(frame)
-                frames.append(frame_no_bg)
-
-            if not frames:
-                return input_path
-
-            # Yeni GIF olarak kaydet
-            temp_file = tempfile.NamedTemporaryFile(suffix='.gif', delete=False)
-            frames[0].save(
-                temp_file.name,
-                save_all=True,
-                append_images=frames[1:],
-                duration=durations,
-                loop=0,
-                disposal=2  # Her kareyi temizle (şeffaflık için önemli)
-            )
-            return Path(temp_file.name)
-
-    except Exception as e:
-        print(f"GIF arka plan silme hatası: {e}")
-        return input_path
-
 
 def convert_video_to_sticker(input_path: Path, output_path: Path) -> bool:
-    """Video/Animated GIF'i animated WebP'ye dönüştür (arka plan silme yok - sadece dönüştürme)"""
+    """Video/GIF'i WebP'ye donustur"""
     try:
-        processed_path = input_path
-
-        # Boyut kontrolü: Eğer zaten 512x512 ise, resize yapma
         width, height = get_video_dimensions(input_path)
         is_correct_size = (width == STICKER_SIZE and height == STICKER_SIZE)
 
-        # Video/GIF için arka plan silme yapılmıyor - direkt dönüştürülüyor
-
-        # 512x512 ise resize filtresi kullanma
         if is_correct_size:
             cmd = [
-                "ffmpeg", "-y", "-i", str(processed_path),
+                "ffmpeg", "-y", "-i", str(input_path),
                 "-t", str(MAX_DURATION),
                 "-vf", f"fps={FPS}",
-                "-loop", "0",
-                "-c:v", "libwebp",
-                "-lossless", "0",
-                "-quality", "70",
-                "-an",
+                "-loop", "0", "-c:v", "libwebp",
+                "-lossless", "0", "-quality", "70", "-an",
                 str(output_path)
             ]
         else:
-            # Normal resize işlemi
             cmd = [
-                "ffmpeg", "-y", "-i", str(processed_path),
+                "ffmpeg", "-y", "-i", str(input_path),
                 "-t", str(MAX_DURATION),
                 "-vf", f"scale={STICKER_SIZE}:{STICKER_SIZE}:force_original_aspect_ratio=decrease,"
                        f"pad={STICKER_SIZE}:{STICKER_SIZE}:(ow-iw)/2:(oh-ih)/2:color=0x00000000,"
                        f"fps={FPS}",
-                "-loop", "0",
-                "-c:v", "libwebp",
-                "-lossless", "0",
-                "-quality", "70",
-                "-an",
+                "-loop", "0", "-c:v", "libwebp",
+                "-lossless", "0", "-quality", "70", "-an",
                 str(output_path)
             ]
         subprocess.run(cmd, capture_output=True, check=True)
 
-        # Boyut kontrolü ve kalite düşürme
         size_kb = output_path.stat().st_size / 1024
         if size_kb > MAX_FILE_SIZE_KB:
             for quality, fps in [(50, 8), (35, 6), (25, 5)]:
-                if is_correct_size:
-                    cmd = [
-                        "ffmpeg", "-y", "-i", str(processed_path),
-                        "-t", str(MAX_DURATION),
-                        "-vf", f"fps={fps}",
-                        "-loop", "0",
-                        "-c:v", "libwebp",
-                        "-lossless", "0",
-                        "-quality", str(quality),
-                        "-an",
-                        str(output_path)
-                    ]
-                else:
-                    cmd = [
-                        "ffmpeg", "-y", "-i", str(processed_path),
-                        "-t", str(MAX_DURATION),
-                        "-vf", f"scale={STICKER_SIZE}:{STICKER_SIZE}:force_original_aspect_ratio=decrease,"
-                               f"pad={STICKER_SIZE}:{STICKER_SIZE}:(ow-iw)/2:(oh-ih)/2:color=0x00000000,"
-                               f"fps={fps}",
-                        "-loop", "0",
-                        "-c:v", "libwebp",
-                        "-lossless", "0",
-                        "-quality", str(quality),
-                        "-an",
-                        str(output_path)
-                    ]
+                cmd[cmd.index("-quality") + 1] = str(quality)
+                if "-vf" in cmd:
+                    vf_idx = cmd.index("-vf")
+                    vf = cmd[vf_idx + 1]
+                    cmd[vf_idx + 1] = vf.replace(f"fps={FPS}", f"fps={fps}")
                 subprocess.run(cmd, capture_output=True, check=True)
                 size_kb = output_path.stat().st_size / 1024
                 if size_kb <= MAX_FILE_SIZE_KB:
@@ -421,71 +495,37 @@ def convert_video_to_sticker(input_path: Path, output_path: Path) -> bool:
     except subprocess.CalledProcessError:
         return False
 
-
 def convert_image_to_sticker(input_path: Path, output_path: Path) -> bool:
-    """Resmi statik WebP'ye dönüştür (arka plan silme dahil)"""
+    """Resmi WebP'ye donustur"""
     temp_path = None
     try:
-        # Boyut kontrolü: Eğer zaten 512x512 ise ve WebP ise, sadece kopyala
         width, height = get_image_dimensions(input_path)
         is_correct_size = (width == STICKER_SIZE and height == STICKER_SIZE)
-        is_webp = input_path.suffix.lower() == '.webp'
 
-        # Eğer zaten 512x512 WebP ve arka plan silme kapalıysa, direkt kopyala
-        if is_correct_size and is_webp and not REMOVE_BACKGROUND:
-            import shutil
-            shutil.copy2(input_path, output_path)
-            return True
-
-        # Arka planı sil (aktifse)
         processed_path = remove_background_from_image(input_path)
         if processed_path != input_path:
-            temp_path = processed_path  # Temizlenmesi gereken geçici dosya
+            temp_path = processed_path
 
-        # Eğer 512x512 ise ama format dönüşümü gerekiyorsa, resize etme
         if is_correct_size:
             cmd = [
                 "ffmpeg", "-y", "-i", str(processed_path),
-                "-c:v", "libwebp",
-                "-lossless", "0",
-                "-quality", "90",
+                "-c:v", "libwebp", "-lossless", "0", "-quality", "90",
                 str(output_path)
             ]
         else:
-            # Normal resize işlemi
             cmd = [
                 "ffmpeg", "-y", "-i", str(processed_path),
                 "-vf", f"scale={STICKER_SIZE}:{STICKER_SIZE}:force_original_aspect_ratio=decrease,"
                        f"pad={STICKER_SIZE}:{STICKER_SIZE}:(ow-iw)/2:(oh-ih)/2:color=0x00000000",
-                "-c:v", "libwebp",
-                "-lossless", "0",
-                "-quality", "90",
+                "-c:v", "libwebp", "-lossless", "0", "-quality", "90",
                 str(output_path)
             ]
         subprocess.run(cmd, capture_output=True, check=True)
 
-        # Boyut kontrolü
         size_kb = output_path.stat().st_size / 1024
         if size_kb > MAX_FILE_SIZE_KB:
             for quality in [70, 50, 35]:
-                if is_correct_size:
-                    cmd = [
-                        "ffmpeg", "-y", "-i", str(processed_path),
-                        "-c:v", "libwebp",
-                        "-lossless", "0",
-                        "-quality", str(quality),
-                        str(output_path)
-                    ]
-                else:
-                    cmd = [
-                        "ffmpeg", "-y", "-i", str(processed_path),
-                        "-vf", f"scale={STICKER_SIZE}:{STICKER_SIZE}:force_original_aspect_ratio=decrease,"
-                               f"pad={STICKER_SIZE}:{STICKER_SIZE}:(ow-iw)/2:(oh-ih)/2:color=0x00000000",
-                        "-c:v", "libwebp",
-                        "-lossless", "0",
-                        "-quality", str(quality),
-                        str(output_path)
-                    ]
+                cmd[cmd.index("-quality") + 1] = str(quality)
                 subprocess.run(cmd, capture_output=True, check=True)
                 size_kb = output_path.stat().st_size / 1024
                 if size_kb <= MAX_FILE_SIZE_KB:
@@ -495,19 +535,17 @@ def convert_image_to_sticker(input_path: Path, output_path: Path) -> bool:
     except subprocess.CalledProcessError:
         return False
     finally:
-        # Geçici dosyayı temizle
         if temp_path and temp_path.exists():
             try:
                 temp_path.unlink()
             except:
                 pass
 
-
 def convert_to_sticker(input_path: Path, output_path: Path) -> tuple:
-    """Dosyayı sticker'a dönüştür, (success, is_animated) döner"""
+    """Dosyayi sticker'a donustur"""
     file_type = get_file_type(input_path)
 
-    if file_type == 'video' or file_type == 'animated_gif':
+    if file_type in ['video', 'animated_gif']:
         success = convert_video_to_sticker(input_path, output_path)
         return success, True
     elif file_type == 'image':
@@ -516,324 +554,229 @@ def convert_to_sticker(input_path: Path, output_path: Path) -> tuple:
 
     return False, False
 
-
 def create_tray_image(input_path: Path, output_path: Path) -> bool:
-    """Tray image (96x96 paket ikonu) oluştur (arka plan silme dahil)"""
+    """Tray image olustur"""
     temp_path = None
     try:
         file_type = get_file_type(input_path)
         processed_path = input_path
 
-        # Resim ise arka planı sil
         if file_type == 'image':
             processed_path = remove_background_from_image(input_path)
             if processed_path != input_path:
                 temp_path = processed_path
 
-        if file_type in ['video', 'animated_gif']:
-            cmd = [
-                "ffmpeg", "-y", "-i", str(processed_path),
-                "-vf", f"scale={TRAY_SIZE}:{TRAY_SIZE}:force_original_aspect_ratio=decrease,"
-                       f"pad={TRAY_SIZE}:{TRAY_SIZE}:(ow-iw)/2:(oh-ih)/2:color=0x00000000",
-                "-frames:v", "1",
-                "-c:v", "libwebp",
-                str(output_path)
-            ]
-        else:
-            cmd = [
-                "ffmpeg", "-y", "-i", str(processed_path),
-                "-vf", f"scale={TRAY_SIZE}:{TRAY_SIZE}:force_original_aspect_ratio=decrease,"
-                       f"pad={TRAY_SIZE}:{TRAY_SIZE}:(ow-iw)/2:(oh-ih)/2:color=0x00000000",
-                "-c:v", "libwebp",
-                str(output_path)
-            ]
-
+        cmd = [
+            "ffmpeg", "-y", "-i", str(processed_path),
+            "-vf", f"scale={TRAY_SIZE}:{TRAY_SIZE}:force_original_aspect_ratio=decrease,"
+                   f"pad={TRAY_SIZE}:{TRAY_SIZE}:(ow-iw)/2:(oh-ih)/2:color=0x00000000",
+            "-frames:v", "1" if file_type in ['video', 'animated_gif'] else "",
+            "-c:v", "libwebp",
+            str(output_path)
+        ]
+        # -frames:v bos ise kaldir
+        cmd = [c for c in cmd if c]
         subprocess.run(cmd, capture_output=True, check=True)
         return True
     except subprocess.CalledProcessError:
         return False
     finally:
-        # Geçici dosyayı temizle
         if temp_path and temp_path.exists():
             try:
                 temp_path.unlink()
             except:
                 pass
 
-
 def find_custom_tray(pack_dir: Path) -> Path:
-    """Özel tray dosyası var mı kontrol et (tray.png, tray.jpg vs.)"""
+    """Ozel tray dosyasi bul"""
     for f in pack_dir.iterdir():
         if f.is_file() and is_tray_file(f) and f.suffix.lower() in (IMAGE_EXTENSIONS | {GIF_EXTENSION}):
             return f
     return None
 
-
-def git_sync():
-    """Değişiklikleri GitHub'a push et"""
-    # Git repo kök dizinini bul
-    git_root = SCRIPT_DIR.parent
-
-    # .git klasörü var mı kontrol et
-    if not (git_root / ".git").exists():
-        print(" ⚠️  Git repo bulunamadı, GitHub sync atlanıyor")
-        return False
-
-    try:
-        # Değişiklik var mı kontrol et
-        result = subprocess.run(
-            ["git", "status", "--porcelain"],
-            cwd=git_root,
-            capture_output=True,
-            text=True
-        )
-
-        if not result.stdout.strip():
-            print(" ✓ GitHub: Değişiklik yok")
-            return True
-
-        # Değişiklikleri ekle
-        subprocess.run(["git", "add", "-A"], cwd=git_root, check=True, capture_output=True)
-
-        # Commit yap
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
-        commit_msg = f"Sticker güncelleme - {timestamp}"
-        subprocess.run(
-            ["git", "commit", "-m", commit_msg],
-            cwd=git_root,
-            check=True,
-            capture_output=True
-        )
-
-        # Push yap
-        print(" 📤 GitHub'a yükleniyor...", end=" ")
-        result = subprocess.run(
-            ["git", "push"],
-            cwd=git_root,
-            capture_output=True,
-            text=True
-        )
-
-        if result.returncode == 0:
-            print("OK")
-            return True
-        else:
-            print(f"HATA: {result.stderr}")
-            return False
-
-    except subprocess.CalledProcessError as e:
-        print(f" ⚠️  GitHub sync hatası: {e}")
-        return False
-    except FileNotFoundError:
-        print(" ⚠️  Git yüklü değil, GitHub sync atlanıyor")
-        return False
-
-
-def init_firebase():
-    """Firebase'i başlat"""
-    if SERVICE_ACCOUNT_KEY is None or not SERVICE_ACCOUNT_KEY.exists():
-        print("Service Account Key bulunamadı!")
-        print(f"   Bu klasöre firebase-adminsdk içeren JSON dosyası koy:")
-        print(f"   {SCRIPT_DIR}/")
-        print(f"\n   Firebase Console > Project Settings > Service Accounts")
-        print(f"   > Generate New Private Key")
-        sys.exit(1)
-
-    cred = credentials.Certificate(str(SERVICE_ACCOUNT_KEY))
-    firebase_admin.initialize_app(cred, {
-        'storageBucket': STORAGE_BUCKET
-    })
-
-    return storage.bucket(), firestore.client()
-
-
-def upload_to_storage(bucket, local_path: Path, remote_path: str, force_refresh: bool = False) -> str:
-    """Firebase Storage'a yükle ve URL döndür"""
-    blob = bucket.blob(remote_path)
-
-    # Eğer force_refresh ise, önce blob'u sil (cache temizlemek için)
-    if force_refresh:
-        try:
-            blob.delete()
-        except:
-            pass
-        blob = bucket.blob(remote_path)
-
-    # Cache-control header'ı ekle - browser cache'ini engelle
-    blob.cache_control = "no-cache, no-store, must-revalidate"
-    blob.upload_from_filename(str(local_path), content_type="image/webp")
-    blob.make_public()
-
-    # Cache busting için timestamp ekle
-    import time
-    timestamp = int(time.time())
-    return f"{blob.public_url}?v={timestamp}"
-
-
-def delete_from_storage(bucket, remote_path: str):
-    """Firebase Storage'dan sil"""
-    try:
-        blob = bucket.blob(remote_path)
-        blob.delete()
-        return True
-    except:
-        return False
-
-
 def get_sticker_files(pack_dir: Path) -> list:
-    """Paketteki sticker dosyalarını bul (tray hariç)"""
+    """Paketteki sticker dosyalarini bul"""
     files = []
     for f in pack_dir.iterdir():
         if f.is_file() and f.suffix.lower() in ALL_EXTENSIONS:
             if not is_tray_file(f):
                 files.append(f)
-
     return sorted(files, key=lambda x: x.name.lower())
 
+# ============================================================================
+# MENU FONKSIYONLARI
+# ============================================================================
 
-def get_local_pack_ids() -> set:
-    """Lokaldeki paket ID'lerini al (hem normal hem premium)"""
-    pack_ids = set()
+def menu_update_trays():
+    """Tray fotograflarini guncelle"""
+    print_header("TRAY FOTOGRAFLARINI GUNCELLE")
 
-    # Normal paketler
-    if STICKERS_DIR.exists():
-        for d in STICKERS_DIR.iterdir():
-            if d.is_dir():
-                pack_id = d.name.lower().replace(" ", "_").replace("-", "_")
-                pack_ids.add(pack_id)
+    if not check_rembg():
+        print_warning("rembg yuklu degil - arka plan silme devre disi")
 
-    # Premium paketler
-    if PREMIUM_STICKERS_DIR.exists():
-        for d in PREMIUM_STICKERS_DIR.iterdir():
-            if d.is_dir():
-                pack_id = d.name.lower().replace(" ", "_").replace("-", "_")
-                pack_ids.add(pack_id)
-
-    return pack_ids
-
-
-def cleanup_deleted_packs(bucket, db, cache: dict, local_pack_ids: set):
-    """Silinen paketleri Firebase'den temizle"""
-    print("\n Silinen paketler kontrol ediliyor...")
-
-    # Her iki koleksiyondaki paketleri al
-    firebase_pack_ids = set()
-    try:
-        # Normal paketler
-        docs = db.collection("stickers").stream()
-        for doc in docs:
-            firebase_pack_ids.add(doc.id)
-        # Premium paketler
-        docs = db.collection("premium_stickers").stream()
-        for doc in docs:
-            firebase_pack_ids.add(doc.id)
-        # Eski koleksiyon (geriye uyumluluk)
-        docs = db.collection("sticker_packs").stream()
-        for doc in docs:
-            firebase_pack_ids.add(doc.id)
-    except:
-        pass
-
-    # Silinen paketleri bul
-    deleted_packs = firebase_pack_ids - local_pack_ids
-
-    if not deleted_packs:
-        print("   Silinen paket yok")
+    bucket, db = init_firebase()
+    if not bucket:
+        wait_enter()
         return
 
-    for pack_id in deleted_packs:
-        print(f"   Siliniyor: {pack_id}...", end=" ")
+    cache = load_cache()
 
-        # Firestore'dan sil (her üç koleksiyondan)
-        for collection in ["stickers", "premium_stickers", "sticker_packs"]:
+    # Klasorleri tara
+    all_pack_dirs = []
+    if STICKERS_DIR.exists():
+        all_pack_dirs.extend([(d, False) for d in STICKERS_DIR.iterdir() if d.is_dir()])
+    if PREMIUM_STICKERS_DIR.exists():
+        all_pack_dirs.extend([(d, True) for d in PREMIUM_STICKERS_DIR.iterdir() if d.is_dir()])
+
+    if not all_pack_dirs:
+        print_warning("Paket klasoru bulunamadi!")
+        wait_enter()
+        return
+
+    updated = 0
+    for pack_dir, is_premium in all_pack_dirs:
+        pack_name = pack_dir.name
+        pack_id = pack_name.lower().replace(" ", "_").replace("-", "_")
+        storage_folder = "premium_stickers" if is_premium else "stickers"
+
+        custom_tray = find_custom_tray(pack_dir)
+        if not custom_tray:
+            # Ilk sticker'i kullan
+            files = get_sticker_files(pack_dir)
+            if files:
+                custom_tray = files[0]
+
+        if not custom_tray:
+            continue
+
+        pack_output = OUTPUT_DIR / pack_id
+        pack_output.mkdir(parents=True, exist_ok=True)
+        tray_path = pack_output / "tray.webp"
+
+        file_hash = get_file_hash(custom_tray)
+        tray_cache_key = f"{pack_id}_tray"
+        cached = cache.get("tray", {}).get(tray_cache_key, {})
+
+        if isinstance(cached, str):
+            cached = {"url": cached, "hash": ""}
+
+        if cached.get("hash") == file_hash and tray_path.exists():
+            print(f"   {pack_name}: Atlanildi (degismemis)")
+            continue
+
+        print(f"   {pack_name}: Guncelleniyor...", end=" ")
+
+        if create_tray_image(custom_tray, tray_path):
+            remote_path = f"{storage_folder}/{pack_id}/tray.webp"
+            tray_url = upload_to_storage(bucket, tray_path, remote_path, force_refresh=True)
+
+            if "tray" not in cache:
+                cache["tray"] = {}
+            cache["tray"][tray_cache_key] = {"url": tray_url, "hash": file_hash}
+
+            # Firestore'u guncelle
+            collection = "premium_stickers" if is_premium else "stickers"
             try:
-                db.collection(collection).document(pack_id).delete()
+                db.collection(collection).document(pack_id).update({
+                    "tray_url": tray_url
+                })
             except:
                 pass
 
-        # Storage'dan sil (hem stickers hem premium_stickers klasörlerinden)
-        for folder in ["stickers", "premium_stickers"]:
-            try:
-                blobs = bucket.list_blobs(prefix=f"{folder}/{pack_id}/")
-                for blob in blobs:
-                    blob.delete()
-            except:
-                pass
-
-        # Cache'den sil
-        if pack_id in cache.get("converted", {}):
-            del cache["converted"][pack_id]
-        if pack_id in cache.get("uploaded", {}):
-            del cache["uploaded"][pack_id]
-
-        # Tray cache'den sil
-        tray_key = f"{pack_id}_tray"
-        if tray_key in cache.get("tray", {}):
-            del cache["tray"][tray_key]
-
-        # Output klasöründen sil
-        output_dir = OUTPUT_DIR / pack_id
-        if output_dir.exists():
-            import shutil
-            shutil.rmtree(output_dir)
-
-        print("Silindi")
+            print("OK")
+            updated += 1
+        else:
+            print("HATA")
 
     save_cache(cache)
+    print_success(f"{updated} tray guncellendi")
+    wait_enter()
 
+def menu_update_stickers():
+    """Stickerlari guncelle (Drive -> Firebase)"""
+    print_header("STICKERLARI GUNCELLE")
 
-def process_pack(pack_dir: Path, bucket, db, cache: dict, is_premium: bool = False):
-    """Bir paket klasörünü işle"""
+    if not check_ffmpeg():
+        print_error("FFmpeg yuklu degil!")
+        print("   Calistir: sudo apt install ffmpeg")
+        wait_enter()
+        return
+
+    bucket, db = init_firebase()
+    if not bucket:
+        wait_enter()
+        return
+
+    cache = load_cache()
+    OUTPUT_DIR.mkdir(exist_ok=True)
+    STICKERS_DIR.mkdir(exist_ok=True)
+    PREMIUM_STICKERS_DIR.mkdir(exist_ok=True)
+
+    # Paketleri bul
+    normal_packs = [d for d in STICKERS_DIR.iterdir() if d.is_dir()] if STICKERS_DIR.exists() else []
+    premium_packs = [d for d in PREMIUM_STICKERS_DIR.iterdir() if d.is_dir()] if PREMIUM_STICKERS_DIR.exists() else []
+
+    total = len(normal_packs) + len(premium_packs)
+    if total == 0:
+        print_warning("Paket bulunamadi!")
+        print("   Once Drive'dan stickerlari indirin (Menu 6)")
+        wait_enter()
+        return
+
+    print_info(f"{len(normal_packs)} normal, {len(premium_packs)} premium paket bulundu")
+
+    successful = 0
+
+    # Normal paketler
+    for pack_dir in sorted(normal_packs):
+        result = process_single_pack(pack_dir, bucket, db, cache, is_premium=False)
+        if result:
+            successful += 1
+
+    # Premium paketler
+    for pack_dir in sorted(premium_packs):
+        result = process_single_pack(pack_dir, bucket, db, cache, is_premium=True)
+        if result:
+            successful += 1
+
+    save_cache(cache)
+    print_success(f"{successful}/{total} paket basariyla islendi")
+    wait_enter()
+
+def process_single_pack(pack_dir: Path, bucket, db, cache: dict, is_premium: bool = False) -> dict:
+    """Tek bir paketi isle"""
     pack_name = pack_dir.name
     pack_id = pack_name.lower().replace(" ", "_").replace("-", "_")
-    pack_type = "🌟 PREMIUM" if is_premium else "📦 NORMAL"
-
-    # Firebase Storage klasör yolu - premium için ayrı klasör
     storage_folder = "premium_stickers" if is_premium else "stickers"
+    pack_type = "PREMIUM" if is_premium else "NORMAL"
 
-    print(f"\n {pack_type} Paket: {pack_name}")
+    print(f"\n [{pack_type}] {pack_name}")
 
-    # Sticker dosyalarını bul
     files = get_sticker_files(pack_dir)
 
     if not files:
-        print(f"   Dosya bulunamadı, atlanıyor")
+        print("   Dosya bulunamadi")
         return None
 
     if len(files) < 3:
-        print(f"   En az 3 sticker gerekli (WhatsApp kuralı), atlanıyor")
+        print("   En az 3 sticker gerekli")
         return None
 
     if len(files) > 30:
-        print(f"   Maksimum 30 sticker, ilk 30 alınacak")
         files = files[:30]
 
-    # Çıktı klasörü
     pack_output = OUTPUT_DIR / pack_id
     pack_output.mkdir(parents=True, exist_ok=True)
 
-    # Pack cache'i başlat
     if pack_id not in cache["converted"]:
         cache["converted"][pack_id] = {}
     if pack_id not in cache["uploaded"]:
         cache["uploaded"][pack_id] = {}
 
-    # Silinen stickerları tespit et
-    current_file_names = {f.name for f in files}
-    cached_file_names = set(cache["converted"].get(pack_id, {}).keys())
-    deleted_files = cached_file_names - current_file_names
-
-    if deleted_files:
-        print(f"   {len(deleted_files)} sticker silindi, temizleniyor...")
-        for file_name in deleted_files:
-            del cache["converted"][pack_id][file_name]
-            if file_name in cache["uploaded"].get(pack_id, {}):
-                del cache["uploaded"][pack_id][file_name]
-
     stickers = []
-    new_conversions = 0
-    skipped = 0
     has_animated = False
+    new_count = 0
+    skip_count = 0
 
     for i, file in enumerate(files, 1):
         sticker_name = f"sticker_{i:02d}.webp"
@@ -841,16 +784,9 @@ def process_pack(pack_dir: Path, bucket, db, cache: dict, is_premium: bool = Fal
         file_hash = get_file_hash(file)
         file_key = file.name
 
-        print(f"   [{i}/{len(files)}] {file.name}", end=" ")
-
-        # Cache kontrolü
         cached = cache["converted"][pack_id].get(file_key)
         if cached and cached.get("hash") == file_hash and sticker_path.exists():
-            size_kb = sticker_path.stat().st_size / 1024
-            file_type = "animated" if cached.get("animated") else "static"
-            print(f"Atlandı ({size_kb:.0f}KB, {file_type})")
-            skipped += 1
-
+            skip_count += 1
             if cached.get("animated"):
                 has_animated = True
 
@@ -861,25 +797,17 @@ def process_pack(pack_dir: Path, bucket, db, cache: dict, is_premium: bool = Fal
                 url = upload_to_storage(bucket, sticker_path, remote_path)
                 cache["uploaded"][pack_id][file_key] = url
 
-            stickers.append({
-                "image_file": sticker_name,
-                "emojis": ["😀"],
-                "url": url
-            })
+            stickers.append({"image_file": sticker_name, "emojis": [""], "url": url})
             continue
 
-        # Dönüştür
         success, is_animated = convert_to_sticker(file, sticker_path)
 
         if success:
-            size_kb = sticker_path.stat().st_size / 1024
-            file_type = "animated" if is_animated else "static"
-            print(f"OK ({size_kb:.0f}KB, {file_type})")
-            new_conversions += 1
-
+            new_count += 1
             if is_animated:
                 has_animated = True
 
+            size_kb = sticker_path.stat().st_size / 1024
             cache["converted"][pack_id][file_key] = {
                 "hash": file_hash,
                 "output": sticker_name,
@@ -891,90 +819,43 @@ def process_pack(pack_dir: Path, bucket, db, cache: dict, is_premium: bool = Fal
             url = upload_to_storage(bucket, sticker_path, remote_path)
             cache["uploaded"][pack_id][file_key] = url
 
-            stickers.append({
-                "image_file": sticker_name,
-                "emojis": ["😀"],
-                "url": url
-            })
-        else:
-            print("HATA")
+            stickers.append({"image_file": sticker_name, "emojis": [""], "url": url})
 
     if not stickers:
-        print(f"   Hiçbir sticker dönüştürülemedi")
+        print("   Hicbir sticker donusturulemedi")
         return None
 
-    print(f"   Sonuç: {new_conversions} yeni, {skipped} atlandı")
+    print(f"   {new_count} yeni, {skip_count} atlandi")
 
-    # Tray image
-    tray_name = "tray.webp"
-    tray_path = pack_output / tray_name
-    tray_cache_key = f"{pack_id}_tray"
-
+    # Tray
+    tray_path = pack_output / "tray.webp"
     custom_tray = find_custom_tray(pack_dir)
+    tray_source = custom_tray if custom_tray else files[0]
 
-    if custom_tray:
-        custom_tray_hash = get_file_hash(custom_tray)
-        cached_tray = cache.get("tray", {}).get(tray_cache_key)
+    tray_cache_key = f"{pack_id}_tray"
+    source_hash = get_file_hash(tray_source)
+    cached_tray = cache.get("tray", {}).get(tray_cache_key, {})
 
-        # Eski cache formatını kontrol et
-        if isinstance(cached_tray, str):
-            cached_tray = {"url": cached_tray, "hash": ""}
-        elif cached_tray is None:
-            cached_tray = {}
+    if isinstance(cached_tray, str):
+        cached_tray = {"url": cached_tray, "hash": ""}
 
-        if cached_tray.get("hash") == custom_tray_hash and tray_path.exists():
-            print(f"   Tray: Atlandı (özel)")
-            tray_url = cached_tray.get("url", "")
-        else:
-            print(f"   Tray: {custom_tray.name} kullanılıyor (GÜNCELLEME)...", end=" ")
-            if create_tray_image(custom_tray, tray_path):
-                print("OK")
-                remote_path = f"{storage_folder}/{pack_id}/{tray_name}"
-                # Tray değişti - force_refresh=True ile yükle (CDN cache temizle)
-                tray_url = upload_to_storage(bucket, tray_path, remote_path, force_refresh=True)
-                if "tray" not in cache:
-                    cache["tray"] = {}
-                cache["tray"][tray_cache_key] = {"url": tray_url, "hash": custom_tray_hash}
-            else:
-                print("HATA")
-                tray_url = stickers[0]["url"]
-                tray_name = stickers[0]["image_file"]
+    if cached_tray.get("hash") == source_hash and tray_path.exists():
+        tray_url = cached_tray.get("url", "")
     else:
-        cached_tray = cache.get("tray", {}).get(tray_cache_key)
-        if isinstance(cached_tray, str):
-            cached_tray = {"url": cached_tray, "hash": "auto"}
-
-        # Otomatik tray için de kaynak dosyanın hash'ini kontrol et
-        first_file_hash = get_file_hash(files[0]) if files else "auto"
-        if cached_tray and cached_tray.get("hash") == first_file_hash and tray_path.exists():
-            print(f"   Tray: Atlandı (otomatik)")
-            tray_url = cached_tray.get("url", "")
+        if create_tray_image(tray_source, tray_path):
+            remote_path = f"{storage_folder}/{pack_id}/tray.webp"
+            tray_url = upload_to_storage(bucket, tray_path, remote_path, force_refresh=True)
+            if "tray" not in cache:
+                cache["tray"] = {}
+            cache["tray"][tray_cache_key] = {"url": tray_url, "hash": source_hash}
         else:
-            print(f"   Tray: Otomatik oluşturuluyor...", end=" ")
-            if create_tray_image(files[0], tray_path):
-                print("OK")
-                remote_path = f"{storage_folder}/{pack_id}/{tray_name}"
-                # Tray değişti - force_refresh=True ile yükle (CDN cache temizle)
-                tray_url = upload_to_storage(bucket, tray_path, remote_path, force_refresh=True)
-                if "tray" not in cache:
-                    cache["tray"] = {}
-                cache["tray"][tray_cache_key] = {"url": tray_url, "hash": first_file_hash}
-            else:
-                print("HATA")
-                tray_url = stickers[0]["url"]
-                tray_name = stickers[0]["image_file"]
+            tray_url = stickers[0]["url"]
 
-    # Firestore'a kaydet - premium ve normal için ayrı koleksiyonlar
-    # Mevcut created_at'ı koru (varsa)
-    existing_doc = db.collection("premium_stickers" if is_premium else "stickers").document(pack_id).get()
-    existing_created_at = ""
-    existing_download_count = 0
-    existing_category = ""
-    if existing_doc.exists:
-        data = existing_doc.to_dict()
-        existing_created_at = data.get("created_at", "")
-        existing_download_count = data.get("download_count", 0)
-        existing_category = data.get("category", "")
+    # Firestore'a kaydet
+    collection_name = "premium_stickers" if is_premium else "stickers"
+
+    existing_doc = db.collection(collection_name).document(pack_id).get()
+    existing_data = existing_doc.to_dict() if existing_doc.exists else {}
 
     pack_data = {
         "name": pack_name.replace("_", " ").replace("-", " ").title(),
@@ -984,128 +865,416 @@ def process_pack(pack_dir: Path, bucket, db, cache: dict, is_premium: bool = Fal
         "license_agreement_website": LICENSE,
         "image_data_version": "1",
         "avoid_cache": False,
-        "tray_image_file": tray_name,
+        "tray_image_file": "tray.webp",
         "tray_url": tray_url,
         "stickers": stickers,
         "isPremium": is_premium,
         "storagePath": storage_folder,
         "animated_sticker_pack": has_animated,
-        "created_at": existing_created_at if existing_created_at else datetime.now().strftime("%Y-%m-%d"),
+        "created_at": existing_data.get("created_at", datetime.now().strftime("%Y-%m-%d")),
         "sticker_count": len(stickers),
-        "category": existing_category,  # Kategori manuel ayarlanmalı (Firebase Console'dan)
-        "download_count": existing_download_count  # İndirme sayısı korunur
+        "category": existing_data.get("category", ""),
+        "download_count": existing_data.get("download_count", 0)
     }
 
-    # Koleksiyon adını belirle - premium için ayrı koleksiyon
-    collection_name = "premium_stickers" if is_premium else "stickers"
-
-    print(f"   Firebase'e kaydediliyor ({collection_name})...", end=" ")
     db.collection(collection_name).document(pack_id).set(pack_data)
-    print("OK")
-
     save_cache(cache)
+
     return pack_data
 
+def menu_update_pack_names():
+    """Paket adlarini guncelle"""
+    print_header("PAKET ADLARINI GUNCELLE")
+
+    bucket, db = init_firebase()
+    if not db:
+        wait_enter()
+        return
+
+    print("\n Mevcut paketler:")
+    print("-" * 40)
+
+    packs = []
+
+    # Normal paketler
+    for doc in db.collection("stickers").stream():
+        data = doc.to_dict()
+        packs.append((doc.id, data.get("name", doc.id), "stickers"))
+
+    # Premium paketler
+    for doc in db.collection("premium_stickers").stream():
+        data = doc.to_dict()
+        packs.append((doc.id, data.get("name", doc.id), "premium_stickers"))
+
+    if not packs:
+        print_warning("Paket bulunamadi!")
+        wait_enter()
+        return
+
+    for i, (pack_id, name, collection) in enumerate(packs, 1):
+        tag = "[P]" if collection == "premium_stickers" else "[N]"
+        print(f"   {i}. {tag} {name} ({pack_id})")
+
+    print("\n Degistirmek istediginiz paketin numarasini girin (0=iptal): ", end="")
+
+    try:
+        choice = int(input())
+        if choice == 0:
+            return
+        if choice < 1 or choice > len(packs):
+            print_error("Gecersiz secim!")
+            wait_enter()
+            return
+
+        pack_id, old_name, collection = packs[choice - 1]
+        print(f"\n Mevcut ad: {old_name}")
+        print(" Yeni ad: ", end="")
+        new_name = input().strip()
+
+        if not new_name:
+            print_error("Isim bos olamaz!")
+            wait_enter()
+            return
+
+        db.collection(collection).document(pack_id).update({"name": new_name})
+        print_success(f"Paket adi guncellendi: {old_name} -> {new_name}")
+
+    except ValueError:
+        print_error("Gecersiz giris!")
+
+    wait_enter()
+
+def menu_github_sync():
+    """GitHub reposunu guncelle"""
+    print_header("GITHUB SENKRONIZASYONU")
+
+    git_root = SCRIPT_DIR.parent
+
+    if not (git_root / ".git").exists():
+        print_error("Git repo bulunamadi!")
+        wait_enter()
+        return
+
+    try:
+        # Durum kontrol
+        result = subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=git_root, capture_output=True, text=True
+        )
+
+        if not result.stdout.strip():
+            print_success("Degisiklik yok")
+            wait_enter()
+            return
+
+        print(" Degisiklikler:")
+        print(result.stdout)
+
+        # Commit mesaji
+        print("\n Commit mesaji (bos birak = otomatik): ", end="")
+        msg = input().strip()
+        if not msg:
+            msg = f"Sticker guncelleme - {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+
+        # Add, commit, push
+        subprocess.run(["git", "add", "-A"], cwd=git_root, check=True, capture_output=True)
+        subprocess.run(["git", "commit", "-m", msg], cwd=git_root, check=True, capture_output=True)
+
+        print_info("Push yapiliyor...")
+        result = subprocess.run(["git", "push"], cwd=git_root, capture_output=True, text=True)
+
+        if result.returncode == 0:
+            print_success("GitHub'a basariyla yuklendi!")
+        else:
+            print_error(f"Push hatasi: {result.stderr}")
+
+    except subprocess.CalledProcessError as e:
+        print_error(f"Git hatasi: {e}")
+
+    wait_enter()
+
+def menu_statistics():
+    """Istatistik ekrani"""
+    print_header("ISTATISTIK EKRANI")
+
+    bucket, db = init_firebase()
+    if not db:
+        wait_enter()
+        return
+
+    # Istatistikleri topla
+    total_packs = 0
+    total_stickers = 0
+    total_downloads = 0
+    total_views = 0
+    total_favorites = 0
+    animated_packs = 0
+
+    pack_stats = []
+
+    for collection in ["stickers", "premium_stickers"]:
+        for doc in db.collection(collection).stream():
+            data = doc.to_dict()
+            total_packs += 1
+            sticker_count = data.get("sticker_count", len(data.get("stickers", [])))
+            total_stickers += sticker_count
+            downloads = data.get("download_count", 0)
+            total_downloads += downloads
+            views = data.get("view_count", 0)
+            total_views += views
+            favorites = data.get("favorite_count", 0)
+            total_favorites += favorites
+
+            if data.get("animated_sticker_pack"):
+                animated_packs += 1
+
+            pack_stats.append({
+                "id": doc.id,
+                "name": data.get("name", doc.id),
+                "downloads": downloads,
+                "views": views,
+                "favorites": favorites,
+                "stickers": sticker_count,
+                "premium": collection == "premium_stickers"
+            })
+
+    # Genel istatistikler
+    print("\n GENEL ISTATISTIKLER")
+    print("-" * 40)
+    print(f"   Toplam Paket      : {total_packs}")
+    print(f"   Toplam Sticker    : {total_stickers}")
+    print(f"   Animasyonlu Paket : {animated_packs}")
+    print(f"   Toplam Indirme    : {total_downloads}")
+    print(f"   Toplam Goruntulenme: {total_views}")
+    print(f"   Toplam Favori     : {total_favorites}")
+
+    # En populer paketler
+    print("\n EN COK INDIRILEN PAKETLER")
+    print("-" * 40)
+    top_downloads = sorted(pack_stats, key=lambda x: x["downloads"], reverse=True)[:5]
+    for i, p in enumerate(top_downloads, 1):
+        tag = "[P]" if p["premium"] else "[N]"
+        print(f"   {i}. {tag} {p['name']}: {p['downloads']} indirme")
+
+    print("\n EN COK GORUNTULENEN PAKETLER")
+    print("-" * 40)
+    top_views = sorted(pack_stats, key=lambda x: x["views"], reverse=True)[:5]
+    for i, p in enumerate(top_views, 1):
+        tag = "[P]" if p["premium"] else "[N]"
+        print(f"   {i}. {tag} {p['name']}: {p['views']} goruntulenme")
+
+    print("\n EN COK FAVORILENEN PAKETLER")
+    print("-" * 40)
+    top_favorites = sorted(pack_stats, key=lambda x: x["favorites"], reverse=True)[:5]
+    for i, p in enumerate(top_favorites, 1):
+        tag = "[P]" if p["premium"] else "[N]"
+        print(f"   {i}. {tag} {p['name']}: {p['favorites']} favori")
+
+    # Detayli tablo
+    print("\n TUM PAKETLER")
+    print("-" * 70)
+    print(f" {'Paket Adi':<30} {'Sticker':>8} {'Indirme':>10} {'Goruntulenme':>12}")
+    print("-" * 70)
+    for p in sorted(pack_stats, key=lambda x: x["name"]):
+        tag = "[P]" if p["premium"] else "[N]"
+        name = f"{tag} {p['name']}"[:30]
+        print(f" {name:<30} {p['stickers']:>8} {p['downloads']:>10} {p['views']:>12}")
+
+    wait_enter()
+
+def menu_download_from_drive():
+    """Drive'dan stickerlari indir"""
+    print_header("DRIVE'DAN STICKERLARI INDIR")
+
+    service = init_drive()
+    if not service:
+        wait_enter()
+        return
+
+    print_info("Drive klasoru araniyor...")
+
+    # Ana klasoru bul
+    main_folder_id = get_or_create_drive_folder(service, DRIVE_FOLDER_NAME)
+    print_success(f"Ana klasor: {DRIVE_FOLDER_NAME}")
+
+    # Alt klasorleri listele
+    items = list_drive_folder(service, main_folder_id)
+
+    folders = [f for f in items if f['mimeType'] == 'application/vnd.google-apps.folder']
+
+    if not folders:
+        print_warning("Drive'da sticker klasoru bulunamadi!")
+        print("   Oncelikle 'Yerel'den Drive'a Yukle' secenegini kullanin")
+        wait_enter()
+        return
+
+    print(f"\n {len(folders)} klasor bulundu:")
+    for folder in folders:
+        print(f"   - {folder['name']}")
+
+    print("\n Indiriliyor...")
+
+    downloaded = 0
+    for folder in folders:
+        folder_name = folder['name']
+
+        # Premium mi normal mi belirle
+        if folder_name.startswith("premium_"):
+            local_dir = PREMIUM_STICKERS_DIR / folder_name[8:]
+            folder_name_clean = folder_name[8:]
+        else:
+            local_dir = STICKERS_DIR / folder_name
+            folder_name_clean = folder_name
+
+        local_dir.mkdir(parents=True, exist_ok=True)
+
+        # Klasordeki dosyalari indir
+        files = list_drive_folder(service, folder['id'])
+
+        for file in files:
+            if file['mimeType'] == 'application/vnd.google-apps.folder':
+                continue
+
+            dest_path = local_dir / file['name']
+
+            if dest_path.exists():
+                continue
+
+            print(f"   {folder_name_clean}/{file['name']}", end=" ")
+            try:
+                download_file_from_drive(service, file['id'], dest_path)
+                print("OK")
+                downloaded += 1
+            except Exception as e:
+                print(f"HATA: {e}")
+
+    print_success(f"{downloaded} dosya indirildi")
+    wait_enter()
+
+def menu_upload_to_drive():
+    """Yerel'den Drive'a yukle"""
+    print_header("YEREL'DEN DRIVE'A YUKLE")
+
+    service = init_drive()
+    if not service:
+        wait_enter()
+        return
+
+    # Ana klasoru bul/olustur
+    main_folder_id = get_or_create_drive_folder(service, DRIVE_FOLDER_NAME)
+    print_success(f"Ana klasor: {DRIVE_FOLDER_NAME}")
+
+    uploaded = 0
+
+    # Normal stickerlar
+    if STICKERS_DIR.exists():
+        for pack_dir in STICKERS_DIR.iterdir():
+            if not pack_dir.is_dir():
+                continue
+
+            print(f"\n [NORMAL] {pack_dir.name}")
+            folder_id = get_or_create_drive_folder(service, pack_dir.name, main_folder_id)
+
+            files = [f for f in pack_dir.iterdir() if f.is_file() and f.suffix.lower() in ALL_EXTENSIONS]
+
+            for file in files:
+                print(f"   {file.name}", end=" ")
+                try:
+                    upload_file_to_drive(service, file, folder_id)
+                    print("OK")
+                    uploaded += 1
+                except Exception as e:
+                    print(f"HATA: {e}")
+
+    # Premium stickerlar
+    if PREMIUM_STICKERS_DIR.exists():
+        for pack_dir in PREMIUM_STICKERS_DIR.iterdir():
+            if not pack_dir.is_dir():
+                continue
+
+            print(f"\n [PREMIUM] {pack_dir.name}")
+            folder_id = get_or_create_drive_folder(service, f"premium_{pack_dir.name}", main_folder_id)
+
+            files = [f for f in pack_dir.iterdir() if f.is_file() and f.suffix.lower() in ALL_EXTENSIONS]
+
+            for file in files:
+                print(f"   {file.name}", end=" ")
+                try:
+                    upload_file_to_drive(service, file, folder_id)
+                    print("OK")
+                    uploaded += 1
+                except Exception as e:
+                    print(f"HATA: {e}")
+
+    print_success(f"{uploaded} dosya yuklendi")
+    wait_enter()
+
+def menu_full_sync():
+    """Tam senkronizasyon"""
+    print_header("TAM SENKRONIZASYON")
+
+    print_info("1/4 - Drive'dan indiriliyor...")
+    menu_download_from_drive()
+
+    print_info("2/4 - Tray'ler guncelleniyor...")
+    menu_update_trays()
+
+    print_info("3/4 - Stickerlar Firebase'e yukleniyor...")
+    menu_update_stickers()
+
+    print_info("4/4 - GitHub senkronize ediliyor...")
+    menu_github_sync()
+
+    print_success("Tam senkronizasyon tamamlandi!")
+    wait_enter()
+
+# ============================================================================
+# ANA PROGRAM
+# ============================================================================
 
 def main():
-    print("=" * 60)
-    print("   STICKER YÜKLEYICI - Otomatik Dönüştürme & Firebase")
-    print("=" * 60)
+    """Ana program"""
+    while True:
+        clear_screen()
+        print(LOGO)
+        print(MENU)
 
-    if not check_ffmpeg():
-        print("\n FFmpeg yüklü değil!")
-        print("   Çalıştır: sudo apt install ffmpeg")
-        sys.exit(1)
+        print(" Seciminiz: ", end="")
 
-    cache = load_cache()
-    print(f"\n Cache: {len(cache.get('converted', {}))} paket kayıtlı")
+        try:
+            choice = input().strip()
 
-    # Tray dosyalarının arka planını kontrol et
-    print(f"\n Tray dosyaları kontrol ediliyor...")
-    fixed_trays = check_and_fix_tray_backgrounds(cache)
-    if fixed_trays > 0:
-        print(f"   {fixed_trays} tray dosyasının arka planı silindi")
-        save_cache(cache)
-    else:
-        print(f"   Tüm tray dosyaları OK")
+            if choice == "0":
+                clear_screen()
+                print("\n Gule gule!\n")
+                break
+            elif choice == "1":
+                menu_update_trays()
+            elif choice == "2":
+                menu_update_stickers()
+            elif choice == "3":
+                menu_update_pack_names()
+            elif choice == "4":
+                menu_github_sync()
+            elif choice == "5":
+                menu_statistics()
+            elif choice == "6":
+                menu_download_from_drive()
+            elif choice == "7":
+                menu_upload_to_drive()
+            elif choice == "8":
+                menu_full_sync()
+            else:
+                print_error("Gecersiz secim!")
+                wait_enter()
 
-    print(f"\n Firebase'e bağlanılıyor...")
-    bucket, db = init_firebase()
-    print(f" Bağlantı başarılı")
-
-    OUTPUT_DIR.mkdir(exist_ok=True)
-    STICKERS_DIR.mkdir(exist_ok=True)
-    PREMIUM_STICKERS_DIR.mkdir(exist_ok=True)
-
-    # Lokaldeki paketleri bul
-    local_pack_ids = get_local_pack_ids()
-
-    # Silinen paketleri temizle
-    cleanup_deleted_packs(bucket, db, cache, local_pack_ids)
-
-    # Normal ve premium paket klasörlerini bul
-    normal_pack_dirs = [d for d in STICKERS_DIR.iterdir() if d.is_dir()]
-    premium_pack_dirs = [d for d in PREMIUM_STICKERS_DIR.iterdir() if d.is_dir()]
-
-    total_packs = len(normal_pack_dirs) + len(premium_pack_dirs)
-
-    if total_packs == 0:
-        print(f"\n ❌ Paket klasörü bulunamadı!")
-        print(f"\n   Klasör yapısı:")
-        print(f"   stickers/              ← Normal paketler")
-        print(f"   ├── kategori-adi/")
-        print(f"   │   ├── tray.png   (opsiyonel - kapak resmi)")
-        print(f"   │   ├── 01.mp4")
-        print(f"   │   ├── 02.gif")
-        print(f"   │   └── 03.png")
-        print(f"   └── diger-kategori/")
-        print(f"\n   premium_stickers/      ← Premium paketler")
-        print(f"   ├── premium-kategori/")
-        print(f"   │   ├── tray.png")
-        print(f"   │   └── stickers...")
-        sys.exit(1)
-
-    print(f"\n 📦 {len(normal_pack_dirs)} normal paket bulundu")
-    print(f" 🌟 {len(premium_pack_dirs)} premium paket bulundu")
-    print(f" 📊 Toplam: {total_packs} paket")
-
-    successful = 0
-
-    # Normal paketleri işle
-    if normal_pack_dirs:
-        print(f"\n{'='*60}")
-        print(f" NORMAL PAKETLER İŞLENİYOR")
-        print(f"{'='*60}")
-        for pack_dir in sorted(normal_pack_dirs):
-            result = process_pack(pack_dir, bucket, db, cache, is_premium=False)
-            if result:
-                successful += 1
-
-    # Premium paketleri işle
-    if premium_pack_dirs:
-        print(f"\n{'='*60}")
-        print(f" 🌟 PREMIUM PAKETLER İŞLENİYOR 🌟")
-        print(f"{'='*60}")
-        for pack_dir in sorted(premium_pack_dirs):
-            result = process_pack(pack_dir, bucket, db, cache, is_premium=True)
-            if result:
-                successful += 1
-
-    save_cache(cache)
-
-    # GitHub'a sync
-    print(f"\n{'='*60}")
-    print(f" GITHUB SYNC")
-    print(f"{'='*60}")
-    git_sync()
-
-    print("\n" + "=" * 60)
-    print(f" ✅ TAMAMLANDI: {successful}/{total_packs} paket başarılı")
-    print(f" 📦 Normal: {len(normal_pack_dirs)} paket")
-    print(f" 🌟 Premium: {len(premium_pack_dirs)} paket")
-    print(f" 📁 Çıktı: {OUTPUT_DIR}")
-    print("=" * 60)
-
+        except KeyboardInterrupt:
+            clear_screen()
+            print("\n Gule gule!\n")
+            break
+        except Exception as e:
+            print_error(f"Beklenmeyen hata: {e}")
+            wait_enter()
 
 if __name__ == "__main__":
     main()
