@@ -1,12 +1,50 @@
-# Sticly - Sticker Yönetim Sistemi
+# Sticly - Sticker Yonetim Sistemi
 
-Bu araç, stickerleri otomatik olarak WhatsApp formatına dönüştürür ve Firebase'e yükler.
+Bu arac, stickerleri otomatik olarak WhatsApp formatina donusturur ve Firebase'e yukler.
 
 ---
 
-## Desteklenen Dosya Formatları
+## Hizli Baslangic (Tek Tikla Calistir)
 
-| Tür | Formatlar | Sonuç |
+Hic komut yazmadan sticker yuklemek icin:
+
+| Isletim Sistemi | Dosya | Nasil Calistirilir |
+|-----------------|-------|-------------------|
+| **Windows** | `upload_stickers.bat` | Cift tikla |
+| **Linux/macOS** | `upload_stickers.run` | Cift tikla veya `./upload_stickers.run` |
+
+Bu dosyalar:
+- Gerekli bagimliliklari otomatik kurar (ilk seferde)
+- Tray (kapak) resimlerinin arka planini siler
+- Stickerleri Firebase'e yukler
+- Degisiklikleri GitHub'a push eder
+
+> **Ilk Kullanim Icin:** [STICKER_EKLEME_REHBERI.md](STICKER_EKLEME_REHBERI.md) dosyasini oku!
+
+---
+
+## Gereksinimler
+
+### Otomatik Kurulanlar (Script halleder):
+- Python paketleri (firebase-admin, rembg)
+
+### Manuel Kurulmasi Gerekenler:
+
+| Program | Windows | Linux | macOS |
+|---------|---------|-------|-------|
+| Python 3 | [python.org](https://python.org) | `sudo apt install python3` | `brew install python` |
+| FFmpeg | [ffmpeg.org](https://ffmpeg.org) | `sudo apt install ffmpeg` | `brew install ffmpeg` |
+| Git | [git-scm.com](https://git-scm.com) | `sudo apt install git` | `brew install git` |
+
+### Tek Seferlik Ayarlar:
+- **Firebase Admin SDK Key** - Firebase Console'dan indir ve bu klasore koy
+- **GitHub Authentication** - SSH key veya token ayarla (opsiyonel)
+
+---
+
+## Desteklenen Dosya Formatlari
+
+| Tur | Formatlar | Sonuc |
 |-----|-----------|-------|
 | Video | MP4, MOV, AVI, MKV, WEBM, MPEG | Hareketli sticker |
 | Animasyonlu GIF | GIF | Hareketli sticker |
@@ -15,215 +53,155 @@ Bu araç, stickerleri otomatik olarak WhatsApp formatına dönüştürür ve Fir
 
 ---
 
-## Klasör Yapısı
+## Klasor Yapisi
 
 ```
 stickers_convert/
-├── stickers/                          <- TÜM KATEGORİLER BURAYA
+├── stickers/                          <- NORMAL (UCRETSIZ) PAKETLER
 │   ├── komik-videolar/                <- Kategori 1
 │   │   ├── tray.png                   <- Kapak resmi (opsiyonel)
 │   │   ├── video1.mp4
 │   │   ├── video2.gif
 │   │   └── resim3.png
 │   │
-│   ├── sevimli-hayvanlar/             <- Kategori 2
-│   │   ├── tray.jpg                   <- Kapak resmi (opsiyonel)
-│   │   ├── kedi.mp4
-│   │   ├── kopek.gif
-│   │   └── tavsan.png
-│   │
-│   └── yeni-kategori/                 <- İstediğin kadar ekle
+│   └── sevimli-hayvanlar/             <- Kategori 2
 │       └── ...
 │
-├── output/                            <- Dönüştürülen dosyalar (otomatik)
-├── venv/                              <- Python ortamı
-├── cache.json                         <- İşlem takibi (otomatik)
+├── premium_stickers/                  <- PREMIUM (UCRETLI) PAKETLER
+│   └── ozel-paket/
+│       └── ...
+│
+├── output/                            <- Donusturulen dosyalar (otomatik)
+├── venv/                              <- Python ortami (otomatik)
+├── cache.json                         <- Islem takibi (otomatik)
 ├── upload_stickers.py                 <- Ana script
-├── *firebase-adminsdk*.json           <- Firebase anahtarı (GİZLİ!)
+├── upload_stickers.run                <- Linux/macOS calistirici
+├── upload_stickers.bat                <- Windows calistirici
+├── *firebase-adminsdk*.json           <- Firebase anahtari (SEN EKLE!)
+├── STICKER_EKLEME_REHBERI.md          <- Detayli rehber
 └── README.md                          <- Bu dosya
 ```
 
 ---
 
-## Sticker Ekleme (Adım Adım)
+## Sticker Ekleme (3 Adim)
 
-### 1. Yeni Kategori Oluştur
-```bash
-mkdir stickers/kategori-adi
+### 1. Klasor Olustur
+```
+stickers/yeni-paket-adi/
 ```
 
-### 2. Dosyaları Ekle
-- Minimum **3 dosya** gerekli (WhatsApp kuralı)
-- Maksimum **30 dosya** (WhatsApp kuralı)
-- Dosyaları `stickers/kategori-adi/` klasörüne kopyala
+### 2. Dosyalari Ekle
+- Minimum **3 dosya** gerekli
+- Maksimum **30 dosya**
+- Kapak icin `tray.png` ekle (opsiyonel)
 
-### 3. Script'i Çalıştır
-```bash
-cd stickers_convert
-source venv/bin/activate   # Linux/macOS
-# veya: venv\Scripts\activate   # Windows
-python3 upload_stickers.py
-```
-
-### 4. Bitti!
-- Dosyalar otomatik dönüştürülür (512x512 WebP)
-- Firebase'e yüklenir
-- Uygulama otomatik güncellenir
+### 3. Calistir
+- **Windows:** `upload_stickers.bat` cift tikla
+- **Linux/macOS:** `./upload_stickers.run` calistir
 
 ---
 
-## Kategori Kapak Resmi (Tray) Değiştirme
+## Yeni Ozellikler
 
-Kategori klasörüne `tray` adında bir resim ekle:
+### Otomatik Tray Arka Plan Silme
+- Tray (kapak) resimlerinin arka plani otomatik silinir
+- Her calistirmada kontrol edilir
+- Sadece islenmemis dosyalar islenir
 
-```
-stickers/kategori-adi/
-├── tray.png      <- veya tray.jpg, tray.jpeg, tray.webp
-├── sticker1.mp4
-├── sticker2.gif
-└── ...
-```
+### GitHub Otomatik Sync
+- Her calistirmada degisiklikler GitHub'a push edilir
+- Commit mesaji otomatik olusturulur
+- SSH veya token ile calisir
 
-- Dosya adı **tray** olmalı (uzantı farklı olabilir)
-- Resim otomatik 96x96 boyutuna dönüştürülür
-- Tray dosyası yoksa ilk sticker'dan otomatik oluşturulur
-
----
-
-## Sticker veya Kategori Silme
-
-### Tek Sticker Silmek:
-1. Dosyayı `stickers/kategori-adi/` klasöründen sil
-2. Script'i çalıştır: `python3 upload_stickers.py`
-3. Firebase'den otomatik silinir
-
-### Tüm Kategoriyi Silmek:
-1. Kategori klasörünü sil: `rm -rf stickers/kategori-adi`
-2. Script'i çalıştır: `python3 upload_stickers.py`
-3. Firebase'den otomatik silinir
+### Tek Tikla Kurulum
+- `.run` ve `.bat` dosyalari tum bagimliliklari otomatik kurar
+- Ilk calistirmada biraz bekleyin (paketler indiriliyor)
 
 ---
 
-## Yeni Bilgisayara Kurulum
+## Sik Kullanilan Komutlar
 
-### 1. Gerekli Dosyaları Kopyala
-```
-stickers_convert/
-├── stickers/                  <- Kategoriler
-├── upload_stickers.py         <- Script
-├── *firebase-adminsdk*.json   <- Firebase anahtarı
-└── README.md
-```
-
-### 2. Sistem Gereksinimlerini Kur
 ```bash
-# Ubuntu/Debian
-sudo apt update
-sudo apt install python3 python3-venv ffmpeg
+# Tek tikla calistir (onerilen)
+./upload_stickers.run          # Linux/macOS
+upload_stickers.bat            # Windows
 
-# macOS
-brew install python3 ffmpeg
-```
-
-### 3. Python Ortamını Oluştur
-```bash
-cd stickers_convert
-python3 -m venv venv
+# Manuel calistir
 source venv/bin/activate
-pip install firebase-admin
-```
-
-### 4. Test Et
-```bash
-python3 upload_stickers.py
-```
-
----
-
-## Sık Kullanılan Komutlar
-
-```bash
-# Ortamı aktifleştir
-source venv/bin/activate
-
-# Stickerleri yükle
 python3 upload_stickers.py
 
-# Cache'i sıfırla (tüm dosyaları yeniden işle)
+# Cache'i sifirla (tum dosyalari yeniden isle)
 rm cache.json
-python3 upload_stickers.py
+./upload_stickers.run
 
 # Yeni kategori ekle
 mkdir stickers/yeni-kategori
-# Dosyaları kopyala
-python3 upload_stickers.py
-
-# Kategori sil
-rm -rf stickers/eski-kategori
-python3 upload_stickers.py
+# Dosyalari kopyala, sonra calistir
 ```
 
 ---
 
 ## WhatsApp Gereksinimleri
 
-| Özellik | Değer |
+| Ozellik | Deger |
 |---------|-------|
 | Sticker boyutu | 512x512 piksel |
 | Tray boyutu | 96x96 piksel |
 | Maksimum dosya boyutu | 500 KB |
-| Maksimum video süresi | 3 saniye |
-| Minimum sticker sayısı | 3 |
-| Maksimum sticker sayısı | 30 |
+| Maksimum video suresi | 3 saniye |
+| Minimum sticker sayisi | 3 |
+| Maksimum sticker sayisi | 30 |
 
-> Script bu gereksinimleri otomatik olarak karşılar. Boyut büyükse kalite düşürür.
+> Script bu gereksinimleri otomatik olarak karsilar.
 
 ---
 
 ## Sorun Giderme
 
-### "FFmpeg yüklü değil" hatası
-```bash
-sudo apt install ffmpeg
-```
-
-### "Firebase Admin SDK yüklü değil" hatası
-```bash
-source venv/bin/activate
-pip install firebase-admin
-```
-
-### "Service Account Key bulunamadı" hatası
+### "Firebase Admin SDK bulunamadi" hatasi
 1. Firebase Console > Project Settings > Service Accounts
-2. "Generate New Private Key" tıkla
-3. İndirilen JSON dosyasını `stickers_convert/` klasörüne kopyala
+2. "Generate New Private Key" tikla
+3. Indirilen JSON dosyasini `stickers_convert/` klasorune kopyala
 
-### Cache sorunları
+### "FFmpeg bulunamadi" hatasi
+```bash
+# Linux
+sudo apt install ffmpeg
+
+# macOS
+brew install ffmpeg
+
+# Windows: ffmpeg.org'dan indir ve PATH'e ekle
+```
+
+### GitHub push yapmiyor
+- SSH key veya token ayarla
+- Detaylar icin: [STICKER_EKLEME_REHBERI.md](STICKER_EKLEME_REHBERI.md)
+
+### Cache sorunlari
 ```bash
 rm cache.json
-python3 upload_stickers.py
+./upload_stickers.run
 ```
 
 ---
 
-## Güvenlik Notları
+## Guvenlik Notlari
 
-- `*firebase-adminsdk*.json` dosyasını **asla paylaşma**
-- Bu dosya sadece senin bilgisayarında olmalı
-- APK içinde bu dosya **bulunmaz**
-- Kullanıcılar sadece stickerleri görebilir, ekleyemez
-
----
-
-## Hızlı Başvuru
-
-| İşlem | Komut |
-|-------|-------|
-| Sticker ekle | Dosyaları `stickers/kategori/` klasörüne koy |
-| Kapak değiştir | `tray.png` dosyası ekle |
-| Kategori sil | Klasörü sil |
-| Yükle | `python3 upload_stickers.py` |
+- `*firebase-adminsdk*.json` dosyasini **asla paylasma**
+- Bu dosya `.gitignore`'da, GitHub'a yuklenmez
+- Her kullanici kendi Firebase anahtarini kullanmali
 
 ---
 
-*Son güncelleme: Ocak 2025*
+## Dokumanlar
+
+| Dosya | Aciklama |
+|-------|----------|
+| [STICKER_EKLEME_REHBERI.md](STICKER_EKLEME_REHBERI.md) | Yeni baslayanlar icin detayli rehber |
+| [PREMIUM_README.md](PREMIUM_README.md) | Premium sticker sistemi |
+
+---
+
+*Son guncelleme: Ocak 2025*
