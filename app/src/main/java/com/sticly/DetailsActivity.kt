@@ -92,6 +92,9 @@ class DetailsActivity : AppCompatActivity() {
     private fun setupUI(pack: Pack) {
         currentPack = pack
 
+        // Görüntülenme sayısını artır (Firebase'e yaz)
+        StickerRepository.incrementViewCount(pack.id, pack.isPremium)
+
         findViewById<android.widget.TextView>(R.id.name).text = pack.name
 
         btnAction = findViewById(R.id.btnAction)
@@ -431,6 +434,11 @@ class DetailsActivity : AppCompatActivity() {
                     PreferencesHelper.addInstalledPack(this, packId)
                     updateButton()
                     Toast.makeText(this, R.string.pack_added, Toast.LENGTH_SHORT).show()
+
+                    // İndirme sayısını artır (Firebase'e yaz)
+                    currentPack?.let { pack ->
+                        StickerRepository.incrementDownloadCount(pack.id, pack.isPremium)
+                    }
 
                     // Sticker ekleme sayacını artır
                     val count = PreferencesHelper.incrementStickersAddedCount(this)

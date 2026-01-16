@@ -78,6 +78,14 @@ class PackAdapter(
             h.btnFavorite.setImageResource(
                 if (newFavState) R.drawable.ic_favorite_filled else R.drawable.ic_favorite_border
             )
+
+            // Firebase'e favori sayısını güncelle
+            if (newFavState) {
+                StickerRepository.incrementFavoriteCount(pack.id, pack.isPremium)
+            } else {
+                StickerRepository.decrementFavoriteCount(pack.id, pack.isPremium)
+            }
+
             val msg = if (newFavState) R.string.added_to_favorites else R.string.removed_from_favorites
             Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
             onFavoriteChanged?.invoke()

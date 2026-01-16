@@ -52,8 +52,9 @@ MENU = """
 ║  [7] Yerel'den Drive'a Stickerlari Yukle                   ║
 ╠════════════════════════════════════════════════════════════╣
 ║  [8] Yeni Sticker Paketi Ekle                              ║
-║  [9] Tam Senkronizasyon (Tum islemler)                     ║
+║  [9] Sticker Paketi Sil                                    ║
 ╠════════════════════════════════════════════════════════════╣
+║  [F] Tam Senkronizasyon (Tum islemler)                     ║
 ║  [0] Cikis                                                 ║
 ╚════════════════════════════════════════════════════════════╝
 """
@@ -1102,14 +1103,46 @@ def menu_statistics():
         print(f"   {i}. {tag} {p['name']}: {p['favorites']} favori")
 
     # Detayli tablo
-    print("\n TUM PAKETLER")
-    print("-" * 70)
-    print(f" {'Paket Adi':<30} {'Sticker':>8} {'Indirme':>10} {'Goruntulenme':>12}")
-    print("-" * 70)
-    for p in sorted(pack_stats, key=lambda x: x["name"]):
-        tag = "[P]" if p["premium"] else "[N]"
-        name = f"{tag} {p['name']}"[:30]
-        print(f" {name:<30} {p['stickers']:>8} {p['downloads']:>10} {p['views']:>12}")
+    print("\n TUM PAKETLER (Detayli)")
+    print("=" * 85)
+    print(f" {'Paket Adi':<28} {'Tip':>4} {'Sticker':>8} {'Indirme':>9} {'Goru.':>8} {'Favori':>8}")
+    print("=" * 85)
+
+    # Sıralama seçeneği
+    print("\n Siralama: [1] Ada gore  [2] Indirmeye gore  [3] Goruntulenmeye gore  [4] Favoriye gore")
+    print(" Seciminiz (varsayilan=2): ", end="")
+    sort_choice = input().strip()
+
+    if sort_choice == "1":
+        sorted_packs = sorted(pack_stats, key=lambda x: x["name"].lower())
+    elif sort_choice == "3":
+        sorted_packs = sorted(pack_stats, key=lambda x: x["views"], reverse=True)
+    elif sort_choice == "4":
+        sorted_packs = sorted(pack_stats, key=lambda x: x["favorites"], reverse=True)
+    else:
+        sorted_packs = sorted(pack_stats, key=lambda x: x["downloads"], reverse=True)
+
+    print("\n" + "=" * 85)
+    print(f" {'Paket Adi':<28} {'Tip':>4} {'Sticker':>8} {'Indirme':>9} {'Goru.':>8} {'Favori':>8}")
+    print("-" * 85)
+
+    for p in sorted_packs:
+        tag = "P" if p["premium"] else "N"
+        name = p['name'][:26]
+        print(f" {name:<28} [{tag}] {p['stickers']:>8} {p['downloads']:>9} {p['views']:>8} {p['favorites']:>8}")
+
+    print("=" * 85)
+    print(f" {'TOPLAM':<28} {'':>4} {total_stickers:>8} {total_downloads:>9} {total_views:>8} {total_favorites:>8}")
+    print("=" * 85)
+
+    # Ek bilgiler
+    print("\n ACIKLAMALAR")
+    print("-" * 40)
+    print("   [N] = Normal (ucretsiz) paket")
+    print("   [P] = Premium (ucretli) paket")
+    print("   Indirme = WhatsApp'a ekleme sayisi")
+    print("   Goru. = Paket detay sayfasi goruntulenme")
+    print("   Favori = Favorilere ekleme sayisi")
 
     wait_enter()
 
@@ -1339,6 +1372,173 @@ def menu_add_new_pack():
 
     wait_enter()
 
+def menu_delete_pack():
+    """Sticker paketi sil"""
+    print_header("STICKER PAKETI SIL")
+
+    print_warning("DIKKAT: Bu islem geri alinamaz!")
+    print("\n Silme islemleri:")
+    print("   - Yerel klasorden siler")
+    print("   - Firebase'den siler (Storage + Firestore)")
+    print("   - Drive'dan siler (opsiyonel)")
+    print("   - Cache'den siler")
+
+    # Tum paketleri listele
+    all_packs = []
+
+    # Yerel paketler
+    if STICKERS_DIR.exists():
+        for d in STICKERS_DIR.iterdir():
+            if d.is_dir():
+                all_packs.append({"name": d.name, "path": d, "premium": False, "source": "yerel"})
+
+    if PREMIUM_STICKERS_DIR.exists():
+        for d in PREMIUM_STICKERS_DIR.iterdir():
+            if d.is_dir():
+                all_packs.append({"name": d.name, "path": d, "premium": True, "source": "yerel"})
+
+    # Firebase'deki paketleri de kontrol et
+    bucket, db = init_firebase()
+    if db:
+        try:
+            for doc in db.collection("stickers").stream():
+                pack_id = doc.id
+                found = False
+                for p in all_packs:
+                    if p["name"].lower().replace(" ", "_").replace("-", "_") == pack_id:
+                        found = True
+                        break
+                if not found:
+                    data = doc.to_dict()
+                    all_packs.append({"name": data.get("name", pack_id), "pack_id": pack_id, "premium": False, "source": "firebase"})
+
+            for doc in db.collection("premium_stickers").stream():
+                pack_id = doc.id
+                found = False
+                for p in all_packs:
+                    if p["name"].lower().replace(" ", "_").replace("-", "_") == pack_id:
+                        found = True
+                        break
+                if not found:
+                    data = doc.to_dict()
+                    all_packs.append({"name": data.get("name", pack_id), "pack_id": pack_id, "premium": True, "source": "firebase"})
+        except:
+            pass
+
+    if not all_packs:
+        print_warning("Silinecek paket bulunamadi!")
+        wait_enter()
+        return
+
+    print("\n MEVCUT PAKETLER:")
+    print("-" * 50)
+    for i, p in enumerate(all_packs, 1):
+        tag = "[P]" if p["premium"] else "[N]"
+        src = f"({p['source']})"
+        print(f"   {i}. {tag} {p['name']} {src}")
+
+    print("\n Silmek istediginiz paketin numarasini girin (0=iptal): ", end="")
+
+    try:
+        choice = int(input())
+        if choice == 0:
+            return
+        if choice < 1 or choice > len(all_packs):
+            print_error("Gecersiz secim!")
+            wait_enter()
+            return
+
+        pack = all_packs[choice - 1]
+        pack_name = pack["name"]
+        pack_id = pack.get("pack_id", pack_name.lower().replace(" ", "_").replace("-", "_"))
+        is_premium = pack["premium"]
+
+        print(f"\n '{pack_name}' paketini silmek istediginizden emin misiniz?")
+        print(" Bu islem GERI ALINAMAZ!")
+        print("\n Onaylamak icin 'SIL' yazin: ", end="")
+
+        confirm = input().strip()
+        if confirm != "SIL":
+            print_info("Islem iptal edildi.")
+            wait_enter()
+            return
+
+        deleted_from = []
+
+        # 1. Yerel klasorden sil
+        if "path" in pack and pack["path"].exists():
+            shutil.rmtree(pack["path"])
+            deleted_from.append("Yerel")
+
+        # 2. Output klasorunden sil
+        output_dir = OUTPUT_DIR / pack_id
+        if output_dir.exists():
+            shutil.rmtree(output_dir)
+            deleted_from.append("Output")
+
+        # 3. Firebase'den sil
+        if bucket and db:
+            collection = "premium_stickers" if is_premium else "stickers"
+            storage_folder = "premium_stickers" if is_premium else "stickers"
+
+            # Firestore'dan sil
+            try:
+                db.collection(collection).document(pack_id).delete()
+                deleted_from.append("Firestore")
+            except Exception as e:
+                print_warning(f"Firestore silme hatasi: {e}")
+
+            # Storage'dan sil
+            try:
+                blobs = bucket.list_blobs(prefix=f"{storage_folder}/{pack_id}/")
+                for blob in blobs:
+                    blob.delete()
+                deleted_from.append("Storage")
+            except Exception as e:
+                print_warning(f"Storage silme hatasi: {e}")
+
+        # 4. Cache'den sil
+        cache = load_cache()
+        if pack_id in cache.get("converted", {}):
+            del cache["converted"][pack_id]
+        if pack_id in cache.get("uploaded", {}):
+            del cache["uploaded"][pack_id]
+        tray_key = f"{pack_id}_tray"
+        if tray_key in cache.get("tray", {}):
+            del cache["tray"][tray_key]
+        save_cache(cache)
+        deleted_from.append("Cache")
+
+        # 5. Drive'dan sil (opsiyonel)
+        print("\n Drive'dan da silmek istiyor musunuz? (e/h): ", end="")
+        delete_drive = input().strip().lower() == 'e'
+
+        if delete_drive:
+            service = init_drive()
+            if service:
+                try:
+                    main_folder_id = get_or_create_drive_folder(service, DRIVE_FOLDER_NAME)
+                    drive_folder_name = f"premium_{pack_name}" if is_premium else pack_name
+
+                    # Klasoru bul
+                    query = f"name='{drive_folder_name}' and '{main_folder_id}' in parents and trashed=false"
+                    results = service.files().list(q=query, spaces='drive', fields='files(id)').execute()
+                    folders = results.get('files', [])
+
+                    if folders:
+                        service.files().delete(fileId=folders[0]['id']).execute()
+                        deleted_from.append("Drive")
+                except Exception as e:
+                    print_warning(f"Drive silme hatasi: {e}")
+
+        print_success(f"'{pack_name}' paketi silindi!")
+        print(f"   Silinen yerler: {', '.join(deleted_from)}")
+
+    except ValueError:
+        print_error("Gecersiz giris!")
+
+    wait_enter()
+
 def menu_full_sync():
     """Tam senkronizasyon"""
     print_header("TAM SENKRONIZASYON")
@@ -1395,6 +1595,8 @@ def main():
             elif choice == "8":
                 menu_add_new_pack()
             elif choice == "9":
+                menu_delete_pack()
+            elif choice.upper() == "F":
                 menu_full_sync()
             else:
                 print_error("Gecersiz secim!")

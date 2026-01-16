@@ -424,4 +424,102 @@ object StickerRepository {
             Log.e(TAG, "Error updating pack cache: ${e.message}")
         }
     }
+
+    // ============================================================================
+    // ISTATISTIK FONKSIYONLARI
+    // ============================================================================
+
+    /**
+     * Paket görüntülenme sayısını artır
+     */
+    fun incrementViewCount(packId: String, isPremium: Boolean) {
+        try {
+            val collection = if (isPremium) "premium_stickers" else "stickers"
+            val docRef = firestore.collection(collection).document(packId)
+
+            // FieldValue.increment() kullan - alan yoksa otomatik oluşturur
+            docRef.update("view_count", com.google.firebase.firestore.FieldValue.increment(1))
+                .addOnSuccessListener {
+                    Log.d(TAG, "View count incremented for $packId")
+                }
+                .addOnFailureListener { e ->
+                    Log.e(TAG, "Error incrementing view count: ${e.message}")
+                    // Alan yoksa set ile oluştur
+                    docRef.set(
+                        mapOf("view_count" to 1),
+                        com.google.firebase.firestore.SetOptions.merge()
+                    )
+                }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error incrementing view count: ${e.message}")
+        }
+    }
+
+    /**
+     * Paket indirme (WhatsApp'a ekleme) sayısını artır
+     */
+    fun incrementDownloadCount(packId: String, isPremium: Boolean) {
+        try {
+            val collection = if (isPremium) "premium_stickers" else "stickers"
+            val docRef = firestore.collection(collection).document(packId)
+
+            docRef.update("download_count", com.google.firebase.firestore.FieldValue.increment(1))
+                .addOnSuccessListener {
+                    Log.d(TAG, "Download count incremented for $packId")
+                }
+                .addOnFailureListener { e ->
+                    Log.e(TAG, "Error incrementing download count: ${e.message}")
+                    docRef.set(
+                        mapOf("download_count" to 1),
+                        com.google.firebase.firestore.SetOptions.merge()
+                    )
+                }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error incrementing download count: ${e.message}")
+        }
+    }
+
+    /**
+     * Paket favori sayısını artır
+     */
+    fun incrementFavoriteCount(packId: String, isPremium: Boolean) {
+        try {
+            val collection = if (isPremium) "premium_stickers" else "stickers"
+            val docRef = firestore.collection(collection).document(packId)
+
+            docRef.update("favorite_count", com.google.firebase.firestore.FieldValue.increment(1))
+                .addOnSuccessListener {
+                    Log.d(TAG, "Favorite count incremented for $packId")
+                }
+                .addOnFailureListener { e ->
+                    Log.e(TAG, "Error incrementing favorite count: ${e.message}")
+                    docRef.set(
+                        mapOf("favorite_count" to 1),
+                        com.google.firebase.firestore.SetOptions.merge()
+                    )
+                }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error incrementing favorite count: ${e.message}")
+        }
+    }
+
+    /**
+     * Paket favori sayısını azalt
+     */
+    fun decrementFavoriteCount(packId: String, isPremium: Boolean) {
+        try {
+            val collection = if (isPremium) "premium_stickers" else "stickers"
+            val docRef = firestore.collection(collection).document(packId)
+
+            docRef.update("favorite_count", com.google.firebase.firestore.FieldValue.increment(-1))
+                .addOnSuccessListener {
+                    Log.d(TAG, "Favorite count decremented for $packId")
+                }
+                .addOnFailureListener { e ->
+                    Log.e(TAG, "Error decrementing favorite count: ${e.message}")
+                }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error decrementing favorite count: ${e.message}")
+        }
+    }
 }

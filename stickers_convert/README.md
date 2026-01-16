@@ -1,55 +1,163 @@
-# Sticly - Sticker Yonetim Sistemi
+# Sticly - Sticker Yonetim Paneli v2.0
 
-Bu arac, stickerleri otomatik olarak WhatsApp formatina donusturur ve Firebase'e yukler.
-
----
-
-## Hizli Baslangic (Tek Tikla Calistir)
-
-Hic komut yazmadan sticker yuklemek icin:
-
-| Isletim Sistemi | Dosya | Nasil Calistirilir |
-|-----------------|-------|-------------------|
-| **Windows** | `upload_stickers.bat` | Cift tikla |
-| **Linux/macOS** | `upload_stickers.run` | Cift tikla veya `./upload_stickers.run` |
-
-Bu dosyalar:
-- Gerekli bagimliliklari otomatik kurar (ilk seferde)
-- Tray (kapak) resimlerinin arka planini siler
-- Stickerleri Firebase'e yukler
-- Degisiklikleri GitHub'a push eder
-
-> **Ilk Kullanim Icin:** [STICKER_EKLEME_REHBERI.md](STICKER_EKLEME_REHBERI.md) dosyasini oku!
+Stickerleri Google Drive'da yedekleyen, Firebase'e yukleyen ve menuyle yoneten arac.
 
 ---
 
-## Gereksinimler
+## Yenilikler (v2.0)
 
-### Otomatik Kurulanlar (Script halleder):
-- Python paketleri (firebase-admin, rembg)
-
-### Manuel Kurulmasi Gerekenler:
-
-| Program | Windows | Linux | macOS |
-|---------|---------|-------|-------|
-| Python 3 | [python.org](https://python.org) | `sudo apt install python3` | `brew install python` |
-| FFmpeg | [ffmpeg.org](https://ffmpeg.org) | `sudo apt install ffmpeg` | `brew install ffmpeg` |
-| Git | [git-scm.com](https://git-scm.com) | `sudo apt install git` | `brew install git` |
-
-### Tek Seferlik Ayarlar:
-- **Firebase Admin SDK Key** - Firebase Console'dan indir ve bu klasore koy
-- **GitHub Authentication** - SSH key veya token ayarla (opsiyonel)
+- **Google Drive Entegrasyonu** - Stickerlar artık Drive'da yedekleniyor
+- **Menu Tabanli Arayuz** - Tek tek islemler secebilirsin
+- **Guvenlik Kontrolleri** - Yanlislikla silme engellendi
+- **Hizli Calisma** - Sadece secilen islem calisir, tum taramalar yapilmaz
 
 ---
 
-## Desteklenen Dosya Formatlari
+## Ana Menu
 
-| Tur | Formatlar | Sonuc |
-|-----|-----------|-------|
-| Video | MP4, MOV, AVI, MKV, WEBM, MPEG | Hareketli sticker |
-| Animasyonlu GIF | GIF | Hareketli sticker |
-| Resim | PNG, JPG, JPEG, WEBP, BMP | Sabit sticker |
-| Statik GIF | GIF (tek kare) | Sabit sticker |
+```
+╔════════════════════════════════════════════════════════════╗
+║                      ANA MENU                              ║
+╠════════════════════════════════════════════════════════════╣
+║  [1] Tray (Kapak) Fotograflarini Guncelle                  ║
+║  [2] Stickerlari Guncelle (Yerel -> Firebase)              ║
+║  [3] Sticker Paket Adlarini Guncelle                       ║
+║  [4] GitHub Reposunu Guncelle                              ║
+║  [5] Istatistik Ekrani                                     ║
+╠════════════════════════════════════════════════════════════╣
+║  [6] Drive'dan Yerel'e Stickerlari Indir                   ║
+║  [7] Yerel'den Drive'a Stickerlari Yukle                   ║
+╠════════════════════════════════════════════════════════════╣
+║  [8] Yeni Sticker Paketi Ekle                              ║
+║  [9] Sticker Paketi Sil                                    ║
+╠════════════════════════════════════════════════════════════╣
+║  [F] Tam Senkronizasyon (Tum islemler)                     ║
+║  [0] Cikis                                                 ║
+╚════════════════════════════════════════════════════════════╝
+```
+
+---
+
+## Ilk Kurulum
+
+### 1. Gerekli Programlar
+
+| Program | Linux | Windows | macOS |
+|---------|-------|---------|-------|
+| Python 3 | `sudo apt install python3` | [python.org](https://python.org) | `brew install python` |
+| FFmpeg | `sudo apt install ffmpeg` | [ffmpeg.org](https://ffmpeg.org) | `brew install ffmpeg` |
+| Git | `sudo apt install git` | [git-scm.com](https://git-scm.com) | `brew install git` |
+
+### 2. Python Paketleri
+
+```bash
+pip install firebase-admin rembg pillow
+pip install google-api-python-client google-auth-httplib2 google-auth-oauthlib
+```
+
+### 3. Firebase Ayari
+
+1. [Firebase Console](https://console.firebase.google.com) > Project Settings > Service Accounts
+2. "Generate New Private Key" tikla
+3. Indirilen JSON'u `stickers_convert/` klasorune koy
+
+### 4. Google Drive Ayari (OAuth 2.0)
+
+1. [Google Cloud Console](https://console.cloud.google.com) > Yeni proje olustur
+2. APIs & Services > Enable APIs > **Google Drive API** etkinlestir
+3. APIs & Services > Credentials > Create Credentials > **OAuth client ID**
+4. Application type: **Desktop app**
+5. JSON indir ve `stickers_convert/credentials.json` olarak kaydet
+6. Ilk calistirmada tarayici acilir, Google hesabinla giris yap
+
+---
+
+## Kullanim Senaryolari
+
+### Yeni Cihazda Baslangic
+
+```bash
+# 1. Repo'yu klonla
+git clone https://github.com/KULLANICI/StickyApp.git
+cd StickyApp/stickers_convert
+
+# 2. credentials.json ve firebase key'i koy
+
+# 3. Scripti calistir
+python upload_stickers.py
+
+# 4. Menu 6 sec -> Tum stickerlar Drive'dan indirilir
+# 5. Menu 2 sec -> Firebase guncellenir
+```
+
+### Yeni Sticker Paketi Ekleme
+
+1. **Menu 8** sec -> Klasor olustur
+2. Klasore en az 3 sticker dosyasi koy (MP4, GIF, PNG, JPG...)
+3. (Opsiyonel) `tray.png` kapak resmi ekle
+4. **Menu 2** sec -> Firebase'e yukle
+5. **Menu 7** sec -> Drive'a yedekle
+6. **Menu 4** sec -> GitHub'a push et
+
+### Sticker Paketi Silme
+
+1. **Menu 9** sec
+2. Silinecek paketi sec
+3. Onay icin `SIL` yaz
+4. Paket su yerlerden silinir:
+   - Yerel klasor
+   - Firebase Storage + Firestore
+   - Cache
+   - Drive (opsiyonel - sorar)
+
+### Mevcut Stickerlari Guncelleme
+
+1. Yerel klasordeki dosyalari degistir/ekle/cikar
+2. **Menu 2** sec -> Sadece degisen dosyalar islenir
+3. **Menu 7** sec -> Drive'a yedekle
+
+---
+
+## Guvenlik Kontrolleri
+
+### Yerel Klasor Bosken
+
+```
+[!] Yerel klasorde paket bulunamadi!
+
+   GUVENLIK: Firebase'deki veriler korunuyor.
+   Stickerlar silinmedi, sadece yerel klasor bos.
+
+   Yapmaniz gerekenler:
+   1. Once Drive'dan stickerlari indirin (Menu 6)
+   2. Veya yeni paket ekleyin (Menu 8)
+```
+
+**Neden?** Bos klasor Firebase'deki verileri silmez. Once Drive'dan indirmelisin.
+
+### Firebase'de Daha Fazla Paket Varken
+
+```
+[!] DIKKAT: Yerelde 5 paket, Firebase'de 20 paket var!
+
+   Bu islem sadece yereldeki paketleri gunceller.
+   Firebase'deki fazla paketler SILINMEYECEK.
+
+   Devam etmek istiyor musunuz? (e/h):
+```
+
+**Neden?** Yanlislikla tum verilerin silinmesini engeller.
+
+### Paket Silme Onayi
+
+```
+'Komik Kediler' paketini silmek istediginizden emin misiniz?
+Bu islem GERI ALINAMAZ!
+
+Onaylamak icin 'SIL' yazin:
+```
+
+**Neden?** Yanlislikla silmeyi engeller.
 
 ---
 
@@ -57,88 +165,34 @@ Bu dosyalar:
 
 ```
 stickers_convert/
-├── stickers/                          <- NORMAL (UCRETSIZ) PAKETLER
-│   ├── komik-videolar/                <- Kategori 1
-│   │   ├── tray.png                   <- Kapak resmi (opsiyonel)
+├── stickers/                    <- NORMAL PAKETLER
+│   ├── komik-videolar/
+│   │   ├── tray.png            <- Kapak resmi (opsiyonel)
 │   │   ├── video1.mp4
-│   │   ├── video2.gif
-│   │   └── resim3.png
-│   │
-│   └── sevimli-hayvanlar/             <- Kategori 2
-│       └── ...
+│   │   └── video2.gif
+│   └── sevimli-hayvanlar/
 │
-├── premium_stickers/                  <- PREMIUM (UCRETLI) PAKETLER
+├── premium_stickers/            <- PREMIUM PAKETLER
 │   └── ozel-paket/
-│       └── ...
 │
-├── output/                            <- Donusturulen dosyalar (otomatik)
-├── venv/                              <- Python ortami (otomatik)
-├── cache.json                         <- Islem takibi (otomatik)
-├── upload_stickers.py                 <- Ana script
-├── upload_stickers.run                <- Linux/macOS calistirici
-├── upload_stickers.bat                <- Windows calistirici
-├── *firebase-adminsdk*.json           <- Firebase anahtari (SEN EKLE!)
-├── STICKER_EKLEME_REHBERI.md          <- Detayli rehber
-└── README.md                          <- Bu dosya
+├── output/                      <- Donusturulen dosyalar
+├── cache.json                   <- Islem takibi
+├── credentials.json             <- Google Drive OAuth (GIZLI)
+├── token.pickle                 <- Drive token (GIZLI)
+├── *firebase-adminsdk*.json     <- Firebase key (GIZLI)
+└── upload_stickers.py           <- Ana script
 ```
 
 ---
 
-## Sticker Ekleme (3 Adim)
+## Desteklenen Formatlar
 
-### 1. Klasor Olustur
-```
-stickers/yeni-paket-adi/
-```
-
-### 2. Dosyalari Ekle
-- Minimum **3 dosya** gerekli
-- Maksimum **30 dosya**
-- Kapak icin `tray.png` ekle (opsiyonel)
-
-### 3. Calistir
-- **Windows:** `upload_stickers.bat` cift tikla
-- **Linux/macOS:** `./upload_stickers.run` calistir
-
----
-
-## Yeni Ozellikler
-
-### Otomatik Tray Arka Plan Silme
-- Tray (kapak) resimlerinin arka plani otomatik silinir
-- Her calistirmada kontrol edilir
-- Sadece islenmemis dosyalar islenir
-
-### GitHub Otomatik Sync
-- Her calistirmada degisiklikler GitHub'a push edilir
-- Commit mesaji otomatik olusturulur
-- SSH veya token ile calisir
-
-### Tek Tikla Kurulum
-- `.run` ve `.bat` dosyalari tum bagimliliklari otomatik kurar
-- Ilk calistirmada biraz bekleyin (paketler indiriliyor)
-
----
-
-## Sik Kullanilan Komutlar
-
-```bash
-# Tek tikla calistir (onerilen)
-./upload_stickers.run          # Linux/macOS
-upload_stickers.bat            # Windows
-
-# Manuel calistir
-source venv/bin/activate
-python3 upload_stickers.py
-
-# Cache'i sifirla (tum dosyalari yeniden isle)
-rm cache.json
-./upload_stickers.run
-
-# Yeni kategori ekle
-mkdir stickers/yeni-kategori
-# Dosyalari kopyala, sonra calistir
-```
+| Tur | Formatlar | Sonuc |
+|-----|-----------|-------|
+| Video | MP4, MOV, AVI, MKV, WEBM | Hareketli sticker |
+| Animasyonlu GIF | GIF (cok kareli) | Hareketli sticker |
+| Resim | PNG, JPG, JPEG, WEBP, BMP | Sabit sticker |
+| Statik GIF | GIF (tek kare) | Sabit sticker |
 
 ---
 
@@ -146,62 +200,76 @@ mkdir stickers/yeni-kategori
 
 | Ozellik | Deger |
 |---------|-------|
-| Sticker boyutu | 512x512 piksel |
-| Tray boyutu | 96x96 piksel |
-| Maksimum dosya boyutu | 500 KB |
-| Maksimum video suresi | 3 saniye |
-| Minimum sticker sayisi | 3 |
-| Maksimum sticker sayisi | 30 |
-
-> Script bu gereksinimleri otomatik olarak karsilar.
+| Sticker boyutu | 512x512 piksel (otomatik) |
+| Tray boyutu | 96x96 piksel (otomatik) |
+| Maksimum dosya | 500 KB (otomatik sıkıştırma) |
+| Video suresi | Max 3 saniye (otomatik kesme) |
+| Sticker sayisi | 3-30 arasi |
 
 ---
 
 ## Sorun Giderme
 
-### "Firebase Admin SDK bulunamadi" hatasi
-1. Firebase Console > Project Settings > Service Accounts
-2. "Generate New Private Key" tikla
-3. Indirilen JSON dosyasini `stickers_convert/` klasorune kopyala
+### "credentials.json bulunamadi"
+Google Cloud Console'dan OAuth client ID olustur ve JSON'u indir.
 
-### "FFmpeg bulunamadi" hatasi
+### "Firebase Admin SDK bulunamadi"
+Firebase Console > Service Accounts > Generate New Private Key
+
+### "FFmpeg yuklu degil"
 ```bash
-# Linux
-sudo apt install ffmpeg
-
-# macOS
-brew install ffmpeg
-
-# Windows: ffmpeg.org'dan indir ve PATH'e ekle
+sudo apt install ffmpeg  # Linux
+brew install ffmpeg      # macOS
 ```
 
-### GitHub push yapmiyor
-- SSH key veya token ayarla
-- Detaylar icin: [STICKER_EKLEME_REHBERI.md](STICKER_EKLEME_REHBERI.md)
+### Drive'a baglanamiyor
+- credentials.json dogru konumda mi?
+- Google Drive API etkin mi?
+- Ilk giriste tarayicida onay verdin mi?
 
 ### Cache sorunlari
 ```bash
 rm cache.json
-./upload_stickers.run
+python upload_stickers.py
 ```
 
 ---
 
 ## Guvenlik Notlari
 
-- `*firebase-adminsdk*.json` dosyasini **asla paylasma**
-- Bu dosya `.gitignore`'da, GitHub'a yuklenmez
-- Her kullanici kendi Firebase anahtarini kullanmali
+Su dosyalar **ASLA PAYLASILMAMALI**:
+- `*firebase-adminsdk*.json` - Firebase erisim anahtari
+- `credentials.json` - Google OAuth istemci sifresi
+- `token.pickle` - Google oturum token'i
+- `client_secret*.json` - Google client secret
+
+Bu dosyalar `.gitignore`'da ve GitHub'a yuklenmez.
 
 ---
 
-## Dokumanlar
+## Veri Akisi
 
-| Dosya | Aciklama |
-|-------|----------|
-| [STICKER_EKLEME_REHBERI.md](STICKER_EKLEME_REHBERI.md) | Yeni baslayanlar icin detayli rehber |
-| [PREMIUM_README.md](PREMIUM_README.md) | Premium sticker sistemi |
+```
+                    ┌─────────────┐
+                    │   GOOGLE    │
+                    │   DRIVE     │  <- Ana yedek
+                    └──────┬──────┘
+                           │
+            Menu 6 ↓       │      ↑ Menu 7
+                           │
+                    ┌──────▼──────┐
+                    │   YEREL     │
+                    │   KLASOR    │  <- Calisma alani
+                    └──────┬──────┘
+                           │
+            Menu 2 ↓       │
+                           │
+              ┌────────────▼────────────┐
+              │        FIREBASE         │
+              │  Storage + Firestore    │  <- Uygulama verisi
+              └─────────────────────────┘
+```
 
 ---
 
-*Son guncelleme: Ocak 2025*
+*Son guncelleme: Ocak 2026*
