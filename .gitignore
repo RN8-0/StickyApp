@@ -37,3 +37,4 @@ stickers_convert/cache.json
 # Google Drive OAuth token (gizli)
 stickers_convert/token.pickle
 stickers_convert/credentials.json
+stickers_convert/client_secret*.json
