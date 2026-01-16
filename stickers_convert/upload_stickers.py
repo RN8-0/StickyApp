@@ -190,6 +190,84 @@ def is_already_correct_size(file_path: Path, file_type: str) -> bool:
     return width == STICKER_SIZE and height == STICKER_SIZE
 
 
+def has_transparency(image_path: Path) -> bool:
+    """Resmin şeffaf arka planı var mı kontrol et"""
+    try:
+        with Image.open(image_path) as img:
+            if img.mode != 'RGBA':
+                return False
+            # Alpha kanalını kontrol et
+            alpha = img.split()[-1]
+            # Tamamen opak olmayan pikseller var mı?
+            extrema = alpha.getextrema()
+            # Eğer min değer 255'ten küçükse şeffaf piksel var
+            return extrema[0] < 255
+    except:
+        return False
+
+
+def check_and_fix_tray_backgrounds(cache: dict) -> int:
+    """Tüm tray dosyalarını kontrol et, arka planı silinmemişse sil"""
+    if not REMBG_AVAILABLE or not REMOVE_BACKGROUND:
+        return 0
+
+    fixed_count = 0
+    processed_trays = cache.get("processed_trays", {})
+
+    # Normal ve premium paket klasörlerini tara
+    all_pack_dirs = []
+    if STICKERS_DIR.exists():
+        all_pack_dirs.extend([d for d in STICKERS_DIR.iterdir() if d.is_dir()])
+    if PREMIUM_STICKERS_DIR.exists():
+        all_pack_dirs.extend([d for d in PREMIUM_STICKERS_DIR.iterdir() if d.is_dir()])
+
+    for pack_dir in all_pack_dirs:
+        tray_file = find_custom_tray(pack_dir)
+        if not tray_file:
+            continue
+
+        # Sadece resim dosyalarını işle (GIF hariç)
+        if tray_file.suffix.lower() not in IMAGE_EXTENSIONS:
+            continue
+
+        file_hash = get_file_hash(tray_file)
+        cache_key = str(tray_file)
+
+        # Daha önce işlenmiş mi?
+        if cache_key in processed_trays and processed_trays[cache_key] == file_hash:
+            continue
+
+        # Şeffaflık var mı kontrol et
+        if has_transparency(tray_file):
+            # Zaten şeffaf, cache'e ekle
+            processed_trays[cache_key] = file_hash
+            continue
+
+        # Arka planı sil
+        print(f"   🖼️  Tray arka planı siliniyor: {pack_dir.name}/{tray_file.name}...", end=" ")
+        try:
+            with Image.open(tray_file) as img:
+                if img.mode != 'RGBA':
+                    img = img.convert('RGBA')
+                output = remove_bg(img)
+                # Orijinal dosyanın üzerine yaz (PNG olarak)
+                new_path = tray_file.with_suffix('.png')
+                output.save(new_path, 'PNG')
+                # Eğer orijinal PNG değilse, eski dosyayı sil
+                if tray_file.suffix.lower() != '.png' and tray_file.exists():
+                    tray_file.unlink()
+                # Yeni hash'i kaydet
+                new_hash = get_file_hash(new_path)
+                processed_trays[str(new_path)] = new_hash
+                fixed_count += 1
+                print("OK")
+        except Exception as e:
+            print(f"HATA: {e}")
+
+    cache["processed_trays"] = processed_trays
+    return fixed_count
+
+
 def remove_background_from_image(input_path: Path) -> Path:
     """Resimden arka planı sil, geçici dosya döndür"""
     if not REMBG_AVAILABLE or not REMOVE_BACKGROUND:
@@ -489,6 +567,66 @@ def find_custom_tray(pack_dir: Path) -> Path:
         if f.is_file() and is_tray_file(f) and f.suffix.lower() in (IMAGE_EXTENSIONS | {GIF_EXTENSION}):
             return f
     return None
+
+
+def git_sync():
+    """Değişiklikleri GitHub'a push et"""
+    # Git repo kök dizinini bul
+    git_root = SCRIPT_DIR.parent
+
+    # .git klasörü var mı kontrol et
+    if not (git_root / ".git").exists():
+        print(" ⚠️  Git repo bulunamadı, GitHub sync atlanıyor")
+        return False
+
+    try:
+        # Değişiklik var mı kontrol et
+        result = subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=git_root,
+            capture_output=True,
+            text=True
+        )
+
+        if not result.stdout.strip():
+            print(" ✓ GitHub: Değişiklik yok")
+            return True
+
+        # Değişiklikleri ekle
+        subprocess.run(["git", "add", "-A"], cwd=git_root, check=True, capture_output=True)
+
+        # Commit yap
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+        commit_msg = f"Sticker güncelleme - {timestamp}"
+        subprocess.run(
+            ["git", "commit", "-m", commit_msg],
+            cwd=git_root,
+            check=True,
+            capture_output=True
+        )
+
+        # Push yap
+        print(" 📤 GitHub'a yükleniyor...", end=" ")
+        result = subprocess.run(
+            ["git", "push"],
+            cwd=git_root,
+            capture_output=True,
+            text=True
+        )
+
+        if result.returncode == 0:
+            print("OK")
+            return True
+        else:
+            print(f"HATA: {result.stderr}")
+            return False
+
+    except subprocess.CalledProcessError as e:
+        print(f" ⚠️  GitHub sync hatası: {e}")
+        return False
+    except FileNotFoundError:
+        print(" ⚠️  Git yüklü değil, GitHub sync atlanıyor")
+        return False
 
 
 def init_firebase():
@@ -882,7 +1020,16 @@ def main():
     cache = load_cache()
     print(f"\n Cache: {len(cache.get('converted', {}))} paket kayıtlı")
 
-    print(f" Firebase'e bağlanılıyor...")
+    # Tray dosyalarının arka planını kontrol et
+    print(f"\n Tray dosyaları kontrol ediliyor...")
+    fixed_trays = check_and_fix_tray_backgrounds(cache)
+    if fixed_trays > 0:
+        print(f"   {fixed_trays} tray dosyasının arka planı silindi")
+        save_cache(cache)
+    else:
+        print(f"   Tüm tray dosyaları OK")
+
+    print(f"\n Firebase'e bağlanılıyor...")
     bucket, db = init_firebase()
     print(f" Bağlantı başarılı")
 
@@ -945,6 +1092,12 @@ def main():
                 successful += 1
 
     save_cache(cache)
+
+    # GitHub'a sync
+    print(f"\n{'='*60}")
+    print(f" GITHUB SYNC")
+    print(f"{'='*60}")
+    git_sync()
 
     print("\n" + "=" * 60)
     print(f" ✅ TAMAMLANDI: {successful}/{total_packs} paket başarılı")
