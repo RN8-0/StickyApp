@@ -43,13 +43,16 @@ MENU = """
 ║                      ANA MENU                              ║
 ╠════════════════════════════════════════════════════════════╣
 ║  [1] Tray (Kapak) Fotograflarini Guncelle                  ║
-║  [2] Stickerlari Guncelle (Drive -> Firebase)              ║
+║  [2] Stickerlari Guncelle (Yerel -> Firebase)              ║
 ║  [3] Sticker Paket Adlarini Guncelle                       ║
 ║  [4] GitHub Reposunu Guncelle                              ║
 ║  [5] Istatistik Ekrani                                     ║
+╠════════════════════════════════════════════════════════════╣
 ║  [6] Drive'dan Yerel'e Stickerlari Indir                   ║
 ║  [7] Yerel'den Drive'a Stickerlari Yukle                   ║
-║  [8] Tam Senkronizasyon (Tum islemler)                     ║
+╠════════════════════════════════════════════════════════════╣
+║  [8] Yeni Sticker Paketi Ekle                              ║
+║  [9] Tam Senkronizasyon (Tum islemler)                     ║
 ╠════════════════════════════════════════════════════════════╣
 ║  [0] Cikis                                                 ║
 ╚════════════════════════════════════════════════════════════╝
@@ -693,7 +696,7 @@ def menu_update_trays():
     wait_enter()
 
 def menu_update_stickers():
-    """Stickerlari guncelle (Drive -> Firebase)"""
+    """Stickerlari guncelle (Yerel -> Firebase)"""
     print_header("STICKERLARI GUNCELLE")
 
     if not check_ffmpeg():
@@ -717,11 +720,39 @@ def menu_update_stickers():
     premium_packs = [d for d in PREMIUM_STICKERS_DIR.iterdir() if d.is_dir()] if PREMIUM_STICKERS_DIR.exists() else []
 
     total = len(normal_packs) + len(premium_packs)
+
+    # GUVENLIK KONTROLU: Yerel klasorde paket yoksa Firebase'e dokunma!
     if total == 0:
-        print_warning("Paket bulunamadi!")
-        print("   Once Drive'dan stickerlari indirin (Menu 6)")
+        print_warning("Yerel klasorde paket bulunamadi!")
+        print("\n   GUVENLIK: Firebase'deki veriler korunuyor.")
+        print("   Stickerlar silinmedi, sadece yerel klasor bos.")
+        print("\n   Yapmaniz gerekenler:")
+        print("   1. Once Drive'dan stickerlari indirin (Menu 6)")
+        print("   2. Veya yeni paket ekleyin (Menu 8)")
         wait_enter()
         return
+
+    # Firebase'deki paket sayisini kontrol et
+    firebase_pack_count = 0
+    try:
+        for doc in db.collection("stickers").stream():
+            firebase_pack_count += 1
+        for doc in db.collection("premium_stickers").stream():
+            firebase_pack_count += 1
+    except:
+        pass
+
+    # Eger Firebase'de cok fazla paket var ama yerelde az varsa uyar
+    if firebase_pack_count > 0 and total < firebase_pack_count:
+        print_warning(f"DIKKAT: Yerelde {total} paket, Firebase'de {firebase_pack_count} paket var!")
+        print("\n   Bu islem sadece yereldeki paketleri gunceller.")
+        print("   Firebase'deki fazla paketler SILINMEYECEK.")
+        print("\n   Devam etmek istiyor musunuz? (e/h): ", end="")
+        confirm = input().strip().lower()
+        if confirm != 'e':
+            print_info("Islem iptal edildi.")
+            wait_enter()
+            return
 
     print_info(f"{len(normal_packs)} normal, {len(premium_packs)} premium paket bulundu")
 
@@ -1209,6 +1240,105 @@ def menu_upload_to_drive():
     print_success(f"{uploaded} dosya yuklendi")
     wait_enter()
 
+def menu_add_new_pack():
+    """Yeni sticker paketi ekle"""
+    print_header("YENI STICKER PAKETI EKLE")
+
+    print("""
+ STICKER EKLEME REHBERI
+ ----------------------
+
+ 1. PAKET KLASORU OLUSTUR:
+    - Normal paket icin: stickers/<paket-adi>/
+    - Premium paket icin: premium_stickers/<paket-adi>/
+
+ 2. STICKER DOSYALARINI EKLE:
+    - Desteklenen formatlar: MP4, GIF, PNG, JPG, WEBP
+    - En az 3, en fazla 30 sticker
+    - Dosyalar otomatik 512x512'ye donusturulur
+
+ 3. KAPAK RESMI (OPSIYONEL):
+    - Klasore "tray.png" veya "tray.jpg" ekle
+    - Yoksa ilk sticker kapak olarak kullanilir
+
+ 4. ISLEM SIRASI:
+    a) Stickerlari yerel klasore koy
+    b) Menu 2: Firebase'e yukle
+    c) Menu 7: Drive'a yedekle
+    d) Menu 4: GitHub'a push et
+""")
+
+    print(" Ne yapmak istiyorsunuz?")
+    print("   [1] Normal paket klasoru olustur")
+    print("   [2] Premium paket klasoru olustur")
+    print("   [3] Mevcut paketleri listele")
+    print("   [0] Geri don")
+    print("\n Seciminiz: ", end="")
+
+    choice = input().strip()
+
+    if choice == "1":
+        print("\n Paket adi (klasor adi): ", end="")
+        pack_name = input().strip()
+        if not pack_name:
+            print_error("Paket adi bos olamaz!")
+            wait_enter()
+            return
+
+        pack_dir = STICKERS_DIR / pack_name
+        if pack_dir.exists():
+            print_warning(f"Bu paket zaten mevcut: {pack_dir}")
+        else:
+            pack_dir.mkdir(parents=True)
+            print_success(f"Klasor olusturuldu: {pack_dir}")
+            print("\n   Simdi bu klasore en az 3 sticker dosyasi koyun.")
+            print("   Sonra Menu 2 ile Firebase'e yukleyin.")
+
+    elif choice == "2":
+        print("\n Premium paket adi (klasor adi): ", end="")
+        pack_name = input().strip()
+        if not pack_name:
+            print_error("Paket adi bos olamaz!")
+            wait_enter()
+            return
+
+        pack_dir = PREMIUM_STICKERS_DIR / pack_name
+        if pack_dir.exists():
+            print_warning(f"Bu paket zaten mevcut: {pack_dir}")
+        else:
+            pack_dir.mkdir(parents=True)
+            print_success(f"Klasor olusturuldu: {pack_dir}")
+            print("\n   Simdi bu klasore en az 3 sticker dosyasi koyun.")
+            print("   Sonra Menu 2 ile Firebase'e yukleyin.")
+
+    elif choice == "3":
+        print("\n MEVCUT PAKETLER")
+        print("-" * 50)
+
+        # Normal paketler
+        if STICKERS_DIR.exists():
+            normal_packs = [d for d in STICKERS_DIR.iterdir() if d.is_dir()]
+            if normal_packs:
+                print("\n Normal Paketler:")
+                for pack in sorted(normal_packs):
+                    files = get_sticker_files(pack)
+                    tray = "+" if find_custom_tray(pack) else "-"
+                    print(f"   [{tray}] {pack.name} ({len(files)} sticker)")
+
+        # Premium paketler
+        if PREMIUM_STICKERS_DIR.exists():
+            premium_packs = [d for d in PREMIUM_STICKERS_DIR.iterdir() if d.is_dir()]
+            if premium_packs:
+                print("\n Premium Paketler:")
+                for pack in sorted(premium_packs):
+                    files = get_sticker_files(pack)
+                    tray = "+" if find_custom_tray(pack) else "-"
+                    print(f"   [{tray}] {pack.name} ({len(files)} sticker)")
+
+        print("\n   [+] = Ozel tray var, [-] = Otomatik tray")
+
+    wait_enter()
+
 def menu_full_sync():
     """Tam senkronizasyon"""
     print_header("TAM SENKRONIZASYON")
@@ -1263,6 +1393,8 @@ def main():
             elif choice == "7":
                 menu_upload_to_drive()
             elif choice == "8":
+                menu_add_new_pack()
+            elif choice == "9":
                 menu_full_sync()
             else:
                 print_error("Gecersiz secim!")
