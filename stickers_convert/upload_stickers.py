@@ -15,11 +15,107 @@ Ozellikler:
 import os
 import sys
 import subprocess
+from pathlib import Path
+
+# ============================================================================
+# OTOMATIK KURULUM - VENV VE PAKET KONTROLU
+# ============================================================================
+
+def setup_environment():
+    """Virtual environment ve gerekli paketleri kontrol et/kur"""
+    script_dir = Path(__file__).parent
+    venv_dir = script_dir / "venv"
+
+    # Windows/Linux uyumu
+    if sys.platform == "win32":
+        python_path = venv_dir / "Scripts" / "python.exe"
+        pip_path = venv_dir / "Scripts" / "pip.exe"
+    else:
+        python_path = venv_dir / "bin" / "python"
+        pip_path = venv_dir / "bin" / "pip"
+
+    # Eger zaten venv icinden calisiyorsak, devam et
+    if hasattr(sys, 'real_prefix') or (hasattr(sys, 'base_prefix') and sys.base_prefix != sys.prefix):
+        return True
+
+    # Venv var mi kontrol et
+    if not venv_dir.exists():
+        print("\n [*] Ilk kurulum yapiliyor...")
+        print(" [*] Virtual environment olusturuluyor...")
+        try:
+            subprocess.run([sys.executable, "-m", "venv", str(venv_dir)], check=True)
+            print(" [OK] Virtual environment olusturuldu")
+        except subprocess.CalledProcessError as e:
+            print(f" [HATA] Venv olusturulamadi: {e}")
+            return False
+
+    # Gerekli paketler
+    required_packages = [
+        "firebase-admin",
+        "google-api-python-client",
+        "google-auth-httplib2",
+        "google-auth-oauthlib",
+        "rembg",
+        "pillow"
+    ]
+
+    # Paketleri kontrol et ve kur
+    print("\n [*] Paketler kontrol ediliyor...")
+
+    try:
+        # Pip upgrade
+        subprocess.run(
+            [str(pip_path), "install", "--upgrade", "pip"],
+            capture_output=True, check=True
+        )
+
+        # Paketleri yükle (zaten varsa atlar)
+        for pkg in required_packages:
+            result = subprocess.run(
+                [str(pip_path), "show", pkg],
+                capture_output=True
+            )
+            if result.returncode != 0:
+                print(f" [*] {pkg} yukleniyor...")
+                subprocess.run(
+                    [str(pip_path), "install", pkg],
+                    capture_output=True, check=True
+                )
+                print(f" [OK] {pkg} yuklendi")
+
+        print(" [OK] Tum paketler hazir")
+
+    except subprocess.CalledProcessError as e:
+        print(f" [HATA] Paket yuklenemedi: {e}")
+        return False
+
+    # Scripti venv python'u ile yeniden calistir
+    print("\n [*] Venv ile yeniden baslatiliyor...\n")
+    os.execv(str(python_path), [str(python_path), __file__] + sys.argv[1:])
+
+# Kurulum kontrolu
+if __name__ == "__main__":
+    # Sadece ana modul olarak calistiginda kontrol et
+    script_dir = Path(__file__).parent
+    venv_python = script_dir / "venv" / ("Scripts" if sys.platform == "win32" else "bin") / "python"
+
+    # Venv disinda calisiyorsak kurulumu yap
+    if not (hasattr(sys, 'real_prefix') or (hasattr(sys, 'base_prefix') and sys.base_prefix != sys.prefix)):
+        if venv_python.exists():
+            # Venv var, onunla calistir
+            os.execv(str(venv_python), [str(venv_python), __file__] + sys.argv[1:])
+        else:
+            # Venv yok, kur
+            setup_environment()
+
+# ============================================================================
+# IMPORTLAR (venv icinden calistiginda yuklenecek)
+# ============================================================================
+
 import json
 import hashlib
 import tempfile
 import shutil
-from pathlib import Path
 from datetime import datetime
 from io import BytesIO
 import pickle
