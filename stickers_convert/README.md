@@ -1,15 +1,21 @@
-# Sticly - Sticker Yonetim Paneli v2.0
+# Sticly - Sticker Yonetim Paneli v2.1
 
 Stickerleri Google Drive'da yedekleyen, Firebase'e yukleyen ve menuyle yoneten arac.
 
 ---
 
-## Yenilikler (v2.0)
+## Yenilikler
 
-- **Google Drive Entegrasyonu** - Stickerlar artık Drive'da yedekleniyor
+### v2.1
+- **Akilli Drive Yukleme** - Klasor bazli kontrol ile hizli yukleme
+- Drive'da mevcut olan paketler otomatik atlaniyor
+- Her dosya icin ayri kontrol yerine tek klasor kontrolu (performans artisi)
+
+### v2.0
+- **Google Drive Entegrasyonu** - Stickerlar artik Drive'da yedekleniyor
 - **Menu Tabanli Arayuz** - Tek tek islemler secebilirsin
 - **Guvenlik Kontrolleri** - Yanlislikla silme engellendi
-- **Hizli Calisma** - Sadece secilen islem calisir, tum taramalar yapilmaz
+- **Hizli Calisma** - Sadece secilen islem calisir
 
 ---
 
@@ -90,7 +96,28 @@ python upload_stickers.py
 # 5. Menu 2 sec -> Firebase guncellenir
 ```
 
-### Yeni Sticker Paketi Ekleme
+### Yeni Paket Ekleme (Mevcut Verileri Silmeden)
+
+Yeni bir bilgisayarda, bos klasorlerle, sadece **yeni** paket eklemek icin:
+
+```
+1. Menu 8 → Klasor olustur (stickers/ veya premium_stickers/)
+2. Klasore dosyalari koy (en az 3 sticker)
+3. Menu 2 → Firebase'e yukle
+   ✓ Mevcut paketler SILINMEZ, sadece yeni eklenir
+4. Menu 7 → Drive'a yedekle
+   ✓ Mevcut klasorler ATLANIR, sadece yeni yuklenir
+```
+
+| Adim | Menu | Islem | Mevcut Veri |
+|------|------|-------|-------------|
+| 1 | 8 | Klasor olustur | - |
+| 2 | 2 | Firebase'e yukle | Korunur ✓ |
+| 3 | 7 | Drive'a yedekle | Korunur ✓ |
+
+> **Not:** Menu 6'yi (Drive'dan indir) **kullanmayin** cunku zaten Drive'da mevcut paketler var ve bos klasore indirilir.
+
+### Sticker Paketi Ekleme (Normal Yol)
 
 1. **Menu 8** sec -> Klasor olustur
 2. Klasore en az 3 sticker dosyasi koy (MP4, GIF, PNG, JPG...)
@@ -110,54 +137,53 @@ python upload_stickers.py
    - Cache
    - Drive (opsiyonel - sorar)
 
-### Mevcut Stickerlari Guncelleme
+---
 
-1. Yerel klasordeki dosyalari degistir/ekle/cikar
-2. **Menu 2** sec -> Sadece degisen dosyalar islenir
-3. **Menu 7** sec -> Drive'a yedekle
+## Drive Yukleme Davranisi (Menu 7)
+
+**Klasor bazli akilli kontrol:**
+
+- Script, Drive'da paket klasoru olup olmadigini kontrol eder
+- Klasor **mevcutsa** -> Tum paket atlanir (hizli)
+- Klasor **yoksa** -> Klasor olusturulur ve dosyalar yuklenir
+
+**Ornek cikti:**
+```
+[NORMAL] komik-kediler - ATLANDI (mevcut)
+[NORMAL] yeni-paket - Yukleniyor...
+   video1.mp4 OK
+   video2.gif OK
+[OK] 1 paket yuklendi, 1 paket atlandi (zaten mevcut)
+```
+
+**Not:** Mevcut bir pakete yeni sticker eklemek icin, Drive'daki klasoru silip tekrar Menu 7'yi calistirabilirsiniz.
 
 ---
 
-## Guvenlik Kontrolleri
+## Premium Sticker Sistemi
 
-### Yerel Klasor Bosken
-
-```
-[!] Yerel klasorde paket bulunamadi!
-
-   GUVENLIK: Firebase'deki veriler korunuyor.
-   Stickerlar silinmedi, sadece yerel klasor bos.
-
-   Yapmaniz gerekenler:
-   1. Once Drive'dan stickerlari indirin (Menu 6)
-   2. Veya yeni paket ekleyin (Menu 8)
-```
-
-**Neden?** Bos klasor Firebase'deki verileri silmez. Once Drive'dan indirmelisin.
-
-### Firebase'de Daha Fazla Paket Varken
+### Premium Klasor
+Premium paketler icin `premium_stickers/` klasorunu kullan:
 
 ```
-[!] DIKKAT: Yerelde 5 paket, Firebase'de 20 paket var!
-
-   Bu islem sadece yereldeki paketleri gunceller.
-   Firebase'deki fazla paketler SILINMEYECEK.
-
-   Devam etmek istiyor musunuz? (e/h):
+stickers_convert/
+├── stickers/                <- Normal (ucretsiz) paketler
+└── premium_stickers/        <- Premium (ucretli) paketler
 ```
 
-**Neden?** Yanlislikla tum verilerin silinmesini engeller.
+### Uygulama Davranisi
+- **Tac Simgesi**: Premium paketlerin saginda sari tac simgesi gorunur
+- **Gorsel Kilit**: Kilitli sticker'larin uzerinde kilit simgesi
+- **Ilk 3 Acik**: Premium olmayan kullanicilar ilk 3 sticker'i gorebilir
 
-### Paket Silme Onayi
-
+### Firebase Yapisi
+```json
+{
+  "name": "VIP Emojiler",
+  "isPremium": true,
+  "stickers": [...]
+}
 ```
-'Komik Kediler' paketini silmek istediginizden emin misiniz?
-Bu islem GERI ALINAMAZ!
-
-Onaylamak icin 'SIL' yazin:
-```
-
-**Neden?** Yanlislikla silmeyi engeller.
 
 ---
 
@@ -202,9 +228,49 @@ stickers_convert/
 |---------|-------|
 | Sticker boyutu | 512x512 piksel (otomatik) |
 | Tray boyutu | 96x96 piksel (otomatik) |
-| Maksimum dosya | 500 KB (otomatik sıkıştırma) |
+| Maksimum dosya | 500 KB (otomatik sikistirma) |
 | Video suresi | Max 3 saniye (otomatik kesme) |
 | Sticker sayisi | 3-30 arasi |
+
+---
+
+## Hizli Komutlar
+
+| Islem | Menu |
+|-------|------|
+| Yeni paket ekle | 8 |
+| Firebase'e yukle | 2 |
+| Drive'a yedekle | 7 |
+| Drive'dan indir | 6 |
+| Paket sil | 9 |
+| Istatistikler | 5 |
+| GitHub push | 4 |
+| Tam sync | F |
+
+---
+
+## Veri Akisi
+
+```
+                    ┌─────────────┐
+                    │   GOOGLE    │
+                    │   DRIVE     │  <- Ana yedek
+                    └──────┬──────┘
+                           │
+            Menu 6 ↓       │      ↑ Menu 7
+                           │
+                    ┌──────▼──────┐
+                    │   YEREL     │
+                    │   KLASOR    │  <- Calisma alani
+                    └──────┬──────┘
+                           │
+            Menu 2 ↓       │
+                           │
+              ┌────────────▼────────────┐
+              │        FIREBASE         │
+              │  Storage + Firestore    │  <- Uygulama verisi
+              └─────────────────────────┘
+```
 
 ---
 
@@ -244,31 +310,6 @@ Su dosyalar **ASLA PAYLASILMAMALI**:
 - `client_secret*.json` - Google client secret
 
 Bu dosyalar `.gitignore`'da ve GitHub'a yuklenmez.
-
----
-
-## Veri Akisi
-
-```
-                    ┌─────────────┐
-                    │   GOOGLE    │
-                    │   DRIVE     │  <- Ana yedek
-                    └──────┬──────┘
-                           │
-            Menu 6 ↓       │      ↑ Menu 7
-                           │
-                    ┌──────▼──────┐
-                    │   YEREL     │
-                    │   KLASOR    │  <- Calisma alani
-                    └──────┬──────┘
-                           │
-            Menu 2 ↓       │
-                           │
-              ┌────────────▼────────────┐
-              │        FIREBASE         │
-              │  Storage + Firestore    │  <- Uygulama verisi
-              └─────────────────────────┘
-```
 
 ---
 

@@ -1311,6 +1311,12 @@ def menu_download_from_drive():
     print_success(f"{downloaded} dosya indirildi")
     wait_enter()
 
+def check_folder_exists_in_drive(service, folder_name: str, parent_id: str) -> bool:
+    """Drive'da klasor var mi kontrol et"""
+    query = f"name='{folder_name}' and mimeType='application/vnd.google-apps.folder' and '{parent_id}' in parents and trashed=false"
+    results = service.files().list(q=query, spaces='drive', fields='files(id)').execute()
+    return len(results.get('files', [])) > 0
+
 def menu_upload_to_drive():
     """Yerel'den Drive'a yukle"""
     print_header("YEREL'DEN DRIVE'A YUKLE")
@@ -1324,7 +1330,8 @@ def menu_upload_to_drive():
     main_folder_id = get_or_create_drive_folder(service, DRIVE_FOLDER_NAME)
     print_success(f"Ana klasor: {DRIVE_FOLDER_NAME}")
 
-    uploaded = 0
+    uploaded_packs = 0
+    skipped_packs = 0
 
     # Normal stickerlar
     if STICKERS_DIR.exists():
@@ -1332,7 +1339,15 @@ def menu_upload_to_drive():
             if not pack_dir.is_dir():
                 continue
 
-            print(f"\n [NORMAL] {pack_dir.name}")
+            print(f"\n [NORMAL] {pack_dir.name}", end=" ")
+            
+            # Klasor Drive'da mevcut mu kontrol et
+            if check_folder_exists_in_drive(service, pack_dir.name, main_folder_id):
+                print("- ATLANDI (mevcut)")
+                skipped_packs += 1
+                continue
+            
+            print("- Yukleniyor...")
             folder_id = get_or_create_drive_folder(service, pack_dir.name, main_folder_id)
 
             files = [f for f in pack_dir.iterdir() if f.is_file() and f.suffix.lower() in ALL_EXTENSIONS]
@@ -1342,9 +1357,10 @@ def menu_upload_to_drive():
                 try:
                     upload_file_to_drive(service, file, folder_id)
                     print("OK")
-                    uploaded += 1
                 except Exception as e:
                     print(f"HATA: {e}")
+            
+            uploaded_packs += 1
 
     # Premium stickerlar
     if PREMIUM_STICKERS_DIR.exists():
@@ -1352,8 +1368,17 @@ def menu_upload_to_drive():
             if not pack_dir.is_dir():
                 continue
 
-            print(f"\n [PREMIUM] {pack_dir.name}")
-            folder_id = get_or_create_drive_folder(service, f"premium_{pack_dir.name}", main_folder_id)
+            premium_folder_name = f"premium_{pack_dir.name}"
+            print(f"\n [PREMIUM] {pack_dir.name}", end=" ")
+            
+            # Klasor Drive'da mevcut mu kontrol et
+            if check_folder_exists_in_drive(service, premium_folder_name, main_folder_id):
+                print("- ATLANDI (mevcut)")
+                skipped_packs += 1
+                continue
+            
+            print("- Yukleniyor...")
+            folder_id = get_or_create_drive_folder(service, premium_folder_name, main_folder_id)
 
             files = [f for f in pack_dir.iterdir() if f.is_file() and f.suffix.lower() in ALL_EXTENSIONS]
 
@@ -1362,11 +1387,12 @@ def menu_upload_to_drive():
                 try:
                     upload_file_to_drive(service, file, folder_id)
                     print("OK")
-                    uploaded += 1
                 except Exception as e:
                     print(f"HATA: {e}")
+            
+            uploaded_packs += 1
 
-    print_success(f"{uploaded} dosya yuklendi")
+    print_success(f"{uploaded_packs} paket yuklendi, {skipped_packs} paket atlandi (zaten mevcut)")
     wait_enter()
 
 def menu_add_new_pack():
