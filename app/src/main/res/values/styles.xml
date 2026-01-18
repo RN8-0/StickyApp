@@ -7,4 +7,17 @@
         <item name="android:statusBarColor">?colorPrimaryDark</item>
         <item name="android:windowBackground">@color/background</item>
     </style>
+
+    <!-- Dairesel Buton Stili -->
+    <style name="CircleButton" parent="Widget.MaterialComponents.Button.Icon">
+        <item name="android:insetTop">0dp</item>
+        <item name="android:insetBottom">0dp</item>
+        <item name="android:padding">0dp</item>
+        <item name="shapeAppearanceOverlay">@style/CircleAppearance</item>
+    </style>
+
+    <style name="CircleAppearance">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">50%</item>
+    </style>
 </resources>

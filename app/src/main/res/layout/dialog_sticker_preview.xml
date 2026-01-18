@@ -13,6 +13,17 @@
         android:layout_gravity="center"
         android:scaleType="fitCenter" />
 
+    <!-- Close button -->
+    <ImageButton
+        android:id="@+id/btnClose"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_gravity="top|end"
+        android:layout_margin="16dp"
+        android:background="?selectableItemBackgroundBorderless"
+        android:src="@drawable/ic_close"
+        app:tint="@android:color/white" />
+
     <!-- Lock overlay for premium stickers -->
     <ImageView
         android:id="@+id/lockOverlay"

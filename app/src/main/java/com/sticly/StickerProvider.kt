@@ -76,57 +76,15 @@ class StickerProvider : ContentProvider() {
     }
 
     private fun getAllPacks(): List<Pack> {
-        // Önce lokal paketleri yükle
-        val localPacks = Loader.load(context!!)
-
-        // Cache'deki Firebase paketlerini yükle
-        val firebasePacks = getFirebasePacksFromCache()
-
-        // Birleştir (aynı ID varsa Firebase versiyonu öncelikli)
-        val allPacks = mutableMapOf<String, Pack>()
-        localPacks.forEach { allPacks[it.id] = it }
-        firebasePacks.forEach { allPacks[it.id] = it }
-
-        return allPacks.values.toList()
-    }
-
-    private fun getFirebasePacksFromCache(): List<Pack> {
-        val cacheDir = File(context!!.cacheDir, CACHE_DIR)
-        if (!cacheDir.exists()) return emptyList()
-
-        val packs = mutableListOf<Pack>()
-
-        cacheDir.listFiles()?.filter { it.isDirectory }?.forEach { packDir ->
-            val packId = packDir.name
-            val stickerFiles = packDir.listFiles()?.filter {
-                it.name.endsWith(".webp") && it.name != "tray.webp"
-            }?.sortedBy { it.name } ?: emptyList()
-
-            if (stickerFiles.size >= 3) {
-                val stickers = stickerFiles.map { file ->
-                    Sticker(
-                        file = file.name,
-                        emojis = listOf("😀"),
-                        url = ""
-                    )
-                }
-
-                val trayFile = File(packDir, "tray.webp")
-                val trayName = if (trayFile.exists()) "tray.webp" else stickerFiles.firstOrNull()?.name ?: ""
-
-                packs.add(Pack(
-                    id = packId,
-                    name = packId.replace("_", " ").replaceFirstChar { it.uppercase() },
-                    pub = "Sticly",
-                    tray = trayName,
-                    stickers = stickers,
-                    trayUrl = "",
-                    isPremium = false
-                ))
-            }
+        // PERFORMANS: StickerRepository'nin memory cache'ini kullan
+        // Dosya sistemi taraması YOK - anında dönüş
+        val cached = StickerRepository.allPacksCache
+        if (cached.isNotEmpty()) {
+            return cached
         }
-
-        return packs
+        
+        // Fallback: Sadece lokal assets'den yükle (hızlı, JSON parse)
+        return Loader.load(context!!)
     }
 
     private fun getPack(identifier: String): Pack? {

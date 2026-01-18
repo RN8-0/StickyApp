@@ -209,6 +209,56 @@ class BillingManager(
         }
     }
 
+    /**
+     * Manuel satın alım geri yükleme
+     * Kullanıcı uygulamayı silip yeniden yüklediğinde bu fonksiyon çağrılabilir
+     */
+    fun restorePurchases(onResult: (RestoreResult) -> Unit) {
+        if (billingClient?.isReady != true) {
+            onResult(RestoreResult.ERROR)
+            return
+        }
+
+        billingClient?.queryPurchasesAsync(
+            QueryPurchasesParams.newBuilder()
+                .setProductType(BillingClient.ProductType.INAPP)
+                .build()
+        ) { billingResult, purchaseList ->
+            if (billingResult.responseCode == BillingClient.BillingResponseCode.OK) {
+                if (purchaseList.isEmpty()) {
+                    CoroutineScope(Dispatchers.Main).launch {
+                        onResult(RestoreResult.NOT_FOUND)
+                    }
+                } else {
+                    var restoredAny = false
+                    for (purchase in purchaseList) {
+                        if (purchase.purchaseState == Purchase.PurchaseState.PURCHASED) {
+                            handleSuccessfulPurchase(purchase)
+                            restoredAny = true
+                        }
+                    }
+                    CoroutineScope(Dispatchers.Main).launch {
+                        if (restoredAny) {
+                            onResult(RestoreResult.SUCCESS)
+                        } else {
+                            onResult(RestoreResult.NOT_FOUND)
+                        }
+                    }
+                }
+            } else {
+                CoroutineScope(Dispatchers.Main).launch {
+                    onResult(RestoreResult.ERROR)
+                }
+            }
+        }
+    }
+
+    enum class RestoreResult {
+        SUCCESS,
+        NOT_FOUND,
+        ERROR
+    }
+
     fun destroy() {
         billingClient?.endConnection()
     }

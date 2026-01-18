@@ -45,11 +45,30 @@
                 android:textSize="18sp"
                 android:textStyle="bold" />
 
+            <!-- Toplu Silme Onay Butonu (Toolbar'da) - Home'un solunda -->
+            <ImageButton
+                android:id="@+id/btnConfirmDelete"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:background="?selectableItemBackgroundBorderless"
+                android:src="@drawable/ic_delete"
+                app:tint="@color/white"
+                android:visibility="gone"
+                android:contentDescription="Seçilenleri Sil" />
+
+            <ImageButton
+                android:id="@+id/btnHome"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:background="?selectableItemBackgroundBorderless"
+                android:src="@drawable/ic_home"
+                android:contentDescription="Ana Sayfa" />
+
             <ImageView
                 android:id="@+id/installedIcon"
                 android:layout_width="32dp"
                 android:layout_height="32dp"
-                android:layout_marginEnd="12dp"
+                android:layout_marginEnd="8dp"
                 android:src="@drawable/ic_check"
                 android:visibility="gone" />
 
@@ -66,15 +85,36 @@
 
     </LinearLayout>
 
-    <!-- Stickers Grid -->
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/rv"
+    <!-- Stickers Grid with FAB -->
+    <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1"
-        android:background="@drawable/chat_wallpaper_pattern"
-        android:padding="8dp"
-        android:clipToPadding="false" />
+        android:layout_weight="1">
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/rv"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@drawable/chat_wallpaper_pattern"
+            android:padding="8dp"
+            android:clipToPadding="false" />
+
+        <!-- FAB: Çıkartma Ekle (sadece custom paketlerde görünür) -->
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/fabAddSticker"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom|end"
+            android:layout_margin="16dp"
+            android:src="@drawable/ic_add"
+            android:contentDescription="Çıkartma Ekle"
+            android:visibility="gone"
+            app:tint="@color/white"
+            app:backgroundTint="#9C27B0"
+            app:fabSize="normal"
+            android:elevation="8dp" />
+
+    </FrameLayout>
 
     <!-- Button container -->
     <LinearLayout
@@ -84,7 +124,143 @@
         android:padding="16dp"
         android:background="?android:colorBackground">
 
-        <!-- Normal Action Button (WhatsApp Ekle/Kaldır) -->
+        <!-- 2x2 Circular Buttons Grid -->
+        <LinearLayout
+            android:id="@+id/customButtonsContainer"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <!-- Row 1 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center">
+
+                <!-- Add to WhatsApp -->
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:gravity="center"
+                    android:padding="8dp">
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnGridAdd"
+                        style="@style/CircleButton"
+                        android:layout_width="64dp"
+                        android:layout_height="64dp"
+                        app:icon="@drawable/ic_check"
+                        app:iconSize="32dp"
+                        app:iconGravity="textStart"
+                        app:iconPadding="0dp"
+                        app:backgroundTint="#25D366" />
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:text="@string/add_to_whatsapp"
+                        android:textSize="12sp"
+                        android:gravity="center" />
+                </LinearLayout>
+
+                <!-- Update WhatsApp -->
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:gravity="center"
+                    android:padding="8dp">
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnGridUpdate"
+                        style="@style/CircleButton"
+                        android:layout_width="64dp"
+                        android:layout_height="64dp"
+                        app:icon="@drawable/ic_restore"
+                        app:iconSize="32dp"
+                        app:iconGravity="textStart"
+                        app:iconPadding="0dp"
+                        app:backgroundTint="#2196F3" />
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:text="@string/update_whatsapp"
+                        android:textSize="12sp"
+                        android:gravity="center" />
+                </LinearLayout>
+
+            </LinearLayout>
+
+            <!-- Row 2 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center">
+
+                <!-- Add Sticker -->
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:gravity="center"
+                    android:padding="8dp">
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnGridAddSticker"
+                        style="@style/CircleButton"
+                        android:layout_width="64dp"
+                        android:layout_height="64dp"
+                        app:icon="@drawable/ic_add"
+                        app:iconSize="32dp"
+                        app:iconGravity="textStart"
+                        app:iconPadding="0dp"
+                        app:backgroundTint="#9C27B0" />
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:text="@string/add_sticker"
+                        android:textSize="12sp"
+                        android:gravity="center" />
+                </LinearLayout>
+
+                <!-- Delete Mode -->
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:gravity="center"
+                    android:padding="8dp">
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnGridDeleteMode"
+                        style="@style/CircleButton"
+                        android:layout_width="64dp"
+                        android:layout_height="64dp"
+                        app:icon="@drawable/ic_delete"
+                        app:iconSize="32dp"
+                        app:iconGravity="textStart"
+                        app:iconPadding="0dp"
+                        app:backgroundTint="#F44336" />
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:text="@string/delete_mode"
+                        android:textSize="12sp"
+                        android:gravity="center" />
+                </LinearLayout>
+
+            </LinearLayout>
+
+        </LinearLayout>
+
+        <!-- Legacy Button (Firebase packs) -->
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnAction"
             android:layout_width="match_parent"
@@ -94,7 +270,10 @@
             android:textSize="16sp"
             android:textAllCaps="false"
             app:backgroundTint="@color/primary"
-            app:cornerRadius="28dp" />
+            app:cornerRadius="28dp"
+            app:icon="@drawable/ic_add"
+            app:iconGravity="textStart"
+            app:iconTint="#FFFFFF" />
 
         <!-- Premium Buttons Container (yan yana) -->
         <LinearLayout

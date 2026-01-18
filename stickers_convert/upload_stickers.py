@@ -530,8 +530,28 @@ def get_image_dimensions(file_path: Path) -> tuple:
     except:
         return (0, 0)
 
+def has_transparent_background(img) -> bool:
+    """Resmin zaten seffaf arka plani olup olmadigini kontrol et"""
+    try:
+        if img.mode != 'RGBA':
+            return False
+        
+        # Alfa kanalini al
+        alpha = img.split()[-1]
+        pixels = list(alpha.getdata())
+        total_pixels = len(pixels)
+        
+        # Seffaf pikselleri say (alfa < 128)
+        transparent_count = sum(1 for p in pixels if p < 128)
+        transparent_ratio = transparent_count / total_pixels
+        
+        # %10'dan fazla seffaf piksel varsa, arka plan zaten silinmis
+        return transparent_ratio > 0.10
+    except:
+        return False
+
 def remove_background_from_image(input_path: Path) -> Path:
-    """Resimden arka plani sil"""
+    """Resimden arka plani sil (eger zaten silinmemisse)"""
     if not check_rembg() or not REMOVE_BACKGROUND:
         return input_path
 
@@ -540,8 +560,15 @@ def remove_background_from_image(input_path: Path) -> Path:
         from PIL import Image
 
         with Image.open(input_path) as img:
+            # RGBA'ya cevir
             if img.mode != 'RGBA':
                 img = img.convert('RGBA')
+            
+            # Arka plan zaten silinmis mi kontrol et
+            if has_transparent_background(img):
+                print_info(f"Arka plan zaten silinmis, atlaniyor: {input_path.name}")
+                return input_path
+            
             output = remove_bg(img)
             temp_file = tempfile.NamedTemporaryFile(suffix='.png', delete=False)
             output.save(temp_file.name, 'PNG')

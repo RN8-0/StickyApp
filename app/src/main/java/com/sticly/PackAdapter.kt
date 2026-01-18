@@ -20,7 +20,8 @@ import java.util.concurrent.TimeUnit
 class PackAdapter(
     private var items: List<Pack>,
     private val click: (Pack) -> Unit,
-    private val onFavoriteChanged: (() -> Unit)? = null
+    private val onFavoriteChanged: (() -> Unit)? = null,
+    private val onDeleteClick: ((Pack) -> Unit)? = null
 ) : RecyclerView.Adapter<PackAdapter.VH>() {
 
     class VH(v: View) : RecyclerView.ViewHolder(v) {
@@ -34,6 +35,7 @@ class PackAdapter(
         val premiumContainer: View = v.findViewById(R.id.premiumContainer)
         val newBadge: TextView = v.findViewById(R.id.newBadge)
         val btnFavorite: ImageButton = v.findViewById(R.id.btnFavorite)
+        val btnDelete: ImageButton = v.findViewById(R.id.btnDelete)
         val downloadCount: TextView = v.findViewById(R.id.downloadCount)
     }
 
@@ -54,6 +56,18 @@ class PackAdapter(
         h.checkIcon.visibility = if (isInstalled) View.VISIBLE else View.GONE
         h.installedBadge.visibility = if (isInstalled) View.VISIBLE else View.GONE
 
+        // Özel paket mi?
+        val isCustomPack = pack.category == "custom"
+        if (isCustomPack) {
+            // Özel paketlerde favori butonu gizle, silme butonu göster
+            h.btnFavorite.visibility = View.GONE
+            h.btnDelete.visibility = View.VISIBLE
+            h.btnDelete.setOnClickListener { onDeleteClick?.invoke(pack) }
+        } else {
+            h.btnFavorite.visibility = View.VISIBLE
+            h.btnDelete.visibility = View.GONE
+        }
+
         // Premium badge ve taç
         val isPremiumPack = pack.isPremium
         val hasAccess = PreferencesHelper.hasAccessToPremiumPack(context, pack.id)
@@ -68,27 +82,29 @@ class PackAdapter(
         val isNew = isPackNew(pack.createdAt)
         h.newBadge.visibility = if (isNew) View.VISIBLE else View.GONE
 
-        // Favori butonu
-        val isFavorite = PreferencesHelper.isPackFavorite(context, pack.id)
-        h.btnFavorite.setImageResource(
-            if (isFavorite) R.drawable.ic_favorite_filled else R.drawable.ic_favorite_border
-        )
-        h.btnFavorite.setOnClickListener {
-            val newFavState = PreferencesHelper.toggleFavorite(context, pack.id)
+        // Favori butonu (Sadece özel olmayan paketler için)
+        if (!isCustomPack) {
+            val isFavorite = PreferencesHelper.isPackFavorite(context, pack.id)
             h.btnFavorite.setImageResource(
-                if (newFavState) R.drawable.ic_favorite_filled else R.drawable.ic_favorite_border
+                if (isFavorite) R.drawable.ic_favorite_filled else R.drawable.ic_favorite_border
             )
+            h.btnFavorite.setOnClickListener {
+                val newFavState = PreferencesHelper.toggleFavorite(context, pack.id)
+                h.btnFavorite.setImageResource(
+                    if (newFavState) R.drawable.ic_favorite_filled else R.drawable.ic_favorite_border
+                )
 
-            // Firebase'e favori sayısını güncelle
-            if (newFavState) {
-                StickerRepository.incrementFavoriteCount(pack.id, pack.isPremium)
-            } else {
-                StickerRepository.decrementFavoriteCount(pack.id, pack.isPremium)
+                // Firebase'e favori sayısını güncelle
+                if (newFavState) {
+                    StickerRepository.incrementFavoriteCount(pack.id, pack.isPremium)
+                } else {
+                    StickerRepository.decrementFavoriteCount(pack.id, pack.isPremium)
+                }
+
+                val msg = if (newFavState) R.string.added_to_favorites else R.string.removed_from_favorites
+                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                onFavoriteChanged?.invoke()
             }
-
-            val msg = if (newFavState) R.string.added_to_favorites else R.string.removed_from_favorites
-            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
-            onFavoriteChanged?.invoke()
         }
 
         // İndirme/ekleme sayısı
@@ -99,35 +115,47 @@ class PackAdapter(
             h.downloadCount.visibility = View.GONE
         }
 
-        // Tray image yükleme - URL varsa HER ZAMAN URL'den yükle (güncel kalması için)
-        when {
-            // 1. Firebase URL varsa oradan yükle - cache KULLANMA (güncel tray için)
-            pack.trayUrl.isNotEmpty() -> {
+        // Tray image yükleme
+        if (isCustomPack) {
+            // Özel paketler için her zaman lokal dosyadan yükle
+            val trayFile = CustomStickerManager.getTrayFile(context, pack.id)
+            if (trayFile != null && trayFile.exists()) {
                 Glide.with(context)
-                    .load(pack.trayUrl)
+                    .load(trayFile)
                     .skipMemoryCache(true)
                     .diskCacheStrategy(DiskCacheStrategy.NONE)
                     .into(h.tray)
+            } else {
+                h.tray.setImageResource(R.drawable.ic_sticker_placeholder)
             }
-            // 2. URL yoksa cache'den yükle
-            else -> {
-                val cachedTray = StickerRepository.getCachedStickerPath(context, pack.id, pack.tray)
-                if (cachedTray.exists() && cachedTray.length() > 0) {
+        } else {
+            // Normal paketler için mevcut mantık
+            when {
+                pack.trayUrl.isNotEmpty() -> {
                     Glide.with(context)
-                        .load(cachedTray)
-                        .signature(ObjectKey(cachedTray.lastModified()))
+                        .load(pack.trayUrl)
+                        .skipMemoryCache(true)
                         .diskCacheStrategy(DiskCacheStrategy.NONE)
                         .into(h.tray)
-                } else {
-                    // 3. Lokal assets'ten yükle
-                    try {
-                        val path = "${pack.id}/${pack.tray}"
-                        val stream = context.assets.open(path)
-                        val bitmap = BitmapFactory.decodeStream(stream)
-                        stream.close()
-                        h.tray.setImageBitmap(bitmap)
-                    } catch (e: Exception) {
-                        h.tray.setImageResource(R.drawable.ic_sticker_placeholder)
+                }
+                else -> {
+                    val cachedTray = StickerRepository.getCachedStickerPath(context, pack.id, pack.tray)
+                    if (cachedTray.exists() && cachedTray.length() > 0) {
+                        Glide.with(context)
+                            .load(cachedTray)
+                            .signature(ObjectKey(cachedTray.lastModified()))
+                            .diskCacheStrategy(DiskCacheStrategy.NONE)
+                            .into(h.tray)
+                    } else {
+                        try {
+                            val path = "${pack.id}/${pack.tray}"
+                            val stream = context.assets.open(path)
+                            val bitmap = BitmapFactory.decodeStream(stream)
+                            stream.close()
+                            h.tray.setImageBitmap(bitmap)
+                        } catch (e: Exception) {
+                            h.tray.setImageResource(R.drawable.ic_sticker_placeholder)
+                        }
                     }
                 }
             }

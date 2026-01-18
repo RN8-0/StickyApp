@@ -19,7 +19,8 @@ data class Pack(
     val storagePath: String = "stickers",  // Firebase Storage klasör yolu (stickers veya premium_stickers)
     val createdAt: String = "",  // Oluşturulma tarihi (ISO format)
     val category: String = "",   // Kategori (komik, romantik, spor, dizi_film, vb.)
-    val downloadCount: Int = 0   // İndirme/ekleme sayısı
+    val downloadCount: Int = 0,  // İndirme/ekleme sayısı
+    val isAnimated: Boolean = false // Animasyonlu paket mi?
 )
 
 data class Sticker(

@@ -170,6 +170,19 @@
 
         </FrameLayout>
 
+        <!-- Silme butonu (özel paketler için) -->
+        <ImageButton
+            android:id="@+id/btnDelete"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:background="?selectableItemBackgroundBorderless"
+            android:src="@drawable/ic_delete"
+            android:scaleType="fitCenter"
+            android:padding="8dp"
+            android:visibility="gone"
+            app:tint="#F44336"
+            android:contentDescription="@string/delete_pack" />
+
         <!-- Favori butonu (en sağda) -->
         <ImageButton
             android:id="@+id/btnFavorite"

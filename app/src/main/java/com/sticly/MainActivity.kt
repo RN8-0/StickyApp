@@ -34,12 +34,16 @@ class MainActivity : AppCompatActivity() {
     private lateinit var swipeRefresh: SwipeRefreshLayout
     private lateinit var adapter: PackAdapter
     private lateinit var btnFilter: ImageButton
+    private lateinit var menuBtn: ImageButton
+    private lateinit var toolbarTitle: TextView
+    private lateinit var toolbarSubtitle: TextView
+    private lateinit var fabAddCustom: com.google.android.material.floatingactionbutton.FloatingActionButton
     private var allPacks: List<Pack> = emptyList()
     private var billingManager: BillingManager? = null
     private var currentFilter: FilterType = FilterType.ALL
     private var currentSearchQuery: String = ""
-
-    enum class FilterType { ALL, INSTALLED, PREMIUM, FAVORITES }
+    private var pendingDeletePackId: String? = null
+    private var waitingForWhatsAppReturn = false
 
     override fun onCreate(s: Bundle?) {
         applyTheme()
@@ -68,7 +72,9 @@ class MainActivity : AppCompatActivity() {
         rv = findViewById(R.id.rv)
         loadingOverlay = findViewById(R.id.loadingOverlay)
         swipeRefresh = findViewById(R.id.swipeRefresh)
-        val menuBtn = findViewById<ImageButton>(R.id.menuBtn)
+        menuBtn = findViewById(R.id.menuBtn)
+        toolbarTitle = findViewById(R.id.toolbarTitle)
+        toolbarSubtitle = findViewById(R.id.toolbarSubtitle)
         val searchBox = findViewById<EditText>(R.id.searchBox)
         val btnTheme = findViewById<ImageButton>(R.id.btnTheme)
         btnFilter = findViewById(R.id.btnFilter)
@@ -87,10 +93,17 @@ class MainActivity : AppCompatActivity() {
         val navShare = findViewById<LinearLayout>(R.id.navShare)
         val navNotifications = findViewById<LinearLayout>(R.id.navNotifications)
         val navPrivacy = findViewById<LinearLayout>(R.id.navPrivacy)
+        val navRestorePurchases = findViewById<LinearLayout>(R.id.navRestorePurchases)
 
-        // Menu button opens drawer from right
+        // Menu button opens drawer from right OR goes back
         menuBtn.setOnClickListener {
-            drawer.openDrawer(GravityCompat.END)
+            if (currentFilter == FilterType.CUSTOM) {
+                // Geri butonu gibi davran
+                currentFilter = FilterType.ALL
+                applyFilters()
+            } else {
+                drawer.openDrawer(GravityCompat.END)
+            }
         }
 
         // Theme toggle button
@@ -100,6 +113,7 @@ class MainActivity : AppCompatActivity() {
         btnTheme.setOnClickListener { view ->
             showThemeMenu(view, btnTheme)
         }
+
 
         // Menu item click handlers
         navFaq.setOnClickListener {
@@ -149,20 +163,80 @@ class MainActivity : AppCompatActivity() {
             showPrivacyDialog()
         }
 
+        navRestorePurchases.setOnClickListener {
+            drawer.closeDrawers()
+            restorePurchases()
+        }
+
         // Setup RecyclerView with linear layout (list)
         rv.layoutManager = LinearLayoutManager(this)
 
-        // Boş adapter oluştur
-        allPacks = emptyList()
+        // Adapter initialization
         adapter = PackAdapter(allPacks, { pack ->
             startActivity(Intent(this, DetailsActivity::class.java).putExtra("id", pack.id))
         }, {
-            // Favori değiştiğinde, eğer favoriler filtresindeyse listeyi güncelle
-            if (currentFilter == FilterType.FAVORITES) {
-                applyFilters()
-            }
+            if (currentFilter == FilterType.FAVORITES) applyFilters()
+        }, { pack ->
+            // Silme butonu tıklandı - WhatsApp'tan kaldır ve uygulamadan sil
+            deleteCustomPack(pack)
         })
         rv.adapter = adapter
+
+        // FAB Logic
+        val fabMain = findViewById<com.google.android.material.floatingactionbutton.FloatingActionButton>(R.id.fabMain)
+        val fabOverlay = findViewById<View>(R.id.fabOverlay)
+        val fabMenuContainer = findViewById<View>(R.id.fabMenuContainer)
+        val fabActionCreate = findViewById<View>(R.id.fabActionCreate)
+        val fabActionMyStickers = findViewById<View>(R.id.fabActionMyStickers)
+        fabAddCustom = findViewById(R.id.fabAddCustom)
+
+        var isFabOpen = false
+        
+        fun toggleFabMenu() {
+            isFabOpen = !isFabOpen
+            if (isFabOpen) {
+                fabOverlay.visibility = View.VISIBLE
+                fabMenuContainer.visibility = View.VISIBLE
+                fabMenuContainer.alpha = 0f
+                fabMenuContainer.translationY = 50f
+                fabMenuContainer.animate().alpha(1f).translationY(0f).setDuration(250).start()
+                fabMain.animate().rotation(45f).setDuration(250).start()
+            } else {
+                fabOverlay.visibility = View.GONE
+                fabMenuContainer.animate().alpha(0f).translationY(50f).setDuration(250).withEndAction {
+                    fabMenuContainer.visibility = View.GONE
+                }.start()
+                fabMain.animate().rotation(0f).setDuration(250).start()
+            }
+        }
+        
+        fabMain.setOnClickListener { toggleFabMenu() }
+        fabOverlay.setOnClickListener { toggleFabMenu() }
+        
+        // Çıkartma Yap seçeneği
+        fabActionCreate.setOnClickListener {
+            toggleFabMenu()
+            startActivity(Intent(this, StickerMakerActivity::class.java))
+            overridePendingTransition(R.anim.fade_in, R.anim.fade_out)
+        }
+        
+        // Çıkartmalarınız seçeneği
+        fabActionMyStickers.setOnClickListener {
+            toggleFabMenu()
+            currentFilter = FilterType.CUSTOM
+            applyFilters()
+            // Custom modunda fabAddCustom'u göster
+            fabAddCustom.visibility = View.VISIBLE
+            if (allPacks.none { it.category == "custom" }) {
+                Toast.makeText(this, "Henüz hiç çıkartma paketin yok. + butonuna tıklayarak oluştur!", Toast.LENGTH_LONG).show()
+            }
+        }
+        
+        // fabAddCustom - Hızlı çıkartma oluşturma (Custom görünümündeyken görünen buton)
+        fabAddCustom.setOnClickListener {
+            startActivity(Intent(this, StickerMakerActivity::class.java))
+            overridePendingTransition(R.anim.fade_in, R.anim.fade_out)
+        }
 
         // Firebase'den paketleri yükle
         loadPacksFromFirebase()
@@ -214,6 +288,7 @@ class MainActivity : AppCompatActivity() {
         if (::adapter.isInitialized) {
             adapter.notifyDataSetChanged()
         }
+
     }
 
     private fun showNoInternetDialog() {
@@ -237,27 +312,27 @@ class MainActivity : AppCompatActivity() {
     private fun loadPacksFromFirebase() {
         lifecycleScope.launch {
             try {
-                val firebasePacks = StickerRepository.loadPacks(this@MainActivity)
-                if (firebasePacks.isNotEmpty()) {
-                    // Geçerli paket ID'lerini al
-                    val validPackIds = firebasePacks.map { it.id }.toSet()
+                // Tüm paketleri (Firebase + Özel) tek seferde yükle
+                val loadedPacks = StickerRepository.loadPacks(this@MainActivity)
+                
+                if (loadedPacks.isNotEmpty()) {
+                    // Firebase paketlerinin ID'lerini al (cache temizliği için)
+                    val firebasePackIds = loadedPacks.filter { it.category != "custom" }.map { it.id }.toSet()
 
-                    // Eski/geçersiz cache'leri temizle
-                    StickerRepository.cleanupInvalidCache(this@MainActivity, validPackIds)
+                    // Eski/geçersiz cache'leri temizle (sadece Firebase paketleri için)
+                    StickerRepository.cleanupInvalidCache(this@MainActivity, firebasePackIds)
 
-                    // Her paket için cache'i güncelle (eski çıkartmaları sil)
-                    firebasePacks.forEach { pack ->
+                    // Firebase paketleri için cache'i güncelle
+                    loadedPacks.filter { it.category != "custom" }.forEach { pack ->
                         StickerRepository.updatePackCache(this@MainActivity, pack)
                     }
 
-                    allPacks = firebasePacks
-                    adapter.updateList(allPacks)
+                    allPacks = loadedPacks
+                    applyFilters()
                 }
-                // Yükleme tamamlandı - overlay'i gizle, listeyi göster
                 showContent()
             } catch (e: Exception) {
                 e.printStackTrace()
-                // Hata durumunda da overlay'i gizle
                 showContent()
             }
         }
@@ -276,45 +351,73 @@ class MainActivity : AppCompatActivity() {
             .start()
     }
 
+
+
     private fun refreshPacks() {
-        lifecycleScope.launch {
-            try {
-                val firebasePacks = StickerRepository.loadPacks(this@MainActivity)
-                if (firebasePacks.isNotEmpty()) {
-                    val validPackIds = firebasePacks.map { it.id }.toSet()
-                    StickerRepository.cleanupInvalidCache(this@MainActivity, validPackIds)
-                    firebasePacks.forEach { pack ->
-                        StickerRepository.updatePackCache(this@MainActivity, pack)
-                    }
-                    allPacks = firebasePacks
-                    applyFilters()
-                    Toast.makeText(this@MainActivity, "Paketler güncellendi", Toast.LENGTH_SHORT).show()
-                }
-            } catch (e: Exception) {
-                Toast.makeText(this@MainActivity, "Güncelleme başarısız", Toast.LENGTH_SHORT).show()
-            } finally {
-                swipeRefresh.isRefreshing = false
-            }
-        }
+        swipeRefresh.isRefreshing = true
+        loadPacksFromFirebase()
+        swipeRefresh.postDelayed({ swipeRefresh.isRefreshing = false }, 1000)
     }
+
+    enum class FilterType { ALL, INSTALLED, PREMIUM, FAVORITES, PURCHASED, CUSTOM }
 
     private fun applyFilters() {
         var filtered = allPacks
-
-        // Önce filtre tipine göre filtrele
+        
+        // Önce arama filtresi uygula
+        if (currentSearchQuery.isNotEmpty()) {
+            val query = currentSearchQuery.lowercase(Locale.getDefault())
+            filtered = filtered.filter { 
+                it.name.lowercase(Locale.getDefault()).contains(query) || 
+                it.pub.lowercase(Locale.getDefault()).contains(query)
+            }
+        }
+        
+        // Sonra kategori filtresi uygula
         filtered = when (currentFilter) {
-            FilterType.ALL -> filtered
+            FilterType.ALL -> filtered.filter { it.category != "custom" } // Özel paketleri genel listeden GİZLE
             FilterType.INSTALLED -> filtered.filter { PreferencesHelper.isPackInstalled(this, it.id) }
             FilterType.PREMIUM -> filtered.filter { it.isPremium }
             FilterType.FAVORITES -> filtered.filter { PreferencesHelper.isPackFavorite(this, it.id) }
+            FilterType.PURCHASED -> filtered.filter { PreferencesHelper.hasAccessToPremiumPack(this, it.id) }
+            FilterType.CUSTOM -> filtered.filter { it.category == "custom" }
         }
-
-        // Sonra arama sorgusuna göre filtrele
-        if (currentSearchQuery.isNotEmpty()) {
-            filtered = filtered.filter { it.name.contains(currentSearchQuery, ignoreCase = true) }
+        
+        // "Çıkartmalarınız" kısmında geri butonu/ev butonu ve fabAddCustom göster
+        if (currentFilter == FilterType.CUSTOM) {
+             menuBtn.setImageResource(R.drawable.ic_back)
+             // Uygulama adı kalıyor, alt başlık gösteriliyor
+             toolbarTitle.text = getString(R.string.app_name)
+             toolbarSubtitle.visibility = View.VISIBLE
+             btnFilter.visibility = View.INVISIBLE
+             fabAddCustom.visibility = View.VISIBLE
+             findViewById<View>(R.id.fabMain).visibility = View.GONE
+        } else {
+             menuBtn.setImageResource(R.drawable.ic_menu)
+             toolbarTitle.text = getString(R.string.app_name)
+             toolbarSubtitle.visibility = View.GONE
+             btnFilter.visibility = View.VISIBLE
+             fabAddCustom.visibility = View.GONE
+             findViewById<View>(R.id.fabMain).visibility = View.VISIBLE
         }
-
+        
+        // Sıralama (yeni paketler önce) ve liste güncelleme
         adapter.updateList(filtered)
+        
+        // Boş durum mesajı (gerekirse eklenebilir)
+    } 
+    
+    // onBackPressed ile de geri dönmeyi sağla
+    @Deprecated("Deprecated in Java")
+    override fun onBackPressed() {
+        if (drawer.isDrawerOpen(GravityCompat.END)) {
+            drawer.closeDrawer(GravityCompat.END)
+        } else if (currentFilter == FilterType.CUSTOM) {
+            currentFilter = FilterType.ALL
+            applyFilters()
+        } else {
+            super.onBackPressed()
+        }
     }
 
     private fun showFilterMenu(anchor: View) {
@@ -323,6 +426,7 @@ class MainActivity : AppCompatActivity() {
         popup.menu.add(0, 1, 1, R.string.filter_favorites)
         popup.menu.add(0, 2, 2, R.string.filter_installed)
         popup.menu.add(0, 3, 3, R.string.filter_premium)
+        popup.menu.add(0, 4, 4, R.string.filter_purchased)
 
         popup.setOnMenuItemClickListener { item ->
             currentFilter = when (item.itemId) {
@@ -330,6 +434,7 @@ class MainActivity : AppCompatActivity() {
                 1 -> FilterType.FAVORITES
                 2 -> FilterType.INSTALLED
                 3 -> FilterType.PREMIUM
+                4 -> FilterType.PURCHASED
                 else -> FilterType.ALL
             }
             applyFilters()
@@ -554,17 +659,94 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
-    @Deprecated("Deprecated in Java")
-    override fun onBackPressed() {
-        if (drawer.isDrawerOpen(GravityCompat.END)) {
-            drawer.closeDrawer(GravityCompat.END)
-        } else {
-            super.onBackPressed()
+    private fun showDeletePackDialog(pack: Pack) {
+        AlertDialog.Builder(this)
+            .setTitle(R.string.delete_pack)
+            .setMessage(R.string.delete_pack_confirm)
+            .setPositiveButton(R.string.yes) { _, _ ->
+                if (CustomStickerManager.deletePack(this, pack.id)) {
+                    // Yükleme bilgisini temizle
+                    PreferencesHelper.removeInstalledPack(this, pack.id)
+                    refreshPacks()
+                    Toast.makeText(this, "Paket silindi ve WhatsApp zorunlu güncellemeye tetiklendi. WhatsApp'ın yenilemesi birkaç saniye sürebilir.", Toast.LENGTH_LONG).show()
+                } else {
+                    Toast.makeText(this, "Paket silinemedi", Toast.LENGTH_SHORT).show()
+                }
+            }
+            .setNegativeButton(R.string.no, null)
+            .show()
+    }
+
+    private fun restorePurchases() {
+        if (billingManager == null) {
+            Toast.makeText(this, R.string.restore_error, Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        Toast.makeText(this, R.string.restoring, Toast.LENGTH_SHORT).show()
+
+        billingManager?.restorePurchases { result ->
+            val messageRes = when (result) {
+                BillingManager.RestoreResult.SUCCESS -> {
+                    // Listeyi güncelle
+                    adapter.notifyDataSetChanged()
+                    R.string.restore_success
+                }
+                BillingManager.RestoreResult.NOT_FOUND -> R.string.restore_not_found
+                BillingManager.RestoreResult.ERROR -> R.string.restore_error
+            }
+            Toast.makeText(this, messageRes, Toast.LENGTH_SHORT).show()
         }
     }
 
     override fun onDestroy() {
         super.onDestroy()
         billingManager?.destroy()
+    }
+
+    companion object {
+        private const val REQUEST_DELETE_PACK = 2001
+    }
+
+    /**
+     * Özel paketi siler - WhatsApp bottom sheet açılır
+     */
+    private fun deleteCustomPack(pack: Pack) {
+        pendingDeletePackId = pack.id
+        waitingForWhatsAppReturn = true
+
+        // WhatsApp sticker pack ekranını aç
+        val intent = Intent().apply {
+            action = "com.whatsapp.intent.action.ENABLE_STICKER_PACK"
+            putExtra("sticker_pack_id", pack.id)
+            putExtra("sticker_pack_authority", "${packageName}.stickers")
+            putExtra("sticker_pack_name", pack.name)
+        }
+
+        try {
+            @Suppress("DEPRECATION")
+            startActivityForResult(intent, REQUEST_DELETE_PACK)
+        } catch (e: Exception) {
+            pendingDeletePackId = null
+            waitingForWhatsAppReturn = false
+            Toast.makeText(this, "WhatsApp yüklü değil", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+
+        if (requestCode == REQUEST_DELETE_PACK && pendingDeletePackId != null) {
+            // WhatsApp'tan döndük - paketi uygulamadan sil
+            val packId = pendingDeletePackId!!
+            if (CustomStickerManager.deletePack(this, packId)) {
+                PreferencesHelper.removeInstalledPack(this, packId)
+                Toast.makeText(this, "Çıkartma paketi silindi", Toast.LENGTH_SHORT).show()
+                refreshPacks()
+            }
+            pendingDeletePackId = null
+            waitingForWhatsAppReturn = false
+        }
     }
 }

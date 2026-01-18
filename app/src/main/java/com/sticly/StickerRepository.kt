@@ -25,38 +25,65 @@ object StickerRepository {
 
     private val storage = FirebaseStorage.getInstance()
     private val firestore = FirebaseFirestore.getInstance()
+    
+    /**
+     * KRITIK: Tüm paketlerin statik cache'i. 
+     * StickerProvider (farklı bir thread/zamanlama) buradan veriyi senkron olarak okuyabilir.
+     */
+    var allPacksCache: List<Pack> = emptyList()
+
+    private var cachedFirestorePacks: List<Pack>? = null
+    private var lastCacheTime: Long = 0
+    private const val CACHE_EXPIRY = 5 * 60 * 1000 // 5 minutes
 
     /**
-     * Firebase Storage'dan tüm paketleri yükler
+     * Tüm paketleri yükler (Firebase + Özel + Lokal Assets)
      */
     suspend fun loadPacks(context: Context): List<Pack> = withContext(Dispatchers.IO) {
         // Helper: Paketleri karışık sırala (ID hash'ine göre tutarlı sıralama)
-        // Her açılışta aynı sırada kalır, yeni paket eklenince hash'ine göre yerleşir
         fun shufflePacks(packs: List<Pack>) = packs.sortedBy { it.id.hashCode() }
+        
+        val allPacks = mutableListOf<Pack>()
 
         try {
-            // Önce Firestore'dan contents.json'u çek
+            // 1. Kullanıcının oluşturduğu özel paketleri yükle
+            val customPacks = CustomStickerManager.getCustomPacks(context).mapNotNull { cp ->
+                CustomStickerManager.toWhatsAppPack(context, cp.id)?.copy(category = "custom")
+            }
+            allPacks.addAll(customPacks)
+            Log.d(TAG, "Loaded ${customPacks.size} custom packs")
+
+            // 2. Firebase paketlerini yükle
             val packsFromFirestore = loadPacksFromFirestore()
             if (packsFromFirestore.isNotEmpty()) {
                 Log.d(TAG, "Loaded ${packsFromFirestore.size} packs from Firestore")
-                return@withContext shufflePacks(packsFromFirestore)
+                allPacks.addAll(packsFromFirestore)
+            } else {
+                // Firestore boşsa Storage'dan contents.json'u çek
+                val packsFromStorage = loadPacksFromStorage(context)
+                if (packsFromStorage.isNotEmpty()) {
+                    Log.d(TAG, "Loaded ${packsFromStorage.size} packs from Storage")
+                    allPacks.addAll(packsFromStorage)
+                }
             }
 
-            // Firestore boşsa Storage'dan contents.json'u çek
-            val packsFromStorage = loadPacksFromStorage(context)
-            if (packsFromStorage.isNotEmpty()) {
-                Log.d(TAG, "Loaded ${packsFromStorage.size} packs from Storage")
-                return@withContext shufflePacks(packsFromStorage)
-            }
+            // 3. HER ZAMAN lokal asset paketlerini ekle (Firebase ile çakışmayanları)
+            val existingIds = allPacks.map { it.id }.toSet()
+            val localPacks = Loader.load(context).filter { it.id !in existingIds }
+            Log.d(TAG, "Loaded ${localPacks.size} local asset packs")
+            allPacks.addAll(localPacks)
 
-            // Her ikisi de boşsa lokal assets'ten yükle (fallback)
-            Log.d(TAG, "Loading from local assets (fallback)")
-            return@withContext shufflePacks(Loader.load(context))
+            val result = shufflePacks(allPacks)
+            allPacksCache = result // Statik cache'i güncelle
+            return@withContext result
 
         } catch (e: Exception) {
             Log.e(TAG, "Error loading packs: ${e.message}")
             // Hata durumunda lokal assets'ten yükle
-            return@withContext shufflePacks(Loader.load(context))
+            val localPacks = Loader.load(context)
+            val result = shufflePacks(localPacks + allPacks)
+            allPacksCache = result // Statik cache'i güncelle
+            return@withContext result
         }
     }
 
@@ -64,6 +91,12 @@ object StickerRepository {
      * Firestore'dan paket listesini yükler
      */
     private suspend fun loadPacksFromFirestore(): List<Pack> {
+        // Return cache if valid
+        if (cachedFirestorePacks != null && System.currentTimeMillis() - lastCacheTime < CACHE_EXPIRY) {
+            Log.d(TAG, "Returning cached Firestore packs (${cachedFirestorePacks?.size})")
+            return cachedFirestorePacks!!
+        }
+
         val allPacks = mutableListOf<Pack>()
 
         try {
@@ -105,6 +138,12 @@ object StickerRepository {
             }
 
             Log.d(TAG, "Total packs loaded: ${allPacks.size}")
+            
+            // Update cache
+            if (allPacks.isNotEmpty()) {
+                cachedFirestorePacks = allPacks
+                lastCacheTime = System.currentTimeMillis()
+            }
 
         } catch (e: Exception) {
             Log.e(TAG, "Error loading from Firestore: ${e.message}")
@@ -124,16 +163,21 @@ object StickerRepository {
                 Log.d(TAG, "First sticker URL: ${stickers.first().url.take(80)}...")
             }
 
+            // WhatsApp zorunlu alanlar için varsayılan değerler
+            val publisher = (data["publisher"] as? String).takeIf { !it.isNullOrBlank() } ?: "Sticly"
+            val email = (data["publisher_email"] as? String).takeIf { !it.isNullOrBlank() } ?: "contact@sticly.com"
+            val privacy = (data["privacy_policy_website"] as? String).takeIf { !it.isNullOrBlank() } ?: "https://sticly.com/privacy"
+
             Pack(
                 id = doc.id,
-                name = data["name"] as? String ?: "",
-                pub = data["publisher"] as? String ?: "",
-                email = data["publisher_email"] as? String ?: "",
-                privacy = data["privacy_policy_website"] as? String ?: "",
+                name = data["name"] as? String ?: doc.id.replace("_", " ").replaceFirstChar { it.uppercase() },
+                pub = publisher,
+                email = email,
+                privacy = privacy,
                 license = data["license_agreement_website"] as? String ?: "",
                 version = data["image_data_version"] as? String ?: "1",
                 avoidCache = data["avoid_cache"] as? Boolean ?: false,
-                tray = data["tray_image_file"] as? String ?: "",
+                tray = data["tray_image_file"] as? String ?: "tray.webp",
                 trayUrl = data["tray_url"] as? String ?: "",
                 stickers = stickers,
                 isPremium = isPremium,
@@ -152,7 +196,8 @@ object StickerRepository {
     private fun parseStickers(data: Any?): List<Sticker> {
         if (data == null) return emptyList()
         return try {
-            (data as? List<Map<String, Any>>)?.map { stickerData ->
+            (data as? List<*>)?.mapNotNull { item ->
+                val stickerData = item as? Map<String, Any> ?: return@mapNotNull null
                 Sticker(
                     file = stickerData["image_file"] as? String ?: "",
                     emojis = (stickerData["emojis"] as? List<String>),
@@ -233,6 +278,7 @@ object StickerRepository {
 
     /**
      * Sticker dosyasını cache'e indirir ve yolunu döner
+     * Dosyalar upload_stickers.py tarafından zaten doğru boyutta yükleniyor
      */
     suspend fun downloadStickerToCache(
         context: Context,
@@ -283,12 +329,18 @@ object StickerRepository {
                         }
                     }
 
-                    // Hepsini bekle
-                    trayJob.await()
-                    stickerJobs.awaitAll()
-                }
+                    // Hepsini bekle ve sonuçları kontrol et
+                    val trayFile = trayJob.await()
+                    val stickerFiles = stickerJobs.awaitAll()
 
-                true
+                    // KRITIK: Eğer herhangi bir dosya indirilemezse başarısız say
+                    if (trayFile == null || stickerFiles.any { it == null }) {
+                         Log.e(TAG, "Download failed: tray=$trayFile, stickersCount=${stickerFiles.filterNotNull().size}/${stickerFiles.size}")
+                         false
+                    } else {
+                        true
+                    }
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "Error downloading pack: ${e.message}")
                 false
@@ -317,11 +369,15 @@ object StickerRepository {
                         }
                     }
 
-                    trayJob.await()
-                    stickerJobs.awaitAll()
-                }
+                    val trayFile = trayJob.await()
+                    val stickerFiles = stickerJobs.awaitAll()
 
-                true
+                    if (trayFile == null || stickerFiles.any { it == null }) {
+                        false
+                    } else {
+                        true
+                    }
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "Error downloading first stickers: ${e.message}")
                 false

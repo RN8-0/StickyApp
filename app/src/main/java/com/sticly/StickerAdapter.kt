@@ -16,6 +16,7 @@ import com.bumptech.glide.load.engine.GlideException
 import com.bumptech.glide.request.RequestListener
 import com.bumptech.glide.request.target.Target
 import com.bumptech.glide.signature.ObjectKey
+import java.io.File
 
 class StickerAdapter(
     private val packId: String,
@@ -23,13 +24,20 @@ class StickerAdapter(
     private val isPackPremium: Boolean = false,
     private val hasAccess: Boolean = true,
     private val storagePath: String = "stickers",
-    private val onStickerClick: ((Sticker, Int) -> Unit)? = null
+    var isSelectionMode: Boolean = false,
+    val selectedPositions: MutableSet<Int> = mutableSetOf(),
+    private val onStickerClick: ((Sticker, Int) -> Unit)? = null,
+    private val onStickerLongClick: ((Sticker, Int) -> Unit)? = null,
+    private val onSelectionChanged: ((Int) -> Unit)? = null
 ) : RecyclerView.Adapter<StickerAdapter.VH>() {
 
     class VH(v: View) : RecyclerView.ViewHolder(v) {
         val img: ImageView = v.findViewById(R.id.img)
         val progressBar: ProgressBar = v.findViewById(R.id.progressBar)
         val lockIcon: ImageView = v.findViewById(R.id.lockIcon)
+        val selectionOverlay: View = v.findViewById(R.id.selectionOverlay)
+        val checkboxContainer: View = v.findViewById(R.id.checkboxContainer)
+        val selectedCheck: ImageView = v.findViewById(R.id.selectedCheck)
     }
 
     override fun onCreateViewHolder(p: ViewGroup, vt: Int) =
@@ -44,10 +52,38 @@ class StickerAdapter(
         h.img.alpha = 1f
         h.img.rotation = 0f
 
-        // Tıklama
         h.itemView.setOnClickListener {
-            onStickerClick?.invoke(sticker, pos)
+            if (isSelectionMode) {
+                if (selectedPositions.contains(pos)) {
+                    selectedPositions.remove(pos)
+                } else {
+                    selectedPositions.add(pos)
+                }
+                notifyItemChanged(pos)
+                onSelectionChanged?.invoke(selectedPositions.size)
+            } else {
+                onStickerClick?.invoke(sticker, pos)
+            }
         }
+        
+        h.itemView.setOnLongClickListener {
+            if (!isSelectionMode) {
+                onStickerLongClick?.invoke(sticker, pos)
+            }
+            true
+        }
+
+        // Seçim UI'ını güncelle
+        val isSelected = selectedPositions.contains(pos)
+        // Silme modunda checkbox container her zaman görünür
+        h.checkboxContainer.visibility = if (isSelectionMode) View.VISIBLE else View.GONE
+        // Seçiliyse overlay ve check işareti görünür
+        h.selectionOverlay.visibility = if (isSelectionMode && isSelected) View.VISIBLE else View.GONE
+        h.selectedCheck.visibility = if (isSelectionMode && isSelected) View.VISIBLE else View.GONE
+        // Seçiliyse checkbox arka planını değiştir
+        h.checkboxContainer.setBackgroundResource(
+            if (isSelected) R.drawable.checkbox_selected else R.drawable.checkbox_border
+        )
 
         // Circular progress drawable oluştur
         val circularProgress = CircularProgressDrawable(context).apply {
@@ -91,6 +127,23 @@ class StickerAdapter(
         val cacheSignature = ObjectKey(sticker.url.ifEmpty { sticker.file })
 
         when {
+            // 0. Özel paket kontrolü (cacheDir/sticker_cache'den yükle - WhatsApp ile aynı)
+            packId.startsWith("custom_") -> {
+                h.progressBar.visibility = View.GONE
+                // KRITIK: cacheDir/sticker_cache kullan (CustomStickerManager ile aynı)
+                val customFile = java.io.File(context.cacheDir, "sticker_cache/$packId/${sticker.file}")
+                android.util.Log.d("StickerAdapter", "Loading custom sticker: ${customFile.absolutePath} exists=${customFile.exists()}")
+                if (customFile.exists()) {
+                    Glide.with(context)
+                        .load(customFile)
+                        .signature(ObjectKey(customFile.lastModified()))
+                        .skipMemoryCache(true)
+                        .diskCacheStrategy(DiskCacheStrategy.NONE)
+                        .into(h.img)
+                } else {
+                    h.img.setImageResource(R.drawable.ic_sticker_placeholder)
+                }
+            }
             // 1. Cache'de varsa oradan yükle
             cachedFile.exists() && cachedFile.length() > 0 -> {
                 h.progressBar.visibility = View.GONE
@@ -110,11 +163,11 @@ class StickerAdapter(
                     .placeholder(circularProgress as Drawable)
                     .signature(cacheSignature)
                     .skipMemoryCache(true)
-                    .diskCacheStrategy(DiskCacheStrategy.NONE)
+                    .diskCacheStrategy(DiskCacheStrategy.ALL)
                     .listener(glideListener)
                     .into(h.img)
             }
-            // 3. Lokal assets'ten yükle
+            // 4. Lokal assets'ten yükle (Önceki "3. Lokal assets'ten yükle" bloğu bu sıraya kaydırılıyor)
             else -> {
                 h.progressBar.visibility = View.GONE
                 try {
@@ -135,6 +188,12 @@ class StickerAdapter(
                 }
             }
         }
+    }
+
+    fun setDeleteMode(enabled: Boolean) {
+        this.isSelectionMode = enabled
+        if (!enabled) selectedPositions.clear()
+        notifyDataSetChanged()
     }
 
     override fun getItemCount() = items.size
