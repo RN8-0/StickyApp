@@ -51,4 +51,7 @@
     <!-- Icon Tints -->
     <color name="icon_tint_primary">@color/text_primary</color>
     <color name="icon_tint_secondary">@color/text_secondary</color>
+
+    <!-- FAB Content Color (icons and text on FAB) -->
+    <color name="fab_content_color">#FFFFFF</color>
 </resources>

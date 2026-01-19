@@ -27,13 +27,15 @@
                 android:layout_height="48dp"
                 android:background="?selectableItemBackgroundBorderless"
                 android:src="@drawable/ic_back"
+                app:tint="@color/text_on_primary"
                 android:contentDescription="Back" />
 
-            <View
+            <ImageView
                 android:layout_width="28dp"
                 android:layout_height="28dp"
                 android:layout_marginStart="4dp"
-                android:background="@drawable/ic_logo_white" />
+                android:src="@drawable/ic_logo_white"
+                app:tint="@color/text_on_primary" />
 
             <TextView
                 android:layout_width="0dp"
@@ -41,7 +43,7 @@
                 android:layout_weight="1"
                 android:layout_marginStart="8dp"
                 android:text="@string/app_name"
-                android:textColor="@color/white"
+                android:textColor="@color/text_on_primary"
                 android:textSize="18sp"
                 android:textStyle="bold" />
 
@@ -60,7 +62,7 @@
                 android:layout_height="48dp"
                 android:background="?selectableItemBackgroundBorderless"
                 android:src="@drawable/ic_delete"
-                app:tint="@color/white"
+                app:tint="@color/text_on_primary"
                 android:visibility="gone"
                 android:contentDescription="Seçilenleri Sil" />
 
@@ -72,6 +74,7 @@
                 android:layout_marginEnd="4dp"
                 android:background="?selectableItemBackgroundBorderless"
                 android:src="@drawable/ic_home"
+                app:tint="@color/text_on_primary"
                 android:contentDescription="Ana Sayfa" />
 
         </LinearLayout>
@@ -82,8 +85,10 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:paddingHorizontal="16dp"
-            android:textSize="15sp"
-            android:textColor="@color/text_on_primary_secondary" />
+            android:textSize="16sp"
+            android:textColor="@color/text_on_primary_secondary"
+            android:textStyle="normal"
+            android:fontFamily="sans-serif" />
 
     </LinearLayout>
 
@@ -111,8 +116,8 @@
             android:src="@drawable/ic_add"
             android:contentDescription="Çıkartma Ekle"
             android:visibility="gone"
-            app:tint="@color/white"
-            app:backgroundTint="@color/purple_accent"
+            app:tint="@color/fab_content_color"
+            app:backgroundTint="@color/primary"
             app:fabSize="normal"
             android:elevation="8dp" />
 

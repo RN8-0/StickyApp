@@ -1,54 +1,57 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Primary Colors - Karanlık temada biraz daha parlak -->
+    <!-- Primary Colors - Material Dark (Desaturated for accessibility) -->
     <color name="primary">#25D366</color>
-    <color name="primary_dark">#1A5F38</color>
+    <color name="primary_dark">#000000</color>
     <color name="primary_light">#5EE89A</color>
     <color name="accent">#5EE89A</color>
 
-    <!-- Background Colors - Material Dark Theme -->
+    <!-- Background Colors - Material Dark Theme (Professional Deep Dark) -->
     <color name="background">#121212</color>
     <color name="surface">#1E1E1E</color>
-    <color name="card_bg">#2D2D2D</color>
-    <color name="search_bg">#2D2D2D</color>
+    <color name="card_bg">#242424</color>
+    <color name="search_bg">#2C2C2C</color>
     <color name="toolbar_bg">#1E1E1E</color>
 
-    <!-- Text Colors - Yüksek kontrast -->
-    <color name="text_primary">#EFEFEF</color>
-    <color name="text_secondary">#B3B3B3</color>
-    <color name="text_hint">#808080</color>
-    <color name="text_on_primary">#FFFFFF</color>
-    <color name="text_on_primary_secondary">#B3FFFFFF</color>
+    <!-- Text Colors - High contrast for professional readability -->
+    <color name="text_primary">#E1E1E1</color>
+    <color name="text_secondary">#A0A0A0</color>
+    <color name="text_hint">#6B6B6B</color>
+    <color name="text_on_primary">#000000</color>
+    <color name="text_on_primary_secondary">#B3000000</color>
 
     <!-- Utility Colors -->
     <color name="white">#FFFFFF</color>
     <color name="black">#000000</color>
-    <color name="divider">#3D3D3D</color>
-    <color name="overlay_dark">#CC000000</color>
+    <color name="divider">#2F2F2F</color>
+    <color name="overlay_dark">#B3000000</color>
 
-    <!-- Status Colors - Karanlık temada daha yumuşak tonlar -->
+    <!-- Status Colors - Softened for Dark Mode -->
     <color name="success">#81C784</color>
-    <color name="error">#EF5350</color>
+    <color name="error">#CF6679</color>
     <color name="warning">#FFD54F</color>
     <color name="info">#64B5F6</color>
-    <color name="remove_red">#EF5350</color>
+    <color name="remove_red">#CF6679</color>
 
-    <!-- Feature Colors - Karanlık tema uyumlu -->
+    <!-- Feature Colors - Professionally adjusted -->
     <color name="premium_gold">#FFD54F</color>
     <color name="premium_text">#121212</color>
-    <color name="purple_accent">#BA68C8</color>
-    <color name="blue_accent">#64B5F6</color>
-    <color name="delete_red">#EF5350</color>
+    <color name="purple_accent">#BB86FC</color>
+    <color name="blue_accent">#03DAC6</color>
+    <color name="delete_red">#CF6679</color>
     <color name="whatsapp_green">#25D366</color>
 
-    <!-- Chat Pattern - Karanlık tema -->
-    <color name="chat_pattern_dark">#0A0A0A</color>
-    <color name="chat_pattern_light">#1A1A1A</color>
+    <!-- Chat Pattern - Subtled -->
+    <color name="chat_pattern_dark">#080808</color>
+    <color name="chat_pattern_light">#121212</color>
 
     <!-- Selection -->
-    <color name="selection_overlay">#8064B5F6</color>
+    <color name="selection_overlay">#40BB86FC</color>
 
     <!-- Icon Tints -->
     <color name="icon_tint_primary">@color/text_primary</color>
     <color name="icon_tint_secondary">@color/text_secondary</color>
+
+    <!-- FAB Content Color (icons and text on FAB) -->
+    <color name="fab_content_color">#000000</color>
 </resources>

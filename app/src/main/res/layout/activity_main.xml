@@ -24,10 +24,11 @@
                 android:orientation="horizontal"
                 android:paddingHorizontal="12dp">
 
-                <View
+                <ImageView
                     android:layout_width="36dp"
                     android:layout_height="36dp"
-                    android:background="@drawable/ic_logo_white" />
+                    android:src="@drawable/ic_logo_white"
+                    app:tint="@color/text_on_primary" />
 
                 <!-- Title and Subtitle Container -->
                 <LinearLayout
@@ -42,17 +43,20 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="@string/app_name"
-                        android:textColor="@color/white"
-                        android:textSize="20sp"
-                        android:textStyle="bold" />
+                        android:textColor="@color/text_on_primary"
+                        android:textSize="22sp"
+                        android:textStyle="bold"
+                        android:fontFamily="sans-serif-medium" />
 
                     <TextView
                         android:id="@+id/toolbarSubtitle"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="@string/your_stickers"
-                        android:textColor="#E0FFFFFF"
-                        android:textSize="12sp"
+                        android:textColor="@color/text_on_primary_secondary"
+                        android:textSize="13sp"
+                        android:textStyle="normal"
+                        android:fontFamily="sans-serif"
                         android:visibility="gone" />
 
                 </LinearLayout>
@@ -63,6 +67,7 @@
                     android:layout_height="48dp"
                     android:background="?selectableItemBackgroundBorderless"
                     android:src="@drawable/ic_moon"
+                    app:tint="@color/text_on_primary"
                     android:contentDescription="Toggle theme" />
 
                 <ImageButton
@@ -71,6 +76,7 @@
                     android:layout_height="48dp"
                     android:background="?selectableItemBackgroundBorderless"
                     android:src="@drawable/ic_menu"
+                    app:tint="@color/text_on_primary"
                     android:contentDescription="Menu" />
             </LinearLayout>
 
@@ -140,16 +146,17 @@
                 android:gravity="center"
                 android:orientation="vertical">
 
-                <View
+                <ImageView
                     android:layout_width="120dp"
                     android:layout_height="120dp"
-                    android:background="@drawable/ic_logo_white" />
+                    android:src="@drawable/ic_logo_white"
+                    app:tint="@color/text_on_primary" />
 
                 <ProgressBar
                     android:layout_width="36dp"
                     android:layout_height="36dp"
                     android:layout_marginTop="32dp"
-                    android:indeterminateTint="@android:color/white" />
+                    android:indeterminateTint="@color/text_on_primary" />
 
             </LinearLayout>
 
@@ -158,7 +165,7 @@
                 android:id="@+id/fabOverlay"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
-                android:background="#99000000"
+                android:background="@color/overlay_dark"
                 android:visibility="gone"
                 android:elevation="4dp"
                 android:clickable="true"
@@ -189,16 +196,24 @@
                     android:focusable="true"
                     android:background="?selectableItemBackground">
 
-                    <TextView
+                    <androidx.cardview.widget.CardView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="@string/create_sticker_option"
-                        android:textColor="@color/text_primary"
-                        android:background="@drawable/bg_fab_label"
-                        android:paddingHorizontal="12dp"
-                        android:paddingVertical="6dp"
-                        android:layout_marginEnd="12dp"
-                        android:elevation="2dp" />
+                        android:layout_marginEnd="8dp"
+                        app:cardCornerRadius="20dp"
+                        app:cardElevation="8dp"
+                        app:cardBackgroundColor="#25D366">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/create_sticker_option"
+                            android:textColor="@color/fab_content_color"
+                            android:textStyle="bold"
+                            android:textSize="14sp"
+                            android:paddingHorizontal="16dp"
+                            android:paddingVertical="10dp" />
+                    </androidx.cardview.widget.CardView>
 
                     <com.google.android.material.floatingactionbutton.FloatingActionButton
                         android:id="@+id/fabCreateIcon"
@@ -206,8 +221,8 @@
                         android:layout_height="wrap_content"
                         android:src="@drawable/ic_create_sticker"
                         app:fabSize="mini"
-                        app:tint="@color/white"
-                        app:backgroundTint="#9C27B0"
+                        app:tint="@color/fab_content_color"
+                        app:backgroundTint="@color/primary"
                         android:clickable="false" />
                 </LinearLayout>
 
@@ -222,16 +237,24 @@
                     android:focusable="true"
                     android:background="?selectableItemBackground">
 
-                    <TextView
+                    <androidx.cardview.widget.CardView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="@string/my_stickers_option"
-                        android:textColor="@color/text_primary"
-                        android:background="@drawable/bg_fab_label"
-                        android:paddingHorizontal="12dp"
-                        android:paddingVertical="6dp"
-                        android:layout_marginEnd="12dp"
-                        android:elevation="2dp" />
+                        android:layout_marginEnd="8dp"
+                        app:cardCornerRadius="20dp"
+                        app:cardElevation="8dp"
+                        app:cardBackgroundColor="#25D366">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/my_stickers_option"
+                            android:textColor="@color/fab_content_color"
+                            android:textStyle="bold"
+                            android:textSize="14sp"
+                            android:paddingHorizontal="16dp"
+                            android:paddingVertical="10dp" />
+                    </androidx.cardview.widget.CardView>
 
                     <com.google.android.material.floatingactionbutton.FloatingActionButton
                         android:id="@+id/fabMyStickersIcon"
@@ -239,8 +262,8 @@
                         android:layout_height="wrap_content"
                         android:src="@drawable/ic_sticker"
                         app:fabSize="mini"
-                        app:tint="@color/white"
-                        app:backgroundTint="@color/accent"
+                        app:tint="@color/fab_content_color"
+                        app:backgroundTint="@color/primary"
                         android:clickable="false" />
                 </LinearLayout>
 
@@ -256,8 +279,8 @@
                 android:src="@drawable/ic_add"
                 android:contentDescription="Çıkartma Ekle"
                 android:visibility="gone"
-                app:tint="@color/white"
-                app:backgroundTint="#9C27B0"
+                app:tint="@color/fab_content_color"
+                app:backgroundTint="@color/primary"
                 app:fabSize="normal"
                 android:elevation="8dp" />
 
@@ -270,8 +293,8 @@
                 android:layout_margin="16dp"
                 android:src="@drawable/ic_add"
                 android:contentDescription="@string/create_sticker"
-                app:tint="@color/white"
-                app:backgroundTint="@color/accent"
+                app:tint="@color/fab_content_color"
+                app:backgroundTint="@color/primary"
                 android:elevation="6dp" />
 
         </FrameLayout>
@@ -298,17 +321,18 @@
             android:orientation="vertical"
             android:padding="16dp">
 
-            <View
+            <ImageView
                 android:layout_width="72dp"
                 android:layout_height="72dp"
-                android:background="@drawable/ic_logo_white" />
+                android:src="@drawable/ic_logo_white"
+                app:tint="@color/text_on_primary" />
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
                 android:text="@string/app_name"
-                android:textColor="@android:color/white"
+                android:textColor="@color/text_on_primary"
                 android:textSize="24sp"
                 android:textStyle="bold" />
 
@@ -317,7 +341,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
                 android:text="v1.0"
-                android:textColor="#CCFFFFFF"
+                android:textColor="@color/text_on_primary_secondary"
                 android:textSize="12sp" />
 
         </LinearLayout>
@@ -384,7 +408,7 @@
                 <View
                     android:layout_width="match_parent"
                     android:layout_height="1dp"
-                    android:background="#E0E0E0" />
+                    android:background="@color/divider" />
 
                 <!-- Bize Ulaşın -->
                 <LinearLayout
@@ -481,7 +505,7 @@
                 <View
                     android:layout_width="match_parent"
                     android:layout_height="1dp"
-                    android:background="#E0E0E0" />
+                    android:background="@color/divider" />
 
                 <!-- SSS -->
                 <LinearLayout

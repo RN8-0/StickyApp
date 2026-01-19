@@ -466,7 +466,7 @@ class StickerMakerActivity : AppCompatActivity() {
         val dialog = android.app.Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen)
         dialog.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE)
         dialog.window?.apply {
-            setBackgroundDrawable(android.graphics.drawable.ColorDrawable(Color.parseColor("#CC000000")))
+            setBackgroundDrawable(android.graphics.drawable.ColorDrawable(ContextCompat.getColor(this@StickerMakerActivity, R.color.overlay_dark)))
             setLayout(android.view.WindowManager.LayoutParams.MATCH_PARENT, android.view.WindowManager.LayoutParams.MATCH_PARENT)
         }
 

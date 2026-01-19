@@ -407,6 +407,12 @@ class DetailsActivity : AppCompatActivity() {
             return
         }
 
+        // Paket WhatsApp'a ekli mi kontrol et
+        if (!PreferencesHelper.isPackInstalled(this, pack.id)) {
+            Toast.makeText(this, "Çıkartma paketi WhatsApp'a ekli değil", Toast.LENGTH_SHORT).show()
+            return
+        }
+
         // Sadece custom paketler için version artır
         if (pack.id.startsWith("custom_")) {
             val newVersion = CustomStickerManager.forceUpdateVersion(this, pack.id)
@@ -575,7 +581,7 @@ class DetailsActivity : AppCompatActivity() {
         val dialog = Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen)
         dialog.requestWindowFeature(Window.FEATURE_NO_TITLE)
         dialog.window?.apply {
-            setBackgroundDrawable(ColorDrawable(Color.parseColor("#CC000000")))
+            setBackgroundDrawable(android.graphics.drawable.ColorDrawable(ContextCompat.getColor(this@DetailsActivity, R.color.overlay_dark)))
             setLayout(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT)
         }
 
