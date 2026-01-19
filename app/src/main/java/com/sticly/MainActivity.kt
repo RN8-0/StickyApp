@@ -43,6 +43,7 @@ class MainActivity : AppCompatActivity() {
     private var currentFilter: FilterType = FilterType.ALL
     private var currentSearchQuery: String = ""
     private var pendingDeletePackId: String? = null
+    private var wasPackInWhatsAppBeforeDelete = false
     private var waitingForWhatsAppReturn = false
 
     override fun onCreate(s: Bundle?) {
@@ -284,11 +285,22 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        // Refresh adapter when returning from DetailsActivity
+        // Custom paketleri her zaman yeniden yükle (StickerMaker'dan dönünce güncel olsun)
         if (::adapter.isInitialized) {
-            adapter.notifyDataSetChanged()
-        }
+            lifecycleScope.launch {
+                // Custom paketleri yeniden yükle
+                val customPacks = CustomStickerManager.getCustomPacks(this@MainActivity).mapNotNull { cp ->
+                    CustomStickerManager.toWhatsAppPack(this@MainActivity, cp.id)?.copy(category = "custom")
+                }
 
+                // Mevcut Firebase paketlerini koru, custom paketleri güncelle
+                val firebasePacks = allPacks.filter { it.category != "custom" }
+                allPacks = firebasePacks + customPacks
+
+                // Eğer CUSTOM filtresi aktifse listeyi güncelle
+                applyFilters()
+            }
+        }
     }
 
     private fun showNoInternetDialog() {
@@ -715,21 +727,28 @@ class MainActivity : AppCompatActivity() {
         pendingDeletePackId = pack.id
         waitingForWhatsAppReturn = true
 
-        // WhatsApp sticker pack ekranını aç
-        val intent = Intent().apply {
-            action = "com.whatsapp.intent.action.ENABLE_STICKER_PACK"
-            putExtra("sticker_pack_id", pack.id)
-            putExtra("sticker_pack_authority", "${packageName}.stickers")
-            putExtra("sticker_pack_name", pack.name)
-        }
+        // WhatsApp'a göndermeden önce mevcut durumu kaydet
+        lifecycleScope.launch {
+            wasPackInWhatsAppBeforeDelete = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                WhitelistCheck.isWhitelisted(this@MainActivity, pack.id)
+            }
 
-        try {
-            @Suppress("DEPRECATION")
-            startActivityForResult(intent, REQUEST_DELETE_PACK)
-        } catch (e: Exception) {
-            pendingDeletePackId = null
-            waitingForWhatsAppReturn = false
-            Toast.makeText(this, "WhatsApp yüklü değil", Toast.LENGTH_SHORT).show()
+            // WhatsApp sticker pack ekranını aç
+            val intent = Intent().apply {
+                action = "com.whatsapp.intent.action.ENABLE_STICKER_PACK"
+                putExtra("sticker_pack_id", pack.id)
+                putExtra("sticker_pack_authority", "${packageName}.stickers")
+                putExtra("sticker_pack_name", pack.name)
+            }
+
+            try {
+                @Suppress("DEPRECATION")
+                startActivityForResult(intent, REQUEST_DELETE_PACK)
+            } catch (e: Exception) {
+                pendingDeletePackId = null
+                waitingForWhatsAppReturn = false
+                Toast.makeText(this@MainActivity, "WhatsApp yüklü değil", Toast.LENGTH_SHORT).show()
+            }
         }
     }
 
@@ -738,15 +757,30 @@ class MainActivity : AppCompatActivity() {
         super.onActivityResult(requestCode, resultCode, data)
 
         if (requestCode == REQUEST_DELETE_PACK && pendingDeletePackId != null) {
-            // WhatsApp'tan döndük - paketi uygulamadan sil
             val packId = pendingDeletePackId!!
-            if (CustomStickerManager.deletePack(this, packId)) {
-                PreferencesHelper.removeInstalledPack(this, packId)
-                Toast.makeText(this, "Çıkartma paketi silindi", Toast.LENGTH_SHORT).show()
-                refreshPacks()
-            }
+            val wasInWhatsApp = wasPackInWhatsAppBeforeDelete
             pendingDeletePackId = null
             waitingForWhatsAppReturn = false
+            wasPackInWhatsAppBeforeDelete = false
+
+            // WhatsApp'tan döndük - gerçekten kaldırıldı mı kontrol et
+            lifecycleScope.launch {
+                val isStillInWhatsApp = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    WhitelistCheck.isWhitelisted(this@MainActivity, packId)
+                }
+
+                // Sadece paket WhatsApp'tayken kaldırıldıysa sil
+                // (Önceden WhatsApp'taydı VE şimdi WhatsApp'ta değil)
+                if (wasInWhatsApp && !isStillInWhatsApp) {
+                    // WhatsApp'tan kaldırıldı - şimdi uygulamadan da sil
+                    if (CustomStickerManager.deletePack(this@MainActivity, packId)) {
+                        PreferencesHelper.removeInstalledPack(this@MainActivity, packId)
+                        Toast.makeText(this@MainActivity, "Çıkartma paketi silindi", Toast.LENGTH_SHORT).show()
+                        refreshPacks()
+                    }
+                }
+                // Eğer hala WhatsApp'taysa veya hiç eklenmemişse hiçbir şey yapma
+            }
         }
     }
 }

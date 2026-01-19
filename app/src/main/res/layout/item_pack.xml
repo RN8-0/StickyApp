@@ -99,14 +99,14 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:textSize="12sp"
-                    android:textColor="#666666" />
+                    android:textColor="@color/text_secondary" />
 
                 <TextView
                     android:id="@+id/downloadCount"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:textSize="11sp"
-                    android:textColor="#888888"
+                    android:textColor="@color/text_hint"
                     android:layout_marginStart="8dp"
                     android:drawableStart="@drawable/ic_download_small"
                     android:drawablePadding="2dp"
@@ -151,7 +151,7 @@
                     android:layout_height="wrap_content"
                     android:text="@string/premium"
                     android:textSize="10sp"
-                    android:textColor="#000000"
+                    android:textColor="@color/premium_text"
                     android:background="@drawable/badge_premium"
                     android:paddingHorizontal="8dp"
                     android:paddingVertical="2dp" />
@@ -162,7 +162,7 @@
                     android:layout_height="wrap_content"
                     android:text="@string/sticker_price"
                     android:textSize="12sp"
-                    android:textColor="#4CAF50"
+                    android:textColor="@color/success"
                     android:textStyle="bold"
                     android:layout_marginTop="4dp" />
 
@@ -180,7 +180,7 @@
             android:scaleType="fitCenter"
             android:padding="8dp"
             android:visibility="gone"
-            app:tint="#F44336"
+            app:tint="@color/delete_red"
             android:contentDescription="@string/delete_pack" />
 
         <!-- Favori butonu (en sağda) -->

@@ -1,36 +1,3 @@
 {
-  "sticker_packs": [
-    {
-      "identifier": "pack1",
-      "name": "Emoji Pack",
-      "publisher": "Sticky",
-      "publisher_email": "sticky@example.com",
-      "privacy_policy_website": "https://example.com/privacy",
-      "license_agreement_website": "",
-      "image_data_version": "1",
-      "avoid_cache": false,
-      "tray_image_file": "tray.webp",
-      "stickers": [
-        {"image_file": "s1.webp", "emojis": ["😊"]},
-        {"image_file": "s2.webp", "emojis": ["😂"]},
-        {"image_file": "s3.webp", "emojis": ["😍"]}
-      ]
-    },
-    {
-      "identifier": "pack2",
-      "name": "Fun Pack",
-      "publisher": "Sticky",
-      "publisher_email": "sticky@example.com",
-      "privacy_policy_website": "https://example.com/privacy",
-      "license_agreement_website": "",
-      "image_data_version": "1",
-      "avoid_cache": false,
-      "tray_image_file": "tray.webp",
-      "stickers": [
-        {"image_file": "s1.webp", "emojis": ["🎉"]},
-        {"image_file": "s2.webp", "emojis": ["🎊"]},
-        {"image_file": "s3.webp", "emojis": ["🎈"]}
-      ]
-    }
-  ]
+  "sticker_packs": []
 }

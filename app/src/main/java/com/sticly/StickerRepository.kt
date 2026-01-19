@@ -184,7 +184,8 @@ object StickerRepository {
                 storagePath = data["storagePath"] as? String ?: if (isPremium) "premium_stickers" else "stickers",
                 createdAt = data["created_at"] as? String ?: "",
                 category = data["category"] as? String ?: "",
-                downloadCount = (data["download_count"] as? Long)?.toInt() ?: 0
+                downloadCount = (data["download_count"] as? Long)?.toInt() ?: 0,
+                isAnimated = data["animated_sticker_pack"] as? Boolean ?: false
             )
         } catch (e: Exception) {
             Log.e(TAG, "Error parsing pack ${doc.id}: ${e.message}")

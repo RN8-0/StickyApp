@@ -127,21 +127,20 @@ class StickerAdapter(
         val cacheSignature = ObjectKey(sticker.url.ifEmpty { sticker.file })
 
         when {
-            // 0. Özel paket kontrolü (cacheDir/sticker_cache'den yükle - WhatsApp ile aynı)
+            // 0. Özel paket kontrolü (filesDir/custom_stickers'dan yükle - KALICI DEPOLAMA)
             packId.startsWith("custom_") -> {
                 h.progressBar.visibility = View.GONE
-                // KRITIK: cacheDir/sticker_cache kullan (CustomStickerManager ile aynı)
-                val customFile = java.io.File(context.cacheDir, "sticker_cache/$packId/${sticker.file}")
+                // KRITIK: filesDir/custom_stickers kullan (kalıcı depolama)
+                val customFile = CustomStickerManager.getCustomStickerPath(context, packId, sticker.file)
                 android.util.Log.d("StickerAdapter", "Loading custom sticker: ${customFile.absolutePath} exists=${customFile.exists()}")
                 if (customFile.exists()) {
                     Glide.with(context)
                         .load(customFile)
                         .signature(ObjectKey(customFile.lastModified()))
-                        .skipMemoryCache(true)
-                        .diskCacheStrategy(DiskCacheStrategy.NONE)
+                        .diskCacheStrategy(DiskCacheStrategy.NONE) // Local file, memory cache is enough
                         .into(h.img)
                 } else {
-                    h.img.setImageResource(R.drawable.ic_sticker_placeholder)
+                    h.img.setImageResource(R.drawable.transparent_placeholder)
                 }
             }
             // 1. Cache'de varsa oradan yükle
@@ -150,8 +149,8 @@ class StickerAdapter(
                 Glide.with(context)
                     .load(cachedFile)
                     .signature(ObjectKey(cachedFile.lastModified()))
-                    .skipMemoryCache(true)
-                    .diskCacheStrategy(DiskCacheStrategy.NONE)
+                    // .skipMemoryCache(true)
+                    .diskCacheStrategy(DiskCacheStrategy.NONE) // Local file, memory cache is enough
                     .into(h.img)
             }
             // 2. Firebase URL varsa oradan yükle
@@ -161,8 +160,9 @@ class StickerAdapter(
                 Glide.with(context)
                     .load(sticker.url)
                     .placeholder(circularProgress as Drawable)
+                    .error(R.drawable.transparent_placeholder) // Use transparent placeholder
                     .signature(cacheSignature)
-                    .skipMemoryCache(true)
+                    // .skipMemoryCache(true)
                     .diskCacheStrategy(DiskCacheStrategy.ALL)
                     .listener(glideListener)
                     .into(h.img)
@@ -178,13 +178,13 @@ class StickerAdapter(
 
                     Glide.with(context)
                         .load(bitmap)
-                        .skipMemoryCache(true)
-                        .diskCacheStrategy(DiskCacheStrategy.NONE)
+                        // .skipMemoryCache(true) // REMOVED
+                        .diskCacheStrategy(DiskCacheStrategy.NONE) // Bitmap from stream, no disk cache source
                         .into(h.img)
                 } catch (e: Exception) {
                     // Assets'te yok - placeholder göster
                     h.progressBar.visibility = View.GONE
-                    h.img.setImageResource(R.drawable.ic_sticker_placeholder)
+                    h.img.setImageResource(R.drawable.transparent_placeholder)
                 }
             }
         }

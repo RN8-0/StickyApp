@@ -38,7 +38,7 @@
         android:id="@+id/selectionOverlay"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:background="#802196F3"
+        android:background="@color/selection_overlay"
         android:visibility="gone" />
 
     <!-- Seçim kutusu çerçevesi (silme modunda her zaman görünür) -->

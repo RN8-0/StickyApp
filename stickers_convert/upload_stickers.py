@@ -535,18 +535,28 @@ def has_transparent_background(img) -> bool:
     try:
         if img.mode != 'RGBA':
             return False
-        
+
         # Alfa kanalini al
         alpha = img.split()[-1]
         pixels = list(alpha.getdata())
         total_pixels = len(pixels)
-        
-        # Seffaf pikselleri say (alfa < 128)
-        transparent_count = sum(1 for p in pixels if p < 128)
-        transparent_ratio = transparent_count / total_pixels
-        
-        # %10'dan fazla seffaf piksel varsa, arka plan zaten silinmis
-        return transparent_ratio > 0.10
+
+        # Tamamen seffaf pikselleri say (alfa = 0)
+        fully_transparent = sum(1 for p in pixels if p == 0)
+        fully_transparent_ratio = fully_transparent / total_pixels
+
+        # Yari seffaf pikselleri say (alfa < 200)
+        semi_transparent = sum(1 for p in pixels if p < 200)
+        semi_transparent_ratio = semi_transparent / total_pixels
+
+        # %3'ten fazla tamamen seffaf piksel VEYA %8'den fazla yari seffaf piksel varsa
+        # arka plan zaten silinmis demektir
+        if fully_transparent_ratio > 0.03:
+            return True
+        if semi_transparent_ratio > 0.08:
+            return True
+
+        return False
     except:
         return False
 
@@ -685,13 +695,39 @@ def create_tray_image(input_path: Path, output_path: Path) -> bool:
     """Tray image olustur"""
     temp_path = None
     try:
+        from PIL import Image
+
         file_type = get_file_type(input_path)
         processed_path = input_path
 
+        # Eger output dosyasi zaten varsa ve arka plani silinmisse, atla
+        if output_path.exists():
+            try:
+                with Image.open(output_path) as existing_img:
+                    if existing_img.mode == 'RGBA' or has_transparent_background(existing_img.convert('RGBA')):
+                        print_info(f"Tray zaten islenmiş, atlanıyor: {output_path.name}")
+                        return True
+            except:
+                pass
+
+        # Kaynak dosyanin arka plani zaten silinmis mi kontrol et
         if file_type == 'image':
-            processed_path = remove_background_from_image(input_path)
-            if processed_path != input_path:
-                temp_path = processed_path
+            try:
+                with Image.open(input_path) as src_img:
+                    src_rgba = src_img.convert('RGBA') if src_img.mode != 'RGBA' else src_img
+                    if has_transparent_background(src_rgba):
+                        print_info(f"Kaynak arka plani zaten silinmis: {input_path.name}")
+                        # Arka plan silme yapmadan direkt donustur
+                        processed_path = input_path
+                    else:
+                        # Arka plan sil
+                        processed_path = remove_background_from_image(input_path)
+                        if processed_path != input_path:
+                            temp_path = processed_path
+            except:
+                processed_path = remove_background_from_image(input_path)
+                if processed_path != input_path:
+                    temp_path = processed_path
 
         cmd = [
             "ffmpeg", "-y", "-i", str(processed_path),

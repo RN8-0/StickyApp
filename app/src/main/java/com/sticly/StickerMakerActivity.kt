@@ -63,10 +63,6 @@ class StickerMakerActivity : AppCompatActivity() {
             selectedUris.addAll(uris)
             currentUriIndex = 0
             loadImageFromUri(selectedUris[0])
-            
-            if (uris.size > 1) {
-                Toast.makeText(this, "${uris.size} fotoğraf seçildi, sırayla işlenecek", Toast.LENGTH_SHORT).show()
-            }
         }
     }
 
@@ -150,7 +146,6 @@ class StickerMakerActivity : AppCompatActivity() {
                     imagePreview.setImageBitmap(selectedBitmap)
                     backgroundRemoved = false
                     btnRemoveBackground.text = getString(R.string.remove_background)
-                    Toast.makeText(this, "Orijinal resim geri yüklendi", Toast.LENGTH_SHORT).show()
                 }
             } else {
                 // Arka plan kaldır
@@ -244,7 +239,6 @@ class StickerMakerActivity : AppCompatActivity() {
     private fun processRemoveBackground(bitmap: Bitmap) {
         progressBar.visibility = View.VISIBLE
         btnRemoveBackground.isEnabled = false
-        Toast.makeText(this, R.string.processing_background, Toast.LENGTH_SHORT).show()
 
         val inputImage = InputImage.fromBitmap(bitmap, 0)
         segmenter.process(inputImage)
@@ -254,7 +248,7 @@ class StickerMakerActivity : AppCompatActivity() {
                 val width = bitmap.width
                 val height = bitmap.height
                 val resultBitmap = bitmap.copy(Bitmap.Config.ARGB_8888, true)
-                
+
                 val pixels = IntArray(width * height)
                 bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
 
@@ -270,16 +264,15 @@ class StickerMakerActivity : AppCompatActivity() {
                 }
 
                 resultBitmap.setPixels(pixels, 0, width, 0, 0, width, height)
-                
+
                 // Seçili bitmap'i güncelle
                 selectedBitmap = resultBitmap
                 imagePreview.setImageBitmap(selectedBitmap)
                 backgroundRemoved = true
                 btnRemoveBackground.text = "↩ Geri Al"
-                
+
                 progressBar.visibility = View.GONE
                 btnRemoveBackground.isEnabled = true
-                Toast.makeText(this, "Arka plan AI ile başarıyla kaldırıldı", Toast.LENGTH_SHORT).show()
             }
             .addOnFailureListener { e ->
                 Log.e("StickerMaker", "Segmentation failed: ${e.message}")
@@ -334,14 +327,13 @@ class StickerMakerActivity : AppCompatActivity() {
             if (success) {
                 // İlk sticker'ı kapak olarak ayarla
                 CustomStickerManager.setPackCover(this, packId, bitmap)
-                Toast.makeText(this, "Paket oluşturuldu ve çıkartma eklendi!", Toast.LENGTH_SHORT).show()
 
                 // Hedef paketi bu yap ve kuyruğu devam ettir
                 targetPackId = packId
                 dialog.dismiss()
                 checkQueueAndProceed()
             } else {
-                Toast.makeText(this, "Sticker eklenemedi", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "Sticker eklenemedi (maksimum 30)", Toast.LENGTH_SHORT).show()
             }
         }
 
@@ -368,8 +360,6 @@ class StickerMakerActivity : AppCompatActivity() {
         }
 
         if (success) {
-            Toast.makeText(this, R.string.sticker_added, Toast.LENGTH_SHORT).show()
-
             // Kuyruğu kontrol et
             targetPackId = packId
             checkQueueAndProceed()
@@ -389,7 +379,10 @@ class StickerMakerActivity : AppCompatActivity() {
             btnRemoveBackground.isEnabled = true
             progressBar.visibility = View.GONE
         } else {
-            // Kuyruk bitti, direkt önizleme ekranına git
+            // Kuyruk bitti - tek mesaj göster
+            Toast.makeText(this, "Çıkartma paketiniz hazırlandı", Toast.LENGTH_SHORT).show()
+
+            // Önizleme ekranına git
             if (targetPackId != null) {
                 val intent = Intent(this, DetailsActivity::class.java)
                 intent.putExtra("id", targetPackId)

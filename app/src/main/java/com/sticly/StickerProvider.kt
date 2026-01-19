@@ -76,15 +76,62 @@ class StickerProvider : ContentProvider() {
     }
 
     private fun getAllPacks(): List<Pack> {
-        // PERFORMANS: StickerRepository'nin memory cache'ini kullan
-        // Dosya sistemi taraması YOK - anında dönüş
-        val cached = StickerRepository.allPacksCache
-        if (cached.isNotEmpty()) {
-            return cached
+        val allPacks = mutableMapOf<String, Pack>()
+
+        // 1. Memory Cache (En hızlı)
+        StickerRepository.allPacksCache.forEach { allPacks[it.id] = it }
+
+        // 2. Lokal Assets (Her zaman güvenli)
+        Loader.load(context!!).forEach { allPacks[it.id] = it }
+
+        // 3. KRITIK: Custom paketleri filesDir/custom_stickers'dan yükle (KALICI DEPOLAMA)
+        val customDir = File(context!!.filesDir, "custom_stickers")
+        if (customDir.exists() && customDir.isDirectory) {
+            customDir.listFiles()?.forEach { packDir ->
+                if (packDir.isDirectory && packDir.name.startsWith("custom_") && !allPacks.containsKey(packDir.name)) {
+                    CustomStickerManager.toWhatsAppPack(context!!, packDir.name)?.let {
+                        allPacks[packDir.name] = it
+                    }
+                }
+            }
         }
-        
-        // Fallback: Sadece lokal assets'den yükle (hızlı, JSON parse)
-        return Loader.load(context!!)
+
+        // 4. Cache Dizini Taraması (Firebase paketleri için)
+        val cacheDir = File(context!!.cacheDir, CACHE_DIR)
+        if (cacheDir.exists() && cacheDir.isDirectory) {
+            cacheDir.listFiles()?.forEach { packDir ->
+                if (packDir.isDirectory && !allPacks.containsKey(packDir.name)) {
+                    val packId = packDir.name
+                    // Custom paketler zaten filesDir'dan yüklendi, atla
+                    if (!packId.startsWith("custom_")) {
+                        // Firebase paketi (reconstruct from files)
+                        val trayFile = File(packDir, "tray.webp")
+                        if (trayFile.exists()) {
+                            val stickers = packDir.listFiles { _, name ->
+                                name.endsWith(".webp") && name != "tray.webp"
+                            }
+                                ?.sortedBy { it.name }
+                                ?.map { Sticker(file = it.name, emojis = listOf("😊")) }
+                                ?: emptyList()
+
+                            if (stickers.isNotEmpty()) {
+                                allPacks[packId] = Pack(
+                                    id = packId,
+                                    name = packId,
+                                    pub = "Sticky",
+                                    tray = "tray.webp",
+                                    stickers = stickers,
+                                    isPremium = false,
+                                    isAnimated = false
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        return allPacks.values.toList()
     }
 
     private fun getPack(identifier: String): Pack? {
@@ -117,7 +164,7 @@ class StickerProvider : ContentProvider() {
                 pack.license,
                 pack.version,
                 if (pack.avoidCache) 1 else 0,
-                1  // ANIMATED_STICKER_PACK = 1 (animasyonlu)
+                if (pack.isAnimated) 1 else 0
             ))
         }
         return cursor
@@ -139,7 +186,7 @@ class StickerProvider : ContentProvider() {
                 pack.license,
                 pack.version,
                 if (pack.avoidCache) 1 else 0,
-                1  // ANIMATED_STICKER_PACK = 1 (animasyonlu)
+                if (pack.isAnimated) 1 else 0
             ))
         }
         return cursor
@@ -165,14 +212,23 @@ class StickerProvider : ContentProvider() {
         val identifier = pathSegments[1]
         val fileName = pathSegments[2]
 
-        // Önce cache klasöründe ara (Firebase stickerleri)
+        // 1. Custom paketler için filesDir/custom_stickers kontrol et (KALICI DEPOLAMA)
+        if (identifier.startsWith("custom_")) {
+            val customFile = File(context!!.filesDir, "custom_stickers/$identifier/$fileName")
+            if (customFile.exists()) {
+                val pfd = ParcelFileDescriptor.open(customFile, ParcelFileDescriptor.MODE_READ_ONLY)
+                return AssetFileDescriptor(pfd, 0, customFile.length())
+            }
+        }
+
+        // 2. Cache klasöründe ara (Firebase stickerleri veya senkronize edilmiş custom paketler)
         val cacheFile = File(context!!.cacheDir, "$CACHE_DIR/$identifier/$fileName")
         if (cacheFile.exists()) {
             val pfd = ParcelFileDescriptor.open(cacheFile, ParcelFileDescriptor.MODE_READ_ONLY)
             return AssetFileDescriptor(pfd, 0, cacheFile.length())
         }
 
-        // Cache'de yoksa assets klasöründe ara (lokal stickerleri)
+        // 3. Assets klasöründe ara (lokal stickerleri)
         return try {
             context!!.assets.openFd("$identifier/$fileName")
         } catch (e: Exception) {

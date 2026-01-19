@@ -6,8 +6,9 @@ import android.net.Uri
 object WhitelistCheck {
     private const val AUTHORITY_QUERY_WHATSAPP = "com.whatsapp.provider.sticker_whitelist_check"
     private const val AUTHORITY_QUERY_WHATSAPP_SMALL = "com.whatsapp.w4b.provider.sticker_whitelist_check"
-    private const val STICKER_PACK_ID_QUERY_PARAM = "sticker_pack_id"
-    private const val STICKER_PACK_AUTHORITY_QUERY_PARAM = "sticker_pack_authority"
+    private const val CONTENT_PROVIDER_PATH = "is_whitelisted"
+    private const val QUERY_PARAM_IDENTIFIER = "identifier"
+    private const val QUERY_PARAM_AUTHORITY = "authority"
     private const val QUERY_RESULT_COLUMN_NAME = "result"
 
     fun isWhitelisted(context: Context, identifier: String): Boolean {
@@ -42,9 +43,9 @@ object WhitelistCheck {
             val uri = Uri.Builder()
                 .scheme("content")
                 .authority(queryAuthority)
-                .appendPath(QUERY_RESULT_COLUMN_NAME)
-                .appendQueryParameter(STICKER_PACK_ID_QUERY_PARAM, identifier)
-                .appendQueryParameter(STICKER_PACK_AUTHORITY_QUERY_PARAM, stickerPackAuthority)
+                .appendPath(CONTENT_PROVIDER_PATH)
+                .appendQueryParameter(QUERY_PARAM_IDENTIFIER, identifier)
+                .appendQueryParameter(QUERY_PARAM_AUTHORITY, stickerPackAuthority)
                 .build()
                 
             context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->

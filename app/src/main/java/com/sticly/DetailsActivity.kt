@@ -271,21 +271,20 @@ class DetailsActivity : AppCompatActivity() {
     }
 
     private fun downloadStickersToCache(pack: Pack, adapter: StickerAdapter) {
-        // URL'ler varsa arka planda cache'e indir
+        // URL'ler varsa arka planda tümünü paralel indir
         if (pack.stickers.any { it.url.isNotEmpty() }) {
             lifecycleScope.launch {
-                // Önce ilk 6 çıkartmayı hızlıca indir (görünen alan için)
                 withContext(Dispatchers.IO) {
-                    StickerRepository.downloadFirstStickers(this@DetailsActivity, pack, 6)
+                    // Tüm çıkartmaları paralel olarak tek seferde indir
+                    kotlinx.coroutines.coroutineScope {
+                        pack.stickers.map { sticker ->
+                            async {
+                                StickerRepository.downloadStickerToCache(this@DetailsActivity, pack.id, sticker.file, pack.storagePath)
+                            }
+                        }.awaitAll()
+                    }
                 }
-                // İlk 6 indirildikten sonra adapter'ı güncelle
-                adapter.notifyDataSetChanged()
-
-                // Sonra geri kalanları arka planda indir
-                withContext(Dispatchers.IO) {
-                    StickerRepository.downloadPackToCache(this@DetailsActivity, pack)
-                }
-                // Tamamlandığında tekrar güncelle
+                // Tamamlandığında bir kez güncelle
                 adapter.notifyDataSetChanged()
             }
         }
@@ -309,11 +308,7 @@ class DetailsActivity : AppCompatActivity() {
             updateButton() // Ekle/Güncelle durumunu ayarlar
             
             btnAction.setOnClickListener {
-                if (PreferencesHelper.isPackInstalled(this, pack.id)) {
-                    forceUpdateWhatsApp(pack)
-                } else {
-                    addToWhatsApp(pack)
-                }
+                handleButtonClick(pack)
             }
 
             btnGridUpdate.setOnClickListener {
@@ -493,17 +488,16 @@ class DetailsActivity : AppCompatActivity() {
     }
 
     private fun handleButtonClick(pack: Pack) {
-        // Her zaman WhatsApp'ı kontrol et
         lifecycleScope.launch {
             val isCurrentlyWhitelisted = withContext(Dispatchers.IO) {
                 WhitelistCheck.isWhitelisted(this@DetailsActivity, packId)
             }
 
             if (isCurrentlyWhitelisted) {
-                // WhatsApp'a kaldırma intent'i gönder
+                // EĞER WhatsApp'ta varsa -> KALDIR moduna geç
                 removeFromWhatsApp()
             } else {
-                // Ekle
+                // EĞER WhatsApp'ta yoksa -> EKLE
                 addToWhatsApp(pack)
             }
         }
@@ -546,17 +540,29 @@ class DetailsActivity : AppCompatActivity() {
             }
 
             if (isWhitelisted) {
-                // Özel paketlerde "Güncelle" metni daha anlamlı
-                if (packId.startsWith("custom_")) {
-                    btnAction.text = getString(R.string.update_whatsapp)
-                    btnAction.setIconResource(R.drawable.ic_restore)
-                } else {
-                    btnAction.text = getString(R.string.remove_from_whatsapp)
-                    btnAction.setIconResource(R.drawable.ic_delete)
+                // HER ZAMAN KIRMIZI VE "KALDIR" (Kullanıcı Talebi)
+                // Ayrıca yerel olarak "yüklü" değilse bile, WhatsApp'ta varsa yüklü işaretle
+                if (!PreferencesHelper.isPackInstalled(this@DetailsActivity, packId)) {
+                    PreferencesHelper.addInstalledPack(this@DetailsActivity, packId)
                 }
+
+                btnAction.text = getString(R.string.remove_from_whatsapp)
+                btnAction.setIconResource(R.drawable.ic_delete)
                 btnAction.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this@DetailsActivity, R.color.remove_red))
                 installedIcon.visibility = View.VISIBLE
             } else {
+                // EKLE MODU (YEŞİL)
+                // Ancak, kullanıcı az önce eklediyse (PreferencesHelper.isPackInstalled = true) ve WhitelistCheck henüz false dönüyorsa (gecikme),
+                // kullanıcıyı yanıltmamak için "Eklendi" veya geçici olarak "Kaldır" modunda tutabiliriz.
+                // Şimdilik WhatsApp gerçeği yansıtmadığı sürece Yeşil dönüyoruz ama kullanıcının kafası karışmasın diye
+                // eğer yerelde yüklü görünüyorsa ama WhatsApp'ta yoksa, senkronizasyon sorunu olabilir.
+                // Yine de agresif davranıp yeşile dönmek en doğrusu, çünkü tekrar eklemesi gerekebilir.
+                
+                if (PreferencesHelper.isPackInstalled(this@DetailsActivity, packId)) {
+                     // Yerelde yüklü ama WhatsApp'ta yok -> Yerel kaydı sil
+                     PreferencesHelper.removeInstalledPack(this@DetailsActivity, packId)
+                }
+
                 btnAction.text = getString(R.string.add_to_whatsapp)
                 btnAction.setIconResource(R.drawable.ic_add)
                 btnAction.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this@DetailsActivity, R.color.primary))
@@ -597,12 +603,21 @@ class DetailsActivity : AppCompatActivity() {
             cachedFile.exists() && cachedFile.length() > 0 -> {
                 Glide.with(this)
                     .load(cachedFile)
+                    .signature(com.bumptech.glide.signature.ObjectKey(cachedFile.lastModified()))
+                    //.skipMemoryCache(true)
+                    .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.NONE) // Local file, use memory cache only
                     .apply(blurTransform)
                     .into(imageView)
             }
             sticker.url.isNotEmpty() -> {
+                val cacheSignature = com.bumptech.glide.signature.ObjectKey(sticker.url)
                 Glide.with(this)
                     .load(sticker.url)
+                    .signature(cacheSignature)
+                    .placeholder(R.drawable.transparent_placeholder) // Add placeholder while loading
+                    .error(R.drawable.transparent_placeholder) // Add error placeholder
+                    //.skipMemoryCache(true)
+                    .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.ALL)
                     .apply(blurTransform)
                     .into(imageView)
             }
@@ -617,7 +632,7 @@ class DetailsActivity : AppCompatActivity() {
                         .apply(blurTransform)
                         .into(imageView)
                 } catch (e: Exception) {
-                    imageView.setImageResource(R.drawable.ic_sticker_placeholder)
+                    imageView.setImageResource(R.drawable.transparent_placeholder)
                 }
             }
         }
@@ -722,66 +737,61 @@ class DetailsActivity : AppCompatActivity() {
     }
 
     private fun removeFromWhatsApp() {
-        // Direkt WhatsApp'ı aç - kullanıcı oradan kaldıracak
         currentPack?.let { pack ->
+            // WhatsApp'a ENABLE intent gönder - zaten yüklü paketler için "Kaldır" seçeneği gösterir
+            val intent = Intent().apply {
+                action = "com.whatsapp.intent.action.ENABLE_STICKER_PACK"
+                putExtra("sticker_pack_id", pack.id)
+                putExtra("sticker_pack_authority", "${packageName}.stickers")
+                putExtra("sticker_pack_name", pack.name)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+
             try {
-                val i = Intent().apply {
-                    action = "com.whatsapp.intent.action.ENABLE_STICKER_PACK"
-                    putExtra("sticker_pack_id", pack.id)
-                    putExtra("sticker_pack_authority", "${packageName}.stickers")
-                    putExtra("sticker_pack_name", pack.name)
-                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                }
-                startActivityForResult(i, REQUEST_REMOVE)
+                startActivityForResult(intent, REQUEST_REMOVE)
             } catch (e: Exception) {
-                Toast.makeText(this, R.string.whatsapp_not_installed, Toast.LENGTH_SHORT).show()
+                // WhatsApp Business dene
+                try {
+                    intent.setPackage("com.whatsapp.w4b")
+                    startActivityForResult(intent, REQUEST_REMOVE)
+                } catch (e2: Exception) {
+                    Toast.makeText(this, R.string.whatsapp_not_installed, Toast.LENGTH_SHORT).show()
+                }
             }
         }
     }
 
     private fun downloadAndAddToWhatsApp(pack: Pack) {
         btnAction.isEnabled = false
-        val totalItems = pack.stickers.size + 1 // +1 for tray
-        btnAction.text = getString(R.string.downloading) + " (0%)"
 
         lifecycleScope.launch {
             try {
                 android.util.Log.d("DetailsActivity", "Starting pack download: ${pack.id}")
-                
-                // İndirme ilerlemesini takip et
-                var downloadedCount = 0
                 val storagePath = pack.storagePath
-                
-                // Tray'i indir
+
+                // Tüm çıkartmaları paralel olarak indir (tray dahil)
                 withContext(Dispatchers.IO) {
-                    StickerRepository.downloadStickerToCache(this@DetailsActivity, pack.id, pack.tray, storagePath)
-                }
-                downloadedCount++
-                withContext(Dispatchers.Main) {
-                    val percent = (downloadedCount * 100) / totalItems
-                    btnAction.text = getString(R.string.downloading) + " ($percent%)"
-                }
-                
-                // Sticker'ları paralel gruplar halinde indir (10'lu gruplar - maksimum hız)
-                val chunks = pack.stickers.chunked(10)
-                for (chunk in chunks) {
                     kotlinx.coroutines.coroutineScope {
-                        chunk.map { sticker ->
-                            async(Dispatchers.IO) {
+                        // Tray'i indir
+                        val trayJob = async {
+                            StickerRepository.downloadStickerToCache(this@DetailsActivity, pack.id, pack.tray, storagePath)
+                        }
+                        // Sticker'ları paralel indir
+                        val stickerJobs = pack.stickers.map { sticker ->
+                            async {
                                 StickerRepository.downloadStickerToCache(this@DetailsActivity, pack.id, sticker.file, storagePath)
                             }
-                        }.awaitAll()
+                        }
+                        trayJob.await()
+                        stickerJobs.awaitAll()
                     }
-                    downloadedCount += chunk.size
-                    btnAction.text = getString(R.string.downloading) + " (${ (downloadedCount * 100) / totalItems }%)"
                 }
-                
+
                 android.util.Log.d("DetailsActivity", "Download success, sending to WhatsApp")
                 sendToWhatsApp(pack)
             } catch (e: Exception) {
                 android.util.Log.e("DetailsActivity", "Error during download/add: ${e.message}", e)
                 Toast.makeText(this@DetailsActivity, getString(R.string.error, e.message), Toast.LENGTH_SHORT).show()
-            } finally {
                 btnAction.isEnabled = true
                 updateButton()
             }
@@ -811,38 +821,44 @@ class DetailsActivity : AppCompatActivity() {
         btnAction.isEnabled = true
 
         when (req) {
-            REQUEST_ADD -> {
-                if (res == Activity.RESULT_OK) {
-                    PreferencesHelper.addInstalledPack(this, packId)
-                    updateButton()
-                    Toast.makeText(this, R.string.pack_added, Toast.LENGTH_SHORT).show()
-
-                    // İndirme sayısını artır (Firebase'e yaz)
-                    currentPack?.let { pack ->
-                        StickerRepository.incrementDownloadCount(pack.id, pack.isPremium)
+            REQUEST_ADD, REQUEST_REMOVE -> {
+                // WhatsApp'tan döndükten sonra gerçek durumu kontrol et
+                lifecycleScope.launch {
+                    val isWhitelisted = withContext(Dispatchers.IO) {
+                        WhitelistCheck.isWhitelisted(this@DetailsActivity, packId)
                     }
 
-                    // Sticker ekleme sayacını artır
-                    val count = PreferencesHelper.incrementStickersAddedCount(this)
+                    val wasInstalled = PreferencesHelper.isPackInstalled(this@DetailsActivity, packId)
 
-                    if (!PreferencesHelper.isPremium(this)) {
-                        // Her 4 sticker'da bir premium promo göster
-                        if (count % 4 == 0 && !PreferencesHelper.wasPremiumPromoShownForCount(this, count)) {
-                            PreferencesHelper.markPremiumPromoShown(this, count)
-                            showPremiumPromoDialog()
-                        } else {
-                            AdManager.showInterstitial(this)
+                    if (isWhitelisted && !wasInstalled) {
+                        // Yeni eklendi
+                        PreferencesHelper.addInstalledPack(this@DetailsActivity, packId)
+                        Toast.makeText(this@DetailsActivity, R.string.pack_added, Toast.LENGTH_SHORT).show()
+
+                        // İndirme sayısını artır (Firebase'e yaz)
+                        currentPack?.let { pack ->
+                            StickerRepository.incrementDownloadCount(pack.id, pack.isPremium)
                         }
+
+                        // Sticker ekleme sayacını artır
+                        val count = PreferencesHelper.incrementStickersAddedCount(this@DetailsActivity)
+
+                        if (!PreferencesHelper.isPremium(this@DetailsActivity)) {
+                            if (count % 4 == 0 && !PreferencesHelper.wasPremiumPromoShownForCount(this@DetailsActivity, count)) {
+                                PreferencesHelper.markPremiumPromoShown(this@DetailsActivity, count)
+                                showPremiumPromoDialog()
+                            } else {
+                                AdManager.showInterstitial(this@DetailsActivity)
+                            }
+                        }
+                    } else if (!isWhitelisted && wasInstalled) {
+                        // Kaldırıldı
+                        PreferencesHelper.removeInstalledPack(this@DetailsActivity, packId)
+                        Toast.makeText(this@DetailsActivity, R.string.pack_removed_from_whatsapp, Toast.LENGTH_SHORT).show()
                     }
-                } else {
+
                     updateButton()
                 }
-            }
-            REQUEST_REMOVE -> {
-                // WhatsApp'tan döndü - kullanıcı kaldırdı varsayalım ve yerel durumu güncelle
-                PreferencesHelper.removeInstalledPack(this, packId)
-                updateButton()
-                Toast.makeText(this, R.string.pack_removed_from_whatsapp, Toast.LENGTH_SHORT).show()
             }
             REQUEST_ADD_STICKER -> {
                 // StickerMaker'dan dönüldü, eğer paket yüklüyse WhatsApp'ı zorla güncelle

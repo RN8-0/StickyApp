@@ -13,18 +13,23 @@ import java.util.UUID
 
 /**
  * Kullanıcının oluşturduğu özel sticker paketlerini yönetir.
- * Sticker dosyaları cacheDir/sticker_cache/ dizinine kaydedilir (Firebase ile aynı sistem)
- * Bu sayede WhatsApp'a ekleme çalışır.
+ * Sticker dosyaları filesDir/custom_stickers/ dizinine kaydedilir (KALICI DEPOLAMA)
+ * Bu sayede kullanıcının oluşturduğu çıkartmalar sistem tarafından silinmez.
  */
 object CustomStickerManager {
 
-    // KRITIK: sticker_cache dizini kullan - StickerRepository ve StickerProvider ile aynı
-    private const val CACHE_DIR = "sticker_cache"
+    // KRITIK: filesDir kullan - kalıcı depolama, sistem tarafından silinmez
+    private const val CUSTOM_DIR = "custom_stickers"
+    // Eski cache dizini (migration için)
+    private const val OLD_CACHE_DIR = "sticker_cache"
     private const val PACK_INFO_FILE = "pack_info.json"
     private const val TRAY_FILE = "tray.webp"
     private const val STICKER_PREFIX = "sticker_"
-    
+
     private val gson = Gson()
+
+    // Migration yapıldı mı kontrolü
+    private var migrationDone = false
 
     /**
      * Özel sticker paketleri için data class
@@ -39,10 +44,13 @@ object CustomStickerManager {
     )
 
     /**
-     * Özel paketlerin saklandığı ana dizini döndürür (cacheDir/sticker_cache)
+     * Özel paketlerin saklandığı ana dizini döndürür (filesDir/custom_stickers - KALICI)
      */
-    private fun getCacheDir(context: Context): File {
-        val dir = File(context.cacheDir, CACHE_DIR)
+    private fun getCustomDir(context: Context): File {
+        // Migration işlemini yap (ilk çağrıda)
+        migrateFromCacheIfNeeded(context)
+
+        val dir = File(context.filesDir, CUSTOM_DIR)
         if (!dir.exists()) dir.mkdirs()
         return dir
     }
@@ -51,9 +59,75 @@ object CustomStickerManager {
      * Belirli bir paketin dizinini döndürür
      */
     private fun getPackDir(context: Context, packId: String): File {
-        val dir = File(getCacheDir(context), packId)
+        val dir = File(getCustomDir(context), packId)
         if (!dir.exists()) dir.mkdirs()
         return dir
+    }
+
+    /**
+     * Eski cache dizininden kalıcı dizine migration yapar
+     * Kullanıcının eski çıkartmalarını korur
+     */
+    private fun migrateFromCacheIfNeeded(context: Context) {
+        if (migrationDone) return
+        migrationDone = true
+
+        try {
+            val oldCacheDir = File(context.cacheDir, OLD_CACHE_DIR)
+            val newCustomDir = File(context.filesDir, CUSTOM_DIR)
+
+            if (!oldCacheDir.exists()) return
+
+            // Eski cache'deki custom paketleri bul ve taşı
+            oldCacheDir.listFiles()?.forEach { packDir ->
+                if (packDir.isDirectory && packDir.name.startsWith("custom_")) {
+                    val newPackDir = File(newCustomDir, packDir.name)
+
+                    // Eğer yeni dizinde yoksa taşı
+                    if (!newPackDir.exists()) {
+                        newCustomDir.mkdirs()
+                        packDir.copyRecursively(newPackDir, overwrite = true)
+                        packDir.deleteRecursively()
+                        android.util.Log.d("CustomStickerManager", "Migrated pack: ${packDir.name}")
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("CustomStickerManager", "Migration error: ${e.message}")
+        }
+    }
+
+    /**
+     * Paketi WhatsApp provider için cache dizinine kopyalar
+     * StickerProvider cache dizininden okur, bu yüzden gerekli
+     */
+    fun syncPackToCache(context: Context, packId: String) {
+        try {
+            val sourceDir = getPackDir(context, packId)
+            val cacheDir = File(context.cacheDir, OLD_CACHE_DIR)
+            val destDir = File(cacheDir, packId)
+
+            if (sourceDir.exists()) {
+                destDir.mkdirs()
+                sourceDir.listFiles()?.forEach { file ->
+                    val destFile = File(destDir, file.name)
+                    if (!destFile.exists() || file.lastModified() > destFile.lastModified()) {
+                        file.copyTo(destFile, overwrite = true)
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("CustomStickerManager", "Sync to cache error: ${e.message}")
+        }
+    }
+
+    /**
+     * Tüm custom paketleri cache'e senkronize eder
+     */
+    fun syncAllPacksToCache(context: Context) {
+        getCustomPacks(context).forEach { pack ->
+            syncPackToCache(context, pack.id)
+        }
     }
 
     /**
@@ -391,16 +465,22 @@ object CustomStickerManager {
      * Tüm özel paketleri listeler
      */
     fun getCustomPacks(context: Context): List<CustomPack> {
-        val cacheDir = getCacheDir(context)
+        val customDir = getCustomDir(context)
         val packs = mutableListOf<CustomPack>()
-        
-        cacheDir.listFiles()?.forEach { packDir ->
+
+        customDir.listFiles()?.forEach { packDir ->
             // Sadece custom_ ile başlayan paketler özel paketler
             if (packDir.isDirectory && packDir.name.startsWith("custom_")) {
-                getPackInfo(context, packDir.name)?.let { packs.add(it) }
+                getPackInfo(context, packDir.name)?.let { pack ->
+                    // Geçerli paket mi kontrol et (en az pack_info.json ve dosyaları olmalı)
+                    val infoFile = File(packDir, PACK_INFO_FILE)
+                    if (infoFile.exists()) {
+                        packs.add(pack)
+                    }
+                }
             }
         }
-        
+
         return packs.sortedByDescending { it.createdAt }
     }
 
@@ -552,19 +632,29 @@ object CustomStickerManager {
      * WhatsApp'a verilerin değiştiğini bildirir
      */
     private fun notifyWhatsApp(context: Context, packId: String) {
+        // KRITIK: Önce paketi cache'e senkronize et (StickerProvider cache'den okur)
+        syncPackToCache(context, packId)
+
         val authority = "${context.packageName}.stickers"
         val contentResolver = context.contentResolver
-        
+
         // 1. Genel metadata değişti bildirimi
         val metadataUri = android.net.Uri.parse("content://$authority/metadata")
         contentResolver.notifyChange(metadataUri, null)
-        
+
         // 2. Spesifik paket metadata'sı değişti bildirimi
         val packUri = android.net.Uri.parse("content://$authority/metadata/$packId")
         contentResolver.notifyChange(packUri, null)
-        
+
         // 3. Çıkartma dosyaları değişti bildirimi
         val stickersUri = android.net.Uri.parse("content://$authority/stickers/$packId")
         contentResolver.notifyChange(stickersUri, null)
+    }
+
+    /**
+     * Custom sticker dosyasının yolunu döndürür (filesDir'dan)
+     */
+    fun getCustomStickerPath(context: Context, packId: String, fileName: String): File {
+        return File(getPackDir(context, packId), fileName)
     }
 }
