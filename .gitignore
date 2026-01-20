@@ -26,6 +26,11 @@ stickers_convert/output/
 stickers_convert/stickers/
 stickers_convert/premium_stickers/
 
+# Keystore (GIZLI - asla paylasilmamali)
+keystore.properties
+*.jks
+*.keystore
+
 # Firebase (GIZLI - asla paylasilmamali)
 app/google-services.json
 *firebase-adminsdk*.json

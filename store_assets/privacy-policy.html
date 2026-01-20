@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sticky - Gizlilik Politikası</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #25D366;
+            --primary-dark: #1DA851;
+            --primary-light: #5EE89A;
+            --primary-bg: rgba(37, 211, 102, 0.1);
+            --text-primary: #212121;
+            --text-secondary: #757575;
+            --background: #F5F5F5;
+            --surface: #FFFFFF;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.7;
+            color: var(--text-primary);
+            background: linear-gradient(135deg, var(--background) 0%, #E8F5E9 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .header {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            color: white;
+            padding: 40px 20px;
+            text-align: center;
+            border-radius: 20px 20px 0 0;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .header::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 60%);
+            animation: pulse 4s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); opacity: 0.5; }
+            50% { transform: scale(1.1); opacity: 0.3; }
+        }
+
+        .header h1 {
+            font-size: 32px;
+            font-weight: 700;
+            margin-bottom: 8px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .header .subtitle {
+            font-size: 16px;
+            opacity: 0.9;
+            position: relative;
+            z-index: 1;
+        }
+
+        .app-icon {
+            width: 100px;
+            height: 100px;
+            border-radius: 22px;
+            margin: 0 auto 20px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            position: relative;
+            z-index: 1;
+            overflow: hidden;
+        }
+
+        .app-icon img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: var(--surface);
+            border-radius: 20px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .content {
+            padding: 40px;
+        }
+
+        .update-date {
+            display: inline-block;
+            background: var(--primary-bg);
+            color: var(--primary-dark);
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 30px;
+        }
+
+        .intro {
+            font-size: 17px;
+            color: var(--text-secondary);
+            margin-bottom: 30px;
+            padding: 20px;
+            background: linear-gradient(135deg, #f8f9fa 0%, #e8f5e9 100%);
+            border-radius: 12px;
+            border-left: 4px solid var(--primary);
+        }
+
+        .section {
+            margin-bottom: 35px;
+        }
+
+        .section-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .section-number {
+            width: 36px;
+            height: 36px;
+            background: var(--primary);
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 14px;
+            margin-right: 12px;
+            flex-shrink: 0;
+        }
+
+        h2 {
+            color: var(--text-primary);
+            font-size: 20px;
+            font-weight: 600;
+        }
+
+        h3 {
+            color: var(--primary-dark);
+            font-size: 16px;
+            font-weight: 600;
+            margin: 20px 0 12px;
+        }
+
+        p {
+            margin-bottom: 15px;
+            text-align: justify;
+            color: var(--text-secondary);
+        }
+
+        ul {
+            margin: 15px 0 15px 0;
+            padding-left: 0;
+            list-style: none;
+        }
+
+        li {
+            margin-bottom: 12px;
+            padding-left: 28px;
+            position: relative;
+            color: var(--text-secondary);
+        }
+
+        li::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 8px;
+            width: 8px;
+            height: 8px;
+            background: var(--primary);
+            border-radius: 50%;
+        }
+
+        li strong {
+            color: var(--text-primary);
+        }
+
+        .info-card {
+            background: var(--primary-bg);
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+
+        .info-card.warning {
+            background: #FFF3E0;
+            border-left: 4px solid #FF9800;
+        }
+
+        .info-card.info {
+            background: #E3F2FD;
+            border-left: 4px solid #2196F3;
+        }
+
+        .service-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+
+        .service-item {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 16px;
+            text-align: center;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .service-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        .service-item .icon {
+            font-size: 28px;
+            margin-bottom: 8px;
+        }
+
+        .service-item .name {
+            font-weight: 600;
+            color: var(--text-primary);
+            font-size: 14px;
+        }
+
+        .service-item .desc {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-top: 4px;
+        }
+
+        .rights-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 12px;
+            margin: 20px 0;
+        }
+
+        .right-item {
+            background: linear-gradient(135deg, var(--primary-bg) 0%, #E8F5E9 100%);
+            border-radius: 10px;
+            padding: 14px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .right-item .check {
+            width: 24px;
+            height: 24px;
+            background: var(--primary);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 14px;
+            flex-shrink: 0;
+        }
+
+        .right-item span {
+            font-size: 14px;
+            color: var(--text-primary);
+            font-weight: 500;
+        }
+
+        .contact-box {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            border-radius: 16px;
+            padding: 30px;
+            color: white;
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        .contact-box h3 {
+            color: white;
+            font-size: 20px;
+            margin-bottom: 15px;
+        }
+
+        .contact-box p {
+            color: rgba(255,255,255,0.9);
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .email-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            background: white;
+            color: var(--primary-dark);
+            padding: 14px 28px;
+            border-radius: 30px;
+            text-decoration: none;
+            font-weight: 600;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .email-link:hover {
+            transform: scale(1.05);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+
+        a {
+            color: var(--primary-dark);
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        a:hover {
+            text-decoration: underline;
+        }
+
+        .external-links {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .external-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: #f8f9fa;
+            padding: 8px 14px;
+            border-radius: 20px;
+            font-size: 13px;
+            transition: background 0.2s;
+        }
+
+        .external-link:hover {
+            background: var(--primary-bg);
+            text-decoration: none;
+        }
+
+        .footer {
+            text-align: center;
+            padding: 30px;
+            background: #f8f9fa;
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+
+        .footer .copyright {
+            margin-top: 10px;
+            font-size: 13px;
+        }
+
+        @media (max-width: 600px) {
+            .content {
+                padding: 25px 20px;
+            }
+
+            .header {
+                padding: 30px 15px;
+            }
+
+            .header h1 {
+                font-size: 26px;
+            }
+
+            .service-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+
+            .rights-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="app-icon"><img src="logo.png" alt="Sticky Logo"></div>
+            <h1>Sticky</h1>
+            <p class="subtitle">Gizlilik Politikası</p>
+        </div>
+
+        <div class="content">
+            <span class="update-date">📅 Son Güncelleme: 20 Ocak 2026</span>
+
+            <div class="intro">
+                Bu gizlilik politikası, <strong>Sticky</strong> uygulamasının ("Uygulama", "Hizmet") kullanıcı verilerini nasıl topladığını, kullandığını, sakladığını ve koruduğunu açıklamaktadır. Uygulamayı kullanarak bu politikayı kabul etmiş sayılırsınız.
+            </div>
+
+            <!-- Bölüm 1 -->
+            <div class="section">
+                <div class="section-header">
+                    <div class="section-number">1</div>
+                    <h2>Hakkımızda</h2>
+                </div>
+                <p>
+                    Sticky, kullanıcıların WhatsApp için özel çıkartma paketleri oluşturmasına ve mevcut çıkartma koleksiyonlarına erişmesine olanak tanıyan bir mobil uygulamadır. Kullanıcı gizliliğine büyük önem veriyor ve verilerinizi korumak için gerekli tüm önlemleri alıyoruz.
+                </p>
+            </div>
+
+            <!-- Bölüm 2 -->
+            <div class="section">
+                <div class="section-header">
+                    <div class="section-number">2</div>
+                    <h2>Toplanan Veriler</h2>
+                </div>
+                <p>Uygulamamız, hizmetlerimizi sunabilmek için aşağıdaki verileri toplayabilir:</p>
+
+                <h3>2.1 Otomatik Olarak Toplanan Veriler</h3>
+                <ul>
+                    <li><strong>Cihaz Bilgileri:</strong> Cihaz modeli, işletim sistemi sürümü, benzersiz cihaz tanımlayıcıları (Reklam ID'si), ekran çözünürlüğü ve dil ayarları</li>
+                    <li><strong>Uygulama Kullanım Verileri:</strong> Uygulama içi etkileşimler, görüntülenen çıkartma paketleri, indirme istatistikleri ve oturum süreleri</li>
+                    <li><strong>Ağ Bilgileri:</strong> İnternet bağlantı durumu ve bağlantı türü (Wi-Fi/Mobil veri)</li>
+                    <li><strong>Kilitlenme ve Hata Raporları:</strong> Uygulama performansını iyileştirmek için anonim hata günlükleri</li>
+                </ul>
+
+                <h3>2.2 Kullanıcı Tarafından Sağlanan Veriler</h3>
+                <ul>
+                    <li><strong>Kamera Erişimi:</strong> Kendi çıkartmalarınızı oluşturmak için kamera kullanıldığında, çekilen fotoğraflar yalnızca cihazınızda işlenir. Bu görüntüler açık izniniz olmadan sunucularımıza yüklenmez</li>
+                    <li><strong>Galeri Erişimi:</strong> Galeriden seçtiğiniz görüntüler çıkartma oluşturmak için kullanılır ve cihazınızda yerel olarak işlenir</li>
+                    <li><strong>Satın Alma Bilgileri:</strong> Uygulama içi satın alma işlemlerinde Google Play tarafından işlenen ödeme bilgileri (kredi kartı bilgilerinize erişimimiz yoktur)</li>
+                </ul>
+
+                <div class="info-card info">
+                    <strong>📌 Önemli:</strong> Kişisel bilgileriniz (ad, e-posta, telefon numarası) tarafımızca zorunlu olarak istenmez ve saklanmaz. Yalnızca destek talebi için iletişime geçtiğinizde e-posta adresinizi görürüz.
+                </div>
+            </div>
+
+            <!-- Bölüm 3 -->
+            <div class="section">
+                <div class="section-header">
+                    <div class="section-number">3</div>
+                    <h2>Verilerin Kullanım Amaçları</h2>
+                </div>
+                <p>Topladığımız veriler aşağıdaki amaçlarla kullanılır:</p>
+                <ul>
+                    <li><strong>Hizmet Sunumu:</strong> Çıkartma paketlerini görüntüleme, indirme ve WhatsApp'a ekleme işlevlerini sağlamak</li>
+                    <li><strong>Çıkartma Oluşturma:</strong> Kullanıcıların kendi özel çıkartmalarını oluşturmasını mümkün kılmak</li>
+                    <li><strong>Ürün Geliştirme:</strong> Uygulama performansını analiz etmek ve kullanıcı deneyimini iyileştirmek</li>
+                    <li><strong>Bildirimler:</strong> Yeni çıkartma paketleri, güncellemeler ve önemli duyurular hakkında bilgilendirme (izniniz dahilinde)</li>
+                    <li><strong>Reklam:</strong> Size ilgi alanlarınıza uygun reklamlar göstermek</li>
+                    <li><strong>Satın Alma İşlemleri:</strong> Premium özelliklere erişim ve reklamsız deneyim sağlamak</li>
+                    <li><strong>Güvenlik:</strong> Dolandırıcılık ve kötüye kullanımı tespit etmek ve önlemek</li>
+                </ul>
+            </div>
+
+            <!-- Bölüm 4 -->
+            <div class="section">
+                <div class="section-header">
+                    <div class="section-number">4</div>
+                    <h2>Üçüncü Taraf Hizmetleri</h2>
+                </div>
+                <p>Uygulamamız, hizmetlerimizi sunmak için aşağıdaki güvenilir üçüncü taraf hizmetlerini kullanmaktadır:</p>
+
+                <div class="service-grid">
+                    <div class="service-item">
+                        <div class="icon">🔥</div>
+                        <div class="name">Firebase</div>
+                        <div class="desc">Veritabanı ve Depolama</div>
+                    </div>
+                    <div class="service-item">
+                        <div class="icon">📢</div>
+                        <div class="name">Firebase Cloud Messaging</div>
+                        <div class="desc">Anlık Bildirimler</div>
+                    </div>
+                    <div class="service-item">
+                        <div class="icon">📊</div>
+                        <div class="name">Google AdMob</div>
+                        <div class="desc">Reklam Hizmetleri</div>
+                    </div>
+                    <div class="service-item">
+                        <div class="icon">💳</div>
+                        <div class="name">Google Play Billing</div>
+                        <div class="desc">Uygulama İçi Satın Alma</div>
+                    </div>
+                    <div class="service-item">
+                        <div class="icon">🤖</div>
+                        <div class="name">ML Kit</div>
+                        <div class="desc">Görüntü İşleme (Cihazda)</div>
+                    </div>
+                    <div class="service-item">
+                        <div class="icon">💬</div>
+                        <div class="name">WhatsApp</div>
+                        <div class="desc">Çıkartma Entegrasyonu</div>
+                    </div>
+                </div>
+
+                <p>Bu üçüncü taraf hizmetlerinin kendi gizlilik politikaları bulunmaktadır:</p>
+                <div class="external-links">
+                    <a href="https://policies.google.com/privacy" target="_blank" class="external-link">
+                        🔗 Google Gizlilik Politikası
+                    </a>
+                    <a href="https://firebase.google.com/support/privacy" target="_blank" class="external-link">
+                        🔗 Firebase Gizlilik
+                    </a>
+                    <a href="https://www.whatsapp.com/legal/privacy-policy" target="_blank" class="external-link">
+                        🔗 WhatsApp Gizlilik
+                    </a>
+                </div>
+            </div>
+
+            <!-- Bölüm 5 -->
+            <div class="section">
+                <div class="section-header">
+                    <div class="section-number">5</div>
+                    <h2>Reklam ve Kişiselleştirme</h2>
+                </div>
+                <p>
+                    Uygulamamızda Google AdMob aracılığıyla reklamlar gösterilmektedir. AdMob, size daha alakalı reklamlar sunmak için reklam kimliğinizi ve cihaz bilgilerinizi kullanabilir.
+                </p>
+                <h3>Reklam Tercihlerinizi Yönetme</h3>
+                <ul>
+                    <li>Android cihazınızda <strong>Ayarlar → Google → Reklamlar</strong> bölümünden kişiselleştirilmiş reklamları kapatabilirsiniz</li>
+                    <li>Reklam kimliğinizi sıfırlayabilirsiniz</li>
+                    <li>Premium üyelik satın alarak reklamsız deneyim elde edebilirsiniz</li>
+                </ul>
+                <div class="info-card warning">
+                    <strong>⚠️ Not:</strong> Kişiselleştirilmiş reklamları kapatsanız bile, genel (kişiselleştirilmemiş) reklamlar görmeye devam edebilirsiniz.
+                </div>
+            </div>
+
+            <!-- Bölüm 6 -->
+            <div class="section">
+                <div class="section-header">
+                    <div class="section-number">6</div>
+                    <h2>Veri Güvenliği</h2>
+                </div>
+                <p>Verilerinizin güvenliğini sağlamak için aşağıdaki önlemleri uyguluyoruz:</p>
+                <ul>
+                    <li><strong>Şifreleme:</strong> Veriler aktarım sırasında SSL/TLS protokolleri ile şifrelenir</li>
+                    <li><strong>Güvenli Depolama:</strong> Firebase altyapısı, endüstri standardı güvenlik sertifikalarına sahiptir</li>
+                    <li><strong>Erişim Kontrolü:</strong> Verilerinize yalnızca yetkili sistemler erişebilir</li>
+                    <li><strong>Düzenli Güvenlik Denetimleri:</strong> Sistemlerimiz düzenli olarak güvenlik açıklarına karşı kontrol edilir</li>
+                </ul>
+                <p>
+                    Ancak, internet üzerinden hiçbir veri iletim yönteminin veya elektronik depolama yönteminin %100 güvenli olmadığını belirtmek isteriz. Verilerinizi korumak için elimizden geleni yapsak da mutlak güvenliği garanti edemeyiz.
+                </p>
+            </div>
+
+            <!-- Bölüm 7 -->
+            <div class="section">
+                <div class="section-header">
+                    <div class="section-number">7</div>
+                    <h2>Veri Saklama ve Silme</h2>
+                </div>
+                <p>
+                    Kullanıcı verileri, hizmetlerimizi sunmak için gerekli olduğu sürece saklanır. Veri saklama süreleri veri türüne göre değişiklik gösterir:
+                </p>
+                <ul>
+                    <li><strong>Kullanım Verileri:</strong> Anonim hale getirilerek analiz amaçlı saklanır</li>
+                    <li><strong>Cihaz Bilgileri:</strong> Aktif kullanım süresince saklanır</li>
+                    <li><strong>Oluşturulan Çıkartmalar:</strong> Yalnızca cihazınızda saklanır, sunucularımızda depolanmaz</li>
+                    <li><strong>Satın Alma Kayıtları:</strong> Yasal gereklilikler doğrultusunda saklanır</li>
+                </ul>
+                <h3>Verilerinizi Silme</h3>
+                <ul>
+                    <li>Uygulamayı kaldırdığınızda, cihazınızdaki tüm yerel veriler otomatik olarak silinir</li>
+                    <li>Sunucu tarafındaki verilerin silinmesini talep etmek için <strong>arainunger@gmail.com</strong> adresinden bizimle iletişime geçebilirsiniz</li>
+                    <li>Silme taleplerini 30 gün içinde işleme alıyoruz</li>
+                </ul>
+            </div>
+
+            <!-- Bölüm 8 -->
+            <div class="section">
+                <div class="section-header">
+                    <div class="section-number">8</div>
+                    <h2>Çocukların Gizliliği</h2>
+                </div>
+                <p>
+                    Uygulamamız 13 yaşın altındaki çocuklara yönelik değildir ve bu yaş grubundan bilerek kişisel bilgi toplamıyoruz. Eğer bir ebeveyn veya vasi olarak çocuğunuzun bize kişisel bilgi sağladığını fark ederseniz, lütfen bizimle iletişime geçin. Bu tür bilgileri derhal silmek için gerekli adımları atacağız.
+                </p>
+                <div class="info-card info">
+                    <strong>👨‍👩‍👧 Ebeveynlere Not:</strong> Çocuklarınızın çevrimiçi aktivitelerini denetlemenizi ve onlarla internet güvenliği hakkında konuşmanızı öneririz.
+                </div>
+            </div>
+
+            <!-- Bölüm 9 -->
+            <div class="section">
+                <div class="section-header">
+                    <div class="section-number">9</div>
+                    <h2>Kullanıcı Hakları</h2>
+                </div>
+                <p>KVKK ve GDPR kapsamında aşağıdaki haklara sahipsiniz:</p>
+
+                <div class="rights-grid">
+                    <div class="right-item">
+                        <div class="check">✓</div>
+                        <span>Verilerinize Erişim</span>
+                    </div>
+                    <div class="right-item">
+                        <div class="check">✓</div>
+                        <span>Verilerin Düzeltilmesi</span>
+                    </div>
+                    <div class="right-item">
+                        <div class="check">✓</div>
+                        <span>Verilerin Silinmesi</span>
+                    </div>
+                    <div class="right-item">
+                        <div class="check">✓</div>
+                        <span>Veri Taşınabilirliği</span>
+                    </div>
+                    <div class="right-item">
+                        <div class="check">✓</div>
+                        <span>İşlemeye İtiraz</span>
+                    </div>
+                    <div class="right-item">
+                        <div class="check">✓</div>
+                        <span>Bildirim Tercihleri</span>
+                    </div>
+                </div>
+
+                <p>Bu haklarınızı kullanmak için <strong>arainunger@gmail.com</strong> adresinden bizimle iletişime geçebilirsiniz.</p>
+            </div>
+
+            <!-- Bölüm 10 -->
+            <div class="section">
+                <div class="section-header">
+                    <div class="section-number">10</div>
+                    <h2>Uluslararası Veri Aktarımı</h2>
+                </div>
+                <p>
+                    Verileriniz, hizmet sağlayıcılarımızın sunucularının bulunduğu ülkelere aktarılabilir (örneğin, Google sunucuları). Bu aktarımlar, uygun güvenlik önlemleri ve yasal çerçeveler dahilinde gerçekleştirilir.
+                </p>
+            </div>
+
+            <!-- Bölüm 11 -->
+            <div class="section">
+                <div class="section-header">
+                    <div class="section-number">11</div>
+                    <h2>Politika Değişiklikleri</h2>
+                </div>
+                <p>
+                    Bu gizlilik politikasını zaman zaman güncelleyebiliriz. Önemli değişiklikler yapıldığında:
+                </p>
+                <ul>
+                    <li>Bu sayfadaki "Son Güncelleme" tarihi değiştirilecektir</li>
+                    <li>Önemli değişiklikler için uygulama içi bildirim gönderilecektir</li>
+                    <li>Değişikliklerden sonra uygulamayı kullanmaya devam etmeniz, güncellenmiş politikayı kabul ettiğiniz anlamına gelir</li>
+                </ul>
+            </div>
+
+            <!-- Bölüm 12 - İletişim -->
+            <div class="section">
+                <div class="section-header">
+                    <div class="section-number">12</div>
+                    <h2>Bizimle İletişime Geçin</h2>
+                </div>
+                <p>
+                    Gizlilik politikamız veya veri uygulamalarımız hakkında sorularınız, endişeleriniz veya talepleriniz için bizimle iletişime geçmekten çekinmeyin.
+                </p>
+                <div class="contact-box">
+                    <h3>📧 İletişim</h3>
+                    <p>Sorularınız ve geri bildirimleriniz için bize ulaşın</p>
+                    <a href="mailto:arainunger@gmail.com" class="email-link">
+                        ✉️ arainunger@gmail.com
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>Bu gizlilik politikası, Sticky uygulaması için geçerlidir.</p>
+            <p class="copyright">© 2026 Sticky. Tüm hakları saklıdır.</p>
+        </div>
+    </div>
+</body>
+</html>

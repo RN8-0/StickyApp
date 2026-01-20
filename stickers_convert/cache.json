@@ -682,158 +682,6 @@
         "animated": true
       }
     },
-    "stranger_things": {
-      "Animated GIF.gif": {
-        "hash": "2fdd2133888c178851fb20ae7f5950b8",
-        "output": "sticker_01.webp",
-        "size_kb": 158.94140625,
-        "animated": true
-      },
-      "Blushing Stranger Things GIF.gif": {
-        "hash": "978d7dc95173c6959b230510eab08fe3",
-        "output": "sticker_02.webp",
-        "size_kb": 248.29296875,
-        "animated": true
-      },
-      "Confused Stranger Things GIF.gif": {
-        "hash": "8e6b4f86acd01ddb03334279d84c6f7b",
-        "output": "sticker_03.webp",
-        "size_kb": 211.455078125,
-        "animated": true
-      },
-      "gif (1).gif": {
-        "hash": "19fbde6ecc9ac7e966c9ba5c809790a8",
-        "output": "sticker_04.webp",
-        "size_kb": 197.7109375,
-        "animated": true
-      },
-      "gif.gif": {
-        "hash": "b4967abf48f346112acb08a2058206cf",
-        "output": "sticker_05.webp",
-        "size_kb": 315.900390625,
-        "animated": true
-      },
-      "Mad Netflix GIF by Stranger Things.gif": {
-        "hash": "466e3056356c2abf1825c7933a85b57e",
-        "output": "sticker_06.webp",
-        "size_kb": 279.236328125,
-        "animated": true
-      },
-      "Nerd Erica GIF by Stranger Things.gif": {
-        "hash": "5eecaa0fd9338cfd5db58a0bd84d4a5c",
-        "output": "sticker_07.webp",
-        "size_kb": 306.853515625,
-        "animated": true
-      },
-      "netflix GIF by Stranger Things (1).gif": {
-        "hash": "aab0172465ee2732e97e5482171048ca",
-        "output": "sticker_08.webp",
-        "size_kb": 312.564453125,
-        "animated": true
-      },
-      "netflix GIF by Stranger Things.gif": {
-        "hash": "4abb9977e168fc15670ece7a3b7caf29",
-        "output": "sticker_09.webp",
-        "size_kb": 352.2734375,
-        "animated": true
-      },
-      "netflix lifeguard GIF by Stranger Things.gif": {
-        "hash": "031160dec36b64d68b97ea2648d4da0a",
-        "output": "sticker_10.webp",
-        "size_kb": 373.26953125,
-        "animated": true
-      },
-      "Running Away Stranger Things GIF by NETFLIX.gif": {
-        "hash": "4c1b8088d8603c54473d2fcfb250f7ad",
-        "output": "sticker_11.webp",
-        "size_kb": 127.1953125,
-        "animated": true
-      },
-      "screaming season 3 GIF by Stranger Things.gif": {
-        "hash": "d0cf17e8fe11c5babb1a98ba7409f7d4",
-        "output": "sticker_12.webp",
-        "size_kb": 275.357421875,
-        "animated": true
-      },
-      "Season 2 Love GIF by NETFLIX.gif": {
-        "hash": "8815fe83222930f5d5f89499d706fd36",
-        "output": "sticker_13.webp",
-        "size_kb": 133.1484375,
-        "animated": true
-      },
-      "Season 3 Netflix GIF by Stranger Things.gif": {
-        "hash": "1ce225bc86d04375c185c4531ea3e57b",
-        "output": "sticker_14.webp",
-        "size_kb": 317.353515625,
-        "animated": true
-      },
-      "Season 4 Netflix GIF.gif": {
-        "hash": "9ff065ca0088ab416ac03e3ac95e9177",
-        "output": "sticker_15.webp",
-        "size_kb": 294.833984375,
-        "animated": true
-      },
-      "Stranger Things Dancing GIF.gif": {
-        "hash": "e201a7efd5516ccbdb2b7c87a8f00ddb",
-        "output": "sticker_16.webp",
-        "size_kb": 34.701171875,
-        "animated": true
-      },
-      "Stranger Things Eddie GIF by NETFLIX.gif": {
-        "hash": "9638977cc1d03964ad7f296b9391a074",
-        "output": "sticker_17.webp",
-        "size_kb": 118.775390625,
-        "animated": true
-      },
-      "Stranger Things GIF.gif": {
-        "hash": "370811937927eadefbdbcd1377789324",
-        "output": "sticker_18.webp",
-        "size_kb": 406.021484375,
-        "animated": true
-      },
-      "stranger things mouthbreather GIF.gif": {
-        "hash": "dc58a351335b2ea9f4a26265ea45097a",
-        "output": "sticker_19.webp",
-        "size_kb": 330.720703125,
-        "animated": true
-      },
-      "Stranger Things St4 GIF by NETFLIX (1).gif": {
-        "hash": "beaa86cd7b52c2141eb6854f37f1cf55",
-        "output": "sticker_20.webp",
-        "size_kb": 322.34375,
-        "animated": true
-      },
-      "Stranger Things St4 GIF by NETFLIX.gif": {
-        "hash": "9a0e756ac470d33420cf8e85d40a3f3b",
-        "output": "sticker_21.webp",
-        "size_kb": 159.7421875,
-        "animated": true
-      },
-      "strangerthings3 GIF by Netflix España (1).gif": {
-        "hash": "d742de27c4ca50ba0b6f3ed469100b10",
-        "output": "sticker_22.webp",
-        "size_kb": 258.216796875,
-        "animated": true
-      },
-      "strangerthings3 GIF by Netflix España.gif": {
-        "hash": "81d53d3e0a3b913adafa8c1cbc2d6bfc",
-        "output": "sticker_23.webp",
-        "size_kb": 329.17578125,
-        "animated": true
-      },
-      "Will Season 2 GIF by Barstool Sports.gif": {
-        "hash": "3d80b8f2dfb4435d089026d88e7bdeed",
-        "output": "sticker_24.webp",
-        "size_kb": 170.923828125,
-        "animated": true
-      },
-      "Will Stranger Things GIF.gif": {
-        "hash": "85f0b1fb8e57e6fba186a81e087ccbc6",
-        "output": "sticker_25.webp",
-        "size_kb": 265.013671875,
-        "animated": true
-      }
-    },
     "romantizm": {
       "arouse french kiss GIF.gif": {
         "hash": "d330737b1f364eb36e88c1ea5753d15f",
@@ -2889,6 +2737,158 @@
         "size_kb": 149.5390625,
         "animated": true
       }
+    },
+    "stranger_things": {
+      "Animated GIF.gif": {
+        "hash": "2fdd2133888c178851fb20ae7f5950b8",
+        "output": "sticker_01.webp",
+        "size_kb": 158.94140625,
+        "animated": true
+      },
+      "Blushing Stranger Things GIF.gif": {
+        "hash": "978d7dc95173c6959b230510eab08fe3",
+        "output": "sticker_02.webp",
+        "size_kb": 248.29296875,
+        "animated": true
+      },
+      "Confused Stranger Things GIF.gif": {
+        "hash": "8e6b4f86acd01ddb03334279d84c6f7b",
+        "output": "sticker_03.webp",
+        "size_kb": 211.455078125,
+        "animated": true
+      },
+      "gif (1).gif": {
+        "hash": "19fbde6ecc9ac7e966c9ba5c809790a8",
+        "output": "sticker_04.webp",
+        "size_kb": 197.7109375,
+        "animated": true
+      },
+      "gif.gif": {
+        "hash": "b4967abf48f346112acb08a2058206cf",
+        "output": "sticker_05.webp",
+        "size_kb": 315.900390625,
+        "animated": true
+      },
+      "Mad Netflix GIF by Stranger Things.gif": {
+        "hash": "466e3056356c2abf1825c7933a85b57e",
+        "output": "sticker_06.webp",
+        "size_kb": 279.236328125,
+        "animated": true
+      },
+      "Nerd Erica GIF by Stranger Things.gif": {
+        "hash": "5eecaa0fd9338cfd5db58a0bd84d4a5c",
+        "output": "sticker_07.webp",
+        "size_kb": 306.853515625,
+        "animated": true
+      },
+      "netflix GIF by Stranger Things (1).gif": {
+        "hash": "aab0172465ee2732e97e5482171048ca",
+        "output": "sticker_08.webp",
+        "size_kb": 312.564453125,
+        "animated": true
+      },
+      "netflix GIF by Stranger Things.gif": {
+        "hash": "4abb9977e168fc15670ece7a3b7caf29",
+        "output": "sticker_09.webp",
+        "size_kb": 352.2734375,
+        "animated": true
+      },
+      "netflix lifeguard GIF by Stranger Things.gif": {
+        "hash": "031160dec36b64d68b97ea2648d4da0a",
+        "output": "sticker_10.webp",
+        "size_kb": 373.26953125,
+        "animated": true
+      },
+      "Running Away Stranger Things GIF by NETFLIX.gif": {
+        "hash": "4c1b8088d8603c54473d2fcfb250f7ad",
+        "output": "sticker_11.webp",
+        "size_kb": 127.1953125,
+        "animated": true
+      },
+      "screaming season 3 GIF by Stranger Things.gif": {
+        "hash": "d0cf17e8fe11c5babb1a98ba7409f7d4",
+        "output": "sticker_12.webp",
+        "size_kb": 275.357421875,
+        "animated": true
+      },
+      "Season 2 Love GIF by NETFLIX.gif": {
+        "hash": "8815fe83222930f5d5f89499d706fd36",
+        "output": "sticker_13.webp",
+        "size_kb": 133.1484375,
+        "animated": true
+      },
+      "Season 3 Netflix GIF by Stranger Things.gif": {
+        "hash": "1ce225bc86d04375c185c4531ea3e57b",
+        "output": "sticker_14.webp",
+        "size_kb": 317.353515625,
+        "animated": true
+      },
+      "Season 4 Netflix GIF.gif": {
+        "hash": "9ff065ca0088ab416ac03e3ac95e9177",
+        "output": "sticker_15.webp",
+        "size_kb": 294.833984375,
+        "animated": true
+      },
+      "Stranger Things Dancing GIF.gif": {
+        "hash": "e201a7efd5516ccbdb2b7c87a8f00ddb",
+        "output": "sticker_16.webp",
+        "size_kb": 34.701171875,
+        "animated": true
+      },
+      "Stranger Things Eddie GIF by NETFLIX.gif": {
+        "hash": "9638977cc1d03964ad7f296b9391a074",
+        "output": "sticker_17.webp",
+        "size_kb": 118.775390625,
+        "animated": true
+      },
+      "Stranger Things GIF.gif": {
+        "hash": "370811937927eadefbdbcd1377789324",
+        "output": "sticker_18.webp",
+        "size_kb": 406.021484375,
+        "animated": true
+      },
+      "stranger things mouthbreather GIF.gif": {
+        "hash": "dc58a351335b2ea9f4a26265ea45097a",
+        "output": "sticker_19.webp",
+        "size_kb": 330.720703125,
+        "animated": true
+      },
+      "Stranger Things St4 GIF by NETFLIX (1).gif": {
+        "hash": "beaa86cd7b52c2141eb6854f37f1cf55",
+        "output": "sticker_20.webp",
+        "size_kb": 322.34375,
+        "animated": true
+      },
+      "Stranger Things St4 GIF by NETFLIX.gif": {
+        "hash": "9a0e756ac470d33420cf8e85d40a3f3b",
+        "output": "sticker_21.webp",
+        "size_kb": 159.7421875,
+        "animated": true
+      },
+      "strangerthings3 GIF by Netflix España (1).gif": {
+        "hash": "d742de27c4ca50ba0b6f3ed469100b10",
+        "output": "sticker_22.webp",
+        "size_kb": 258.216796875,
+        "animated": true
+      },
+      "strangerthings3 GIF by Netflix España.gif": {
+        "hash": "81d53d3e0a3b913adafa8c1cbc2d6bfc",
+        "output": "sticker_23.webp",
+        "size_kb": 329.17578125,
+        "animated": true
+      },
+      "Will Season 2 GIF by Barstool Sports.gif": {
+        "hash": "3d80b8f2dfb4435d089026d88e7bdeed",
+        "output": "sticker_24.webp",
+        "size_kb": 170.923828125,
+        "animated": true
+      },
+      "Will Stranger Things GIF.gif": {
+        "hash": "85f0b1fb8e57e6fba186a81e087ccbc6",
+        "output": "sticker_25.webp",
+        "size_kb": 265.013671875,
+        "animated": true
+      }
     }
   },
   "uploaded": {
@@ -3013,33 +3013,6 @@
       "video6.mp4": "https://storage.googleapis.com/sticky-dcd20.firebasestorage.app/stickers/recep_i%CC%87vedik/sticker_23.webp",
       "video7.mp4": "https://storage.googleapis.com/sticky-dcd20.firebasestorage.app/stickers/recep_i%CC%87vedik/sticker_24.webp",
       "video9.mp4": "https://storage.googleapis.com/sticky-dcd20.firebasestorage.app/stickers/recep_i%CC%87vedik/sticker_25.webp"
-    },
-    "stranger_things": {
-      "Animated GIF.gif": "https://storage.googleapis.com/sticky-dcd20.firebasestorage.app/stickers/stranger_things/sticker_01.webp",
-      "Blushing Stranger Things GIF.gif": "https://storage.googleapis.com/sticky-dcd20.firebasestorage.app/stickers/stranger_things/sticker_02.webp",
-      "Confused Stranger Things GIF.gif": "https://storage.googleapis.com/sticky-dcd20.firebasestorage.app/stickers/stranger_things/sticker_03.webp",
-      "gif (1).gif": "https://storage.googleapis.com/sticky-dcd20.firebasestorage.app/stickers/stranger_things/sticker_04.webp",
-      "gif.gif": "https://storage.googleapis.com/sticky-dcd20.firebasestorage.app/stickers/stranger_things/sticker_05.webp",
-      "Mad Netflix GIF by Stranger Things.gif": "https://storage.googleapis.com/sticky-dcd20.firebasestorage.app/stickers/stranger_things/sticker_06.webp",
-      "Nerd Erica GIF by Stranger Things.gif": "https://storage.googleapis.com/sticky-dcd20.firebasestorage.app/stickers/stranger_things/sticker_07.webp",
-      "netflix GIF by Stranger Things (1).gif": "https://storage.googleapis.com/sticky-dcd20.firebasestorage.app/stickers/stranger_things/sticker_08.webp",
-      "netflix GIF by Stranger Things.gif": "https://storage.googleapis.com/sticky-dcd20.firebasestorage.app/stickers/stranger_things/sticker_09.webp",
-      "netflix lifeguard GIF by Stranger Things.gif": "https://storage.googleapis.com/sticky-dcd20.firebasestorage.app/stickers/stranger_things/sticker_10.webp",
-      "Running Away Stranger Things GIF by NETFLIX.gif": "https://storage.googleapis.com/sticky-dcd20.firebasestorage.app/stickers/stranger_things/sticker_11.webp",
-      "screaming season 3 GIF by Stranger Things.gif": "https://storage.googleapis.com/sticky-dcd20.firebasestorage.app/stickers/stranger_things/sticker_12.webp",
-      "Season 2 Love GIF by NETFLIX.gif": "https://storage.googleapis.com/sticky-dcd20.firebasestorage.app/stickers/stranger_things/sticker_13.webp",
-      "Season 3 Netflix GIF by Stranger Things.gif": "https://storage.googleapis.com/sticky-dcd20.firebasestorage.app/stickers/stranger_things/sticker_14.webp",
-      "Season 4 Netflix GIF.gif": "https://storage.googleapis.com/sticky-dcd20.firebasestorage.app/stickers/stranger_things/sticker_15.webp",
-      "Stranger Things Dancing GIF.gif": "https://storage.googleapis.com/sticky-dcd20.firebasestorage.app/stickers/stranger_things/sticker_16.webp",
-      "Stranger Things Eddie GIF by NETFLIX.gif": "https://storage.googleapis.com/sticky-dcd20.firebasestorage.app/stickers/stranger_things/sticker_17.webp",
-      "Stranger Things GIF.gif": "https://storage.googleapis.com/sticky-dcd20.firebasestorage.app/stickers/stranger_things/sticker_18.webp",
-      "stranger things mouthbreather GIF.gif": "https://storage.googleapis.com/sticky-dcd20.firebasestorage.app/stickers/stranger_things/sticker_19.webp",
-      "Stranger Things St4 GIF by NETFLIX (1).gif": "https://storage.googleapis.com/sticky-dcd20.firebasestorage.app/stickers/stranger_things/sticker_20.webp",
-      "Stranger Things St4 GIF by NETFLIX.gif": "https://storage.googleapis.com/sticky-dcd20.firebasestorage.app/stickers/stranger_things/sticker_21.webp",
-      "strangerthings3 GIF by Netflix España (1).gif": "https://storage.googleapis.com/sticky-dcd20.firebasestorage.app/stickers/stranger_things/sticker_22.webp",
-      "strangerthings3 GIF by Netflix España.gif": "https://storage.googleapis.com/sticky-dcd20.firebasestorage.app/stickers/stranger_things/sticker_23.webp",
-      "Will Season 2 GIF by Barstool Sports.gif": "https://storage.googleapis.com/sticky-dcd20.firebasestorage.app/stickers/stranger_things/sticker_24.webp",
-      "Will Stranger Things GIF.gif": "https://storage.googleapis.com/sticky-dcd20.firebasestorage.app/stickers/stranger_things/sticker_25.webp"
     },
     "romantizm": {
       "arouse french kiss GIF.gif": "https://storage.googleapis.com/sticky-dcd20.firebasestorage.app/premium_stickers/romantizm/sticker_01.webp",
@@ -3406,6 +3379,33 @@
       "tom hardy beyonce GIF.gif": "https://storage.googleapis.com/sticky-dcd20.firebasestorage.app/stickers/peaky_blinders/sticker_28.webp?v=1768569689",
       "tom hardy shelby GIF by ARTEfr.gif": "https://storage.googleapis.com/sticky-dcd20.firebasestorage.app/stickers/peaky_blinders/sticker_29.webp?v=1768569692",
       "Tom Hardy Shelby GIF by ARTEfr.gif": "https://storage.googleapis.com/sticky-dcd20.firebasestorage.app/stickers/peaky_blinders/sticker_30.webp?v=1768569693"
+    },
+    "stranger_things": {
+      "Animated GIF.gif": "https://storage.googleapis.com/sticky-dcd20.firebasestorage.app/stickers/stranger_things/sticker_01.webp?v=1768926953",
+      "Blushing Stranger Things GIF.gif": "https://storage.googleapis.com/sticky-dcd20.firebasestorage.app/stickers/stranger_things/sticker_02.webp?v=1768926956",
+      "Confused Stranger Things GIF.gif": "https://storage.googleapis.com/sticky-dcd20.firebasestorage.app/stickers/stranger_things/sticker_03.webp?v=1768926959",
+      "gif (1).gif": "https://storage.googleapis.com/sticky-dcd20.firebasestorage.app/stickers/stranger_things/sticker_04.webp?v=1768926961",
+      "gif.gif": "https://storage.googleapis.com/sticky-dcd20.firebasestorage.app/stickers/stranger_things/sticker_05.webp?v=1768926965",
+      "Mad Netflix GIF by Stranger Things.gif": "https://storage.googleapis.com/sticky-dcd20.firebasestorage.app/stickers/stranger_things/sticker_06.webp?v=1768926967",
+      "Nerd Erica GIF by Stranger Things.gif": "https://storage.googleapis.com/sticky-dcd20.firebasestorage.app/stickers/stranger_things/sticker_07.webp?v=1768926970",
+      "netflix GIF by Stranger Things (1).gif": "https://storage.googleapis.com/sticky-dcd20.firebasestorage.app/stickers/stranger_things/sticker_08.webp?v=1768926974",
+      "netflix GIF by Stranger Things.gif": "https://storage.googleapis.com/sticky-dcd20.firebasestorage.app/stickers/stranger_things/sticker_09.webp?v=1768926976",
+      "netflix lifeguard GIF by Stranger Things.gif": "https://storage.googleapis.com/sticky-dcd20.firebasestorage.app/stickers/stranger_things/sticker_10.webp?v=1768926979",
+      "Running Away Stranger Things GIF by NETFLIX.gif": "https://storage.googleapis.com/sticky-dcd20.firebasestorage.app/stickers/stranger_things/sticker_11.webp?v=1768926981",
+      "screaming season 3 GIF by Stranger Things.gif": "https://storage.googleapis.com/sticky-dcd20.firebasestorage.app/stickers/stranger_things/sticker_12.webp?v=1768926984",
+      "Season 2 Love GIF by NETFLIX.gif": "https://storage.googleapis.com/sticky-dcd20.firebasestorage.app/stickers/stranger_things/sticker_13.webp?v=1768926985",
+      "Season 3 Netflix GIF by Stranger Things.gif": "https://storage.googleapis.com/sticky-dcd20.firebasestorage.app/stickers/stranger_things/sticker_14.webp?v=1768926988",
+      "Season 4 Netflix GIF.gif": "https://storage.googleapis.com/sticky-dcd20.firebasestorage.app/stickers/stranger_things/sticker_15.webp?v=1768926991",
+      "Stranger Things Dancing GIF.gif": "https://storage.googleapis.com/sticky-dcd20.firebasestorage.app/stickers/stranger_things/sticker_16.webp?v=1768926992",
+      "Stranger Things Eddie GIF by NETFLIX.gif": "https://storage.googleapis.com/sticky-dcd20.firebasestorage.app/stickers/stranger_things/sticker_17.webp?v=1768926994",
+      "Stranger Things GIF.gif": "https://storage.googleapis.com/sticky-dcd20.firebasestorage.app/stickers/stranger_things/sticker_18.webp?v=1768926996",
+      "stranger things mouthbreather GIF.gif": "https://storage.googleapis.com/sticky-dcd20.firebasestorage.app/stickers/stranger_things/sticker_19.webp?v=1768927000",
+      "Stranger Things St4 GIF by NETFLIX (1).gif": "https://storage.googleapis.com/sticky-dcd20.firebasestorage.app/stickers/stranger_things/sticker_20.webp?v=1768927002",
+      "Stranger Things St4 GIF by NETFLIX.gif": "https://storage.googleapis.com/sticky-dcd20.firebasestorage.app/stickers/stranger_things/sticker_21.webp?v=1768927004",
+      "strangerthings3 GIF by Netflix España (1).gif": "https://storage.googleapis.com/sticky-dcd20.firebasestorage.app/stickers/stranger_things/sticker_22.webp?v=1768927006",
+      "strangerthings3 GIF by Netflix España.gif": "https://storage.googleapis.com/sticky-dcd20.firebasestorage.app/stickers/stranger_things/sticker_23.webp?v=1768927009",
+      "Will Season 2 GIF by Barstool Sports.gif": "https://storage.googleapis.com/sticky-dcd20.firebasestorage.app/stickers/stranger_things/sticker_24.webp?v=1768927011",
+      "Will Stranger Things GIF.gif": "https://storage.googleapis.com/sticky-dcd20.firebasestorage.app/stickers/stranger_things/sticker_25.webp?v=1768927013"
     }
   },
   "tray": {
@@ -3428,10 +3428,6 @@
     "recep_i̇vedik_tray": {
       "url": "https://storage.googleapis.com/sticky-dcd20.firebasestorage.app/stickers/recep_i%CC%87vedik/tray.webp?v=1768569700",
       "hash": "3e2b21fcc9adf573819132d146c4eb9e"
-    },
-    "stranger_things_tray": {
-      "url": "https://storage.googleapis.com/sticky-dcd20.firebasestorage.app/stickers/stranger_things/tray.webp?v=1768569713",
-      "hash": "99012ca4bf30d0189acdea2aedaa2f5c"
     },
     "romantizm_tray": {
       "url": "https://storage.googleapis.com/sticky-dcd20.firebasestorage.app/premium_stickers/romantizm/tray.webp?v=1768569743",

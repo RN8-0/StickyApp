@@ -551,19 +551,13 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showFaqDialog() {
-        AlertDialog.Builder(this)
-            .setTitle(R.string.faq_title)
-            .setMessage(R.string.faq_content)
-            .setPositiveButton(R.string.ok, null)
-            .show()
+        val url = "https://arain-0.github.io/sticky-privacy/#faq"
+        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
     }
 
     private fun showAboutDialog() {
-        AlertDialog.Builder(this)
-            .setTitle(R.string.about_title)
-            .setMessage(R.string.about_message)
-            .setPositiveButton(R.string.ok, null)
-            .show()
+        val url = "https://arain-0.github.io/sticky-privacy/#about"
+        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
     }
 
     private fun showPremiumDialog() {
@@ -580,13 +574,17 @@ class MainActivity : AppCompatActivity() {
 
         val view = LayoutInflater.from(this).inflate(R.layout.dialog_premium, null)
 
-        AlertDialog.Builder(this)
+        val dialog = AlertDialog.Builder(this)
             .setView(view)
-            .setPositiveButton(R.string.buy_premium) { _, _ ->
-                billingManager?.launchPurchase(this)
-            }
-            .setNegativeButton(R.string.cancel, null)
-            .show()
+            .create()
+
+        // Premium Al butonuna tıklama
+        view.findViewById<com.google.android.material.button.MaterialButton>(R.id.btnBuyPremium)?.setOnClickListener {
+            dialog.dismiss()
+            billingManager?.launchPurchase(this)
+        }
+
+        dialog.show()
     }
 
     private fun openPlayStore() {
@@ -664,11 +662,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showPrivacyDialog() {
-        AlertDialog.Builder(this)
-            .setTitle(R.string.privacy_title)
-            .setMessage(R.string.privacy_content)
-            .setPositiveButton(R.string.ok, null)
-            .show()
+        val url = "https://arain-0.github.io/sticky-privacy/#privacy"
+        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
     }
 
     private fun showDeletePackDialog(pack: Pack) {
