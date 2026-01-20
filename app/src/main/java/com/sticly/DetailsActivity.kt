@@ -2,6 +2,7 @@ package com.sticly
 
 import android.app.Activity
 import android.app.Dialog
+import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.content.res.ColorStateList
 import android.graphics.BitmapFactory
@@ -55,6 +56,8 @@ class DetailsActivity : AppCompatActivity() {
     private val selectedIndices = mutableSetOf<Int>()
     private var progressDialog: AlertDialog? = null // Profesyonel yükleme dialoğu
     private var adapter: StickerAdapter? = null
+    private var isPackReady = false // Çıkartmalar yüklendi mi kontrolü
+    private lateinit var loadingContainer: LinearLayout
 
     override fun onCreate(s: Bundle?) {
         super.onCreate(s)
@@ -113,6 +116,7 @@ class DetailsActivity : AppCompatActivity() {
 
     private fun setupUI(pack: Pack) {
         currentPack = pack
+        isPackReady = false // Reset state when setting up new pack
 
         // Görüntülenme sayısını artır (Firebase'e yaz)
         StickerRepository.incrementViewCount(pack.id, pack.isPremium)
@@ -128,6 +132,11 @@ class DetailsActivity : AppCompatActivity() {
         btnGridDeleteMode = findViewById(R.id.btnGridDeleteMode)
         btnConfirmDelete = findViewById(R.id.btnConfirmDelete)
         installedIcon = findViewById(R.id.installedIcon)
+        loadingContainer = findViewById(R.id.loadingContainer)
+
+        // Başlangıçta buton disabled ve loading göster
+        btnAction.isEnabled = false
+        showLoadingState(true)
 
         val rv = findViewById<RecyclerView>(R.id.rv)
         rv.layoutManager = GridLayoutManager(this, 3)
@@ -172,7 +181,16 @@ class DetailsActivity : AppCompatActivity() {
         rv.adapter = adapter
 
         // PERFORMANS: Arka planda sticker'ları önceden indir (WhatsApp'a ekleme hızlansın)
-        downloadStickersToCache(pack, adapter!!)
+        downloadStickersToCache(pack, adapter!!) { success ->
+            isPackReady = success
+            showLoadingState(false)
+            btnAction.isEnabled = success
+
+            if (!success) {
+                // Yükleme başarısız olursa kullanıcıya bildir
+                Toast.makeText(this@DetailsActivity, R.string.stickers_load_failed, Toast.LENGTH_SHORT).show()
+            }
+        }
 
         // Butonları ayarla
         setupButtons(pack, hasAccess)
@@ -197,6 +215,22 @@ class DetailsActivity : AppCompatActivity() {
             selectedIndices.clear()
             findViewById<android.widget.TextView>(R.id.name).text = currentPack?.name
             btnConfirmDelete.visibility = View.GONE
+        }
+    }
+
+    /**
+     * Loading state'i göster/gizle
+     * @param isLoading true ise loading göster, false ise gizle
+     */
+    private fun showLoadingState(isLoading: Boolean) {
+        if (!::loadingContainer.isInitialized || !::btnAction.isInitialized) return
+
+        if (isLoading) {
+            loadingContainer.visibility = View.VISIBLE
+            btnAction.visibility = View.GONE
+        } else {
+            loadingContainer.visibility = View.GONE
+            // btnAction visibility'si setupButtons tarafından kontrol edilecek
         }
     }
 
@@ -270,23 +304,38 @@ class DetailsActivity : AppCompatActivity() {
             .show()
     }
 
-    private fun downloadStickersToCache(pack: Pack, adapter: StickerAdapter) {
+    /**
+     * Çıkartmaları cache'e indir
+     * @param pack Paket
+     * @param adapter Adapter
+     * @param onComplete İndirme tamamlandığında çağrılacak callback (başarılı mı?)
+     */
+    private fun downloadStickersToCache(pack: Pack, adapter: StickerAdapter, onComplete: ((Boolean) -> Unit)? = null) {
         // URL'ler varsa arka planda tümünü paralel indir
         if (pack.stickers.any { it.url.isNotEmpty() }) {
             lifecycleScope.launch {
-                withContext(Dispatchers.IO) {
-                    // Tüm çıkartmaları paralel olarak tek seferde indir
-                    kotlinx.coroutines.coroutineScope {
-                        pack.stickers.map { sticker ->
-                            async {
-                                StickerRepository.downloadStickerToCache(this@DetailsActivity, pack.id, sticker.file, pack.storagePath)
-                            }
-                        }.awaitAll()
+                try {
+                    withContext(Dispatchers.IO) {
+                        // Tüm çıkartmaları paralel olarak tek seferde indir
+                        kotlinx.coroutines.coroutineScope {
+                            pack.stickers.map { sticker ->
+                                async {
+                                    StickerRepository.downloadStickerToCache(this@DetailsActivity, pack.id, sticker.file, pack.storagePath)
+                                }
+                            }.awaitAll()
+                        }
                     }
+                    // Tamamlandığında bir kez güncelle
+                    adapter.notifyDataSetChanged()
+                    onComplete?.invoke(true)
+                } catch (e: Exception) {
+                    android.util.Log.e("DetailsActivity", "Error downloading stickers to cache: ${e.message}", e)
+                    onComplete?.invoke(false)
                 }
-                // Tamamlandığında bir kez güncelle
-                adapter.notifyDataSetChanged()
             }
+        } else {
+            // URL yoksa (custom pack veya local pack), zaten hazır
+            onComplete?.invoke(true)
         }
     }
 
@@ -744,27 +793,76 @@ class DetailsActivity : AppCompatActivity() {
 
     private fun removeFromWhatsApp() {
         currentPack?.let { pack ->
-            // WhatsApp'a ENABLE intent gönder - zaten yüklü paketler için "Kaldır" seçeneği gösterir
-            val intent = Intent().apply {
-                action = "com.whatsapp.intent.action.ENABLE_STICKER_PACK"
-                putExtra("sticker_pack_id", pack.id)
-                putExtra("sticker_pack_authority", "${packageName}.stickers")
-                putExtra("sticker_pack_name", pack.name)
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            }
+            // Önce bilgilendirme dialog'u göster
+            androidx.appcompat.app.AlertDialog.Builder(this)
+                .setTitle(R.string.remove_instructions_title)
+                .setMessage(R.string.remove_instructions_message)
+                .setPositiveButton(R.string.go_to_whatsapp) { _, _ ->
+                    launchWhatsAppRemove(pack)
+                }
+                .setNegativeButton(R.string.cancel, null)
+                .show()
+        }
+    }
 
+    /**
+     * WhatsApp'a kaldırma intent'i gönder
+     */
+    private fun launchWhatsAppRemove(pack: Pack) {
+        val intent = Intent().apply {
+            action = "com.whatsapp.intent.action.ENABLE_STICKER_PACK"
+            putExtra("sticker_pack_id", pack.id)
+            putExtra("sticker_pack_authority", "${packageName}.stickers")
+            putExtra("sticker_pack_name", pack.name)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+
+        try {
+            startActivityForResult(intent, REQUEST_REMOVE)
+        } catch (e: ActivityNotFoundException) {
+            // WhatsApp Business dene
             try {
+                intent.setPackage("com.whatsapp.w4b")
                 startActivityForResult(intent, REQUEST_REMOVE)
-            } catch (e: Exception) {
-                // WhatsApp Business dene
+            } catch (e2: ActivityNotFoundException) {
+                showWhatsAppNotAvailableDialog()
+            }
+        } catch (e: SecurityException) {
+            // WhatsApp'a erişim engellendi
+            showWhatsAppNotAvailableDialog()
+        } catch (e: Exception) {
+            // Diğer hatalar
+            Toast.makeText(this, getString(R.string.whatsapp_error_detailed, e.message), Toast.LENGTH_LONG).show()
+        }
+    }
+
+    /**
+     * WhatsApp kullanılamıyor dialog'u göster
+     */
+    private fun showWhatsAppNotAvailableDialog() {
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle(R.string.whatsapp_not_available_title)
+            .setMessage(R.string.whatsapp_not_available_message)
+            .setPositiveButton(R.string.play_store) { _, _ ->
                 try {
-                    intent.setPackage("com.whatsapp.w4b")
-                    startActivityForResult(intent, REQUEST_REMOVE)
-                } catch (e2: Exception) {
-                    Toast.makeText(this, R.string.whatsapp_not_installed, Toast.LENGTH_SHORT).show()
+                    startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse("market://details?id=com.whatsapp")))
+                } catch (e: Exception) {
+                    startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://play.google.com/store/apps/details?id=com.whatsapp")))
                 }
             }
-        }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
+    }
+
+    /**
+     * Paket hâlâ yüklü uyarısı göster
+     */
+    private fun showPackStillInstalledWarning() {
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle(R.string.pack_still_installed_title)
+            .setMessage(R.string.pack_still_installed_message)
+            .setPositiveButton(R.string.ok, null)
+            .show()
     }
 
     private fun downloadAndAddToWhatsApp(pack: Pack) {
@@ -805,18 +903,35 @@ class DetailsActivity : AppCompatActivity() {
     }
 
     private fun sendToWhatsApp(pack: Pack) {
+        val intent = Intent().apply {
+            action = "com.whatsapp.intent.action.ENABLE_STICKER_PACK"
+            putExtra("sticker_pack_id", pack.id)
+            putExtra("sticker_pack_authority", "${packageName}.stickers")
+            putExtra("sticker_pack_name", pack.name)
+            // KRITIK: WhatsApp'ın provider'dan okuyabilmesi için izin ver
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+
         try {
-            val i = Intent().apply {
-                action = "com.whatsapp.intent.action.ENABLE_STICKER_PACK"
-                putExtra("sticker_pack_id", pack.id)
-                putExtra("sticker_pack_authority", "${packageName}.stickers")
-                putExtra("sticker_pack_name", pack.name)
-                // KRITIK: WhatsApp'ın provider'dan okuyabilmesi için izin ver
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            startActivityForResult(intent, REQUEST_ADD)
+        } catch (e: ActivityNotFoundException) {
+            // WhatsApp yok, Business dene
+            try {
+                intent.setPackage("com.whatsapp.w4b")
+                startActivityForResult(intent, REQUEST_ADD)
+            } catch (e2: ActivityNotFoundException) {
+                showWhatsAppNotAvailableDialog()
+                btnAction.isEnabled = true
+                updateButton()
             }
-            startActivityForResult(i, REQUEST_ADD)
+        } catch (e: SecurityException) {
+            // WhatsApp'a erişim engellendi (hesap yok veya izin sorunu)
+            showWhatsAppNotAvailableDialog()
+            btnAction.isEnabled = true
+            updateButton()
         } catch (e: Exception) {
-            Toast.makeText(this, R.string.whatsapp_not_installed, Toast.LENGTH_SHORT).show()
+            // Diğer beklenmedik hatalar
+            Toast.makeText(this, getString(R.string.whatsapp_error_detailed, e.message), Toast.LENGTH_LONG).show()
             btnAction.isEnabled = true
             updateButton()
         }
@@ -827,7 +942,7 @@ class DetailsActivity : AppCompatActivity() {
         btnAction.isEnabled = true
 
         when (req) {
-            REQUEST_ADD, REQUEST_REMOVE -> {
+            REQUEST_ADD -> {
                 // WhatsApp'tan döndükten sonra gerçek durumu kontrol et
                 lifecycleScope.launch {
                     val isWhitelisted = withContext(Dispatchers.IO) {
@@ -858,7 +973,26 @@ class DetailsActivity : AppCompatActivity() {
                             }
                         }
                     } else if (!isWhitelisted && wasInstalled) {
-                        // Kaldırıldı
+                        // Kaldırıldı (kullanıcı WhatsApp'tan kaldırmış olabilir)
+                        PreferencesHelper.removeInstalledPack(this@DetailsActivity, packId)
+                        Toast.makeText(this@DetailsActivity, R.string.pack_removed_from_whatsapp, Toast.LENGTH_SHORT).show()
+                    }
+
+                    updateButton()
+                }
+            }
+            REQUEST_REMOVE -> {
+                // WhatsApp'tan kaldırma işlemi sonrası kontrol
+                lifecycleScope.launch {
+                    val isStillWhitelisted = withContext(Dispatchers.IO) {
+                        WhitelistCheck.isWhitelisted(this@DetailsActivity, packId)
+                    }
+
+                    if (isStillWhitelisted) {
+                        // Paket hâlâ yüklü - kullanıcı kaldırmamış veya iptal etmiş
+                        showPackStillInstalledWarning()
+                    } else {
+                        // Başarıyla kaldırıldı
                         PreferencesHelper.removeInstalledPack(this@DetailsActivity, packId)
                         Toast.makeText(this@DetailsActivity, R.string.pack_removed_from_whatsapp, Toast.LENGTH_SHORT).show()
                     }

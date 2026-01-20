@@ -5,8 +5,10 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.graphics.BitmapFactory
 import android.os.Build
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 
@@ -50,13 +52,30 @@ class StickyMessagingService : FirebaseMessagingService() {
             PendingIntent.FLAG_IMMUTABLE
         )
 
+        // Süslü başlık ve mesaj oluştur
+        val decoratedTitle = "🎉 $title ✨"
+        val decoratedBody = "🌟 $body\n\n💫 Hemen keşfet ve arkadaşlarınla paylaş!"
+
+        // Büyük ikon için bitmap
+        val largeIcon = BitmapFactory.decodeResource(resources, R.mipmap.ic_launcher)
+
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle(title)
+            .setLargeIcon(largeIcon)
+            .setContentTitle(decoratedTitle)
             .setContentText(body)
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setStyle(
+                NotificationCompat.BigTextStyle()
+                    .bigText(decoratedBody)
+                    .setBigContentTitle(decoratedTitle)
+                    .setSummaryText("Sticky Stickers")
+            )
+            .setColor(ContextCompat.getColor(this, R.color.primary))
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)
+            .setDefaults(NotificationCompat.DEFAULT_ALL)
+            .setCategory(NotificationCompat.CATEGORY_PROMO)
             .build()
 
         val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -68,9 +87,13 @@ class StickyMessagingService : FirebaseMessagingService() {
             val channel = NotificationChannel(
                 CHANNEL_ID,
                 CHANNEL_NAME,
-                NotificationManager.IMPORTANCE_DEFAULT
+                NotificationManager.IMPORTANCE_HIGH
             ).apply {
                 description = "Yeni sticker paketleri hakkında bildirimler"
+                enableLights(true)
+                lightColor = ContextCompat.getColor(this@StickyMessagingService, R.color.primary)
+                enableVibration(true)
+                vibrationPattern = longArrayOf(0, 250, 250, 250)
             }
 
             val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager

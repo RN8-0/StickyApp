@@ -13,6 +13,8 @@ object PreferencesHelper {
     private const val KEY_PREMIUM_PROMO_SHOWN = "premium_promo_shown"
     private const val KEY_FAVORITE_PACKS = "favorite_packs"
     private const val KEY_SEARCH_HISTORY = "search_history"
+    private const val KEY_FIRST_LAUNCH = "is_first_launch"
+    private const val KEY_NOTIFICATION_PERMISSION_ASKED = "notification_permission_asked"
 
     private fun getPrefs(context: Context): SharedPreferences {
         return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -34,6 +36,23 @@ object PreferencesHelper {
 
     fun setNotificationsEnabled(context: Context, enabled: Boolean) {
         getPrefs(context).edit().putBoolean(KEY_NOTIFICATIONS, enabled).apply()
+    }
+
+    // First Launch / İlk Açılış
+    fun isFirstLaunch(context: Context): Boolean {
+        return getPrefs(context).getBoolean(KEY_FIRST_LAUNCH, true)
+    }
+
+    fun setFirstLaunchComplete(context: Context) {
+        getPrefs(context).edit().putBoolean(KEY_FIRST_LAUNCH, false).apply()
+    }
+
+    fun wasNotificationPermissionAsked(context: Context): Boolean {
+        return getPrefs(context).getBoolean(KEY_NOTIFICATION_PERMISSION_ASKED, false)
+    }
+
+    fun setNotificationPermissionAsked(context: Context) {
+        getPrefs(context).edit().putBoolean(KEY_NOTIFICATION_PERMISSION_ASKED, true).apply()
     }
 
     // Installed Packs

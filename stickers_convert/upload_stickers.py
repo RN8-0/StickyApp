@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
-Sticly - Sticker Yonetim Paneli
-================================
+Sticly - Sticker Yonetim Paneli v3.0
+=====================================
 Google Drive entegrasyonlu, menu tabanli sticker yonetim araci.
 
 Ozellikler:
 - Google Drive'dan sticker cekme/yukleme
 - Firebase Storage ve Firestore senkronizasyonu
-- Tray (kapak) resmi guncelleme
+- Tray (kapak) resmi guncelleme ve arka plan silme
 - Istatistik goruntuleme
 - GitHub senkronizasyonu
 """
@@ -116,6 +116,7 @@ import json
 import hashlib
 import tempfile
 import shutil
+import random
 from datetime import datetime
 from io import BytesIO
 import pickle
@@ -131,7 +132,7 @@ LOGO = """
 ╚════██║   ██║   ██║██║     ██║    ╚██╔╝
 ███████║   ██║   ██║╚██████╗███████╗██║
 ╚══════╝   ╚═╝   ╚═╝ ╚═════╝╚══════╝╚═╝
-        Sticker Yonetim Paneli v2.0
+        Sticker Yonetim Paneli v3.0
 """
 
 MENU = """
@@ -149,6 +150,9 @@ MENU = """
 ╠════════════════════════════════════════════════════════════╣
 ║  [8] Yeni Sticker Paketi Ekle                              ║
 ║  [9] Sticker Paketi Sil                                    ║
+╠════════════════════════════════════════════════════════════╣
+║  [C] Paket Kategorisini Degistir                           ║
+║  [R] Indirme Sayilarini Sifirla                            ║
 ╠════════════════════════════════════════════════════════════╣
 ║  [F] Tam Senkronizasyon (Tum islemler)                     ║
 ║  [0] Cikis                                                 ║
@@ -206,7 +210,7 @@ _firebase_initialized = False
 _bucket = None
 _db = None
 _drive_service = None
-_rembg_available = None
+_rembg_session = None
 
 # ============================================================================
 # YARDIMCI FONKSIYONLAR
@@ -233,6 +237,14 @@ def print_warning(msg):
 
 def print_info(msg):
     print(f" [*] {msg}")
+
+def print_progress(current, total, prefix=""):
+    """Ilerleme goster"""
+    percent = int((current / total) * 100) if total > 0 else 0
+    bar_length = 30
+    filled = int(bar_length * current / total) if total > 0 else 0
+    bar = "█" * filled + "░" * (bar_length - filled)
+    print(f"\r {prefix}[{bar}] {percent}% ({current}/{total})", end="", flush=True)
 
 def wait_enter():
     """Enter'a basilmasini bekle"""
@@ -269,18 +281,29 @@ def check_ffmpeg():
     except (subprocess.CalledProcessError, FileNotFoundError):
         return False
 
+def get_rembg_session():
+    """rembg oturumunu al veya olustur"""
+    global _rembg_session
+    if _rembg_session is not None:
+        return _rembg_session
+    try:
+        from rembg import new_session
+        _rembg_session = new_session("u2net")
+        return _rembg_session
+    except ImportError:
+        return None
+    except Exception as e:
+        print_warning(f"rembg oturumu olusturulamadi: {e}")
+        return None
+
 def check_rembg():
     """rembg kurulu mu kontrol et"""
-    global _rembg_available
-    if _rembg_available is not None:
-        return _rembg_available
     try:
         from rembg import remove as remove_bg
         from PIL import Image
-        _rembg_available = True
+        return True
     except ImportError:
-        _rembg_available = False
-    return _rembg_available
+        return False
 
 # ============================================================================
 # GOOGLE DRIVE ENTEGRASYONU
@@ -473,6 +496,84 @@ def delete_from_storage(bucket, remote_path: str):
         return False
 
 # ============================================================================
+# ARKA PLAN SILME FONKSIYONLARI
+# ============================================================================
+
+def has_transparent_background(img) -> bool:
+    """Resmin zaten seffaf arka plani olup olmadigini kontrol et"""
+    try:
+        if img.mode != 'RGBA':
+            return False
+
+        # Alfa kanalini al
+        alpha = img.split()[-1]
+        pixels = list(alpha.getdata())
+        total_pixels = len(pixels)
+
+        # Tamamen seffaf pikselleri say (alfa = 0)
+        fully_transparent = sum(1 for p in pixels if p == 0)
+        fully_transparent_ratio = fully_transparent / total_pixels
+
+        # Yari seffaf pikselleri say (alfa < 200)
+        semi_transparent = sum(1 for p in pixels if p < 200)
+        semi_transparent_ratio = semi_transparent / total_pixels
+
+        # %3'ten fazla tamamen seffaf piksel VEYA %8'den fazla yari seffaf piksel varsa
+        # arka plan zaten silinmis demektir
+        if fully_transparent_ratio > 0.03:
+            return True
+        if semi_transparent_ratio > 0.08:
+            return True
+
+        return False
+    except:
+        return False
+
+def remove_background_from_image(input_path: Path, force: bool = False) -> Path:
+    """Resimden arka plani sil (eger zaten silinmemisse)
+
+    Args:
+        input_path: Girdi dosyasi yolu
+        force: True ise arka plan zaten silinmis olsa bile tekrar sil
+
+    Returns:
+        Islenmis dosyanin yolu (gecici dosya veya orijinal)
+    """
+    if not check_rembg() or not REMOVE_BACKGROUND:
+        return input_path
+
+    try:
+        from rembg import remove as remove_bg
+        from PIL import Image
+
+        with Image.open(input_path) as img:
+            # RGBA'ya cevir
+            if img.mode != 'RGBA':
+                img = img.convert('RGBA')
+
+            # Arka plan zaten silinmis mi kontrol et (force degilse)
+            if not force and has_transparent_background(img):
+                print_info(f"Arka plan zaten silinmis: {input_path.name}")
+                return input_path
+
+            # Arka plani sil
+            print_info(f"Arka plan siliniyor: {input_path.name}")
+            session = get_rembg_session()
+            if session:
+                output = remove_bg(img, session=session)
+            else:
+                output = remove_bg(img)
+
+            # Gecici dosyaya kaydet
+            temp_file = tempfile.NamedTemporaryFile(suffix='.png', delete=False)
+            output.save(temp_file.name, 'PNG')
+            return Path(temp_file.name)
+
+    except Exception as e:
+        print_warning(f"Arka plan silme hatasi: {e}")
+        return input_path
+
+# ============================================================================
 # DONUSTURME FONKSIYONLARI
 # ============================================================================
 
@@ -529,63 +630,6 @@ def get_image_dimensions(file_path: Path) -> tuple:
             return img.size
     except:
         return (0, 0)
-
-def has_transparent_background(img) -> bool:
-    """Resmin zaten seffaf arka plani olup olmadigini kontrol et"""
-    try:
-        if img.mode != 'RGBA':
-            return False
-
-        # Alfa kanalini al
-        alpha = img.split()[-1]
-        pixels = list(alpha.getdata())
-        total_pixels = len(pixels)
-
-        # Tamamen seffaf pikselleri say (alfa = 0)
-        fully_transparent = sum(1 for p in pixels if p == 0)
-        fully_transparent_ratio = fully_transparent / total_pixels
-
-        # Yari seffaf pikselleri say (alfa < 200)
-        semi_transparent = sum(1 for p in pixels if p < 200)
-        semi_transparent_ratio = semi_transparent / total_pixels
-
-        # %3'ten fazla tamamen seffaf piksel VEYA %8'den fazla yari seffaf piksel varsa
-        # arka plan zaten silinmis demektir
-        if fully_transparent_ratio > 0.03:
-            return True
-        if semi_transparent_ratio > 0.08:
-            return True
-
-        return False
-    except:
-        return False
-
-def remove_background_from_image(input_path: Path) -> Path:
-    """Resimden arka plani sil (eger zaten silinmemisse)"""
-    if not check_rembg() or not REMOVE_BACKGROUND:
-        return input_path
-
-    try:
-        from rembg import remove as remove_bg
-        from PIL import Image
-
-        with Image.open(input_path) as img:
-            # RGBA'ya cevir
-            if img.mode != 'RGBA':
-                img = img.convert('RGBA')
-            
-            # Arka plan zaten silinmis mi kontrol et
-            if has_transparent_background(img):
-                print_info(f"Arka plan zaten silinmis, atlaniyor: {input_path.name}")
-                return input_path
-            
-            output = remove_bg(img)
-            temp_file = tempfile.NamedTemporaryFile(suffix='.png', delete=False)
-            output.save(temp_file.name, 'PNG')
-            return Path(temp_file.name)
-    except Exception as e:
-        print_warning(f"Arka plan silme hatasi: {e}")
-        return input_path
 
 def convert_video_to_sticker(input_path: Path, output_path: Path) -> bool:
     """Video/GIF'i WebP'ye donustur"""
@@ -691,8 +735,14 @@ def convert_to_sticker(input_path: Path, output_path: Path) -> tuple:
 
     return False, False
 
-def create_tray_image(input_path: Path, output_path: Path) -> bool:
-    """Tray image olustur"""
+def create_tray_image(input_path: Path, output_path: Path, force_bg_removal: bool = True) -> bool:
+    """Tray image olustur (96x96, arka plan silinmis)
+
+    Args:
+        input_path: Kaynak dosya yolu
+        output_path: Hedef dosya yolu
+        force_bg_removal: True ise arka plan mutlaka silinir
+    """
     temp_path = None
     try:
         from PIL import Image
@@ -700,48 +750,46 @@ def create_tray_image(input_path: Path, output_path: Path) -> bool:
         file_type = get_file_type(input_path)
         processed_path = input_path
 
-        # Eger output dosyasi zaten varsa ve arka plani silinmisse, atla
-        if output_path.exists():
-            try:
-                with Image.open(output_path) as existing_img:
-                    if existing_img.mode == 'RGBA' or has_transparent_background(existing_img.convert('RGBA')):
-                        print_info(f"Tray zaten islenmiş, atlanıyor: {output_path.name}")
-                        return True
-            except:
-                pass
-
-        # Kaynak dosyanin arka plani zaten silinmis mi kontrol et
+        # Resim dosyasi ise arka plan sil
         if file_type == 'image':
-            try:
-                with Image.open(input_path) as src_img:
-                    src_rgba = src_img.convert('RGBA') if src_img.mode != 'RGBA' else src_img
-                    if has_transparent_background(src_rgba):
-                        print_info(f"Kaynak arka plani zaten silinmis: {input_path.name}")
-                        # Arka plan silme yapmadan direkt donustur
-                        processed_path = input_path
-                    else:
-                        # Arka plan sil
-                        processed_path = remove_background_from_image(input_path)
-                        if processed_path != input_path:
-                            temp_path = processed_path
-            except:
-                processed_path = remove_background_from_image(input_path)
-                if processed_path != input_path:
-                    temp_path = processed_path
+            processed_path = remove_background_from_image(input_path, force=force_bg_removal)
+            if processed_path != input_path:
+                temp_path = processed_path
 
+        # Video/GIF ise ilk kareyi al ve arka plan sil
+        elif file_type in ['video', 'animated_gif']:
+            # Ilk kareyi PNG olarak cikart
+            frame_temp = tempfile.NamedTemporaryFile(suffix='.png', delete=False)
+            cmd = [
+                "ffmpeg", "-y", "-i", str(input_path),
+                "-vframes", "1",
+                "-vf", "scale=512:512:force_original_aspect_ratio=decrease,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=0x00000000",
+                str(frame_temp.name)
+            ]
+            subprocess.run(cmd, capture_output=True, check=True)
+
+            # Arka plani sil
+            processed_path = remove_background_from_image(Path(frame_temp.name), force=force_bg_removal)
+            if processed_path != Path(frame_temp.name):
+                temp_path = processed_path
+                os.unlink(frame_temp.name)
+            else:
+                temp_path = Path(frame_temp.name)
+                processed_path = temp_path
+
+        # 96x96'ya kucult ve WebP olarak kaydet
         cmd = [
             "ffmpeg", "-y", "-i", str(processed_path),
             "-vf", f"scale={TRAY_SIZE}:{TRAY_SIZE}:force_original_aspect_ratio=decrease,"
                    f"pad={TRAY_SIZE}:{TRAY_SIZE}:(ow-iw)/2:(oh-ih)/2:color=0x00000000",
-            "-frames:v", "1" if file_type in ['video', 'animated_gif'] else "",
             "-c:v", "libwebp",
             str(output_path)
         ]
-        # -frames:v bos ise kaldir
-        cmd = [c for c in cmd if c]
         subprocess.run(cmd, capture_output=True, check=True)
         return True
-    except subprocess.CalledProcessError:
+
+    except Exception as e:
+        print_warning(f"Tray olusturma hatasi: {e}")
         return False
     finally:
         if temp_path and temp_path.exists():
@@ -771,11 +819,18 @@ def get_sticker_files(pack_dir: Path) -> list:
 # ============================================================================
 
 def menu_update_trays():
-    """Tray fotograflarini guncelle"""
+    """Tray fotograflarini guncelle - ARKA PLAN SILME ILE"""
     print_header("TRAY FOTOGRAFLARINI GUNCELLE")
 
     if not check_rembg():
         print_warning("rembg yuklu degil - arka plan silme devre disi")
+        print_info("Kurmak icin: pip install rembg")
+
+    if not check_ffmpeg():
+        print_error("FFmpeg yuklu degil!")
+        print("   Calistir: sudo apt install ffmpeg")
+        wait_enter()
+        return
 
     bucket, db = init_firebase()
     if not bucket:
@@ -796,12 +851,28 @@ def menu_update_trays():
         wait_enter()
         return
 
+    print(f"\n {len(all_pack_dirs)} paket bulundu.")
+    print("\n Secenekler:")
+    print("   [1] Sadece degisenleri guncelle (Hizli)")
+    print("   [2] Tum tray'leri yeniden olustur (Yavas ama kesin)")
+    print("\n Seciminiz (varsayilan=1): ", end="")
+
+    choice = input().strip()
+    force_all = (choice == "2")
+
+    if force_all:
+        print_warning("TUM tray'ler yeniden olusturulacak!")
+
     updated = 0
-    for pack_dir, is_premium in all_pack_dirs:
+    skipped = 0
+    failed = 0
+
+    for idx, (pack_dir, is_premium) in enumerate(all_pack_dirs, 1):
         pack_name = pack_dir.name
         pack_id = pack_name.lower().replace(" ", "_").replace("-", "_")
         storage_folder = "premium_stickers" if is_premium else "stickers"
 
+        # Tray kaynagini bul
         custom_tray = find_custom_tray(pack_dir)
         if not custom_tray:
             # Ilk sticker'i kullan
@@ -810,6 +881,8 @@ def menu_update_trays():
                 custom_tray = files[0]
 
         if not custom_tray:
+            print(f"   {pack_name}: ATLANDI (dosya yok)")
+            skipped += 1
             continue
 
         pack_output = OUTPUT_DIR / pack_id
@@ -823,13 +896,17 @@ def menu_update_trays():
         if isinstance(cached, str):
             cached = {"url": cached, "hash": ""}
 
-        if cached.get("hash") == file_hash and tray_path.exists():
-            print(f"   {pack_name}: Atlanildi (degismemis)")
+        # Cache kontrolu (force_all degilse)
+        if not force_all and cached.get("hash") == file_hash and tray_path.exists():
+            print(f"   {pack_name}: ATLANDI (degismemis)")
+            skipped += 1
             continue
 
-        print(f"   {pack_name}: Guncelleniyor...", end=" ")
+        print(f"\n [{idx}/{len(all_pack_dirs)}] {pack_name}:")
+        print(f"      Kaynak: {custom_tray.name}")
+        print(f"      Arka plan siliniyor ve tray olusturuluyor...", end=" ")
 
-        if create_tray_image(custom_tray, tray_path):
+        if create_tray_image(custom_tray, tray_path, force_bg_removal=True):
             remote_path = f"{storage_folder}/{pack_id}/tray.webp"
             tray_url = upload_to_storage(bucket, tray_path, remote_path, force_refresh=True)
 
@@ -847,12 +924,18 @@ def menu_update_trays():
                 pass
 
             print("OK")
+            print(f"      URL: {tray_url[:60]}...")
             updated += 1
         else:
             print("HATA")
+            failed += 1
 
     save_cache(cache)
-    print_success(f"{updated} tray guncellendi")
+
+    print("\n" + "=" * 50)
+    print(f" SONUC: {updated} guncellendi, {skipped} atlandi, {failed} hata")
+    print("=" * 50)
+
     wait_enter()
 
 def menu_update_stickers():
@@ -1033,7 +1116,7 @@ def process_single_pack(pack_dir: Path, bucket, db, cache: dict, is_premium: boo
     if cached_tray.get("hash") == source_hash and tray_path.exists():
         tray_url = cached_tray.get("url", "")
     else:
-        if create_tray_image(tray_source, tray_path):
+        if create_tray_image(tray_source, tray_path, force_bg_removal=True):
             remote_path = f"{storage_folder}/{pack_id}/tray.webp"
             tray_url = upload_to_storage(bucket, tray_path, remote_path, force_refresh=True)
             if "tray" not in cache:
@@ -1047,6 +1130,11 @@ def process_single_pack(pack_dir: Path, bucket, db, cache: dict, is_premium: boo
 
     existing_doc = db.collection(collection_name).document(pack_id).get()
     existing_data = existing_doc.to_dict() if existing_doc.exists else {}
+
+    # Yeni paket icin display_base olustur (500-600 arasi rastgele)
+    display_base = existing_data.get("display_base")
+    if display_base is None:
+        display_base = random.randint(500, 600)
 
     pack_data = {
         "name": pack_name.replace("_", " ").replace("-", " ").title(),
@@ -1065,7 +1153,10 @@ def process_single_pack(pack_dir: Path, bucket, db, cache: dict, is_premium: boo
         "created_at": existing_data.get("created_at", datetime.now().strftime("%Y-%m-%d")),
         "sticker_count": len(stickers),
         "category": existing_data.get("category", ""),
-        "download_count": existing_data.get("download_count", 0)
+        "download_count": existing_data.get("download_count", 0),  # Gercek indirme sayisi
+        "display_base": display_base,  # Goruntuleme icin taban deger (500-600)
+        "view_count": existing_data.get("view_count", 0),
+        "favorite_count": existing_data.get("favorite_count", 0)
     }
 
     db.collection(collection_name).document(pack_id).set(pack_data)
@@ -1133,6 +1224,145 @@ def menu_update_pack_names():
     except ValueError:
         print_error("Gecersiz giris!")
 
+    wait_enter()
+
+def menu_change_category():
+    """Paket kategorisini degistir"""
+    print_header("PAKET KATEGORISINI DEGISTIR")
+
+    bucket, db = init_firebase()
+    if not db:
+        wait_enter()
+        return
+
+    categories = [
+        ("", "Kategorisiz"),
+        ("komik", "Komik"),
+        ("romantik", "Romantik"),
+        ("spor", "Spor"),
+        ("dizi_film", "Dizi/Film"),
+        ("hayvanlar", "Hayvanlar"),
+        ("memeler", "Memeler"),
+        ("gunluk", "Gunluk"),
+        ("ozel_gun", "Ozel Gun"),
+    ]
+
+    print("\n Mevcut paketler:")
+    print("-" * 50)
+
+    packs = []
+
+    # Normal paketler
+    for doc in db.collection("stickers").stream():
+        data = doc.to_dict()
+        packs.append((doc.id, data.get("name", doc.id), data.get("category", ""), "stickers"))
+
+    # Premium paketler
+    for doc in db.collection("premium_stickers").stream():
+        data = doc.to_dict()
+        packs.append((doc.id, data.get("name", doc.id), data.get("category", ""), "premium_stickers"))
+
+    if not packs:
+        print_warning("Paket bulunamadi!")
+        wait_enter()
+        return
+
+    for i, (pack_id, name, cat, collection) in enumerate(packs, 1):
+        tag = "[P]" if collection == "premium_stickers" else "[N]"
+        cat_name = next((c[1] for c in categories if c[0] == cat), cat or "Yok")
+        print(f"   {i}. {tag} {name} - Kategori: {cat_name}")
+
+    print("\n Degistirmek istediginiz paketin numarasini girin (0=iptal): ", end="")
+
+    try:
+        choice = int(input())
+        if choice == 0:
+            return
+        if choice < 1 or choice > len(packs):
+            print_error("Gecersiz secim!")
+            wait_enter()
+            return
+
+        pack_id, name, old_cat, collection = packs[choice - 1]
+
+        print(f"\n Paket: {name}")
+        print("\n Kategoriler:")
+        for i, (cat_id, cat_name) in enumerate(categories, 1):
+            marker = " <--" if cat_id == old_cat else ""
+            print(f"   {i}. {cat_name}{marker}")
+
+        print("\n Yeni kategori numarasi (0=iptal): ", end="")
+        cat_choice = int(input())
+
+        if cat_choice == 0:
+            return
+        if cat_choice < 1 or cat_choice > len(categories):
+            print_error("Gecersiz secim!")
+            wait_enter()
+            return
+
+        new_cat = categories[cat_choice - 1][0]
+        db.collection(collection).document(pack_id).update({"category": new_cat})
+        print_success(f"Kategori guncellendi: {categories[cat_choice - 1][1]}")
+
+    except ValueError:
+        print_error("Gecersiz giris!")
+
+    wait_enter()
+
+def menu_reset_download_counts():
+    """Indirme sayilarini sifirla"""
+    print_header("INDIRME SAYILARINI SIFIRLA")
+
+    print_warning("DIKKAT: Bu islem tum indirme sayilarini sifirlar!")
+    print("\n Secenekler:")
+    print("   [1] Sadece download_count'u sifirla (Gercek sayilar)")
+    print("   [2] display_base degerlerini yeniden olustur (500-600)")
+    print("   [3] Her ikisini de yap")
+    print("   [0] Iptal")
+    print("\n Seciminiz: ", end="")
+
+    choice = input().strip()
+
+    if choice == "0":
+        return
+
+    if choice not in ["1", "2", "3"]:
+        print_error("Gecersiz secim!")
+        wait_enter()
+        return
+
+    print("\n Onaylamak icin 'SIFIRLA' yazin: ", end="")
+    confirm = input().strip()
+
+    if confirm != "SIFIRLA":
+        print_info("Islem iptal edildi.")
+        wait_enter()
+        return
+
+    bucket, db = init_firebase()
+    if not db:
+        wait_enter()
+        return
+
+    updated = 0
+
+    for collection_name in ["stickers", "premium_stickers"]:
+        for doc in db.collection(collection_name).stream():
+            updates = {}
+
+            if choice in ["1", "3"]:
+                updates["download_count"] = 0
+
+            if choice in ["2", "3"]:
+                updates["display_base"] = random.randint(500, 600)
+
+            if updates:
+                db.collection(collection_name).document(doc.id).update(updates)
+                updated += 1
+                print(f"   {doc.id}: Guncellendi")
+
+    print_success(f"{updated} paket guncellendi")
     wait_enter()
 
 def menu_github_sync():
@@ -1215,6 +1445,7 @@ def menu_statistics():
             total_views += views
             favorites = data.get("favorite_count", 0)
             total_favorites += favorites
+            display_base = data.get("display_base", 0)
 
             if data.get("animated_sticker_pack"):
                 animated_packs += 1
@@ -1223,24 +1454,27 @@ def menu_statistics():
                 "id": doc.id,
                 "name": data.get("name", doc.id),
                 "downloads": downloads,
+                "display_base": display_base,
+                "display_total": downloads + display_base,
                 "views": views,
                 "favorites": favorites,
                 "stickers": sticker_count,
-                "premium": collection == "premium_stickers"
+                "premium": collection == "premium_stickers",
+                "category": data.get("category", "")
             })
 
     # Genel istatistikler
     print("\n GENEL ISTATISTIKLER")
     print("-" * 40)
-    print(f"   Toplam Paket      : {total_packs}")
-    print(f"   Toplam Sticker    : {total_stickers}")
-    print(f"   Animasyonlu Paket : {animated_packs}")
-    print(f"   Toplam Indirme    : {total_downloads}")
+    print(f"   Toplam Paket       : {total_packs}")
+    print(f"   Toplam Sticker     : {total_stickers}")
+    print(f"   Animasyonlu Paket  : {animated_packs}")
+    print(f"   Toplam Indirme     : {total_downloads} (gercek)")
     print(f"   Toplam Goruntulenme: {total_views}")
-    print(f"   Toplam Favori     : {total_favorites}")
+    print(f"   Toplam Favori      : {total_favorites}")
 
     # En populer paketler
-    print("\n EN COK INDIRILEN PAKETLER")
+    print("\n EN COK INDIRILEN PAKETLER (Gercek)")
     print("-" * 40)
     top_downloads = sorted(pack_stats, key=lambda x: x["downloads"], reverse=True)[:5]
     for i, p in enumerate(top_downloads, 1):
@@ -1254,21 +1488,14 @@ def menu_statistics():
         tag = "[P]" if p["premium"] else "[N]"
         print(f"   {i}. {tag} {p['name']}: {p['views']} goruntulenme")
 
-    print("\n EN COK FAVORILENEN PAKETLER")
-    print("-" * 40)
-    top_favorites = sorted(pack_stats, key=lambda x: x["favorites"], reverse=True)[:5]
-    for i, p in enumerate(top_favorites, 1):
-        tag = "[P]" if p["premium"] else "[N]"
-        print(f"   {i}. {tag} {p['name']}: {p['favorites']} favori")
-
     # Detayli tablo
     print("\n TUM PAKETLER (Detayli)")
-    print("=" * 85)
-    print(f" {'Paket Adi':<28} {'Tip':>4} {'Sticker':>8} {'Indirme':>9} {'Goru.':>8} {'Favori':>8}")
-    print("=" * 85)
+    print("=" * 95)
+    print(f" {'Paket Adi':<25} {'Tip':>4} {'Kat':>6} {'Sticker':>8} {'Gercek':>8} {'Gosterim':>9} {'Goru.':>8}")
+    print("=" * 95)
 
     # Sıralama seçeneği
-    print("\n Siralama: [1] Ada gore  [2] Indirmeye gore  [3] Goruntulenmeye gore  [4] Favoriye gore")
+    print("\n Siralama: [1] Ada gore  [2] Gercek indirmeye gore  [3] Goruntulenmeye gore")
     print(" Seciminiz (varsayilan=2): ", end="")
     sort_choice = input().strip()
 
@@ -1276,32 +1503,29 @@ def menu_statistics():
         sorted_packs = sorted(pack_stats, key=lambda x: x["name"].lower())
     elif sort_choice == "3":
         sorted_packs = sorted(pack_stats, key=lambda x: x["views"], reverse=True)
-    elif sort_choice == "4":
-        sorted_packs = sorted(pack_stats, key=lambda x: x["favorites"], reverse=True)
     else:
         sorted_packs = sorted(pack_stats, key=lambda x: x["downloads"], reverse=True)
 
-    print("\n" + "=" * 85)
-    print(f" {'Paket Adi':<28} {'Tip':>4} {'Sticker':>8} {'Indirme':>9} {'Goru.':>8} {'Favori':>8}")
-    print("-" * 85)
+    print("\n" + "=" * 95)
+    print(f" {'Paket Adi':<25} {'Tip':>4} {'Kat':>6} {'Sticker':>8} {'Gercek':>8} {'Gosterim':>9} {'Goru.':>8}")
+    print("-" * 95)
 
     for p in sorted_packs:
         tag = "P" if p["premium"] else "N"
-        name = p['name'][:26]
-        print(f" {name:<28} [{tag}] {p['stickers']:>8} {p['downloads']:>9} {p['views']:>8} {p['favorites']:>8}")
+        name = p['name'][:23]
+        cat = p['category'][:5] if p['category'] else "-"
+        print(f" {name:<25} [{tag}] {cat:>6} {p['stickers']:>8} {p['downloads']:>8} {p['display_total']:>9} {p['views']:>8}")
 
-    print("=" * 85)
-    print(f" {'TOPLAM':<28} {'':>4} {total_stickers:>8} {total_downloads:>9} {total_views:>8} {total_favorites:>8}")
-    print("=" * 85)
+    print("=" * 95)
 
-    # Ek bilgiler
+    # Aciklamalar
     print("\n ACIKLAMALAR")
     print("-" * 40)
     print("   [N] = Normal (ucretsiz) paket")
     print("   [P] = Premium (ucretli) paket")
-    print("   Indirme = WhatsApp'a ekleme sayisi")
+    print("   Gercek = Firebase'deki gercek indirme sayisi")
+    print("   Gosterim = Uygulamada gosterilen sayi (Gercek + Taban)")
     print("   Goru. = Paket detay sayfasi goruntulenme")
-    print("   Favori = Favorilere ekleme sayisi")
 
     wait_enter()
 
@@ -1403,13 +1627,13 @@ def menu_upload_to_drive():
                 continue
 
             print(f"\n [NORMAL] {pack_dir.name}", end=" ")
-            
+
             # Klasor Drive'da mevcut mu kontrol et
             if check_folder_exists_in_drive(service, pack_dir.name, main_folder_id):
                 print("- ATLANDI (mevcut)")
                 skipped_packs += 1
                 continue
-            
+
             print("- Yukleniyor...")
             folder_id = get_or_create_drive_folder(service, pack_dir.name, main_folder_id)
 
@@ -1422,7 +1646,7 @@ def menu_upload_to_drive():
                     print("OK")
                 except Exception as e:
                     print(f"HATA: {e}")
-            
+
             uploaded_packs += 1
 
     # Premium stickerlar
@@ -1433,13 +1657,13 @@ def menu_upload_to_drive():
 
             premium_folder_name = f"premium_{pack_dir.name}"
             print(f"\n [PREMIUM] {pack_dir.name}", end=" ")
-            
+
             # Klasor Drive'da mevcut mu kontrol et
             if check_folder_exists_in_drive(service, premium_folder_name, main_folder_id):
                 print("- ATLANDI (mevcut)")
                 skipped_packs += 1
                 continue
-            
+
             print("- Yukleniyor...")
             folder_id = get_or_create_drive_folder(service, premium_folder_name, main_folder_id)
 
@@ -1452,7 +1676,7 @@ def menu_upload_to_drive():
                     print("OK")
                 except Exception as e:
                     print(f"HATA: {e}")
-            
+
             uploaded_packs += 1
 
     print_success(f"{uploaded_packs} paket yuklendi, {skipped_packs} paket atlandi (zaten mevcut)")
@@ -1478,6 +1702,7 @@ def menu_add_new_pack():
  3. KAPAK RESMI (OPSIYONEL):
     - Klasore "tray.png" veya "tray.jpg" ekle
     - Yoksa ilk sticker kapak olarak kullanilir
+    - Arka plan otomatik silinir
 
  4. ISLEM SIRASI:
     a) Stickerlari yerel klasore koy
@@ -1757,7 +1982,7 @@ def main():
         print(" Seciminiz: ", end="")
 
         try:
-            choice = input().strip()
+            choice = input().strip().upper()
 
             if choice == "0":
                 clear_screen()
@@ -1781,7 +2006,11 @@ def main():
                 menu_add_new_pack()
             elif choice == "9":
                 menu_delete_pack()
-            elif choice.upper() == "F":
+            elif choice == "C":
+                menu_change_category()
+            elif choice == "R":
+                menu_reset_download_counts()
+            elif choice == "F":
                 menu_full_sync()
             else:
                 print_error("Gecersiz secim!")
@@ -1793,6 +2022,8 @@ def main():
             break
         except Exception as e:
             print_error(f"Beklenmeyen hata: {e}")
+            import traceback
+            traceback.print_exc()
             wait_enter()
 
 if __name__ == "__main__":

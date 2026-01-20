@@ -1,22 +1,27 @@
 @echo off
 chcp 65001 >nul
 REM =============================================================================
-REM STICKER YUKLEYICI - Otomatik Kurulum ve Calistirma (Windows)
+REM STICLY STICKER MANAGER - Otomatik Kurulum ve Calistirma (Windows)
 REM =============================================================================
 REM Bu script:
 REM 1. Gerekli bagimliliklari kontrol eder ve kurar
 REM 2. Python virtual environment olusturur
-REM 3. Stickerleri Firebase'e ve GitHub'a yukler
+REM 3. GUI uygulamasini baslatir (veya CLI'yi --cli parametresiyle)
 REM =============================================================================
 
-title Sticker Yukleyici
+title Sticly Sticker Manager
 
 cd /d "%~dp0"
 
 echo ============================================================
-echo    STICKER YUKLEYICI - Otomatik Kurulum
+echo    STICLY STICKER MANAGER - Otomatik Kurulum
 echo ============================================================
 echo.
+
+REM Parametre kontrolu
+set "MODE=gui"
+if "%1"=="--cli" set "MODE=cli"
+if "%1"=="-c" set "MODE=cli"
 
 REM Python kontrolu
 echo [1/5] Python kontrol ediliyor...
@@ -64,24 +69,39 @@ echo [4/5] Bagimliliklar kontrol ediliyor...
 REM Pip'i guncelle
 venv\Scripts\pip install --upgrade pip -q 2>nul
 
-REM Firebase admin kontrol et
-venv\Scripts\python -c "import firebase_admin" 2>nul
-if %errorlevel% neq 0 (
-    echo    firebase-admin yukleniyor...
-    venv\Scripts\pip install firebase-admin -q
-    echo    + firebase-admin yuklendi
+REM requirements.txt varsa onu kullan
+if exist "requirements.txt" (
+    echo    requirements.txt'den yukluyor...
+    venv\Scripts\pip install -r requirements.txt -q 2>nul
+    echo    + Bagimliliklar yuklendi
 ) else (
-    echo    + firebase-admin mevcut
-)
+    REM Manuel kurulum (eski uyumluluk icin)
+    venv\Scripts\python -c "import firebase_admin" 2>nul
+    if %errorlevel% neq 0 (
+        echo    firebase-admin yukleniyor...
+        venv\Scripts\pip install firebase-admin -q
+        echo    + firebase-admin yuklendi
+    ) else (
+        echo    + firebase-admin mevcut
+    )
 
-REM rembg kontrol et
-venv\Scripts\python -c "import rembg" 2>nul
-if %errorlevel% neq 0 (
-    echo    rembg yukleniyor (bu biraz surebilir)...
-    venv\Scripts\pip install "rembg[cpu]" -q
-    echo    + rembg yuklendi
-) else (
-    echo    + rembg mevcut
+    venv\Scripts\python -c "import rembg" 2>nul
+    if %errorlevel% neq 0 (
+        echo    rembg yukleniyor (bu biraz surebilir)...
+        venv\Scripts\pip install "rembg[cpu]" -q
+        echo    + rembg yuklendi
+    ) else (
+        echo    + rembg mevcut
+    )
+
+    venv\Scripts\python -c "import customtkinter" 2>nul
+    if %errorlevel% neq 0 (
+        echo    customtkinter yukleniyor...
+        venv\Scripts\pip install customtkinter -q
+        echo    + customtkinter yuklendi
+    ) else (
+        echo    + customtkinter mevcut
+    )
 )
 
 REM Firebase Admin SDK key kontrolu
@@ -89,30 +109,36 @@ echo [5/5] Firebase yapilandirmasi kontrol ediliyor...
 set "FIREBASE_KEY="
 for %%f in (*firebase-adminsdk*.json) do set "FIREBASE_KEY=%%f"
 if "%FIREBASE_KEY%"=="" (
-    echo    X Firebase Admin SDK anahtari bulunamadi!
+    echo    ! Firebase Admin SDK anahtari bulunamadi!
     echo.
+    echo    GUI baslatilacak ama Firebase islemleri calismayacak.
     echo    Anahtar dosyasini bu klasore koyun.
     echo.
-    echo    Dosyayi almak icin:
-    echo    1. https://console.firebase.google.com adresine gidin
-    echo    2. Proje Ayarlari - Hizmet Hesaplari
-    echo    3. 'Yeni Ozel Anahtar Olustur' tiklayin
-    echo    4. Indirilen JSON dosyasini bu klasore koyun
-    echo.
-    pause
-    exit /b 1
 ) else (
     echo    + Firebase anahtari bulundu
 )
 
 echo.
 echo ============================================================
-echo    KURULUM TAMAMLANDI - Sticker yukleyici baslatiliyor...
+if "%MODE%"=="gui" (
+    echo    STICLY GUI BASLATILIYOR...
+) else (
+    echo    STICLY CLI BASLATILIYOR...
+)
 echo ============================================================
 echo.
 
-REM Ana scripti calistir
-venv\Scripts\python upload_stickers.py
+REM Uygulamayi calistir
+if "%MODE%"=="gui" (
+    if exist "sticly_gui.py" (
+        venv\Scripts\python sticly_gui.py
+    ) else (
+        echo    ! GUI dosyasi bulunamadi, CLI baslatiliyor...
+        venv\Scripts\python upload_stickers.py
+    )
+) else (
+    venv\Scripts\python upload_stickers.py
+)
 
 echo.
 echo Islem tamamlandi!

@@ -1,0 +1,24 @@
+# Sticly Manager - Gerekli Paketler
+# ==================================
+
+# GUI Framework
+customtkinter>=5.2.0
+
+# Firebase
+firebase-admin>=6.2.0
+
+# Google Drive API
+google-api-python-client>=2.100.0
+google-auth-httplib2>=0.1.1
+google-auth-oauthlib>=1.1.0
+
+# Image Processing
+rembg>=2.0.50
+pillow>=10.0.0
+onnxruntime>=1.16.0
+
+# Charts (for statistics)
+matplotlib>=3.8.0
+
+# Utilities
+requests>=2.31.0

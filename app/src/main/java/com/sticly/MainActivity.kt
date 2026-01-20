@@ -1,17 +1,22 @@
 package com.sticly
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
 import android.view.LayoutInflater
 import android.view.View
 import android.widget.*
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.widget.PopupMenu
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
+import androidx.core.content.ContextCompat
 import androidx.core.view.GravityCompat
 import androidx.drawerlayout.widget.DrawerLayout
 import androidx.lifecycle.lifecycleScope
@@ -45,6 +50,19 @@ class MainActivity : AppCompatActivity() {
     private var pendingDeletePackId: String? = null
     private var wasPackInWhatsAppBeforeDelete = false
     private var waitingForWhatsAppReturn = false
+
+    // Bildirim izni launcher
+    private val notificationPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            PreferencesHelper.setNotificationsEnabled(this, true)
+            Toast.makeText(this, R.string.notifications_enabled, Toast.LENGTH_SHORT).show()
+        } else {
+            PreferencesHelper.setNotificationsEnabled(this, false)
+            Toast.makeText(this, R.string.notifications_disabled, Toast.LENGTH_SHORT).show()
+        }
+    }
 
     override fun onCreate(s: Bundle?) {
         applyTheme()
@@ -241,6 +259,9 @@ class MainActivity : AppCompatActivity() {
 
         // Firebase'den paketleri yükle
         loadPacksFromFirebase()
+
+        // İlk açılışta bildirim izni iste
+        checkAndRequestNotificationPermission()
 
         // Search functionality
         searchBox.addTextChangedListener(object : TextWatcher {
@@ -648,17 +669,87 @@ class MainActivity : AppCompatActivity() {
         val view = LayoutInflater.from(this).inflate(R.layout.dialog_notifications, null)
         val switchNotifications = view.findViewById<SwitchMaterial>(R.id.switchNotifications)
 
-        switchNotifications.isChecked = PreferencesHelper.isNotificationsEnabled(this)
+        // Mevcut durumu kontrol et
+        val hasPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.POST_NOTIFICATIONS
+            ) == PackageManager.PERMISSION_GRANTED
+        } else {
+            true
+        }
+
+        switchNotifications.isChecked = PreferencesHelper.isNotificationsEnabled(this) && hasPermission
 
         AlertDialog.Builder(this)
             .setTitle(R.string.notifications_title)
             .setView(view)
             .setPositiveButton(R.string.ok) { _, _ ->
-                PreferencesHelper.setNotificationsEnabled(this, switchNotifications.isChecked)
-                Toast.makeText(this, R.string.notifications_saved, Toast.LENGTH_SHORT).show()
+                if (switchNotifications.isChecked) {
+                    // Bildirimler açılacak - izin kontrolü yap
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        when {
+                            ContextCompat.checkSelfPermission(
+                                this,
+                                Manifest.permission.POST_NOTIFICATIONS
+                            ) == PackageManager.PERMISSION_GRANTED -> {
+                                PreferencesHelper.setNotificationsEnabled(this, true)
+                                Toast.makeText(this, R.string.notifications_enabled, Toast.LENGTH_SHORT).show()
+                            }
+                            else -> {
+                                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                            }
+                        }
+                    } else {
+                        PreferencesHelper.setNotificationsEnabled(this, true)
+                        Toast.makeText(this, R.string.notifications_enabled, Toast.LENGTH_SHORT).show()
+                    }
+                } else {
+                    PreferencesHelper.setNotificationsEnabled(this, false)
+                    Toast.makeText(this, R.string.notifications_disabled, Toast.LENGTH_SHORT).show()
+                }
             }
             .setNegativeButton(R.string.cancel, null)
             .show()
+    }
+
+    private fun checkAndRequestNotificationPermission() {
+        android.util.Log.d("StickyDebug", "checkAndRequestNotificationPermission called")
+        android.util.Log.d("StickyDebug", "Android SDK: ${Build.VERSION.SDK_INT}, TIRAMISU: ${Build.VERSION_CODES.TIRAMISU}")
+
+        // Android 13+ için bildirim izni kontrolü
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val wasAsked = PreferencesHelper.wasNotificationPermissionAsked(this)
+            android.util.Log.d("StickyDebug", "wasNotificationPermissionAsked: $wasAsked")
+
+            // Daha önce izin istendi mi kontrol et
+            if (wasAsked) {
+                android.util.Log.d("StickyDebug", "Permission was already asked, returning")
+                return
+            }
+
+            val hasPermission = ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.POST_NOTIFICATIONS
+            ) == PackageManager.PERMISSION_GRANTED
+
+            android.util.Log.d("StickyDebug", "hasPermission: $hasPermission")
+
+            // İzin zaten verilmiş mi kontrol et
+            if (!hasPermission) {
+                // İzin iste
+                android.util.Log.d("StickyDebug", "Requesting notification permission...")
+                PreferencesHelper.setNotificationPermissionAsked(this)
+                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            } else {
+                android.util.Log.d("StickyDebug", "Permission already granted")
+            }
+        } else {
+            android.util.Log.d("StickyDebug", "Android version < 13, no permission needed")
+        }
+
+        // İlk açılış tamamlandı olarak işaretle
+        PreferencesHelper.setFirstLaunchComplete(this)
     }
 
     private fun showPrivacyDialog() {

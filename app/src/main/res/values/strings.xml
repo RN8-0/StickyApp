@@ -64,6 +64,8 @@
     <string name="notification_new_packs">Yeni sticker paketleri</string>
     <string name="notification_new_packs_desc">Yeni paket eklendiğinde bildirim al</string>
     <string name="notifications_saved">Ayarlar kaydedildi</string>
+    <string name="notifications_enabled">🔔 Bildirimler açıldı! Yeni paketlerden haberdar olacaksınız.</string>
+    <string name="notifications_disabled">🔕 Bildirimler kapatıldı.</string>
 
     <!-- Internet -->
     <string name="no_internet_title">İnternet Bağlantısı Yok</string>
@@ -180,4 +182,22 @@
     <string name="selection_mode_title">Silinecekleri Seçin</string>
     <string name="add_sticker">Çıkartma Ekle</string>
     <string name="delete_mode">Silme Modu</string>
+
+    <!-- Loading States -->
+    <string name="stickers_loading">Çıkartmalar yükleniyor…</string>
+    <string name="stickers_load_failed">Çıkartmalar yüklenemedi</string>
+
+    <!-- Remove Instructions -->
+    <string name="remove_instructions_title">Nasıl Kaldırılır?</string>
+    <string name="remove_instructions_message">WhatsApp\'ın çıkartma paketlerini kaldırma ekranını açıyoruz.\n\nAçılan ekranda \"Sil\" seçeneğine tıklayarak paketi kaldırabilirsiniz.</string>
+    <string name="go_to_whatsapp">WhatsApp\'a Git</string>
+
+    <!-- Pack Still Installed Warning -->
+    <string name="pack_still_installed_title">Paket Hâlâ Yüklü</string>
+    <string name="pack_still_installed_message">Görünüşe göre paket hâlâ WhatsApp\'a ekli.\n\nManuel olarak kaldırmak için:\n1. WhatsApp\'ı açın\n2. Bir sohbette çıkartma simgesine dokunun\n3. Sağ üstten \"+\" simgesine dokunun\n4. \"Çıkartmalarım\" sekmesinden paketi bulun\n5. Çöp kutusu simgesine dokunun</string>
+
+    <!-- WhatsApp Errors -->
+    <string name="whatsapp_not_available_title">WhatsApp Kullanılamıyor</string>
+    <string name="whatsapp_not_available_message">WhatsApp açılamadı. Lütfen şunları kontrol edin:\n\n• WhatsApp\'ın yüklü olduğundan\n• WhatsApp\'a giriş yaptığınızdan\n• WhatsApp\'ın güncel olduğundan\n\nemin olun.</string>
+    <string name="whatsapp_error_detailed">WhatsApp hatası: %s\n\nLütfen WhatsApp\'ın düzgün çalıştığından emin olun.</string>
 </resources>
