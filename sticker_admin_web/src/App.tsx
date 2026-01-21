@@ -131,6 +131,7 @@ function App() {
         download_count: 0,
         view_count: 0,
         sticker_count: 0,
+        image_data_version: "1",
         stickers: [],
         tray_url: "",
         created_at: serverTimestamp()
@@ -158,19 +159,21 @@ function App() {
       const oldCollection = selectedPack.is_premium ? 'premium_stickers' : 'stickers';
       const newCollection = editFormData.is_premium ? 'premium_stickers' : 'stickers';
 
+      const updatedData = { ...editFormData, image_data_version: Date.now().toString() };
+
       if (oldCollection !== newCollection) {
         // Move document between collections
         const oldRef = doc(db, oldCollection, selectedPack.id);
         const newRef = doc(db, newCollection, selectedPack.id);
 
-        const fullData = { ...selectedPack, ...editFormData };
+        const fullData = { ...selectedPack, ...updatedData };
         await setDoc(newRef, fullData);
         await deleteDoc(oldRef);
       } else {
-        await updateDoc(doc(db, oldCollection, selectedPack.id), editFormData);
+        await updateDoc(doc(db, oldCollection, selectedPack.id), updatedData);
       }
 
-      const updated = { ...selectedPack, ...editFormData } as StickerPack;
+      const updated = { ...selectedPack, ...updatedData } as StickerPack;
       setPacks(packs.map(p => p.id === selectedPack.id ? updated : p));
       setSelectedPack(updated);
       setShowEditPackModal(false);
@@ -229,15 +232,18 @@ function App() {
         });
       }
 
+      const newVersion = Date.now().toString();
       await updateDoc(packRef, {
         stickers: [...(selectedPack.stickers || []), ...newStickers],
-        sticker_count: Math.max(0, (selectedPack.sticker_count || 0) + newStickers.length)
+        sticker_count: Math.max(0, (selectedPack.sticker_count || 0) + newStickers.length),
+        image_data_version: newVersion
       });
 
       const updated = {
         ...selectedPack,
         stickers: [...(selectedPack.stickers || []), ...newStickers],
-        sticker_count: (selectedPack.sticker_count || 0) + newStickers.length
+        sticker_count: (selectedPack.sticker_count || 0) + newStickers.length,
+        image_data_version: newVersion
       };
 
       setPacks(packs.map(p => p.id === selectedPack.id ? updated : p));
@@ -264,13 +270,15 @@ function App() {
 
       await uploadBytes(storageRef, file);
       const url = await getDownloadURL(storageRef);
+      const newVersion = Date.now().toString();
 
       await updateDoc(doc(db, collectionName, selectedPack.id), {
         tray_url: url,
-        tray_image_file: file.name
+        tray_image_file: file.name,
+        image_data_version: newVersion
       });
 
-      const updated = { ...selectedPack, tray_url: url, tray_image_file: file.name };
+      const updated = { ...selectedPack, tray_url: url, tray_image_file: file.name, image_data_version: newVersion };
       setPacks(packs.map(p => p.id === selectedPack.id ? updated : p));
       setSelectedPack(updated);
       alert("Kapak resmi güncellendi.");
@@ -303,8 +311,10 @@ function App() {
       const collectionName = pack.is_premium ? 'premium_stickers' : 'stickers';
       const packRef = doc(db, collectionName, pack.id);
 
+      const newVersion = Date.now().toString();
       await updateDoc(packRef, {
-        stickers: arrayRemove(sticker)
+        stickers: arrayRemove(sticker),
+        image_data_version: newVersion
       });
 
       const storagePath = `${pack.is_premium ? 'premium_stickers' : 'stickers'}/${pack.id}/${sticker.image_file}`;
@@ -313,7 +323,8 @@ function App() {
       const updatedPack = {
         ...pack,
         stickers: pack.stickers.filter(s => s.image_file !== sticker.image_file),
-        sticker_count: Math.max(0, pack.sticker_count - 1)
+        sticker_count: Math.max(0, pack.sticker_count - 1),
+        image_data_version: newVersion
       };
 
       setPacks(packs.map(p => p.id === pack.id ? updatedPack : p));

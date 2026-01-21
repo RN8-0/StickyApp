@@ -19,5 +19,6 @@ export interface StickerPack {
     download_count: number;
     view_count: number;
     sticker_count: number;
+    image_data_version: string;
     stickers: Sticker[];
 }
