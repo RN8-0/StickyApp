@@ -738,7 +738,7 @@ function App() {
                           downloads: p.download_count || 0,
                           views: p.view_count || 0
                         }))}
-                      margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
+                      margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
                       barGap={8}
                     >
                       <defs>
@@ -756,8 +756,11 @@ function App() {
                         dataKey="name"
                         axisLine={false}
                         tickLine={false}
-                        tick={{ fill: '#888', fontSize: 11, fontWeight: 700 }}
+                        tick={{ fill: '#888', fontSize: 9, fontWeight: 800 }}
                         dy={15}
+                        interval={0}
+                        angle={-15}
+                        textAnchor="end"
                       />
                       <YAxis
                         axisLine={false}
@@ -800,8 +803,15 @@ function App() {
               <div className="glass rounded-[2.5rem] overflow-hidden border border-white/5">
                 <div className="px-8 py-6 border-b border-white/5 bg-white/5 flex items-center justify-between">
                   <h3 className="text-xl font-bold flex items-center gap-3">
-                    <RefreshCcw className="text-primary" size={24} /> En Popüler Paketler
+                    <TrendingUp className="text-primary" size={24} /> En Popüler Paketler
                   </h3>
+                  <button
+                    onClick={fetchPacks}
+                    className="p-2.5 hover:bg-white/10 rounded-xl transition-all active:scale-95 text-textSec hover:text-primary"
+                    title="İstatistikleri Yenile"
+                  >
+                    <RefreshCcw size={20} className={cn(loading && 'animate-spin text-primary')} />
+                  </button>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse">
