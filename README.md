@@ -1,21 +1,21 @@
-# Sticly - Yeni Nesil WhatsApp Sticker Yönetim Sistemi 🚀
+# Sticky - Yeni Nesil WhatsApp Sticker Yönetim Sistemi 🚀
 
 WhatsApp için özel sticker paketleri oluşturan, bulut tabanlı çalışan profesyonel Android uygulaması ve Web Yönetim Paneli.
 
 ---
 
 ## 🌐 Canlı Yönetim Paneli
-Artık terminal veya Python ile uğraşmanıza gerek yok! Paketinizi tarayıcı üzerinden yönetin:
-👉 **[http://localhost:5173/StickyApp/](http://localhost:5173/StickyApp/)**
-*(GitHub Pages linkiniz: `https://arain-0.github.io/StickyApp/`)*
+Artık terminal veya Python ile uğraşmanıza gerek yok! Paketinizi tarayıcı üzerinden profesyonelce yönetin:
+👉 **[https://sticky-dcd20.web.app](https://sticky-dcd20.web.app)**
 
 ---
 
 ## ✨ Özellikler
 
-- **Web Admin v2.0:** Tamamen yenilenmiş, görsel ve hızlı yönetim paneli.
+- **Web Admin v2.0 PRO+:** Tamamen yenilenmiş, görsel ve hızlı Firebase tabanlı yönetim paneli.
 - **Güvenli Erişim:** Firebase Authentication ile şifreli yönetici girişi.
-- **Gelişmiş İstatistikler:** Paket indirme, görüntülenme ve verimlilik analizleri.
+- **Favori Sistemi:** Paket favori sayıları takibi ve uygulama içi favori önceliği.
+- **Gelişmiş İstatistikler:** İndirme, görüntülenme ve favori analizleri (Recharts).
 - **Premium Sistem:** Ücretli/Ücretsiz paket ayrımı ve kategori yönetimi.
 - **Otomatik İşleme:** MP4, GIF, PNG -> WebP dönüşümü (Android tarafında optimize).
 
@@ -63,13 +63,13 @@ StickyApp/
 
 ---
 
-## 🚀 Yayına Alma (GitHub Pages)
+## 🚀 Yayına Alma (Firebase Hosting)
 
-Web panelinizi GitHub üzerinde yayınlamak için:
+Web panelinizi Firebase üzerinde yayınlamak için:
 1. `cd sticker_admin_web`
-2. `npm run deploy` 
+2. `npm run deploy-firebase` 
 
-Bu komut projeyi derler ve otomatik olarak GitHub Pages şubesinde yayınlar.
+Bu komut projeyi derler ve otomatik olarak Firebase Hosting üzerinde güvenli bir şekilde yayınlar.
 
 ---
 
