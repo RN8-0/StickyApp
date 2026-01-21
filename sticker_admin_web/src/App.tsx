@@ -35,7 +35,8 @@ import {
   ExternalLink,
   ChevronRight,
   TrendingUp,
-  BarChart3
+  BarChart3,
+  Heart
 } from 'lucide-react';
 import {
   BarChart,
@@ -754,151 +755,167 @@ function App() {
                     </h3>
                     <p className="text-textSec text-sm font-medium">En popüler 10 paketin indirme ve görüntülenme oranları</p>
                   </div>
-                  <div className="flex gap-4">
-                    <div className="flex items-center gap-2 px-4 py-2 bg-white/5 rounded-xl border border-white/5">
-                      <div className="w-3 h-3 bg-primary rounded-full shadow-[0_0_10px_rgba(0,168,132,0.5)]" />
-                      <span className="text-[10px] font-black uppercase tracking-widest text-textSec">İndirme</span>
-                    </div>
-                    <div className="flex items-center gap-2 px-4 py-2 bg-white/5 rounded-xl border border-white/5">
-                      <div className="w-3 h-3 bg-accent rounded-full shadow-[0_0_10px_rgba(255,51,102,0.5)]" />
-                      <span className="text-[10px] font-black uppercase tracking-widest text-textSec">Görüntüleme</span>
-                    </div>
+                  <div className="flex items-center gap-2 px-4 py-2 bg-white/5 rounded-xl border border-white/5">
+                    <div className="w-3 h-3 bg-primary rounded-full shadow-[0_0_10px_rgba(0,168,132,0.5)]" />
+                    <span className="text-[10px] font-black uppercase tracking-widest text-textSec">İndirme</span>
                   </div>
-                </div>
-
-                <div className="h-[450px] w-full mt-12 relative z-10">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart
-                      data={packs
-                        .sort((a, b) => (b.download_count || 0) - (a.download_count || 0))
-                        .slice(0, 10)
-                        .map(p => ({
-                          name: p.name.length > 12 ? p.name.substring(0, 10) + '..' : p.name,
-                          downloads: p.download_count || 0,
-                          views: p.view_count || 0
-                        }))}
-                      margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
-                      barGap={8}
-                    >
-                      <defs>
-                        <linearGradient id="barGradientPrimary" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#00A884" stopOpacity={1} />
-                          <stop offset="100%" stopColor="#00A884" stopOpacity={0.6} />
-                        </linearGradient>
-                        <linearGradient id="barGradientAccent" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#FF3366" stopOpacity={1} />
-                          <stop offset="100%" stopColor="#FF3366" stopOpacity={0.6} />
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-                      <XAxis
-                        dataKey="name"
-                        axisLine={false}
-                        tickLine={false}
-                        tick={{ fill: '#888', fontSize: 9, fontWeight: 800 }}
-                        dy={15}
-                        interval={0}
-                        angle={-15}
-                        textAnchor="end"
-                      />
-                      <YAxis
-                        axisLine={false}
-                        tickLine={false}
-                        tick={{ fill: '#888', fontSize: 11, fontWeight: 700 }}
-                        dx={-10}
-                      />
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: '#1E293B',
-                          border: '1px solid rgba(255,255,255,0.1)',
-                          borderRadius: '16px',
-                          boxShadow: '0 20px 25px -5px rgba(0,0,0,0.5)',
-                          padding: '12px'
-                        }}
-                        itemStyle={{ fontSize: '12px', fontWeight: 800, padding: '4px 0' }}
-                        labelStyle={{ color: '#fff', marginBottom: '8px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.05em' }}
-                        cursor={{ fill: 'rgba(255,255,255,0.02)' }}
-                      />
-                      <Bar
-                        dataKey="downloads"
-                        fill="url(#barGradientPrimary)"
-                        radius={[6, 6, 0, 0]}
-                        barSize={20}
-                        animationDuration={1500}
-                      />
-                      <Bar
-                        dataKey="views"
-                        fill="url(#barGradientAccent)"
-                        radius={[6, 6, 0, 0]}
-                        barSize={20}
-                        animationDuration={2000}
-                      />
-                    </BarChart>
-                  </ResponsiveContainer>
+                  <div className="flex items-center gap-2 px-4 py-2 bg-white/5 rounded-xl border border-white/5">
+                    <div className="w-3 h-3 bg-accent rounded-full shadow-[0_0_10px_rgba(255,51,102,0.5)]" />
+                    <span className="text-[10px] font-black uppercase tracking-widest text-textSec">Görüntüleme</span>
+                  </div>
+                  <div className="flex items-center gap-2 px-4 py-2 bg-white/5 rounded-xl border border-white/5">
+                    <div className="w-3 h-3 bg-amber-400 rounded-full shadow-[0_0_10px_rgba(251,191,36,0.5)]" />
+                    <span className="text-[10px] font-black uppercase tracking-widest text-textSec">Favori</span>
+                  </div>
                 </div>
               </div>
 
-              {/* Top Packs Table */}
-              <div className="glass rounded-[2.5rem] overflow-hidden border border-white/5">
-                <div className="px-8 py-6 border-b border-white/5 bg-white/5 flex items-center justify-between">
-                  <h3 className="text-xl font-bold flex items-center gap-3">
-                    <TrendingUp className="text-primary" size={24} /> En Popüler Paketler
-                  </h3>
-                  <button
-                    onClick={fetchPacks}
-                    className="p-2.5 hover:bg-white/10 rounded-xl transition-all active:scale-95 text-textSec hover:text-primary"
-                    title="İstatistikleri Yenile"
+              <div className="h-[450px] w-full mt-12 relative z-10">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={packs
+                      .sort((a, b) => (b.download_count || 0) - (a.download_count || 0))
+                      .slice(0, 10)
+                      .map(p => ({
+                        name: p.name.length > 12 ? p.name.substring(0, 10) + '..' : p.name,
+                        downloads: p.download_count || 0,
+                        views: p.view_count || 0,
+                        favorites: p.favorite_count || 0
+                      }))}
+                    margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
+                    barGap={8}
                   >
-                    <RefreshCcw size={20} className={cn(loading && 'animate-spin text-primary')} />
-                  </button>
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="border-b border-white/5 bg-white/2">
-                        <th className="px-8 py-4 text-xs font-black uppercase text-textSec">Paket</th>
-                        <th className="px-8 py-4 text-xs font-black uppercase text-textSec">İndirme</th>
-                        <th className="px-8 py-4 text-xs font-black uppercase text-textSec">Görüntülenme</th>
-                        <th className="px-8 py-4 text-xs font-black uppercase text-textSec">Verimlilik (%)</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {packs
-                        .sort((a, b) => (b.download_count || 0) - (a.download_count || 0))
-                        .slice(0, 10)
-                        .map((pack, idx) => (
-                          <tr key={pack.id} className="border-b border-white/2 hover:bg-white/5 transition-colors group">
-                            <td className="px-8 py-5">
-                              <div className="flex items-center gap-4">
-                                <span className="text-xs font-mono text-textSec">#{idx + 1}</span>
-                                <div className="w-10 h-10 bg-hover rounded-xl flex items-center justify-center">
-                                  {pack.tray_url ? <img src={pack.tray_url} className="w-8 h-8 object-contain" /> : <Package size={18} />}
-                                </div>
-                                <span className="font-bold text-sm text-white">{pack.name}</span>
+                    <defs>
+                      <linearGradient id="barGradientPrimary" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#00A884" stopOpacity={1} />
+                        <stop offset="100%" stopColor="#00A884" stopOpacity={0.6} />
+                      </linearGradient>
+                      <linearGradient id="barGradientAccent" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#FF3366" stopOpacity={1} />
+                        <stop offset="100%" stopColor="#FF3366" stopOpacity={0.6} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                    <XAxis
+                      dataKey="name"
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fill: '#888', fontSize: 9, fontWeight: 800 }}
+                      dy={15}
+                      interval={0}
+                      angle={-15}
+                      textAnchor="end"
+                    />
+                    <YAxis
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fill: '#888', fontSize: 11, fontWeight: 700 }}
+                      dx={-10}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: '#1E293B',
+                        border: '1px solid rgba(255,255,255,0.1)',
+                        borderRadius: '16px',
+                        boxShadow: '0 20px 25px -5px rgba(0,0,0,0.5)',
+                        padding: '12px'
+                      }}
+                      itemStyle={{ fontSize: '12px', fontWeight: 800, padding: '4px 0' }}
+                      labelStyle={{ color: '#fff', marginBottom: '8px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.05em' }}
+                      cursor={{ fill: 'rgba(255,255,255,0.02)' }}
+                    />
+                    <Bar
+                      dataKey="downloads"
+                      fill="url(#barGradientPrimary)"
+                      radius={[6, 6, 0, 0]}
+                      barSize={20}
+                      animationDuration={1500}
+                    />
+                    <Bar
+                      dataKey="views"
+                      fill="url(#barGradientAccent)"
+                      radius={[6, 6, 0, 0]}
+                      barSize={20}
+                      animationDuration={2000}
+                    />
+                    <Bar
+                      dataKey="favorites"
+                      fill="#FBBF24"
+                      radius={[6, 6, 0, 0]}
+                      barSize={20}
+                      animationDuration={2500}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            {/* Top Packs Table */}
+            <div className="glass rounded-[2.5rem] overflow-hidden border border-white/5">
+              <div className="px-8 py-6 border-b border-white/5 bg-white/5 flex items-center justify-between">
+                <h3 className="text-xl font-bold flex items-center gap-3">
+                  <TrendingUp className="text-primary" size={24} /> En Popüler Paketler
+                </h3>
+                <button
+                  onClick={fetchPacks}
+                  className="p-2.5 hover:bg-white/10 rounded-xl transition-all active:scale-95 text-textSec hover:text-primary"
+                  title="İstatistikleri Yenile"
+                >
+                  <RefreshCcw size={20} className={cn(loading && 'animate-spin text-primary')} />
+                </button>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-white/5 bg-white/2">
+                      <th className="px-8 py-4 text-xs font-black uppercase text-textSec">Paket</th>
+                      <th className="px-8 py-4 text-xs font-black uppercase text-textSec">İndirme</th>
+                      <th className="px-8 py-4 text-xs font-black uppercase text-textSec">Görüntülenme</th>
+                      <th className="px-8 py-4 text-xs font-black uppercase text-textSec">Verimlilik (%)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {packs
+                      .sort((a, b) => (b.download_count || 0) - (a.download_count || 0))
+                      .slice(0, 10)
+                      .map((pack, idx) => (
+                        <tr key={pack.id} className="border-b border-white/2 hover:bg-white/5 transition-colors group">
+                          <td className="px-8 py-5">
+                            <div className="flex items-center gap-4">
+                              <span className="text-xs font-mono text-textSec">#{idx + 1}</span>
+                              <div className="w-10 h-10 bg-hover rounded-xl flex items-center justify-center">
+                                {pack.tray_url ? <img src={pack.tray_url} className="w-8 h-8 object-contain" /> : <Package size={18} />}
                               </div>
-                            </td>
-                            <td className="px-8 py-5">
-                              <span className="text-sm font-black text-primary">{(pack.download_count || 0).toLocaleString()}</span>
-                            </td>
-                            <td className="px-8 py-5 text-sm text-textSec">{(pack.view_count || 0).toLocaleString()}</td>
-                            <td className="px-8 py-5">
-                              <div className="flex items-center gap-3">
-                                <div className="flex-1 h-1.5 bg-hover rounded-full overflow-hidden">
-                                  <div
-                                    className="h-full bg-primary"
-                                    style={{ width: `${Math.min(100, ((pack.download_count || 0) / (pack.view_count || 1)) * 100)}%` }}
-                                  />
-                                </div>
-                                <span className="text-[10px] font-black w-8">
-                                  {Math.round(((pack.download_count || 0) / (pack.view_count || 1)) * 100)}%
-                                </span>
+                              <span className="font-bold text-sm text-white">{pack.name}</span>
+                            </div>
+                          </td>
+                          <td className="px-8 py-5">
+                            <span className="text-sm font-black text-primary">{(pack.download_count || 0).toLocaleString()}</span>
+                          </td>
+                          <td className="px-8 py-5 text-sm text-textSec">{(pack.view_count || 0).toLocaleString()}</td>
+                          <td className="px-8 py-5">
+                            <div className="flex items-center gap-2 text-amber-400">
+                              <Heart size={14} fill="currentColor" />
+                              <span className="text-sm font-black">{(pack.favorite_count || 0).toLocaleString()}</span>
+                            </div>
+                          </td>
+                          <td className="px-8 py-5">
+                            <div className="flex items-center gap-3">
+                              <div className="flex-1 h-1.5 bg-hover rounded-full overflow-hidden">
+                                <div
+                                  className="h-full bg-primary"
+                                  style={{ width: `${Math.min(100, ((pack.download_count || 0) / (pack.view_count || 1)) * 100)}%` }}
+                                />
                               </div>
-                            </td>
-                          </tr>
-                        ))}
-                    </tbody>
-                  </table>
-                </div>
+                              <span className="text-[10px] font-black w-8">
+                                {Math.round(((pack.download_count || 0) / (pack.view_count || 1)) * 100)}%
+                              </span>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>
@@ -996,10 +1013,10 @@ function App() {
             {isProcessing ? 'PAKET OLUŞTURULUYOR...' : 'OLUŞTUR VE BAŞLA'}
           </button>
         </div>
-      </Modal>
+      </Modal >
 
       {/* Edit Pack Modal */}
-      <Modal show={showEditPackModal} onClose={() => setShowEditPackModal(false)} title="Uygulama Bilgilerini Düzenle">
+      < Modal show={showEditPackModal} onClose={() => setShowEditPackModal(false)} title="Uygulama Bilgilerini Düzenle" >
         {selectedPack && (
           <div className="space-y-6">
             <div className="grid grid-cols-2 gap-4">
@@ -1088,40 +1105,42 @@ function App() {
             </button>
           </div>
         )}
-      </Modal>
+      </Modal >
 
       {/* Loading Overlay */}
-      {uploadProgress && (
-        <div className="fixed inset-0 z-[100] bg-background/90 backdrop-blur-xl flex flex-col items-center justify-center space-y-8 animate-in fade-in duration-300">
-          <div className="relative">
-            <div className="w-32 h-32 border-4 border-primary/20 rounded-full animate-[spin_3s_linear_infinite]" />
-            <div className="absolute inset-0 border-4 border-t-primary border-transparent rounded-full animate-spin" />
-            <div className="absolute inset-0 flex items-center justify-center">
-              <TrendingUp className="text-primary animate-pulse" size={40} />
+      {
+        uploadProgress && (
+          <div className="fixed inset-0 z-[100] bg-background/90 backdrop-blur-xl flex flex-col items-center justify-center space-y-8 animate-in fade-in duration-300">
+            <div className="relative">
+              <div className="w-32 h-32 border-4 border-primary/20 rounded-full animate-[spin_3s_linear_infinite]" />
+              <div className="absolute inset-0 border-4 border-t-primary border-transparent rounded-full animate-spin" />
+              <div className="absolute inset-0 flex items-center justify-center">
+                <TrendingUp className="text-primary animate-pulse" size={40} />
+              </div>
             </div>
-          </div>
 
-          <div className="text-center space-y-3">
-            <h3 className="text-3xl font-black text-white tracking-tight">STİCKERLAR BULUTA YÜKLENİYOR</h3>
-            <p className="text-textSec font-bold uppercase tracking-widest text-sm">
-              Dosya {uploadProgress.current} / {uploadProgress.total} işleniyor...
+            <div className="text-center space-y-3">
+              <h3 className="text-3xl font-black text-white tracking-tight">STİCKERLAR BULUTA YÜKLENİYOR</h3>
+              <p className="text-textSec font-bold uppercase tracking-widest text-sm">
+                Dosya {uploadProgress.current} / {uploadProgress.total} işleniyor...
+              </p>
+            </div>
+
+            <div className="w-full max-w-md bg-white/5 h-2 rounded-full overflow-hidden border border-white/5">
+              <div
+                className="h-full bg-primary shadow-[0_0_15px_rgba(0,168,132,0.5)] transition-all duration-500 ease-out"
+                style={{ width: `${(uploadProgress.current / uploadProgress.total) * 100}%` }}
+              />
+            </div>
+
+            <p className="text-[10px] text-textSec font-bold uppercase tracking-[0.3em] animate-pulse">
+              Lütfen tarayıcıyı kapatmayın
             </p>
           </div>
+        )
+      }
 
-          <div className="w-full max-w-md bg-white/5 h-2 rounded-full overflow-hidden border border-white/5">
-            <div
-              className="h-full bg-primary shadow-[0_0_15px_rgba(0,168,132,0.5)] transition-all duration-500 ease-out"
-              style={{ width: `${(uploadProgress.current / uploadProgress.total) * 100}%` }}
-            />
-          </div>
-
-          <p className="text-[10px] text-textSec font-bold uppercase tracking-[0.3em] animate-pulse">
-            Lütfen tarayıcıyı kapatmayın
-          </p>
-        </div>
-      )}
-
-    </div>
+    </div >
   );
 }
 

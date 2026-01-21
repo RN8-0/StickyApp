@@ -18,6 +18,7 @@ export interface StickerPack {
     category: string;
     download_count: number;
     view_count: number;
+    favorite_count: number;
     sticker_count: number;
     image_data_version: string;
     is_active: boolean;
