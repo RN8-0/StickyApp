@@ -1,0 +1,934 @@
+import { useState, useEffect } from 'react';
+import { db, storage, auth } from './firebase';
+import {
+  collection,
+  getDocs,
+  deleteDoc,
+  doc,
+  updateDoc,
+  arrayRemove,
+  setDoc,
+  serverTimestamp
+} from 'firebase/firestore';
+import { ref, deleteObject, uploadBytes, getDownloadURL } from 'firebase/storage';
+import {
+  signInWithEmailAndPassword,
+  onAuthStateChanged,
+  signOut,
+  type User
+} from 'firebase/auth';
+import {
+  Package,
+  Trash2,
+  RefreshCcw,
+  Search,
+  Grid,
+  List as ListIcon,
+  Plus,
+  Settings,
+  LogOut,
+  Lock,
+  User as UserIcon,
+  X,
+  Save,
+  Info,
+  ExternalLink,
+  ChevronRight
+} from 'lucide-react';
+import type { StickerPack, Sticker } from './types';
+import { clsx, type ClassValue } from 'clsx';
+import { twMerge } from 'tailwind-merge';
+
+function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
+}
+
+function App() {
+  const [user, setUser] = useState<User | null>(null);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [packs, setPacks] = useState<StickerPack[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedPack, setSelectedPack] = useState<StickerPack | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'stats'>('dashboard');
+
+  // Modals
+  const [showNewPackModal, setShowNewPackModal] = useState(false);
+  const [showEditPackModal, setShowEditPackModal] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  // Form States
+  const [newPackData, setNewPackData] = useState({ name: '', publisher: '', category: 'Mizah', is_premium: false });
+  const [editFormData, setEditFormData] = useState<Partial<StickerPack>>({});
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (u) => {
+      setUser(u);
+      if (u) fetchPacks();
+      else setLoading(false);
+    });
+    return unsubscribe;
+  }, []);
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+    } catch (error) {
+      alert("Giriş hatası: Şifre veya e-posta hatalı.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchPacks = async () => {
+    setLoading(true);
+    try {
+      const normalPacks = await getDocs(collection(db, 'stickers'));
+      const premiumPacks = await getDocs(collection(db, 'premium_stickers'));
+
+      const allPacks: StickerPack[] = [
+        ...normalPacks.docs.map(d => ({ id: d.id, ...d.data(), is_premium: false } as StickerPack)),
+        ...premiumPacks.docs.map(d => ({ id: d.id, ...d.data(), is_premium: true } as StickerPack))
+      ];
+
+      setPacks(allPacks.sort((a, b) => a.name.localeCompare(b.name)));
+    } catch (error) {
+      console.error("Fetch error:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreatePack = async () => {
+    if (!newPackData.name || !newPackData.publisher) return alert("Lütfen isim ve yayıncı alanlarını doldurun.");
+    setIsProcessing(true);
+    try {
+      const packId = newPackData.name.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+      const collectionName = newPackData.is_premium ? 'premium_stickers' : 'stickers';
+
+      const packData: any = {
+        name: newPackData.name,
+        publisher: newPackData.publisher,
+        publisher_email: "contact@sticly.com",
+        category: newPackData.category,
+        is_premium: newPackData.is_premium,
+        download_count: 0,
+        view_count: 0,
+        sticker_count: 0,
+        stickers: [],
+        tray_url: "",
+        created_at: serverTimestamp()
+      };
+
+      await setDoc(doc(db, collectionName, packId), packData);
+
+      const createdPack = { id: packId, ...packData } as StickerPack;
+      setPacks([createdPack, ...packs]);
+      setSelectedPack(createdPack);
+      setShowNewPackModal(false);
+      setNewPackData({ name: '', publisher: '', category: 'Mizah', is_premium: false });
+      alert("Yeni paket oluşturuldu. Şimdi sticker ekleyebilirsiniz.");
+    } catch (e) {
+      alert("Hata: " + e);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleUpdatePack = async () => {
+    if (!selectedPack || !editFormData) return;
+    setIsProcessing(true);
+    try {
+      const collectionName = selectedPack.is_premium ? 'premium_stickers' : 'stickers';
+      await updateDoc(doc(db, collectionName, selectedPack.id), editFormData);
+
+      const updated = { ...selectedPack, ...editFormData };
+      setPacks(packs.map(p => p.id === selectedPack.id ? updated : p));
+      setSelectedPack(updated);
+      setShowEditPackModal(false);
+      alert("Paket bilgileri güncellendi.");
+    } catch (e) {
+      alert("Hata: " + e);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleAddSticker = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || !selectedPack) return;
+
+    setIsProcessing(true);
+    try {
+      const collectionName = selectedPack.is_premium ? 'premium_stickers' : 'stickers';
+      const packRef = doc(db, collectionName, selectedPack.id);
+
+      const newStickers: Sticker[] = [];
+
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const storagePath = `${collectionName}/${selectedPack.id}/${file.name}`;
+        const storageRef = ref(storage, storagePath);
+
+        await uploadBytes(storageRef, file);
+        const url = await getDownloadURL(storageRef);
+
+        newStickers.push({
+          image_file: file.name,
+          url: url,
+          emojis: [""]
+        });
+      }
+
+      await updateDoc(packRef, {
+        stickers: [...(selectedPack.stickers || []), ...newStickers],
+        sticker_count: Math.max(0, (selectedPack.sticker_count || 0) + newStickers.length)
+      });
+
+      const updated = {
+        ...selectedPack,
+        stickers: [...(selectedPack.stickers || []), ...newStickers],
+        sticker_count: (selectedPack.sticker_count || 0) + newStickers.length
+      };
+
+      setPacks(packs.map(p => p.id === selectedPack.id ? updated : p));
+      setSelectedPack(updated);
+      alert(`${newStickers.length} sticker başarıyla eklendi.`);
+    } catch (error) {
+      alert("Yükleme hatası: " + error);
+    } finally {
+      setIsProcessing(false);
+      e.target.value = ''; // Reset input
+    }
+  };
+
+  const handleUpdateTray = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !selectedPack) return;
+
+    setIsProcessing(true);
+    try {
+      const collectionName = selectedPack.is_premium ? 'premium_stickers' : 'stickers';
+      const storagePath = `${collectionName}/${selectedPack.id}/tray_${file.name}`;
+      const storageRef = ref(storage, storagePath);
+
+      await uploadBytes(storageRef, file);
+      const url = await getDownloadURL(storageRef);
+
+      await updateDoc(doc(db, collectionName, selectedPack.id), {
+        tray_url: url,
+        tray_image_file: file.name
+      });
+
+      const updated = { ...selectedPack, tray_url: url, tray_image_file: file.name };
+      setPacks(packs.map(p => p.id === selectedPack.id ? updated : p));
+      setSelectedPack(updated);
+      alert("Kapak resmi güncellendi.");
+    } catch (e) {
+      alert("Hata: " + e);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const deletePack = async (pack: StickerPack) => {
+    if (!window.confirm(`"${pack.name}" paketini TAMAMEN silmek istediğinize emin misiniz?`)) return;
+
+    try {
+      const collectionName = pack.is_premium ? 'premium_stickers' : 'stickers';
+      await deleteDoc(doc(db, collectionName, pack.id));
+
+      setPacks(packs.filter(p => p.id !== pack.id));
+      if (selectedPack?.id === pack.id) setSelectedPack(null);
+      alert("Paket silindi.");
+    } catch (error) {
+      alert("Silme hatası: " + error);
+    }
+  };
+
+  const deleteSticker = async (pack: StickerPack, sticker: Sticker) => {
+    if (!window.confirm("Bu çıkartmayı silmek istediğinize emin misiniz?")) return;
+
+    try {
+      const collectionName = pack.is_premium ? 'premium_stickers' : 'stickers';
+      const packRef = doc(db, collectionName, pack.id);
+
+      await updateDoc(packRef, {
+        stickers: arrayRemove(sticker)
+      });
+
+      const storagePath = `${pack.is_premium ? 'premium_stickers' : 'stickers'}/${pack.id}/${sticker.image_file}`;
+      try { await deleteObject(ref(storage, storagePath)); } catch (e) { }
+
+      const updatedPack = {
+        ...pack,
+        stickers: pack.stickers.filter(s => s.image_file !== sticker.image_file),
+        sticker_count: Math.max(0, pack.sticker_count - 1)
+      };
+
+      setPacks(packs.map(p => p.id === pack.id ? updatedPack : p));
+      setSelectedPack(updatedPack);
+    } catch (error) {
+      alert("Çıkartma silme hatası: " + error);
+    }
+  };
+
+  const resetStats = async (pack: StickerPack) => {
+    if (!window.confirm("İstatistikleri sıfırlamak istiyor musunuz?")) return;
+    try {
+      const collectionName = pack.is_premium ? 'premium_stickers' : 'stickers';
+      await updateDoc(doc(db, collectionName, pack.id), {
+        download_count: 0,
+        view_count: 0
+      });
+      const updated = { ...pack, download_count: 0, view_count: 0 };
+      setPacks(packs.map(p => p.id === pack.id ? updated : p));
+      setSelectedPack(updated);
+      alert("İstatistikler sıfırlandı.");
+    } catch (e) { alert("Hata: " + e); }
+  };
+
+  if (loading && !user) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <RefreshCcw className="text-primary animate-spin" size={40} />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <div className="glass w-full max-w-md p-8 rounded-3xl space-y-8 animate-in fade-in zoom-in duration-300">
+          <div className="text-center space-y-2">
+            <div className="bg-primary w-16 h-16 rounded-2xl flex items-center justify-center mx-auto shadow-lg shadow-primary/20">
+              <Lock className="text-white" size={32} />
+            </div>
+            <h1 className="text-2xl font-bold">Sticky Admin Girişi</h1>
+            <p className="text-textSec text-sm">Yönetim paneline erişmek için giriş yapın</p>
+          </div>
+
+          <form onSubmit={handleLogin} className="space-y-4">
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-textSec uppercase">E-posta</label>
+              <div className="relative">
+                <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-textSec" size={18} />
+                <input
+                  type="email"
+                  required
+                  placeholder="admin@sticly.com"
+                  className="w-full bg-hover border-none rounded-xl pl-10 pr-4 py-3 outline-none focus:ring-2 focus:ring-primary transition-all text-white"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-textSec uppercase">Şifre</label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-textSec" size={18} />
+                <input
+                  type="password"
+                  required
+                  placeholder="••••••••"
+                  className="w-full bg-hover border-none rounded-xl pl-10 pr-4 py-3 outline-none focus:ring-2 focus:ring-primary transition-all text-white"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full bg-primary hover:bg-primary/90 py-3 rounded-xl font-bold text-white transition-all shadow-lg shadow-primary/20 disabled:opacity-50"
+            >
+              {loading ? 'Giriş Yapılıyor...' : 'Giriş Yap'}
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
+  const filteredPacks = packs.filter(p =>
+    p.name?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  return (
+    <div className="min-h-screen bg-background text-textMain flex flex-col font-sans">
+      {/* Header */}
+      <header className="glass sticky top-0 z-20 px-6 py-4 flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <div className="bg-primary p-2.5 rounded-xl shadow-lg shadow-primary/20">
+            <Package className="text-white" size={24} />
+          </div>
+          <div>
+            <h1 className="text-xl font-bold tracking-tight">Sticky Web Admin</h1>
+            <div className="flex items-center gap-2">
+              <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
+              <span className="text-[10px] text-textSec font-medium uppercase tracking-widest">Canlı Sistem</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-4">
+          <div className="relative group">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-textSec group-focus-within:text-primary transition-colors" size={18} />
+            <input
+              type="text"
+              placeholder="Paket ara..."
+              className="bg-hover border-transparent border rounded-full pl-10 pr-4 py-2.5 focus:ring-2 focus:ring-primary focus:bg-background outline-none text-sm w-64 transition-all text-white"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+          <button
+            onClick={fetchPacks}
+            className="p-2.5 hover:bg-hover rounded-xl transition-all active:scale-95"
+          >
+            <RefreshCcw size={20} className={cn("text-textSec", loading && 'animate-spin text-primary')} />
+          </button>
+          <div className="w-px h-6 bg-white/10 mx-2" />
+          <button
+            onClick={() => signOut(auth)}
+            className="flex items-center gap-2 px-3 py-2 hover:bg-danger/10 text-textSec hover:text-danger rounded-xl transition-all"
+          >
+            <LogOut size={18} />
+            <span className="text-sm font-semibold">Çıkış</span>
+          </button>
+        </div>
+      </header>
+
+      <main className="flex-1 overflow-hidden flex">
+        {/* Navigation Sidebar */}
+        <div className="w-16 flex flex-col items-center py-6 gap-6 border-r border-white/5 bg-card/20">
+          <button
+            onClick={() => setActiveTab('dashboard')}
+            className={cn("p-3 rounded-2xl transition-all", activeTab === 'dashboard' ? "bg-primary text-white shadow-lg" : "text-textSec hover:bg-hover")}
+            title="Dashboard"
+          >
+            <Grid size={24} />
+          </button>
+          <button
+            onClick={() => setActiveTab('stats')}
+            className={cn("p-3 rounded-2xl transition-all", activeTab === 'stats' ? "bg-primary text-white shadow-lg" : "text-textSec hover:bg-hover")}
+            title="İstatistikler"
+          >
+            <RefreshCcw size={24} />
+          </button>
+        </div>
+
+        {activeTab === 'dashboard' ? (
+          <>
+            {/* Sidebar / Pack List */}
+            <div className={cn(
+              "border-r border-white/5 flex flex-col bg-card/30 transition-all duration-500",
+              selectedPack ? "w-80" : "w-full"
+            )}>
+              <div className="p-5 flex items-center justify-between">
+                <div className="flex flex-col">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-textSec">Sticker Paketleri</span>
+                  <span className="text-lg font-bold">{filteredPacks.length} Paket</span>
+                </div>
+                <div className="flex bg-hover rounded-xl p-1 gap-1">
+                  <button
+                    onClick={() => setViewMode('grid')}
+                    className={cn("p-1.5 rounded-lg transition-all", viewMode === 'grid' ? 'bg-primary text-white shadow-md' : 'text-textSec hover:text-textMain')}
+                  >
+                    <Grid size={16} />
+                  </button>
+                  <button
+                    onClick={() => setViewMode('list')}
+                    className={cn("p-1.5 rounded-lg transition-all", viewMode === 'list' ? 'bg-primary text-white shadow-md' : 'text-textSec hover:text-textMain')}
+                  >
+                    <ListIcon size={16} />
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex-1 overflow-y-auto px-4 pb-20 space-y-2.5 flex flex-col custom-scrollbar">
+                <button
+                  onClick={() => setShowNewPackModal(true)}
+                  className="w-full flex items-center justify-center gap-2 p-4 border-2 border-dashed border-white/10 hover:border-primary/50 hover:bg-primary/5 rounded-2xl group transition-all mb-4"
+                >
+                  <Plus className="text-textSec group-hover:text-primary transition-colors" size={20} />
+                  <span className="text-sm font-bold text-textSec group-hover:text-primary">Yeni Paket Oluştur</span>
+                </button>
+
+                {filteredPacks.map(pack => (
+                  <div
+                    key={pack.id}
+                    onClick={() => setSelectedPack(pack)}
+                    className={cn(
+                      "group relative cursor-pointer p-3.5 rounded-2xl transition-all duration-300 border",
+                      selectedPack?.id === pack.id
+                        ? 'bg-primary/10 border-primary/50 shadow-xl shadow-primary/5 scale-[1.02]'
+                        : 'bg-card border-white/5 hover:border-white/20 hover:bg-hover active:scale-[0.98]'
+                    )}
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="relative w-14 h-14 bg-hover rounded-2xl overflow-hidden glass flex-shrink-0 flex items-center justify-center group-hover:scale-105 transition-transform">
+                        {pack.tray_url ? (
+                          <img src={pack.tray_url} alt="" className="w-10 h-10 object-contain" />
+                        ) : (
+                          <Package className="w-6 h-6 text-textSec" />
+                        )}
+                        {pack.is_premium && (
+                          <div className="absolute top-0 right-0 w-4 h-4 bg-warning flex items-center justify-center rounded-bl-xl shadow-sm">
+                            <span className="text-[8px] text-background font-black">P</span>
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-bold text-sm truncate text-white">{pack.name}</h3>
+                        <div className="flex items-center gap-2 mt-1.5">
+                          <span className="text-[10px] bg-white/5 px-2 py-0.5 rounded-full text-textSec font-semibold">
+                            {pack.sticker_count} Sticker
+                          </span>
+                          {pack.category && (
+                            <span className="text-[10px] text-primary font-bold uppercase tracking-tighter">{pack.category}</span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex flex-col items-end opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); deletePack(pack); }}
+                          className="p-2 hover:text-danger hover:bg-danger/10 rounded-xl transition-all active:scale-90"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                        <ChevronRight size={16} className="text-textSec mr-1" />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Details Panel */}
+            {selectedPack ? (
+              <div className="flex-1 flex flex-col bg-background/80 overflow-hidden animate-in fade-in slide-in-from-right-10 duration-500">
+                {/* Detail Header */}
+                <div className="p-8 border-b border-white/5 bg-card/20 backdrop-blur-xl">
+                  <div className="max-w-7xl mx-auto flex items-start justify-between">
+                    <div className="flex gap-8 items-center">
+                      <div className="w-32 h-32 bg-card rounded-3xl overflow-hidden glass flex items-center justify-center p-4 shadow-2xl relative group">
+                        {selectedPack.tray_url ? (
+                          <img src={selectedPack.tray_url} alt="" className="w-full h-full object-contain group-hover:scale-110 transition-transform duration-500" />
+                        ) : (
+                          <Package className="w-16 h-16 text-textSec/20" />
+                        )}
+                        <label className="absolute inset-0 bg-primary/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer">
+                          <RefreshCcw className="text-white" size={24} />
+                          <input type="file" className="hidden" onChange={handleUpdateTray} disabled={isProcessing} />
+                        </label>
+                      </div>
+                      <div className="space-y-4">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-3">
+                            <h2 className="text-4xl font-black tracking-tight text-white">{selectedPack.name}</h2>
+                            <span className={cn(
+                              "px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg",
+                              selectedPack.is_premium ? 'bg-warning text-background' : 'bg-primary text-white'
+                            )}>
+                              {selectedPack.is_premium ? 'Premium Pack' : 'Standard Pack'}
+                            </span>
+                          </div>
+                          <p className="text-textSec text-lg flex items-center gap-2">
+                            <UserIcon size={16} />
+                            {selectedPack.publisher}
+                            <span className="w-1 h-1 bg-white/20 rounded-full" />
+                            <span className="text-primary font-bold uppercase tracking-tighter">{selectedPack.category}</span>
+                          </p>
+                        </div>
+
+                        <div className="flex items-center gap-4">
+                          <StatCard label="İndirme" value={selectedPack.download_count} color="primary" />
+                          <StatCard label="Görüntülenme" value={selectedPack.view_count} color="accent" />
+                          <button
+                            onClick={() => resetStats(selectedPack)}
+                            className="p-3 bg-white/5 hover:bg-white/10 rounded-2xl transition-all text-textSec hover:text-white"
+                            title="İstatistikleri Sıfırla"
+                          >
+                            <RefreshCcw size={20} />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col gap-3">
+                      <label className="relative flex items-center gap-2 px-6 py-3.5 bg-primary hover:bg-primary/90 text-white rounded-2xl text-sm font-black shadow-xl shadow-primary/20 transition-all hover:translate-y-[-2px] active:translate-y-0 cursor-pointer">
+                        <Plus size={20} className="stroke-[3]" /> Sticker Ekle
+                        <input type="file" multiple className="hidden" onChange={handleAddSticker} disabled={isProcessing} />
+                      </label>
+                      <button
+                        onClick={() => {
+                          setEditFormData({ ...selectedPack });
+                          setShowEditPackModal(true);
+                        }}
+                        className="flex items-center gap-2 px-6 py-3.5 bg-card hover:bg-hover border border-white/5 rounded-2xl text-sm font-bold transition-all text-textSec hover:text-textMain"
+                      >
+                        <Settings size={20} /> Paket Bilgileri
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Sticker Grid */}
+                <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
+                  <div className="max-w-7xl mx-auto">
+                    <div className="flex items-center justify-between mb-8">
+                      <h3 className="text-xl font-bold flex items-center gap-3">
+                        <Grid className="text-primary" size={24} />
+                        Paket İçeriği
+                        <span className="bg-white/5 px-2.5 py-1 rounded-lg text-xs font-mono ml-2">{selectedPack.sticker_count} DOSYA</span>
+                      </h3>
+                      <div className="flex items-center gap-4 text-xs text-textSec font-bold uppercase tracking-widest">
+                        <span className="flex items-center gap-1.5"><Info size={14} /> Anlık Bulut Önizleme</span>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7 xl:grid-cols-8 gap-5">
+                      {selectedPack.stickers?.map((sticker, idx) => (
+                        <div key={idx} className="group relative aspect-square bg-card/50 rounded-2xl glass p-4 hover:ring-2 hover:ring-primary/50 transition-all duration-300 shadow-lg hover:shadow-2xl hover:shadow-primary/5">
+                          <div className="w-full h-full flex items-center justify-center">
+                            <img src={sticker.url} alt="" className="max-w-full max-h-full object-contain group-hover:scale-110 transition-transform duration-500" />
+                          </div>
+                          <div className="absolute inset-0 bg-background/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 rounded-2xl backdrop-blur-[2px]">
+                            <button
+                              onClick={() => deleteSticker(selectedPack, sticker)}
+                              className="p-2.5 bg-danger hover:bg-danger/80 text-white rounded-xl shadow-lg transition-all hover:scale-110"
+                            >
+                              <Trash2 size={18} />
+                            </button>
+                            <a
+                              href={sticker.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="p-2.5 bg-primary hover:bg-primary/80 text-white rounded-xl shadow-lg transition-all hover:scale-110"
+                            >
+                              <ExternalLink size={18} />
+                            </a>
+                          </div>
+                          <div className="absolute bottom-2 left-3 text-[9px] font-black text-textSec group-hover:text-primary transition-colors opacity-0 group-hover:opacity-100 tracking-tighter">
+                            {sticker.image_file.toUpperCase()}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="flex-1 flex flex-col items-center justify-center text-textSec/30 space-y-6 animate-pulse">
+                <Package size={120} strokeWidth={0.5} className="rotate-12" />
+                <div className="text-center">
+                  <p className="text-xl font-black uppercase tracking-[0.3em]">Merkez Kontrol Ünitesi</p>
+                  <p className="text-sm font-medium mt-2">İşlem yapmak için sol panelden bir paket seçin</p>
+                </div>
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="flex-1 overflow-y-auto p-12 custom-scrollbar bg-background">
+            <div className="max-w-6xl mx-auto space-y-12">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-4xl font-black text-white">Detaylı İstatistikler</h2>
+                  <p className="text-textSec">Uygulama genelindeki performans verileri</p>
+                </div>
+                <div className="bg-primary/10 px-6 py-3 rounded-2xl border border-primary/20">
+                  <span className="text-primary font-bold">Toplam {packs.length} Paket</span>
+                </div>
+              </div>
+
+              {/* High Level Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <div className="glass p-8 rounded-[2.5rem] space-y-4 bg-gradient-to-br from-primary/10 to-transparent">
+                  <div className="bg-primary/20 w-12 h-12 rounded-2xl flex items-center justify-center text-primary">
+                    <Package size={24} />
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-3xl font-black text-white">{packs.reduce((acc, p) => acc + (p.download_count || 0), 0).toLocaleString()}</span>
+                    <span className="text-sm font-bold text-textSec uppercase tracking-widest">Toplam İndirme</span>
+                  </div>
+                </div>
+                <div className="glass p-8 rounded-[2.5rem] space-y-4 bg-gradient-to-br from-accent/10 to-transparent">
+                  <div className="bg-accent/20 w-12 h-12 rounded-2xl flex items-center justify-center text-accent">
+                    <Search size={24} />
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-3xl font-black text-white">{packs.reduce((acc, p) => acc + (p.view_count || 0), 0).toLocaleString()}</span>
+                    <span className="text-sm font-bold text-textSec uppercase tracking-widest">Toplam Görüntülenme</span>
+                  </div>
+                </div>
+                <div className="glass p-8 rounded-[2.5rem] space-y-4 bg-gradient-to-br from-warning/10 to-transparent">
+                  <div className="bg-warning/20 w-12 h-12 rounded-2xl flex items-center justify-center text-warning">
+                    <LogOut size={24} className="rotate-[270deg]" />
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-3xl font-black text-white">{packs.filter(p => p.is_premium).length}</span>
+                    <span className="text-sm font-bold text-textSec uppercase tracking-widest">Premium Paketler</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Top Packs Table */}
+              <div className="glass rounded-[2.5rem] overflow-hidden border border-white/5">
+                <div className="px-8 py-6 border-b border-white/5 bg-white/5 flex items-center justify-between">
+                  <h3 className="text-xl font-bold flex items-center gap-3">
+                    <RefreshCcw className="text-primary" size={24} /> En Popüler Paketler
+                  </h3>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="border-b border-white/5 bg-white/2">
+                        <th className="px-8 py-4 text-xs font-black uppercase text-textSec">Paket</th>
+                        <th className="px-8 py-4 text-xs font-black uppercase text-textSec">İndirme</th>
+                        <th className="px-8 py-4 text-xs font-black uppercase text-textSec">Görüntülenme</th>
+                        <th className="px-8 py-4 text-xs font-black uppercase text-textSec">Verimlilik (%)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {packs
+                        .sort((a, b) => (b.download_count || 0) - (a.download_count || 0))
+                        .slice(0, 10)
+                        .map((pack, idx) => (
+                          <tr key={pack.id} className="border-b border-white/2 hover:bg-white/5 transition-colors group">
+                            <td className="px-8 py-5">
+                              <div className="flex items-center gap-4">
+                                <span className="text-xs font-mono text-textSec">#{idx + 1}</span>
+                                <div className="w-10 h-10 bg-hover rounded-xl flex items-center justify-center">
+                                  {pack.tray_url ? <img src={pack.tray_url} className="w-8 h-8 object-contain" /> : <Package size={18} />}
+                                </div>
+                                <span className="font-bold text-sm text-white">{pack.name}</span>
+                              </div>
+                            </td>
+                            <td className="px-8 py-5">
+                              <span className="text-sm font-black text-primary">{(pack.download_count || 0).toLocaleString()}</span>
+                            </td>
+                            <td className="px-8 py-5 text-sm text-textSec">{(pack.view_count || 0).toLocaleString()}</td>
+                            <td className="px-8 py-5">
+                              <div className="flex items-center gap-3">
+                                <div className="flex-1 h-1.5 bg-hover rounded-full overflow-hidden">
+                                  <div
+                                    className="h-full bg-primary"
+                                    style={{ width: `${Math.min(100, ((pack.download_count || 0) / (pack.view_count || 1)) * 100)}%` }}
+                                  />
+                                </div>
+                                <span className="text-[10px] font-black w-8">
+                                  {Math.round(((pack.download_count || 0) / (pack.view_count || 1)) * 100)}%
+                                </span>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </main>
+
+      {/* Footer / Status Bar */}
+      <footer className="glass h-8 px-6 flex items-center justify-between text-[10px] font-bold text-textSec uppercase tracking-widest border-t border-white/5">
+        <div className="flex items-center gap-6">
+          <div className="flex items-center gap-2">
+            <div className="w-1.5 h-1.5 bg-primary rounded-full shadow-sm shadow-primary/50" />
+            Firebase Bağlı: {selectedPack ? selectedPack.id : 'Hazır'}
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-1.5 h-1.5 bg-accent rounded-full" />
+            Storage: Veri Akışı Aktif
+          </div>
+        </div>
+        <div>
+          v2.0 PRO • {new Date().toLocaleTimeString()}
+        </div>
+      </footer>
+
+      {/* New Pack Modal */}
+      <Modal show={showNewPackModal} onClose={() => setShowNewPackModal(false)} title="Yeni Paket Oluştur">
+        <div className="space-y-6">
+          <p className="text-sm text-textSec">StickyApp veritabanına doğrudan el ile yeni paket ekleyin.</p>
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label="Paket Adı"
+              placeholder="Örn: Komik Çıkartmalar"
+              value={newPackData.name}
+              onChange={(e: any) => setNewPackData({ ...newPackData, name: e.target.value })}
+            />
+            <Input
+              label="Yayıncı"
+              placeholder="Sticly"
+              value={newPackData.publisher}
+              onChange={(e: any) => setNewPackData({ ...newPackData, publisher: e.target.value })}
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-textSec uppercase tracking-widest px-1">Kategori</label>
+              <select
+                className="w-full bg-hover rounded-xl px-4 py-3 text-sm outline-none border-none cursor-pointer text-white"
+                value={newPackData.category}
+                onChange={(e) => setNewPackData({ ...newPackData, category: e.target.value })}
+              >
+                <option>Mizah</option>
+                <option>Aşk</option>
+                <option>Dini</option>
+                <option>Eğlence</option>
+                <option>Arka Plan</option>
+              </select>
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-textSec uppercase tracking-widest px-1">Premium</label>
+              <div className="flex bg-hover rounded-xl p-1 gap-1">
+                <button
+                  onClick={() => setNewPackData({ ...newPackData, is_premium: false })}
+                  className={cn("flex-1 py-2 rounded-lg text-[10px] font-black transition-all", !newPackData.is_premium ? "bg-primary text-white" : "text-textSec")}
+                >NORMAL</button>
+                <button
+                  onClick={() => setNewPackData({ ...newPackData, is_premium: true })}
+                  className={cn("flex-1 py-2 rounded-lg text-[10px] font-black transition-all", newPackData.is_premium ? "bg-warning text-background" : "text-textSec")}
+                >PREMIUM</button>
+              </div>
+            </div>
+          </div>
+          <div className="bg-primary/5 border border-primary/20 p-4 rounded-xl flex items-center gap-3">
+            <Info className="text-primary" size={20} />
+            <span className="text-xs text-textMain/70">Yeni paket oluşturduktan sonra sticker ekleme paneli açılacaktır.</span>
+          </div>
+          <button
+            onClick={handleCreatePack}
+            disabled={isProcessing}
+            className="w-full bg-primary py-4 rounded-2xl font-black shadow-lg shadow-primary/20 hover:scale-[1.01] active:scale-95 transition-all disabled:opacity-50 text-white"
+          >
+            {isProcessing ? 'PAKET OLUŞTURULUYOR...' : 'OLUŞTUR VE BAŞLA'}
+          </button>
+        </div>
+      </Modal>
+
+      {/* Edit Pack Modal */}
+      <Modal show={showEditPackModal} onClose={() => setShowEditPackModal(false)} title="Uygulama Bilgilerini Düzenle">
+        {selectedPack && (
+          <div className="space-y-6">
+            <div className="grid grid-cols-2 gap-4">
+              <Input
+                label="Paket Adı"
+                value={editFormData.name}
+                onChange={(e: any) => setEditFormData({ ...editFormData, name: e.target.value })}
+              />
+              <Input
+                label="Yayıncı"
+                value={editFormData.publisher}
+                onChange={(e: any) => setEditFormData({ ...editFormData, publisher: e.target.value })}
+              />
+            </div>
+            <Input
+              label="Yayıncı E-posta"
+              value={editFormData.publisher_email}
+              onChange={(e: any) => setEditFormData({ ...editFormData, publisher_email: e.target.value })}
+            />
+            <div className="grid grid-cols-2 gap-4">
+              <Input
+                label="Gizlilik Politikası Link"
+                value={editFormData.privacy_policy_website}
+                onChange={(e: any) => setEditFormData({ ...editFormData, privacy_policy_website: e.target.value })}
+              />
+              <Input
+                label="Lisans Sözleşmesi Link"
+                value={editFormData.license_agreement_website}
+                onChange={(e: any) => setEditFormData({ ...editFormData, license_agreement_website: e.target.value })}
+              />
+            </div>
+            <div className="flex items-center gap-4">
+              <div className="flex-1">
+                <label className="text-xs font-bold text-textSec uppercase mb-2 block">Kategori</label>
+                <select
+                  className="w-full bg-hover rounded-xl px-4 py-2.5 text-sm outline-none border-none text-white cursor-pointer"
+                  value={editFormData.category}
+                  onChange={(e) => setEditFormData({ ...editFormData, category: e.target.value })}
+                >
+                  <option>Mizah</option>
+                  <option>Aşk</option>
+                  <option>Dini</option>
+                  <option>Eğlence</option>
+                  <option>Arka Plan</option>
+                </select>
+              </div>
+            </div>
+            <button
+              onClick={handleUpdatePack}
+              disabled={isProcessing}
+              className="w-full bg-primary py-4 rounded-2xl font-black shadow-lg shadow-primary/20 flex items-center justify-center gap-2 hover:scale-[1.01] active:scale-95 transition-all disabled:opacity-50 text-white"
+            >
+              {isProcessing ? 'KAYDEDİLİYOR...' : (
+                <>
+                  <Save size={20} /> DEĞİŞİKLİKLERİ KAYDET
+                </>
+              )}
+            </button>
+          </div>
+        )}
+      </Modal>
+
+    </div>
+  );
+}
+
+// Components
+function StatCard({ label, value, color }: { label: string, value: number, color: 'primary' | 'accent' }) {
+  return (
+    <div className="bg-card px-5 py-3 rounded-2xl border border-white/5 flex flex-col min-w-[100px]">
+      <span className="text-[10px] font-bold text-textSec uppercase tracking-widest mb-1">{label}</span>
+      <span className={cn("text-2xl font-black", color === 'primary' ? 'text-primary' : 'text-accent')}>
+        {(value || 0).toLocaleString()}
+      </span>
+    </div>
+  );
+}
+
+function Modal({ show, onClose, title, children }: { show: boolean, onClose: () => void, title: string, children: React.ReactNode }) {
+  if (!show) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-md animate-in fade-in duration-200" onClick={onClose}>
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="glass w-full max-w-2xl rounded-3xl overflow-hidden animate-in zoom-in-95 duration-200 shadow-[0_0_100px_rgba(0,168,132,0.1)]"
+      >
+        <div className="px-8 py-6 border-b border-white/5 flex items-center justify-between bg-card/50">
+          <h3 className="text-xl font-black tracking-tight text-white">{title}</h3>
+          <button onClick={onClose} className="p-2 hover:bg-hover rounded-xl transition-all">
+            <X size={20} className="text-textSec" />
+          </button>
+        </div>
+        <div className="p-8 max-h-[80vh] overflow-y-auto custom-scrollbar bg-background/50">
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Input({ label, ...props }: any) {
+  return (
+    <div className="space-y-2">
+      <label className="text-[10px] font-black text-textSec uppercase tracking-widest px-1">{label}</label>
+      <input
+        className="w-full bg-hover border-transparent border focus:border-primary/50 rounded-xl px-4 py-3 outline-none transition-all placeholder:text-textSec/30 text-white"
+        {...props}
+      />
+    </div>
+  );
+}
+
+export default App;
