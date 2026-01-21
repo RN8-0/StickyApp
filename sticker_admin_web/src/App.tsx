@@ -174,15 +174,25 @@ function App() {
     const files = e.target.files;
     if (!files || !selectedPack) return;
 
-    // Minimum 3, Maksimum 30 Kontrolü
-    if (files.length < 3 || files.length > 30) {
-      alert("Hata: Bir seferde en az 3, en fazla 30 sticker seçilmelidir.");
+    const currentCount = selectedPack.sticker_count || 0;
+    const uploadCount = files.length;
+    const totalCount = currentCount + uploadCount;
+
+    // WhatsApp Paket Standartları Kontrolü (Min 3, Max 30 Toplam)
+    if (totalCount > 30) {
+      alert(`Hata: Bir pakette en fazla 30 sticker olabilir. (Mevcut: ${currentCount}, Yeni: ${uploadCount}, Toplam: ${totalCount})`);
+      e.target.value = '';
+      return;
+    }
+
+    if (totalCount < 3) {
+      alert(`Hata: Bir pakette en az 3 sticker olmalıdır. (Mevcut: ${currentCount}, Yeni: ${uploadCount}, Toplam: ${totalCount}). En az ${3 - currentCount} adet daha eklemelisiniz.`);
       e.target.value = '';
       return;
     }
 
     setIsProcessing(true);
-    setUploadProgress({ current: 0, total: files.length });
+    setUploadProgress({ current: 0, total: uploadCount });
 
     try {
       const collectionName = selectedPack.is_premium ? 'premium_stickers' : 'stickers';
@@ -190,9 +200,9 @@ function App() {
 
       const newStickers: Sticker[] = [];
 
-      for (let i = 0; i < files.length; i++) {
+      for (let i = 0; i < uploadCount; i++) {
         const file = files[i];
-        setUploadProgress({ current: i + 1, total: files.length });
+        setUploadProgress({ current: i + 1, total: uploadCount });
 
         const storagePath = `${collectionName}/${selectedPack.id}/${file.name}`;
         const storageRef = ref(storage, storagePath);
