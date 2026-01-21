@@ -389,8 +389,8 @@ function App() {
       {/* Header */}
       <header className="glass sticky top-0 z-20 px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <div className="bg-primary p-2.5 rounded-xl shadow-lg shadow-primary/20">
-            <Grid className="text-white" size={24} />
+          <div className="bg-primary p-2.5 rounded-full shadow-lg shadow-primary/20 flex items-center justify-center">
+            <div className="w-5 h-5 bg-white rounded-full" />
           </div>
           <div>
             <h1 className="text-xl font-bold tracking-tight">Sticky Web Admin</h1>
