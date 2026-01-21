@@ -511,10 +511,16 @@ function App() {
                 </div>
               </div>
 
-              <div className="flex-1 overflow-y-auto px-4 pb-20 space-y-2.5 flex flex-col custom-scrollbar">
+              <div className={cn(
+                "flex-1 overflow-y-auto px-4 pb-20 custom-scrollbar",
+                viewMode === 'grid' ? "grid grid-cols-2 gap-3 p-4" : "flex flex-col space-y-2.5"
+              )}>
                 <button
                   onClick={() => setShowNewPackModal(true)}
-                  className="w-full flex items-center justify-center gap-2 p-4 border-2 border-dashed border-white/10 hover:border-primary/50 hover:bg-primary/5 rounded-2xl group transition-all mb-4"
+                  className={cn(
+                    "flex items-center justify-center gap-2 border-2 border-dashed border-white/10 hover:border-primary/50 hover:bg-primary/5 rounded-2xl group transition-all",
+                    viewMode === 'grid' ? "h-32" : "w-full p-4 mb-4"
+                  )}
                 >
                   <Plus className="text-textSec group-hover:text-primary transition-colors" size={20} />
                   <span className="text-sm font-bold text-textSec group-hover:text-primary">Yeni Paket Oluştur</span>
@@ -791,8 +797,8 @@ function App() {
                         <stop offset="100%" stopColor="#00A884" stopOpacity={0.6} />
                       </linearGradient>
                       <linearGradient id="barGradientAccent" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#FF3366" stopOpacity={1} />
-                        <stop offset="100%" stopColor="#FF3366" stopOpacity={0.6} />
+                        <stop offset="0%" stopColor="#34B7F1" stopOpacity={1} />
+                        <stop offset="100%" stopColor="#34B7F1" stopOpacity={0.6} />
                       </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
