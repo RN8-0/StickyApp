@@ -33,8 +33,19 @@ import {
   Save,
   Info,
   ExternalLink,
-  ChevronRight
+  ChevronRight,
+  TrendingUp,
+  BarChart3
 } from 'lucide-react';
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer
+} from 'recharts';
 import type { StickerPack, Sticker } from './types';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -62,6 +73,7 @@ function App() {
   // Form States
   const [newPackData, setNewPackData] = useState({ name: '', publisher: '', category: 'Mizah', is_premium: false });
   const [editFormData, setEditFormData] = useState<Partial<StickerPack>>({});
+  const [uploadProgress, setUploadProgress] = useState<{ current: number, total: number } | null>(null);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (u) => {
@@ -162,7 +174,16 @@ function App() {
     const files = e.target.files;
     if (!files || !selectedPack) return;
 
+    // Minimum 3, Maksimum 30 Kontrolü
+    if (files.length < 3 || files.length > 30) {
+      alert("Hata: Bir seferde en az 3, en fazla 30 sticker seçilmelidir.");
+      e.target.value = '';
+      return;
+    }
+
     setIsProcessing(true);
+    setUploadProgress({ current: 0, total: files.length });
+
     try {
       const collectionName = selectedPack.is_premium ? 'premium_stickers' : 'stickers';
       const packRef = doc(db, collectionName, selectedPack.id);
@@ -171,6 +192,8 @@ function App() {
 
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
+        setUploadProgress({ current: i + 1, total: files.length });
+
         const storagePath = `${collectionName}/${selectedPack.id}/${file.name}`;
         const storageRef = ref(storage, storagePath);
 
@@ -202,6 +225,7 @@ function App() {
       alert("Yükleme hatası: " + error);
     } finally {
       setIsProcessing(false);
+      setUploadProgress(null);
       e.target.value = ''; // Reset input
     }
   };
@@ -679,6 +703,99 @@ function App() {
                 </div>
               </div>
 
+              {/* Chart Section */}
+              <div className="glass p-10 rounded-[3rem] border border-white/5 space-y-8 bg-card/20 backdrop-blur-3xl relative overflow-hidden group">
+                <div className="absolute top-0 right-0 w-64 h-64 bg-primary/10 blur-[100px] rounded-full -translate-y-1/2 translate-x-1/2 group-hover:bg-primary/20 transition-all duration-1000" />
+
+                <div className="flex items-center justify-between relative z-10">
+                  <div className="space-y-1">
+                    <h3 className="text-2xl font-black flex items-center gap-3">
+                      <BarChart3 className="text-primary" size={28} />
+                      Paket Kıyaslama Analizi
+                    </h3>
+                    <p className="text-textSec text-sm font-medium">En popüler 10 paketin indirme ve görüntülenme oranları</p>
+                  </div>
+                  <div className="flex gap-4">
+                    <div className="flex items-center gap-2 px-4 py-2 bg-white/5 rounded-xl border border-white/5">
+                      <div className="w-3 h-3 bg-primary rounded-full shadow-[0_0_10px_rgba(0,168,132,0.5)]" />
+                      <span className="text-[10px] font-black uppercase tracking-widest text-textSec">İndirme</span>
+                    </div>
+                    <div className="flex items-center gap-2 px-4 py-2 bg-white/5 rounded-xl border border-white/5">
+                      <div className="w-3 h-3 bg-accent rounded-full shadow-[0_0_10px_rgba(255,51,102,0.5)]" />
+                      <span className="text-[10px] font-black uppercase tracking-widest text-textSec">Görüntüleme</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="h-[450px] w-full mt-12 relative z-10">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={packs
+                        .sort((a, b) => (b.download_count || 0) - (a.download_count || 0))
+                        .slice(0, 10)
+                        .map(p => ({
+                          name: p.name.length > 12 ? p.name.substring(0, 10) + '..' : p.name,
+                          downloads: p.download_count || 0,
+                          views: p.view_count || 0
+                        }))}
+                      margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
+                      barGap={8}
+                    >
+                      <defs>
+                        <linearGradient id="barGradientPrimary" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#00A884" stopOpacity={1} />
+                          <stop offset="100%" stopColor="#00A884" stopOpacity={0.6} />
+                        </linearGradient>
+                        <linearGradient id="barGradientAccent" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#FF3366" stopOpacity={1} />
+                          <stop offset="100%" stopColor="#FF3366" stopOpacity={0.6} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                      <XAxis
+                        dataKey="name"
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fill: '#888', fontSize: 11, fontWeight: 700 }}
+                        dy={15}
+                      />
+                      <YAxis
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fill: '#888', fontSize: 11, fontWeight: 700 }}
+                        dx={-10}
+                      />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: '#1E293B',
+                          border: '1px solid rgba(255,255,255,0.1)',
+                          borderRadius: '16px',
+                          boxShadow: '0 20px 25px -5px rgba(0,0,0,0.5)',
+                          padding: '12px'
+                        }}
+                        itemStyle={{ fontSize: '12px', fontWeight: 800, padding: '4px 0' }}
+                        labelStyle={{ color: '#fff', marginBottom: '8px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.05em' }}
+                        cursor={{ fill: 'rgba(255,255,255,0.02)' }}
+                      />
+                      <Bar
+                        dataKey="downloads"
+                        fill="url(#barGradientPrimary)"
+                        radius={[6, 6, 0, 0]}
+                        barSize={20}
+                        animationDuration={1500}
+                      />
+                      <Bar
+                        dataKey="views"
+                        fill="url(#barGradientAccent)"
+                        radius={[6, 6, 0, 0]}
+                        barSize={20}
+                        animationDuration={2000}
+                      />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
               {/* Top Packs Table */}
               <div className="glass rounded-[2.5rem] overflow-hidden border border-white/5">
                 <div className="px-8 py-6 border-b border-white/5 bg-white/5 flex items-center justify-between">
@@ -880,6 +997,37 @@ function App() {
           </div>
         )}
       </Modal>
+
+      {/* Loading Overlay */}
+      {uploadProgress && (
+        <div className="fixed inset-0 z-[100] bg-background/90 backdrop-blur-xl flex flex-col items-center justify-center space-y-8 animate-in fade-in duration-300">
+          <div className="relative">
+            <div className="w-32 h-32 border-4 border-primary/20 rounded-full animate-[spin_3s_linear_infinite]" />
+            <div className="absolute inset-0 border-4 border-t-primary border-transparent rounded-full animate-spin" />
+            <div className="absolute inset-0 flex items-center justify-center">
+              <TrendingUp className="text-primary animate-pulse" size={40} />
+            </div>
+          </div>
+
+          <div className="text-center space-y-3">
+            <h3 className="text-3xl font-black text-white tracking-tight">STİCKERLAR BULUTA YÜKLENİYOR</h3>
+            <p className="text-textSec font-bold uppercase tracking-widest text-sm">
+              Dosya {uploadProgress.current} / {uploadProgress.total} işleniyor...
+            </p>
+          </div>
+
+          <div className="w-full max-w-md bg-white/5 h-2 rounded-full overflow-hidden border border-white/5">
+            <div
+              className="h-full bg-primary shadow-[0_0_15px_rgba(0,168,132,0.5)] transition-all duration-500 ease-out"
+              style={{ width: `${(uploadProgress.current / uploadProgress.total) * 100}%` }}
+            />
+          </div>
+
+          <p className="text-[10px] text-textSec font-bold uppercase tracking-[0.3em] animate-pulse">
+            Lütfen tarayıcıyı kapatmayın
+          </p>
+        </div>
+      )}
 
     </div>
   );
