@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import logo from './assets/logo.png';
 import { db, storage, auth } from './firebase';
 import {
   collection,
@@ -423,13 +422,8 @@ function App() {
       {/* Header */}
       <header className="glass sticky top-0 z-20 px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-5">
-          <div className="relative group">
-            <div className="absolute inset-0 bg-primary/20 blur-2xl rounded-full scale-150 animate-pulse group-hover:bg-primary/40 transition-all duration-700" />
-            <img
-              src={logo}
-              alt="Sticky"
-              className="relative w-12 h-12 object-contain drop-shadow-[0_0_10px_rgba(0,168,132,0.3)] transition-transform duration-500 group-hover:scale-110"
-            />
+          <div className="w-11 h-11 bg-primary rounded-2xl flex items-center justify-center shadow-lg shadow-primary/20 transition-transform duration-500 hover:scale-110">
+            <div className="w-3.5 h-3.5 bg-white rounded-full" />
           </div>
           <div className="flex flex-col">
             <h1 className="text-2xl font-black tracking-tight text-white flex items-center gap-2">
