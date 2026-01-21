@@ -366,7 +366,7 @@ function App() {
             <div className="bg-primary w-16 h-16 rounded-2xl flex items-center justify-center mx-auto shadow-lg shadow-primary/20">
               <Lock className="text-white" size={32} />
             </div>
-            <h1 className="text-2xl font-bold">Sticky Admin Girişi</h1>
+            <h1 className="text-2xl font-bold">Sticly Admin Girişi</h1>
             <p className="text-textSec text-sm">Yönetim paneline erişmek için giriş yapın</p>
           </div>
 
@@ -427,7 +427,7 @@ function App() {
             <div className="w-5 h-5 bg-white rounded-full" />
           </div>
           <div>
-            <h1 className="text-xl font-bold tracking-tight">Sticky Web Admin</h1>
+            <h1 className="text-xl font-bold tracking-tight">Sticly Web Admin</h1>
             <div className="flex items-center gap-2">
               <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
               <span className="text-[10px] text-textSec font-medium uppercase tracking-widest">Canlı Sistem</span>
@@ -925,7 +925,7 @@ function App() {
       {/* New Pack Modal */}
       <Modal show={showNewPackModal} onClose={() => setShowNewPackModal(false)} title="Yeni Paket Oluştur">
         <div className="space-y-6">
-          <p className="text-sm text-textSec">StickyApp veritabanına doğrudan el ile yeni paket ekleyin.</p>
+          <p className="text-sm text-textSec">Sticly veritabanına doğrudan el ile yeni paket ekleyin.</p>
           <div className="grid grid-cols-2 gap-4">
             <Input
               label="Paket Adı"
