@@ -41,10 +41,12 @@ def setup_environment():
 def clear_screen():
     os.system('cls' if os.name == 'nt' else 'clear')
 
-def print_banner():
     print("""
     ==================================================
     🚀 STICKY APP PRO - HEPSİ BİR ARADA KURULUM ARACI
+    --------------------------------------------------
+    📢 NOT: Google Drive bağlantısı tamamen kaldırıldı.
+    Sistem artık %100 Firebase üzerinden çalışmaktadır.
     ==================================================
     """)
 
@@ -62,16 +64,20 @@ def check_credentials():
     # Admin SDK için
     creds_path = "firebase-admin-sdk.json"
     if os.path.exists(creds_path):
-        print(f"✅ Admin SDK: {creds_path} bulundu.")
+        print(f"✅ Web Panel Yetki Dosyası: {creds_path} klasörde mevcut.")
     else:
-        print(f"❌ EKSİK: {creds_path}")
-        print("\n   ADMİN ANAHTARI NASIL ALINIR?")
-        print("   1. https://console.firebase.google.com adresine gidin.")
-        print("   2. Sol üstteki Çark simgesine (Proje Ayarları) tıklayın.")
-        print("   3. Üstten 'Hizmet Hesapları' (Service Accounts) sekmesine tıklayın.")
-        print("   4. Sayfanın ortasındaki 'Yeni Özel Anahtar Oluştur' (Generate New Private Key) butonuna basın.")
-        print("   5. İnen .json dosyasının adını 'firebase-admin-sdk.json' olarak değiştirin.")
-        print(f"   6. Dosyayı şu an bulunduğunuz klasöre ({os.getcwd()}) yapıştırın.\n")
+        print(f"❌ KRİTİK EKSİK: {creds_path}")
+        print("\n   --- ADMİN ANAHTARI (SDK) NASIL ALINIR? ---")
+        print("   1. Firebase Console'u açın: https://console.firebase.google.com")
+        print("   2. Projenizi seçin (StickyApp).")
+        print("   3. Sol menüde, 'Project Overview' yazısının yanındaki ÇARK (⚙️) simgesine tıklayın.")
+        print("   4. Açılan menüden 'Project settings' (Proje Ayarları) seçeneğine basın.")
+        print("   5. Üstteki sekmelerden 'Service accounts' (Hizmet Hesapları) sekmesine gidin.")
+        print("   6. 'Firebase Admin SDK' yazısının seçili olduğundan emin olun.")
+        print("   7. Sayfanın en altındaki mavi 'Generate new private key' butonuna basın.")
+        print("   8. İnen .json dosyasını şu klasöre yapıştırın: " + os.getcwd())
+        print(f"   9. Dosyanın adını tam olarak '{creds_path}' yapın.")
+        print("   ------------------------------------------\n")
 
 def check_web_dependencies():
     print("\n🌐 Web Admin Bağımlılıkları Kontrol Ediliyor...")
