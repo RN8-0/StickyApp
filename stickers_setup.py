@@ -71,14 +71,21 @@ def check_web_dependencies():
     print("\n🌐 Web Admin Bağımlılıkları Kontrol Ediliyor...")
     web_dir = "sticker_admin_web"
     if os.path.exists(web_dir):
+        # NPM Check
+        npm_cmd = "npm.cmd" if os.name == "nt" else "npm"
+        if not shutil.which(npm_cmd) and not shutil.which("npm"):
+            print("❌ HATA: 'npm' (Node.js) sisteminizde bulunamadı!")
+            print("   Lütfen https://nodejs.org/ adresinden Node.js indirip kurun.")
+            return
+
         node_modules = os.path.join(web_dir, "node_modules")
         if not os.path.exists(node_modules):
-            print("⏳ 'node_modules' eksik, paketler yükleniyor (npm install)...")
+            print("⏳ 'node_modules' eksik, paketler yükleniyor (npm install)... Bu işlem birkaç dakika sürebilir.")
             try:
-                subprocess.check_call(["npm", "install"], cwd=web_dir, shell=(os.name == 'nt'))
+                subprocess.check_call([npm_cmd, "install"], cwd=web_dir, shell=(os.name == 'nt'))
                 print("✅ Web paketleri başarıyla yüklendi.")
             except Exception as e:
-                print(f"❌ NPM hatası: {e}. 'npm' kurulu olduğundan emin olun.")
+                print(f"❌ NPM hatası: {e}.")
         else:
             print("✅ Web paketleri (node_modules) mevcut.")
     else:
