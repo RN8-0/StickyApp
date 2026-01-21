@@ -682,12 +682,8 @@ function App() {
                 </div>
               </div>
             ) : (
-              <div className="flex-1 flex flex-col items-center justify-center text-textSec/30 space-y-6 animate-pulse">
-                <Package size={120} strokeWidth={0.5} className="rotate-12" />
-                <div className="text-center">
-                  <p className="text-xl font-black uppercase tracking-[0.3em]">Merkez Kontrol Ünitesi</p>
-                  <p className="text-sm font-medium mt-2">İşlem yapmak için sol panelden bir paket seçin</p>
-                </div>
+              <div className="flex-1 flex flex-col items-center justify-center">
+                {/* Boş Durum - Temizlendi */}
               </div>
             )}
           </>
