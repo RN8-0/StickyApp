@@ -1,0 +1,25 @@
+vite v7.3.1 building client environment for production...
+transforming...
+✓ 2248 modules transformed.
+✗ Build failed in 3.31s
+error during build:
+src/utils/stickerProcessor.ts (3:7): "default" is not exported by "node_modules/@imgly/background-removal/dist/index.mjs", imported by "src/utils/stickerProcessor.ts".
+file: /home/arain/Desktop/StickyApp/sticker_admin_web/src/utils/stickerProcessor.ts:3:7
+
+1: import { FFmpeg } from '@ffmpeg/ffmpeg';
+2: import { fetchFile, toBlobURL } from '@ffmpeg/util';
+3: import removeBackground from '@imgly/background-removal';
+          ^
+4: 
+5: export type StickerProgress = {
+
+    at getRollupError (file:///home/arain/Desktop/StickyApp/sticker_admin_web/node_modules/rollup/dist/es/shared/parseAst.js:401:41)
+    at error (file:///home/arain/Desktop/StickyApp/sticker_admin_web/node_modules/rollup/dist/es/shared/parseAst.js:397:42)
+    at Module.error (file:///home/arain/Desktop/StickyApp/sticker_admin_web/node_modules/rollup/dist/es/shared/node-entry.js:17025:16)
+    at Module.traceVariable (file:///home/arain/Desktop/StickyApp/sticker_admin_web/node_modules/rollup/dist/es/shared/node-entry.js:17481:29)
+    at ModuleScope.findVariable (file:///home/arain/Desktop/StickyApp/sticker_admin_web/node_modules/rollup/dist/es/shared/node-entry.js:15144:39)
+    at ChildScope.findVariable (file:///home/arain/Desktop/StickyApp/sticker_admin_web/node_modules/rollup/dist/es/shared/node-entry.js:5688:38)
+    at ClassBodyScope.findVariable (file:///home/arain/Desktop/StickyApp/sticker_admin_web/node_modules/rollup/dist/es/shared/node-entry.js:5688:38)
+    at ChildScope.findVariable (file:///home/arain/Desktop/StickyApp/sticker_admin_web/node_modules/rollup/dist/es/shared/node-entry.js:5688:38)
+    at ChildScope.findVariable (file:///home/arain/Desktop/StickyApp/sticker_admin_web/node_modules/rollup/dist/es/shared/node-entry.js:5688:38)
+    at FunctionScope.findVariable (file:///home/arain/Desktop/StickyApp/sticker_admin_web/node_modules/rollup/dist/es/shared/node-entry.js:5688:38)

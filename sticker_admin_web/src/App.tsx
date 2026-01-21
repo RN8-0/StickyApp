@@ -49,6 +49,7 @@ import {
 import type { StickerPack, Sticker } from './types';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { stickerProcessor } from './utils/stickerProcessor';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -70,9 +71,19 @@ function App() {
   const [isProcessing, setIsProcessing] = useState(false);
 
   // Form States
-  const [newPackData, setNewPackData] = useState({ name: '', publisher: '', category: 'Mizah', is_premium: false, is_active: true });
+  const [newPackData, setNewPackData] = useState({
+    name: '',
+    publisher: '',
+    publisher_email: '',
+    privacy_policy_website: '',
+    license_agreement_website: '',
+    category: 'Mizah',
+    is_premium: false,
+    is_active: true,
+    is_animated: true
+  });
   const [editFormData, setEditFormData] = useState<Partial<StickerPack>>({});
-  const [uploadProgress, setUploadProgress] = useState<{ current: number, total: number } | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<{ current: number, total: number, message?: string } | null>(null);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (u) => {
@@ -102,8 +113,8 @@ function App() {
       const premiumPacks = await getDocs(collection(db, 'premium_stickers'));
 
       const allPacks: StickerPack[] = [
-        ...normalPacks.docs.map(d => ({ id: d.id, ...d.data(), is_premium: false } as StickerPack)),
-        ...premiumPacks.docs.map(d => ({ id: d.id, ...d.data(), is_premium: true } as StickerPack))
+        ...normalPacks.docs.map(d => ({ id: d.id, ...d.data(), is_premium: false, is_animated: d.data().is_animated ?? false } as StickerPack)),
+        ...premiumPacks.docs.map(d => ({ id: d.id, ...d.data(), is_premium: true, is_animated: d.data().is_animated ?? false } as StickerPack))
       ];
 
       setPacks(allPacks.sort((a, b) => a.name.localeCompare(b.name)));
@@ -127,8 +138,10 @@ function App() {
         publisher_email: "contact@sticly.com",
         category: newPackData.category,
         is_premium: newPackData.is_premium,
+        is_animated: newPackData.is_animated,
         download_count: 0,
         view_count: 0,
+        favorite_count: 0,
         sticker_count: 0,
         image_data_version: "1",
         is_active: newPackData.is_active,
@@ -143,8 +156,18 @@ function App() {
       setPacks([createdPack, ...packs]);
       setSelectedPack(createdPack);
       setShowNewPackModal(false);
-      setNewPackData({ name: '', publisher: '', category: 'Mizah', is_premium: false, is_active: true });
-      alert("Yeni paket oluşturuldu. Şimdi sticker ekleyebilirsiniz.");
+      setNewPackData({
+        name: '',
+        publisher: '',
+        publisher_email: '',
+        privacy_policy_website: '',
+        license_agreement_website: '',
+        category: 'Mizah',
+        is_premium: false,
+        is_active: true,
+        is_animated: true
+      });
+      alert("Yeni hareketli paket oluşturuldu. Şimdi video/gif ekleyebilirsiniz.");
     } catch (e) {
       alert("Hata: " + e);
     } finally {
@@ -207,29 +230,63 @@ function App() {
     }
 
     setIsProcessing(true);
-    setUploadProgress({ current: 0, total: uploadCount });
+    setUploadProgress({ current: 0, total: uploadCount, message: 'İşlem başlıyor...' });
 
     try {
       const collectionName = selectedPack.is_premium ? 'premium_stickers' : 'stickers';
       const packRef = doc(db, collectionName, selectedPack.id);
-
       const newStickers: Sticker[] = [];
 
       for (let i = 0; i < uploadCount; i++) {
         const file = files[i];
-        setUploadProgress({ current: i + 1, total: uploadCount });
+        const isAnimatedFile = file.type.includes('video') || file.type.includes('gif');
 
-        const storagePath = `${collectionName}/${selectedPack.id}/${file.name}`;
+        // Karışık paket kontrolü (WhatsApp kısıtlaması)
+        if (selectedPack.is_animated && !isAnimatedFile && !file.name.endsWith('.webp')) {
+          alert(`Hata: Bu paket hareketli bir pakettir. "${file.name}" gibi statik görseller eklenemez.`);
+          continue;
+        }
+        if (!selectedPack.is_animated && isAnimatedFile) {
+          alert(`Hata: Bu paket statik bir pakettir. "${file.name}" gibi hareketli dosyalar eklenemez.`);
+          continue;
+        }
+
+        setUploadProgress({
+          current: i + 1,
+          total: uploadCount,
+          message: `${file.name} işleniyor...`
+        });
+
+        let processedBlob: Blob;
+        const isAnimatedPack = selectedPack.is_animated ?? false;
+        if (isAnimatedPack) {
+          processedBlob = await stickerProcessor.processAnimated(file, (p) => {
+            setUploadProgress(prev => prev ? { ...prev, message: `${file.name}: ${p.message}` } : null);
+          });
+        } else {
+          processedBlob = await stickerProcessor.processStatic(file, (p) => {
+            setUploadProgress(prev => prev ? { ...prev, message: `${file.name}: ${p.message}` } : null);
+          });
+        }
+
+        const fileName = `${Date.now()}_${i}.webp`;
+        const storagePath = `${collectionName}/${selectedPack.id}/${fileName}`;
         const storageRef = ref(storage, storagePath);
 
-        await uploadBytes(storageRef, file);
+        await uploadBytes(storageRef, processedBlob);
         const url = await getDownloadURL(storageRef);
 
         newStickers.push({
-          image_file: file.name,
+          image_file: fileName,
           url: url,
           emojis: [""]
         });
+      }
+
+      if (newStickers.length === 0) {
+        setIsProcessing(false);
+        setUploadProgress(null);
+        return;
       }
 
       const newVersion = Date.now().toString();
@@ -248,13 +305,14 @@ function App() {
 
       setPacks(packs.map(p => p.id === selectedPack.id ? updated : p));
       setSelectedPack(updated);
-      alert(`${newStickers.length} sticker başarıyla eklendi.`);
+      alert(`${newStickers.length} sticker başarıyla işlendi ve eklendi.`);
     } catch (error) {
+      console.error(error);
       alert("Yükleme hatası: " + error);
     } finally {
       setIsProcessing(false);
       setUploadProgress(null);
-      e.target.value = ''; // Reset input
+      if (e.target) e.target.value = '';
     }
   };
 
@@ -263,29 +321,41 @@ function App() {
     if (!file || !selectedPack) return;
 
     setIsProcessing(true);
+    setUploadProgress({ current: 1, total: 1, message: 'Kapak resmi hazırlanıyor...' });
+
+    // Kısa gecikme: State'in render edilmesine ve overlay'in görünmesine izin ver
+    await new Promise(r => setTimeout(r, 100));
+
     try {
+      setUploadProgress(prev => prev ? { ...prev, message: 'Arka plan siliniyor...' } : null);
+      const processedBlob = await stickerProcessor.processTray(file, (p) => {
+        setUploadProgress(prev => prev ? { ...prev, message: p.message } : null);
+      });
+
       const collectionName = selectedPack.is_premium ? 'premium_stickers' : 'stickers';
-      const storagePath = `${collectionName}/${selectedPack.id}/tray_${file.name}`;
+      const fileName = `tray_${Date.now()}.webp`;
+      const storagePath = `${collectionName}/${selectedPack.id}/${fileName}`;
       const storageRef = ref(storage, storagePath);
 
-      await uploadBytes(storageRef, file);
+      await uploadBytes(storageRef, processedBlob);
       const url = await getDownloadURL(storageRef);
       const newVersion = Date.now().toString();
 
       await updateDoc(doc(db, collectionName, selectedPack.id), {
         tray_url: url,
-        tray_image_file: file.name,
+        tray_image_file: fileName,
         image_data_version: newVersion
       });
 
-      const updated = { ...selectedPack, tray_url: url, tray_image_file: file.name, image_data_version: newVersion };
+      const updated = { ...selectedPack, tray_url: url, tray_image_file: fileName, image_data_version: newVersion };
       setPacks(packs.map(p => p.id === selectedPack.id ? updated : p));
       setSelectedPack(updated);
-      alert("Kapak resmi güncellendi.");
+      alert("Kapak resmi başarıyla işlendi ve güncellendi.");
     } catch (e) {
       alert("Hata: " + e);
     } finally {
       setIsProcessing(false);
+      setUploadProgress(null);
     }
   };
 
@@ -648,7 +718,11 @@ function App() {
                       {selectedPack.stickers?.map((sticker, idx) => (
                         <div key={idx} className="group relative aspect-square bg-card/50 rounded-2xl glass p-4 hover:ring-2 hover:ring-primary/50 transition-all duration-300 shadow-lg hover:shadow-2xl hover:shadow-primary/5">
                           <div className="w-full h-full flex items-center justify-center">
-                            <img src={sticker.url} alt="" className="max-w-full max-h-full object-contain group-hover:scale-110 transition-transform duration-500" />
+                            <img
+                              src={sticker.url}
+                              alt=""
+                              className="w-full h-full object-contain group-hover:scale-110 transition-transform duration-500"
+                            />
                           </div>
                           <div className="absolute inset-0 bg-background/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 rounded-2xl backdrop-blur-[2px]">
                             <button
@@ -939,53 +1013,18 @@ function App() {
               onChange={(e: any) => setNewPackData({ ...newPackData, publisher: e.target.value })}
             />
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-textSec uppercase tracking-widest px-1">Kategori</label>
-              <select
-                className="w-full bg-hover rounded-xl px-4 py-3 text-sm outline-none border-none cursor-pointer text-white"
-                value={newPackData.category}
-                onChange={(e) => setNewPackData({ ...newPackData, category: e.target.value })}
-              >
-                <option>Mizah</option>
-                <option>Aşk</option>
-                <option>Dini</option>
-                <option>Eğlence</option>
-                <option>Arka Plan</option>
-              </select>
-            </div>
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-textSec uppercase tracking-widest px-1">Premium</label>
-              <div className="flex bg-hover rounded-xl p-1 gap-1">
-                <button
-                  onClick={() => setNewPackData({ ...newPackData, is_premium: false })}
-                  className={cn("flex-1 py-2 rounded-lg text-[10px] font-black transition-all", !newPackData.is_premium ? "bg-primary text-white" : "text-textSec")}
-                >NORMAL</button>
-                <button
-                  onClick={() => setNewPackData({ ...newPackData, is_premium: true })}
-                  className={cn("flex-1 py-2 rounded-lg text-[10px] font-black transition-all", newPackData.is_premium ? "bg-warning text-background" : "text-textSec")}
-                >PREMIUM</button>
-              </div>
-            </div>
-          </div>
-          <div className="grid grid-cols-1 gap-4">
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-textSec uppercase tracking-widest px-1">Durum (Görünürlük)</label>
-              <div className="flex bg-hover rounded-xl p-1 gap-1">
-                <button
-                  onClick={() => setNewPackData({ ...newPackData, is_active: true })}
-                  className={cn("flex-1 py-2 rounded-lg text-[10px] font-black transition-all", newPackData.is_active ? "bg-primary text-white" : "text-textSec")}
-                >AKTİF</button>
-                <button
-                  onClick={() => setNewPackData({ ...newPackData, is_active: false })}
-                  className={cn("flex-1 py-2 rounded-lg text-[10px] font-black transition-all", !newPackData.is_active ? "bg-danger text-white" : "text-textSec")}
-                >PASİF (GİZLİ)</button>
-              </div>
-            </div>
+          <Input
+            label="Yayıncı E-posta"
+            value={newPackData.publisher_email}
+            onChange={(e: any) => setNewPackData({ ...newPackData, publisher_email: e.target.value })}
+          />
+          <div className="bg-primary/5 border border-primary/20 p-4 rounded-xl flex items-center gap-3">
+            <RefreshCcw className="text-primary animate-spin" size={20} />
+            <span className="text-xs text-textMain/70 font-bold uppercase">HAREKETLİ PAKET (VIDEO/GIF) MODU AKTİF</span>
           </div>
           <div className="bg-primary/5 border border-primary/20 p-4 rounded-xl flex items-center gap-3">
             <Info className="text-primary" size={20} />
-            <span className="text-xs text-textMain/70">Yeni paket oluşturduktan sonra sticker ekleme paneli açılacaktır.</span>
+            <span className="text-xs text-textMain/70 uppercase font-bold">Yeni hareketli paket oluşturduktan sonra video ekleme paneli açılacaktır.</span>
           </div>
           <button
             onClick={handleCreatePack}
@@ -1061,6 +1100,19 @@ function App() {
             </div>
             <div className="flex items-center gap-4">
               <div className="flex-1">
+                <label className="text-xs font-bold text-textSec uppercase mb-2 block">Paket Türü</label>
+                <div className="flex bg-hover rounded-xl p-1 gap-1">
+                  <button
+                    onClick={() => setEditFormData({ ...editFormData, is_animated: false })}
+                    className={cn("flex-1 py-2 rounded-lg text-[10px] font-black transition-all", !editFormData.is_animated ? "bg-primary text-white" : "text-textSec")}
+                  >STATİK</button>
+                  <button
+                    onClick={() => setEditFormData({ ...editFormData, is_animated: true })}
+                    className={cn("flex-1 py-2 rounded-lg text-[10px] font-black transition-all", editFormData.is_animated ? "bg-accent text-white" : "text-textSec")}
+                  >HAREKETLİ</button>
+                </div>
+              </div>
+              <div className="flex-1">
                 <label className="text-xs font-bold text-textSec uppercase mb-2 block">Durum (Görünürlük)</label>
                 <div className="flex bg-hover rounded-xl p-1 gap-1">
                   <button
@@ -1089,38 +1141,48 @@ function App() {
         )}
       </Modal >
 
-      {/* Loading Overlay */}
-      {
-        uploadProgress && (
-          <div className="fixed inset-0 z-[100] bg-background/90 backdrop-blur-xl flex flex-col items-center justify-center space-y-8 animate-in fade-in duration-300">
-            <div className="relative">
-              <div className="w-32 h-32 border-4 border-primary/20 rounded-full animate-[spin_3s_linear_infinite]" />
-              <div className="absolute inset-0 border-4 border-t-primary border-transparent rounded-full animate-spin" />
-              <div className="absolute inset-0 flex items-center justify-center">
-                <TrendingUp className="text-primary animate-pulse" size={40} />
-              </div>
+      {/* Processing Overlay */}
+      {isProcessing && uploadProgress && (
+        <div className="fixed inset-0 z-[100] bg-background/90 backdrop-blur-xl flex flex-col items-center justify-center space-y-8 animate-in fade-in duration-300 p-6">
+          <div className="relative group">
+            <div className="absolute inset-0 bg-primary/20 blur-[60px] rounded-full animate-pulse" />
+            <div className="relative bg-card/60 p-8 rounded-[3rem] border border-white/10 shadow-2xl backdrop-blur-3xl">
+              <RefreshCcw className="text-primary animate-spin" size={60} />
             </div>
+          </div>
 
-            <div className="text-center space-y-3">
-              <h3 className="text-3xl font-black text-white tracking-tight">STİCKERLAR BULUTA YÜKLENİYOR</h3>
-              <p className="text-textSec font-bold uppercase tracking-widest text-sm">
-                Dosya {uploadProgress.current} / {uploadProgress.total} işleniyor...
+          <div className="text-center space-y-4 max-w-lg">
+            <h3 className="text-3xl font-black text-white tracking-tight uppercase">Çıkartmalar İşleniyor</h3>
+            <div className="bg-white/5 px-6 py-2 rounded-2xl border border-white/5 inline-block">
+              <p className="text-primary font-black uppercase tracking-[0.2em] text-[10px]">
+                {uploadProgress.message || 'Medyalar WhatsApp formatına dönüştürülüyor...'}
               </p>
             </div>
+          </div>
 
-            <div className="w-full max-w-md bg-white/5 h-2 rounded-full overflow-hidden border border-white/5">
+          <div className="w-full max-w-md space-y-4">
+            <div className="flex items-center justify-between text-[10px] font-black text-textSec uppercase tracking-widest px-1">
+              <span>İşlem: {uploadProgress.current} / {uploadProgress.total}</span>
+              <span className="text-primary">{Math.round((uploadProgress.current / uploadProgress.total) * 100)}%</span>
+            </div>
+            <div className="w-full bg-white/5 h-3 rounded-full overflow-hidden border border-white/5 p-1">
               <div
-                className="h-full bg-primary shadow-[0_0_15px_rgba(0,168,132,0.5)] transition-all duration-500 ease-out"
+                className="h-full bg-gradient-to-r from-primary via-accent to-primary shadow-[0_0_20px_rgba(0,168,132,0.6)] transition-all duration-700 ease-out rounded-full"
                 style={{ width: `${(uploadProgress.current / uploadProgress.total) * 100}%` }}
               />
             </div>
+          </div>
 
-            <p className="text-[10px] text-textSec font-bold uppercase tracking-[0.3em] animate-pulse">
-              Lütfen tarayıcıyı kapatmayın
+          <div className="bg-primary/5 border border-primary/20 p-5 rounded-3xl flex items-center gap-4 max-w-sm">
+            <div className="bg-primary/20 p-2 rounded-xl text-primary">
+              <Info size={20} />
+            </div>
+            <p className="text-[10px] text-textMain/70 font-bold uppercase leading-relaxed text-left">
+              Video ve GIF işlemleri işlemci gücü gerektirir. Lütfen işlemi bölmeyin.
             </p>
           </div>
-        )
-      }
+        </div>
+      )}
 
     </div >
   );
