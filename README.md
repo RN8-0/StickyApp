@@ -29,11 +29,14 @@ Projenin bağımlılıklarını kontrol etmek, eksik dosyaları (Admin SDK vb.) 
 python3 stickers_setup.py
 ```
 
-**Bu araç şunları yapar:**
-1. Eksik kütüphaneleri otomatik yükler.
-2. `firebase-admin-sdk.json` dosyasını kontrol eder, yoksa nereden alacağınızı gösterir.
-3. Web Admin panelini tek tıkla başlatır.
-4. Yaptığınız değişiklikleri otomatik olarak GitHub'a gönderir.
+**⚠️ ÖNEMLİ: Firebase Admin SDK Nasıl Alınır?**
+Web Admin panelinin çalışması için `firebase-admin-sdk.json` dosyası gereklidir:
+1. [Firebase Console](https://console.firebase.google.com) > Proje Ayarları > **Hizmet Hesapları** sekmesine gidin.
+2. Merkezdeki **"Yeni Özel Anahtar Oluştur"** butonuna basın.
+3. İnen dosyayı `firebase-admin-sdk.json` olarak adlandırıp ana dizine atın.
+
+**☁️ Google Drive Notu:**
+Eski sistemdeki Google Drive bağımlılığı tamamen kaldırılmıştır. Artık tüm işlemler doğrudan Firebase üzerinden daha güvenli ve hızlı yapılmaktadır.
 
 ---
 

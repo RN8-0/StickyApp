@@ -65,7 +65,13 @@ def check_credentials():
         print(f"✅ Admin SDK: {creds_path} bulundu.")
     else:
         print(f"❌ EKSİK: {creds_path}")
-        print("   -> Firebase Console > Hizmet Hesapları > Yeni özel anahtar oluşturup bu ana dizine bu isimle koyun.")
+        print("\n   ADMİN ANAHTARI NASIL ALINIR?")
+        print("   1. https://console.firebase.google.com adresine gidin.")
+        print("   2. Sol üstteki Çark simgesine (Proje Ayarları) tıklayın.")
+        print("   3. Üstten 'Hizmet Hesapları' (Service Accounts) sekmesine tıklayın.")
+        print("   4. Sayfanın ortasındaki 'Yeni Özel Anahtar Oluştur' (Generate New Private Key) butonuna basın.")
+        print("   5. İnen .json dosyasının adını 'firebase-admin-sdk.json' olarak değiştirin.")
+        print(f"   6. Dosyayı şu an bulunduğunuz klasöre ({os.getcwd()}) yapıştırın.\n")
 
 def check_web_dependencies():
     print("\n🌐 Web Admin Bağımlılıkları Kontrol Ediliyor...")
@@ -118,7 +124,8 @@ def cleanup():
     print("\n🧹 Gereksiz Dosyalar Temizleniyor...")
     files_to_remove = [
         "upload_stickers.py", "sticker_manager.py", "upload_stickers.sh", 
-        "upload_stickers.bat", "requirements.txt", "token.pickle", "cache.json"
+        "upload_stickers.bat", "requirements.txt", "token.pickle", "cache.json",
+        "credentials.json", "client_secrets.json", "token.json"
     ]
     for f in files_to_remove:
         path = os.path.join("stickers_convert", f)
