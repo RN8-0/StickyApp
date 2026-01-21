@@ -20,5 +20,6 @@ export interface StickerPack {
     view_count: number;
     sticker_count: number;
     image_data_version: string;
+    is_active: boolean;
     stickers: Sticker[];
 }

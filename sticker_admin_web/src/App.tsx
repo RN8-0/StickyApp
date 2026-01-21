@@ -71,7 +71,7 @@ function App() {
   const [isProcessing, setIsProcessing] = useState(false);
 
   // Form States
-  const [newPackData, setNewPackData] = useState({ name: '', publisher: '', category: 'Mizah', is_premium: false });
+  const [newPackData, setNewPackData] = useState({ name: '', publisher: '', category: 'Mizah', is_premium: false, is_active: true });
   const [editFormData, setEditFormData] = useState<Partial<StickerPack>>({});
   const [uploadProgress, setUploadProgress] = useState<{ current: number, total: number } | null>(null);
 
@@ -132,6 +132,7 @@ function App() {
         view_count: 0,
         sticker_count: 0,
         image_data_version: "1",
+        is_active: newPackData.is_active,
         stickers: [],
         tray_url: "",
         created_at: serverTimestamp()
@@ -143,7 +144,7 @@ function App() {
       setPacks([createdPack, ...packs]);
       setSelectedPack(createdPack);
       setShowNewPackModal(false);
-      setNewPackData({ name: '', publisher: '', category: 'Mizah', is_premium: false });
+      setNewPackData({ name: '', publisher: '', category: 'Mizah', is_premium: false, is_active: true });
       alert("Yeni paket oluşturuldu. Şimdi sticker ekleyebilirsiniz.");
     } catch (e) {
       alert("Hata: " + e);
@@ -539,6 +540,11 @@ function App() {
                         {pack.is_premium && (
                           <div className="absolute top-0 right-0 w-4 h-4 bg-warning flex items-center justify-center rounded-bl-xl shadow-sm">
                             <span className="text-[8px] text-background font-black">P</span>
+                          </div>
+                        )}
+                        {pack.is_active === false && (
+                          <div className="absolute bottom-0 left-0 right-0 bg-danger/80 py-0.5 flex items-center justify-center">
+                            <span className="text-[7px] text-white font-black tracking-widest">PASİF</span>
                           </div>
                         )}
                       </div>
@@ -1026,16 +1032,16 @@ function App() {
                 </select>
               </div>
               <div className="flex-1">
-                <label className="text-xs font-bold text-textSec uppercase mb-2 block">Paket Tipi</label>
+                <label className="text-xs font-bold text-textSec uppercase mb-2 block">Durum (Görünürlük)</label>
                 <div className="flex bg-hover rounded-xl p-1 gap-1">
                   <button
-                    onClick={() => setEditFormData({ ...editFormData, is_premium: false })}
-                    className={cn("flex-1 py-2 rounded-lg text-[10px] font-black transition-all", !editFormData.is_premium ? "bg-primary text-white" : "text-textSec")}
-                  >NORMAL</button>
+                    onClick={() => setEditFormData({ ...editFormData, is_active: true })}
+                    className={cn("flex-1 py-2 rounded-lg text-[10px] font-black transition-all", editFormData.is_active !== false ? "bg-primary text-white" : "text-textSec")}
+                  >AKTİF</button>
                   <button
-                    onClick={() => setEditFormData({ ...editFormData, is_premium: true })}
-                    className={cn("flex-1 py-2 rounded-lg text-[10px] font-black transition-all", editFormData.is_premium ? "bg-warning text-background" : "text-textSec")}
-                  >PREMIUM</button>
+                    onClick={() => setEditFormData({ ...editFormData, is_active: false })}
+                    className={cn("flex-1 py-2 rounded-lg text-[10px] font-black transition-all", editFormData.is_active === false ? "bg-danger text-white" : "text-textSec")}
+                  >PASİF</button>
                 </div>
               </div>
             </div>
