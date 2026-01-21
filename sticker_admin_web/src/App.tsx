@@ -390,7 +390,7 @@ function App() {
       <header className="glass sticky top-0 z-20 px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-4">
           <div className="bg-primary p-2.5 rounded-xl shadow-lg shadow-primary/20">
-            <Package className="text-white" size={24} />
+            <Grid className="text-white" size={24} />
           </div>
           <div>
             <h1 className="text-xl font-bold tracking-tight">Sticky Web Admin</h1>
@@ -444,7 +444,7 @@ function App() {
             className={cn("p-3 rounded-2xl transition-all", activeTab === 'stats' ? "bg-primary text-white shadow-lg" : "text-textSec hover:bg-hover")}
             title="İstatistikler"
           >
-            <RefreshCcw size={24} />
+            <BarChart3 size={24} />
           </button>
         </div>
 
