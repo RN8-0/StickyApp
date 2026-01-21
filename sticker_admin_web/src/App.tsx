@@ -422,15 +422,22 @@ function App() {
     <div className="min-h-screen bg-background text-textMain flex flex-col font-sans">
       {/* Header */}
       <header className="glass sticky top-0 z-20 px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl overflow-hidden shadow-lg shadow-primary/20 flex items-center justify-center bg-card border border-white/10">
-            <img src={logo} alt="Sticky Logo" className="w-10 h-10 object-contain" />
+        <div className="flex items-center gap-5">
+          <div className="relative group">
+            <div className="absolute inset-0 bg-primary/20 blur-2xl rounded-full scale-150 animate-pulse group-hover:bg-primary/40 transition-all duration-700" />
+            <img
+              src={logo}
+              alt="Sticky"
+              className="relative w-12 h-12 object-contain drop-shadow-[0_0_10px_rgba(0,168,132,0.3)] transition-transform duration-500 group-hover:scale-110"
+            />
           </div>
-          <div>
-            <h1 className="text-xl font-bold tracking-tight">Sticky Web Admin</h1>
+          <div className="flex flex-col">
+            <h1 className="text-2xl font-black tracking-tight text-white flex items-center gap-2">
+              Sticky <span className="text-primary/80">Web Admin</span>
+            </h1>
             <div className="flex items-center gap-2">
-              <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
-              <span className="text-[10px] text-textSec font-medium uppercase tracking-widest">Canlı Sistem</span>
+              <div className="w-1.5 h-1.5 bg-primary rounded-full shadow-[0_0_8px_rgba(0,168,132,0.6)]" />
+              <span className="text-[10px] text-textSec font-black uppercase tracking-[0.2em]">Sistem Çevrimiçi</span>
             </div>
           </div>
         </div>
