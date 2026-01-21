@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import logo from './assets/logo.png';
 import { db, storage, auth } from './firebase';
 import {
   collection,
@@ -423,7 +424,7 @@ function App() {
       <header className="glass sticky top-0 z-20 px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-4">
           <div className="w-12 h-12 rounded-2xl overflow-hidden shadow-lg shadow-primary/20 flex items-center justify-center bg-card border border-white/10">
-            <img src="/logo.png" alt="Sticky Logo" className="w-10 h-10 object-contain" />
+            <img src={logo} alt="Sticky Logo" className="w-10 h-10 object-contain" />
           </div>
           <div>
             <h1 className="text-xl font-bold tracking-tight">Sticky Web Admin</h1>
