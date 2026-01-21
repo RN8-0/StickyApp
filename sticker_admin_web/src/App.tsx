@@ -155,14 +155,26 @@ function App() {
     if (!selectedPack || !editFormData) return;
     setIsProcessing(true);
     try {
-      const collectionName = selectedPack.is_premium ? 'premium_stickers' : 'stickers';
-      await updateDoc(doc(db, collectionName, selectedPack.id), editFormData);
+      const oldCollection = selectedPack.is_premium ? 'premium_stickers' : 'stickers';
+      const newCollection = editFormData.is_premium ? 'premium_stickers' : 'stickers';
 
-      const updated = { ...selectedPack, ...editFormData };
+      if (oldCollection !== newCollection) {
+        // Move document between collections
+        const oldRef = doc(db, oldCollection, selectedPack.id);
+        const newRef = doc(db, newCollection, selectedPack.id);
+
+        const fullData = { ...selectedPack, ...editFormData };
+        await setDoc(newRef, fullData);
+        await deleteDoc(oldRef);
+      } else {
+        await updateDoc(doc(db, oldCollection, selectedPack.id), editFormData);
+      }
+
+      const updated = { ...selectedPack, ...editFormData } as StickerPack;
       setPacks(packs.map(p => p.id === selectedPack.id ? updated : p));
       setSelectedPack(updated);
       setShowEditPackModal(false);
-      alert("Paket bilgileri güncellendi.");
+      alert("Paket bilgileri ve tipi başarıyla güncellendi.");
     } catch (e) {
       alert("Hata: " + e);
     } finally {
@@ -1001,6 +1013,19 @@ function App() {
                   <option>Eğlence</option>
                   <option>Arka Plan</option>
                 </select>
+              </div>
+              <div className="flex-1">
+                <label className="text-xs font-bold text-textSec uppercase mb-2 block">Paket Tipi</label>
+                <div className="flex bg-hover rounded-xl p-1 gap-1">
+                  <button
+                    onClick={() => setEditFormData({ ...editFormData, is_premium: false })}
+                    className={cn("flex-1 py-2 rounded-lg text-[10px] font-black transition-all", !editFormData.is_premium ? "bg-primary text-white" : "text-textSec")}
+                  >NORMAL</button>
+                  <button
+                    onClick={() => setEditFormData({ ...editFormData, is_premium: true })}
+                    className={cn("flex-1 py-2 rounded-lg text-[10px] font-black transition-all", editFormData.is_premium ? "bg-warning text-background" : "text-textSec")}
+                  >PREMIUM</button>
+                </div>
               </div>
             </div>
             <button
