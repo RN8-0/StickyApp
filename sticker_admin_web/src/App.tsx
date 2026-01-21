@@ -23,7 +23,6 @@ import {
   RefreshCcw,
   Search,
   Grid,
-  List as ListIcon,
   Plus,
   Settings,
   LogOut,
@@ -63,7 +62,6 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [selectedPack, setSelectedPack] = useState<StickerPack | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [activeTab, setActiveTab] = useState<'dashboard' | 'stats'>('dashboard');
 
   // Modals
@@ -424,8 +422,8 @@ function App() {
       {/* Header */}
       <header className="glass sticky top-0 z-20 px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <div className="bg-primary p-2.5 rounded-full shadow-lg shadow-primary/20 flex items-center justify-center">
-            <div className="w-5 h-5 bg-white rounded-full" />
+          <div className="w-12 h-12 rounded-2xl overflow-hidden shadow-lg shadow-primary/20 flex items-center justify-center bg-card border border-white/10">
+            <img src="/logo.png" alt="Sticky Logo" className="w-10 h-10 object-contain" />
           </div>
           <div>
             <h1 className="text-xl font-bold tracking-tight">Sticky Web Admin</h1>
@@ -495,32 +493,12 @@ function App() {
                   <span className="text-[10px] font-bold uppercase tracking-widest text-textSec">Sticker Paketleri</span>
                   <span className="text-lg font-bold">{filteredPacks.length} Paket</span>
                 </div>
-                <div className="flex bg-hover rounded-xl p-1 gap-1">
-                  <button
-                    onClick={() => setViewMode('grid')}
-                    className={cn("p-1.5 rounded-lg transition-all", viewMode === 'grid' ? 'bg-primary text-white shadow-md' : 'text-textSec hover:text-textMain')}
-                  >
-                    <Grid size={16} />
-                  </button>
-                  <button
-                    onClick={() => setViewMode('list')}
-                    className={cn("p-1.5 rounded-lg transition-all", viewMode === 'list' ? 'bg-primary text-white shadow-md' : 'text-textSec hover:text-textMain')}
-                  >
-                    <ListIcon size={16} />
-                  </button>
-                </div>
               </div>
 
-              <div className={cn(
-                "flex-1 overflow-y-auto px-4 pb-20 custom-scrollbar",
-                viewMode === 'grid' ? "grid grid-cols-2 gap-3 p-4" : "flex flex-col space-y-2.5"
-              )}>
+              <div className="flex-1 overflow-y-auto px-4 pb-20 space-y-2.5 flex flex-col custom-scrollbar">
                 <button
                   onClick={() => setShowNewPackModal(true)}
-                  className={cn(
-                    "flex items-center justify-center gap-2 border-2 border-dashed border-white/10 hover:border-primary/50 hover:bg-primary/5 rounded-2xl group transition-all",
-                    viewMode === 'grid' ? "h-32" : "w-full p-4 mb-4"
-                  )}
+                  className="w-full flex items-center justify-center gap-2 p-4 border-2 border-dashed border-white/10 hover:border-primary/50 hover:bg-primary/5 rounded-2xl group transition-all mb-4"
                 >
                   <Plus className="text-textSec group-hover:text-primary transition-colors" size={20} />
                   <span className="text-sm font-bold text-textSec group-hover:text-primary">Yeni Paket Oluştur</span>
@@ -958,7 +936,7 @@ function App() {
             />
             <Input
               label="Yayıncı"
-              placeholder="Sticly"
+              placeholder="Sticky"
               value={newPackData.publisher}
               onChange={(e: any) => setNewPackData({ ...newPackData, publisher: e.target.value })}
             />
