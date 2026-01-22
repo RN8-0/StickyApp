@@ -108,10 +108,22 @@ def print_colored(text, color="white"):
 
     print(f"{colors.get(color, '')}{text}{colors['reset']}")
 
-def run_command(cmd, cwd=None, shell=False):
+def run_command(cmd, cwd=None, shell=False, interactive=False):
     """Run a command and return success status."""
     os_type, _ = get_os_info()
     try:
+        if interactive:
+            # Interactive commands shouldn't capture output
+            if shell:
+                if isinstance(cmd, list): cmd = " ".join(cmd)
+                result = subprocess.run(cmd, cwd=cwd, shell=True)
+            else:
+                if isinstance(cmd, str):
+                    import shlex
+                    cmd = shlex.split(cmd)
+                result = subprocess.run(cmd, cwd=cwd, shell=False)
+            return result.returncode == 0, "", ""
+            
         if shell:
             # If shell=True, cmd should be a string
             if isinstance(cmd, list):
@@ -452,17 +464,18 @@ def option_github_push():
             return
 
     print("[*] GitHub'a gonderiliyor...")
-    print_colored("[i] NOT: GitHub sifrenizi veya Token'inizi terminale girmeniz gerekebilir.", "yellow")
+    print_colored("[i] Terminalde GitHub sifrenizi veya Token'inizi girmeniz gerekebilir.", "yellow")
     
-    success, stdout, err = run_command(["git", "push"])
+    # Use interactive=True for git push to allow password prompts
+    success, _, _ = run_command(["git", "push"], interactive=True)
     if success:
         print_colored("\n[+] Tum degisiklikler GitHub'a basariyla gonderildi!", "green")
     else:
-        print_colored(f"\n[!] git push hatasi: {err or stdout}", "red")
+        print_colored("\n[!] git push hatasi. Lutfen terminaldeki mesaji kontrol edin.", "red")
         print("\n    Olasi cozumler:")
-        print("    1. Terminalde manuel olarak 'git push' yazip kimlik dogrulayin.")
-        print("    2. 'git pull' ile uzak degisiklikleri cekin.")
-        print("    3. GitHub Personal Access Token (PAT) kullandiginizdan emin olun.")
+        print("    1. 'git pull' ile uzak degisiklikleri cekin.")
+        print("    2. GitHub Personal Access Token (PAT) kullandiginizdan emin olun.")
+        print("    3. Kimlik bilgilerinizi 'git config --global credential.helper store' ile kaydedin.")
 
     print("\n")
     input("Devam etmek icin ENTER'a basin...")
@@ -505,8 +518,13 @@ def main_menu():
 
 def main():
     """Main entry point."""
-    # Setup virtual environment first
-    setup_venv()
+    # Ensure banner is shown immediately
+    clear_screen()
+    print_banner()
+
+    # Setup virtual environment if not already in it
+    if not is_in_venv():
+        setup_venv()
 
     try:
         main_menu()
