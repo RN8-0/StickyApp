@@ -55,8 +55,8 @@ Eski sistemdeki Google Drive bağımlılığı tamamen kaldırılmıştır. Art�
 ```
 StickyApp/
 ├── app/                      # Android Uygulama Kaynak Kodları (Kotlin)
-├── sticker_admin_web/        # [YENİ] React tabanlı Web Yönetim Paneli
-├── stickers_setup.py         # [YENİ] Sistem Kontrol ve Otomasyon Aracı
+├── sticker_admin_web/        # React tabanlı Web Yönetim Paneli
+├── stickers_setup.py         # [GÜNCELLENDİ] Sistem Kontrol ve Otomasyon Aracı
 ├── stickers_convert/         # Sticker Veri Deposu (Yedekler)
 └── README.md                 # Bu Dosya
 ```
@@ -76,4 +76,4 @@ Bu komut projeyi derler ve otomatik olarak Firebase Hosting üzerinde güvenli b
 ## 📄 Lisans ve Destek
 Bu proje WhatsApp Sticker API'ları ile uyumlu geliştirilmiştir. Sorun yaşarsanız `stickers_setup.py` üzerinden bağımlılıkları kontrol edin veya Firebase Console loglarına göz atın.
 
-**Son Güncelleme:** Ocak 2026 - v2.0 PRO
+**Son Güncelleme:** 22 Ocak 2026 - v2.1 PRO (Otomasyon Güncellemesi)

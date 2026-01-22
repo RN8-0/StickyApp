@@ -102,11 +102,17 @@ def run_command(cmd, cwd=None, shell=False):
     """Run a command and return success status."""
     os_type, _ = get_os_info()
     try:
-        if os_type == "windows" and not shell:
-            # Windows'ta bazı komutlar shell=True gerektirir
+        if shell:
+            # If shell=True, cmd should be a string
+            if isinstance(cmd, list):
+                cmd = " ".join(cmd)
             result = subprocess.run(cmd, cwd=cwd, shell=True, capture_output=True, text=True)
         else:
-            result = subprocess.run(cmd, cwd=cwd, shell=shell, capture_output=True, text=True)
+            # If shell=False, cmd should be a list
+            if isinstance(cmd, str):
+                import shlex
+                cmd = shlex.split(cmd)
+            result = subprocess.run(cmd, cwd=cwd, shell=False, capture_output=True, text=True)
         return result.returncode == 0, result.stdout, result.stderr
     except Exception as e:
         return False, "", str(e)
@@ -142,37 +148,47 @@ def setup_venv():
         return True
 
     if not os.path.exists(VENV_DIR):
-        print("\n[*] Sanal ortam olusturuluyor...")
+        print_colored("\n[*] Sanal ortam olusturuluyor...", "blue")
         try:
             import venv
             venv.create(VENV_DIR, with_pip=True)
-            print("[+] Sanal ortam olusturuldu.")
+            print_colored("[+] Sanal ortam olusturuldu.", "green")
         except Exception as e:
-            print(f"[!] Sanal ortam olusturulamadi: {e}")
+            print_colored(f"[!] Sanal ortam olusturulamadi: {e}", "red")
             return False
 
     # Install dependencies
     pip_exe = get_pip_executable()
     if os.path.exists(pip_exe):
-        print("[*] Gerekli paketler yukleniyor...")
+        print_colored("[*] Gerekli paketler yukleniyor...", "blue")
         os_type, _ = get_os_info()
         try:
-            if os_type == "windows":
-                subprocess.run([pip_exe, "install", "--upgrade", "pip", "-q"], shell=True)
-                subprocess.run([pip_exe, "install", "firebase-admin", "-q"], shell=True)
-            else:
-                subprocess.run([pip_exe, "install", "--upgrade", "pip", "-q"])
-                subprocess.run([pip_exe, "install", "firebase-admin", "-q"])
-            print("[+] Paketler yuklendi.")
+            # Upgrade pip first
+            run_command([pip_exe, "install", "--upgrade", "pip", "-q"], shell=(os_type == "windows"))
+            
+            # Install requirements
+            requirements = ["firebase-admin", "shlex; python_version < '3.8'"]
+            for req in requirements:
+                success, _, err = run_command([pip_exe, "install", req, "-q"], shell=(os_type == "windows"))
+                if not success:
+                    print_colored(f"[!] {req} yukleme hatasi: {err}", "yellow")
+            
+            print_colored("[+] Paketler yuklendi.", "green")
         except Exception as e:
-            print(f"[!] Paket yukleme hatasi: {e}")
+            print_colored(f"[!] Paket yukleme hatasi: {e}", "red")
 
     # Restart script in venv
     python_exe = get_python_executable()
     if os.path.exists(python_exe):
-        print("[*] Script sanal ortamda yeniden baslatiliyor...\n")
-        result = subprocess.run([python_exe] + sys.argv)
-        sys.exit(result.returncode)
+        print_colored("[*] Script sanal ortamda yeniden baslatiliyor...\n", "yellow")
+        try:
+            # We use subprocess.call to properly pass through to the new process
+            process = subprocess.Popen([python_exe] + sys.argv)
+            process.wait()
+            sys.exit(process.returncode)
+        except Exception as e:
+            print_colored(f"[!] Sanal ortamda baslatma hatasi: {e}", "red")
+            return False
 
     return True
 
@@ -476,8 +492,8 @@ def main_menu():
 
 def main():
     """Main entry point."""
-    # Setup virtual environment first (optional, can be disabled)
-    # setup_venv()
+    # Setup virtual environment first
+    setup_venv()
 
     try:
         main_menu()
