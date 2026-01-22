@@ -64,6 +64,16 @@ def clear_screen():
 def print_banner():
     """Print application banner."""
     os_type, os_name = get_os_info()
+    logo = """
+    ███████╗████████╗██╗ ██████╗██╗  ██╗██╗   ██╗ █████╗ ██████╗ ██████╗ 
+    ██╔════╝╚══██╔══╝██║██╔════╝██║ ██╔╝╚██╗ ██╔╝██╔══██╗██╔══██╗██╔══██╗
+    ███████╗   ██║   ██║██║     █████╔╝  ╚████╔╝ ███████║██████╔╝██████╔╝
+    ╚════██║   ██║   ██║██║     ██╔═██╗   ╚██╔╝  ██╔══██║██╔═══╝ ██╔═══╝ 
+    ███████║   ██║   ██║╚██████╗██║  ██╗   ██║   ██║  ██║██║     ██║     
+    ╚══════╝   ╚═╝   ╚═╝ ╚═════╝╚═╝  ╚═╝   ╚═╝   ╚═╝  ╚═╝╚═╝     ╚═╝     
+    """
+    print_colored(logo, "blue")
+    
     print("""
     ╔══════════════════════════════════════════════════════════╗
     ║           STICKYAPP - KURULUM VE YAYIN ARACI             ║
@@ -432,24 +442,27 @@ def option_github_push():
         return
 
     print("[*] Commit olusturuluyor...")
-    success, _, err = run_command(["git", "commit", "-m", commit_msg])
+    success, stdout, err = run_command(["git", "commit", "-m", commit_msg])
     if not success:
-        if "nothing to commit" in err:
-            print_colored("[i] Commit edilecek degisiklik yok.", "yellow")
+        if "nothing to commit" in err or "nothing to commit" in stdout or not (err or stdout):
+            print_colored("[i] Commit edilecek yeni degisiklik yok (Sistem guncel).", "yellow")
         else:
-            print_colored(f"[!] git commit hatasi: {err}", "red")
-        input("\nDevam etmek icin ENTER'a basin...")
-        return
+            print_colored(f"[!] git commit hatasi: {err or stdout}", "red")
+            input("\nDevam etmek icin ENTER'a basin...")
+            return
 
     print("[*] GitHub'a gonderiliyor...")
+    print_colored("[i] NOT: GitHub sifrenizi veya Token'inizi terminale girmeniz gerekebilir.", "yellow")
+    
     success, stdout, err = run_command(["git", "push"])
     if success:
         print_colored("\n[+] Tum degisiklikler GitHub'a basariyla gonderildi!", "green")
     else:
-        print_colored(f"\n[!] git push hatasi: {err}", "red")
+        print_colored(f"\n[!] git push hatasi: {err or stdout}", "red")
         print("\n    Olasi cozumler:")
-        print("    - 'git pull' ile uzak degisiklikleri cekin")
-        print("    - GitHub kimlik bilgilerinizi kontrol edin")
+        print("    1. Terminalde manuel olarak 'git push' yazip kimlik dogrulayin.")
+        print("    2. 'git pull' ile uzak degisiklikleri cekin.")
+        print("    3. GitHub Personal Access Token (PAT) kullandiginizdan emin olun.")
 
     print("\n")
     input("Devam etmek icin ENTER'a basin...")
