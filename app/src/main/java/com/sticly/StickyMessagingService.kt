@@ -34,11 +34,12 @@ class StickyMessagingService : FirebaseMessagingService() {
 
         val title = remoteMessage.notification?.title ?: remoteMessage.data["title"] ?: "Sticky"
         val body = remoteMessage.notification?.body ?: remoteMessage.data["body"] ?: ""
+        val imageUrl = remoteMessage.data["imageUrl"]
 
-        showNotification(title, body)
+        showNotification(title, body, imageUrl)
     }
 
-    private fun showNotification(title: String, body: String) {
+    private fun showNotification(title: String, body: String, imageUrl: String? = null) {
         createNotificationChannel()
 
         val intent = Intent(this, MainActivity::class.java).apply {
@@ -59,27 +60,54 @@ class StickyMessagingService : FirebaseMessagingService() {
         // Büyük ikon için bitmap
         val largeIcon = BitmapFactory.decodeResource(resources, R.mipmap.ic_launcher)
 
-        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
+        val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
             .setLargeIcon(largeIcon)
             .setContentTitle(decoratedTitle)
             .setContentText(body)
-            .setStyle(
-                NotificationCompat.BigTextStyle()
-                    .bigText(decoratedBody)
-                    .setBigContentTitle(decoratedTitle)
-                    .setSummaryText("Sticky Stickers")
-            )
             .setColor(ContextCompat.getColor(this, R.color.primary))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)
             .setDefaults(NotificationCompat.DEFAULT_ALL)
             .setCategory(NotificationCompat.CATEGORY_PROMO)
-            .build()
+
+        // Eğer resim URL'si varsa "Fancy" notification (BigPictureStyle) yap
+        if (!imageUrl.isNullOrEmpty()) {
+            try {
+                val url = java.net.URL(imageUrl)
+                val connection = url.openConnection() as java.net.HttpURLConnection
+                connection.doInput = true
+                connection.connect()
+                val input = connection.inputStream
+                val bitmap = BitmapFactory.decodeStream(input)
+                
+                builder.setStyle(
+                    NotificationCompat.BigPictureStyle()
+                        .bigPicture(bitmap)
+                        .setBigContentTitle(decoratedTitle)
+                        .setSummaryText(decoratedBody)
+                )
+            } catch (e: Exception) {
+                // Resim yüklenemezse klasik stile dön
+                builder.setStyle(
+                    NotificationCompat.BigTextStyle()
+                        .bigText(decoratedBody)
+                        .setBigContentTitle(decoratedTitle)
+                        .setSummaryText("Sticky Stickers")
+                )
+            }
+        } else {
+            builder.setStyle(
+                NotificationCompat.BigTextStyle()
+                    .bigText(decoratedBody)
+                    .setBigContentTitle(decoratedTitle)
+                    .setSummaryText("Sticky Stickers")
+            )
+        }
 
         val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        notificationManager.notify(System.currentTimeMillis().toInt(), notification)
+        notificationManager.notify(System.currentTimeMillis().toInt(), builder.build())
     }
 
     private fun createNotificationChannel() {

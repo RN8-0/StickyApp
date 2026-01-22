@@ -15,6 +15,7 @@ object PreferencesHelper {
     private const val KEY_SEARCH_HISTORY = "search_history"
     private const val KEY_FIRST_LAUNCH = "is_first_launch"
     private const val KEY_NOTIFICATION_PERMISSION_ASKED = "notification_permission_asked"
+    private const val KEY_LANGUAGE = "app_language"
 
     private fun getPrefs(context: Context): SharedPreferences {
         return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -176,5 +177,14 @@ object PreferencesHelper {
 
     fun clearSearchHistory(context: Context) {
         getPrefs(context).edit().remove(KEY_SEARCH_HISTORY).apply()
+    }
+
+    // Language
+    fun getLanguage(context: Context): String {
+        return getPrefs(context).getString(KEY_LANGUAGE, "") ?: ""
+    }
+
+    fun setLanguage(context: Context, languageCode: String) {
+        getPrefs(context).edit().putString(KEY_LANGUAGE, languageCode).apply()
     }
 }

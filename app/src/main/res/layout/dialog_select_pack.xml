@@ -1,23 +1,35 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="vertical"
-    android:padding="24dp">
+    android:padding="24dp"
+    android:background="@color/surface">
 
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="@string/select_pack"
-        android:textSize="18sp"
+        android:text="Paket Seçin"
+        android:textSize="20sp"
         android:textStyle="bold"
-        android:layout_marginBottom="16dp" />
+        android:textColor="@color/text_primary"
+        android:layout_marginBottom="8dp" />
+        
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Çıkartmanızı eklemek istediğiniz paketi seçin veya yeni bir tane oluşturun."
+        android:textSize="14sp"
+        android:textColor="@color/text_secondary"
+        android:layout_marginBottom="20dp" />
 
     <!-- Mevcut Paketler -->
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/rvPacks"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:maxHeight="300dp"
         android:layout_marginBottom="16dp"
         android:nestedScrollingEnabled="true"
         android:overScrollMode="never"
@@ -27,40 +39,38 @@
         android:layout_width="match_parent"
         android:layout_height="1dp"
         android:background="@color/divider"
-        android:layout_marginBottom="16dp" />
+        android:layout_marginBottom="20dp" />
 
     <!-- Yeni Paket Oluştur -->
-    <TextView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="@string/create_new_pack"
-        android:textSize="14sp"
-        android:textColor="?android:textColorSecondary"
-        android:layout_marginBottom="8dp" />
-
     <com.google.android.material.textfield.TextInputLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginBottom="16dp"
+        app:hintTextColor="@color/primary"
+        app:boxStrokeColor="@color/primary"
+        android:textColorHint="@color/text_secondary"
         style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
 
         <com.google.android.material.textfield.TextInputEditText
             android:id="@+id/inputPackName"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="@string/pack_name"
+            android:hint="Yeni Paket Adı"
+            android:textColor="@color/text_primary"
             android:inputType="text"
             android:maxLength="30" />
 
     </com.google.android.material.textfield.TextInputLayout>
 
-    <Button
+    <com.google.android.material.button.MaterialButton
         android:id="@+id/btnCreatePack"
         android:layout_width="match_parent"
-        android:layout_height="48dp"
-        android:background="@drawable/btn_rounded_primary"
-        android:text="@string/create_and_add"
+        android:layout_height="56dp"
+        app:cornerRadius="12dp"
+        android:text="Yeni Paket Oluştur ve Ekle"
         android:textColor="@android:color/white"
-        android:textAllCaps="false" />
+        android:textStyle="bold"
+        android:textAllCaps="false"
+        app:backgroundTint="@color/primary" />
 
 </LinearLayout>

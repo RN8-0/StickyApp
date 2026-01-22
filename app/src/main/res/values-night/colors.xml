@@ -1,57 +1,57 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Primary Colors - Material Dark (Desaturated for accessibility) -->
-    <color name="primary">#25D366</color>
-    <color name="primary_dark">#000000</color>
-    <color name="primary_light">#5EE89A</color>
-    <color name="accent">#5EE89A</color>
+    <!-- Primary Colors - Çok koyu yeşil tema -->
+    <color name="primary">#004D40</color>
+    <color name="primary_dark">#00251A</color>
+    <color name="accent">#00A884</color>
 
-    <!-- Background Colors - Material Dark Theme (Professional Deep Dark) -->
-    <color name="background">#121212</color>
-    <color name="surface">#1E1E1E</color>
-    <color name="card_bg">#242424</color>
-    <color name="search_bg">#2C2C2C</color>
-    <color name="toolbar_bg">#1E1E1E</color>
+    <!-- Background Colors -->
+    <color name="background">#0B1014</color>
+    <color name="surface">#111B21</color>
+    <color name="card_bg">#1F2C34</color>
+    <color name="toolbar_bg">#111B21</color>
+    <color name="bottom_nav_bg">#111B21</color>
+    <color name="toolbar_icon">#E9EDEF</color>
+    <color name="toolbar_text">#E9EDEF</color>
+    <color name="bottom_nav_active">#00A884</color>
+    <color name="bottom_nav_inactive">#8696A0</color>
+    <color name="search_bg">#1F2C34</color>
+    <color name="chip_bg">#1F2C34</color>
 
-    <!-- Text Colors - High contrast for professional readability -->
-    <color name="text_primary">#E1E1E1</color>
-    <color name="text_secondary">#A0A0A0</color>
-    <color name="text_hint">#6B6B6B</color>
-    <color name="text_on_primary">#000000</color>
-    <color name="text_on_primary_secondary">#B3000000</color>
+    <!-- Text Colors - Okunabilir -->
+    <color name="text_primary">#E9EDEF</color>
+    <color name="text_secondary">#8696A0</color>
+    <color name="text_hint">#667781</color>
+    <color name="text_on_primary">#FFFFFF</color>
+    <color name="text_on_primary_secondary">#8696A0</color>
 
-    <!-- Utility Colors -->
+    <!-- Basic Colors -->
     <color name="white">#FFFFFF</color>
     <color name="black">#000000</color>
-    <color name="divider">#2F2F2F</color>
-    <color name="overlay_dark">#B3000000</color>
+    <color name="grey">#667781</color>
+    <color name="divider">#233138</color>
 
-    <!-- Status Colors - Softened for Dark Mode -->
-    <color name="success">#81C784</color>
-    <color name="error">#CF6679</color>
-    <color name="warning">#FFD54F</color>
-    <color name="info">#64B5F6</color>
-    <color name="remove_red">#CF6679</color>
+    <!-- Status Colors -->
+    <color name="danger">#F15C6D</color>
+    <color name="warning">#FFD279</color>
+    <color name="success">#00A884</color>
 
-    <!-- Feature Colors - Professionally adjusted -->
-    <color name="premium_gold">#FFD54F</color>
-    <color name="premium_text">#121212</color>
-    <color name="purple_accent">#BB86FC</color>
-    <color name="blue_accent">#03DAC6</color>
-    <color name="delete_red">#CF6679</color>
-    <color name="whatsapp_green">#25D366</color>
+    <!-- Brand Colors -->
+    <color name="whatsapp_green">#00A884</color>
+    <color name="blue_accent">#53BDEB</color>
+    <color name="fab_content_color">#111B21</color>
+    <color name="premium_gold">#FFD700</color>
+    <color name="premium_text">#FFD700</color>
+    <color name="premium_text_on_gold">#3E2723</color>
+    <color name="delete_red">#F15C6D</color>
+    <color name="selection_overlay">#4000A884</color>
+    <color name="chat_pattern_light">#0B1014</color>
+    <color name="chat_pattern_dark">#111B21</color>
+    <color name="purple_accent">#A855F7</color>
+    <color name="surface_variant">#1F2C34</color>
+    <color name="remove_red">#F15C6D</color>
+    <color name="overlay_dark">#CC000000</color>
 
-    <!-- Chat Pattern - Subtled -->
-    <color name="chat_pattern_dark">#080808</color>
-    <color name="chat_pattern_light">#121212</color>
-
-    <!-- Selection -->
-    <color name="selection_overlay">#40BB86FC</color>
-
-    <!-- Icon Tints -->
-    <color name="icon_tint_primary">@color/text_primary</color>
-    <color name="icon_tint_secondary">@color/text_secondary</color>
-
-    <!-- FAB Content Color (icons and text on FAB) -->
-    <color name="fab_content_color">#000000</color>
+    <!-- Sticker Preview -->
+    <color name="preview_bg">#111B21</color>
 </resources>

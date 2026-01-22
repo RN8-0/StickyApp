@@ -5,12 +5,10 @@ import android.util.Log
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.storage.FirebaseStorage
 import com.google.gson.Gson
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.*
 import kotlinx.coroutines.tasks.await
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import java.io.File
 
 /**
@@ -26,20 +24,29 @@ object StickerRepository {
     private val storage = FirebaseStorage.getInstance()
     private val firestore = FirebaseFirestore.getInstance()
     
+    // Repository scope for long-running observers and background tasks
+    private val repositoryScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    
     /**
      * KRITIK: Tüm paketlerin statik cache'i. 
      * StickerProvider (farklı bir thread/zamanlama) buradan veriyi senkron olarak okuyabilir.
      */
     var allPacksCache: List<Pack> = emptyList()
+    
+    private val _packsUpdateFlow = MutableSharedFlow<List<Pack>>(replay = 1)
+    val packsUpdateFlow = _packsUpdateFlow.asSharedFlow()
 
     private var cachedFirestorePacks: List<Pack>? = null
     private var lastCacheTime: Long = 0
-    private const val CACHE_EXPIRY = 5 * 60 * 1000 // 5 minutes
+    private const val CACHE_EXPIRY = 1 * 60 * 1000 // 1 minute
+    
+    private var stickersListener: com.google.firebase.firestore.ListenerRegistration? = null
+    private var premiumStickersListener: com.google.firebase.firestore.ListenerRegistration? = null
 
     /**
      * Tüm paketleri yükler (Firebase + Özel + Lokal Assets)
      */
-    suspend fun loadPacks(context: Context): List<Pack> = withContext(Dispatchers.IO) {
+    suspend fun loadPacks(context: Context, forceRefresh: Boolean = false): List<Pack> = withContext(Dispatchers.IO) {
         // Helper: Paketleri karışık sırala (ID hash'ine göre tutarlı sıralama)
         fun shufflePacks(packs: List<Pack>) = packs.sortedBy { it.id.hashCode() }
         
@@ -54,7 +61,7 @@ object StickerRepository {
             Log.d(TAG, "Loaded ${customPacks.size} custom packs")
 
             // 2. Firebase paketlerini yükle
-            val packsFromFirestore = loadPacksFromFirestore()
+            val packsFromFirestore = loadPacksFromFirestore(forceRefresh)
             if (packsFromFirestore.isNotEmpty()) {
                 Log.d(TAG, "Loaded ${packsFromFirestore.size} packs from Firestore")
                 allPacks.addAll(packsFromFirestore)
@@ -88,23 +95,79 @@ object StickerRepository {
     }
 
     /**
+     * Firestore koleksiyonlarını gerçek zamanlı takip eder
+     */
+    fun startObservingPacks(context: Context) {
+        if (stickersListener != null && premiumStickersListener != null) return
+
+        Log.d(TAG, "Starting real-time observers for Firestore...")
+
+        // Stickers koleksiyonunu dinle
+        stickersListener = firestore.collection("stickers")
+            .addSnapshotListener { snapshot, e ->
+                if (e != null) {
+                    Log.e(TAG, "Stickers listener failed: ${e.message}")
+                    return@addSnapshotListener
+                }
+                Log.d(TAG, "Stickers collection updated: ${snapshot?.documents?.size} docs")
+                triggerRefresh(context)
+            }
+
+        // Premium_stickers koleksiyonunu dinle
+        premiumStickersListener = firestore.collection("premium_stickers")
+            .addSnapshotListener { snapshot, e ->
+                if (e != null) {
+                    Log.e(TAG, "Premium stickers listener failed: ${e.message}")
+                    return@addSnapshotListener
+                }
+                Log.d(TAG, "Premium stickers collection updated: ${snapshot?.documents?.size} docs")
+                triggerRefresh(context)
+            }
+    }
+
+    fun stopObservingPacks() {
+        stickersListener?.remove()
+        premiumStickersListener?.remove()
+        stickersListener = null
+        premiumStickersListener = null
+    }
+
+    private fun triggerRefresh(context: Context) {
+        repositoryScope.launch {
+            try {
+                // Veriyi her zaman sunucudan (forceRefresh) çekiyoruz ki anlık yansısın
+                val packs = withContext(Dispatchers.IO) {
+                    loadPacks(context, forceRefresh = true)
+                }
+                _packsUpdateFlow.emit(packs)
+                Log.d(TAG, "Real-time refresh successful: ${packs.size} packs emitted")
+            } catch (e: Exception) {
+                Log.e(TAG, "Error during real-time refresh: ${e.message}")
+            }
+        }
+    }
+
+    /**
      * Firestore'dan paket listesini yükler
      */
-    private suspend fun loadPacksFromFirestore(): List<Pack> {
+    private suspend fun loadPacksFromFirestore(forceRefresh: Boolean = false): List<Pack> {
         // Return cache if valid
-        if (cachedFirestorePacks != null && System.currentTimeMillis() - lastCacheTime < CACHE_EXPIRY) {
+        if (!forceRefresh && cachedFirestorePacks != null && System.currentTimeMillis() - lastCacheTime < CACHE_EXPIRY) {
             Log.d(TAG, "Returning cached Firestore packs (${cachedFirestorePacks?.size})")
             return cachedFirestorePacks!!
         }
 
         val allPacks = mutableListOf<Pack>()
+        // Force server if requested to bypass Firestore's persistent cache
+        // KRITIK: Kullanıcı anlık yansıma istediği için HER ZAMAN sunucudan çek
+        val source = com.google.firebase.firestore.Source.SERVER
 
         try {
-            Log.d(TAG, "Loading packs from Firestore...")
+            Log.d(TAG, "Loading packs from Firestore using source: ${source.name}...")
 
             // Normal paketleri yükle (stickers koleksiyonu)
             try {
-                val stickersSnapshot = firestore.collection("stickers").get().await()
+                val stickersSnapshot = firestore.collection("stickers").get(source).await()
                 Log.d(TAG, "Stickers collection: ${stickersSnapshot.documents.size} documents")
                 stickersSnapshot.documents.mapNotNull { doc ->
                     parsePackDocument(doc, isPremiumOverride = false)
@@ -115,7 +178,7 @@ object StickerRepository {
 
             // Premium paketleri yükle (premium_stickers koleksiyonu)
             try {
-                val premiumSnapshot = firestore.collection("premium_stickers").get().await()
+                val premiumSnapshot = firestore.collection("premium_stickers").get(source).await()
                 Log.d(TAG, "Premium_stickers collection: ${premiumSnapshot.documents.size} documents")
                 premiumSnapshot.documents.mapNotNull { doc ->
                     parsePackDocument(doc, isPremiumOverride = true)
@@ -127,7 +190,7 @@ object StickerRepository {
             // Eski koleksiyonu da kontrol et (geriye uyumluluk)
             if (allPacks.isEmpty()) {
                 try {
-                    val oldSnapshot = firestore.collection("sticker_packs").get().await()
+                    val oldSnapshot = firestore.collection("sticker_packs").get(source).await()
                     Log.d(TAG, "Old sticker_packs collection: ${oldSnapshot.documents.size} documents")
                     oldSnapshot.documents.mapNotNull { doc ->
                         parsePackDocument(doc, isPremiumOverride = null)
@@ -171,6 +234,12 @@ object StickerRepository {
             Pack(
                 id = doc.id,
                 name = data["name"] as? String ?: doc.id.replace("_", " ").replaceFirstChar { it.uppercase() },
+                nameTr = data["name_tr"] as? String ?: "",
+                nameZh = data["name_zh"] as? String ?: "",
+                nameEs = data["name_es"] as? String ?: "",
+                nameAr = data["name_ar"] as? String ?: "",
+                nameHi = data["name_hi"] as? String ?: "",
+                namePt = data["name_pt"] as? String ?: "",
                 pub = publisher,
                 email = email,
                 privacy = privacy,
@@ -185,7 +254,12 @@ object StickerRepository {
                 createdAt = data["created_at"] as? String ?: "",
                 category = data["category"] as? String ?: "",
                 downloadCount = (data["download_count"] as? Long)?.toInt() ?: 0,
-                isAnimated = data["animated_sticker_pack"] as? Boolean ?: false
+                favoriteCount = (data["favorite_count"] as? Long)?.toInt() ?: 0,
+                isAnimated = data["animated_sticker_pack"] as? Boolean ?: false,
+                isActive = data["is_active"] as? Boolean ?: true,
+                priceTRY = data["price_try"] as? String ?: "",
+                priceUSD = data["price_usd"] as? String ?: "",
+                priceEUR = data["price_eur"] as? String ?: ""
             )
         } catch (e: Exception) {
             Log.e(TAG, "Error parsing pack ${doc.id}: ${e.message}")
@@ -579,4 +653,130 @@ object StickerRepository {
             Log.e(TAG, "Error decrementing favorite count: ${e.message}")
         }
     }
+
+    /**
+     * Firestore'dan genel ödeme ayarlarını (fiyatlar vb.) yükler
+     */
+    suspend fun getGlobalBillingSettings(): BillingSettings = withContext(Dispatchers.IO) {
+        try {
+            // KRITIK: Fiyatların anlık yansıması için her zaman sunucudan (SERVER) çek
+            val doc = firestore.collection("settings").document("billing")
+                .get(com.google.firebase.firestore.Source.SERVER).await()
+            
+            if (doc.exists()) {
+                BillingSettings(
+                    priceTRY = doc.getString("price_try") ?: "69,99 TL",
+                    priceUSD = doc.getString("price_usd") ?: "$4.99",
+                    priceEUR = doc.getString("price_eur") ?: "€4.49",
+                    updatedAt = doc.getTimestamp("updated_at")?.toDate()?.toString() ?: ""
+                )
+            } else {
+                BillingSettings()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error loading billing settings: ${e.message}")
+            BillingSettings()
+        }
+    }
+}
+
+/**
+ * Simple helper to handle common translations as a fallback
+ */
+object TranslationHelper {
+    private val translationMap = mapOf(
+        "tatlı bebekler" to "Cute Babies",
+        "komik kedi" to "Funny Cat",
+        "günaydın" to "Good Morning",
+        "teşekkürler" to "Thanks",
+        "aşk" to "Love",
+        "bebek" to "Baby",
+        "romatizm" to "Rheumatism",
+        "romantizm" to "Romanticism",
+        "okula git" to "Go to school",
+        "boş konuşma" to "Empty Talk",
+        "mizah" to "Humor",
+        "karışık" to "Mixed",
+        "dizi" to "Series",
+        "film" to "Movie",
+        "reklam" to "Ad",
+        "spor" to "Sports",
+        "oyun" to "Game",
+        "salak işler" to "Foolish Business",
+        "değişik olaylar" to "Strange Events",
+        "değişik" to "Different",
+        "olaylar" to "Events",
+        "salak" to "Silly",
+        "aptal" to "Stupid",
+        "komik" to "Funny",
+        "sözler" to "Quotes",
+        "deli" to "Crazy"
+    )
+
+    fun translate(text: String): String {
+        val lower = text.lowercase()
+        // 1. Check exact map
+        translationMap[lower]?.let { return it }
+        
+        // 2. Check contains
+        for ((tr, en) in translationMap) {
+            if (lower.contains(tr)) {
+                return text.replace(tr, en, ignoreCase = true)
+            }
+        }
+        
+        // No translation found
+        return text
+    }
+}
+
+/**
+ * Paketin mevcut dile uygun ismini döner
+ */
+val Pack.localizedName: String
+    get() {
+        val locale = java.util.Locale.getDefault().language
+        
+        // 1. Check for native language field matches first
+        when (locale) {
+            "tr" -> if (nameTr.isNotBlank()) return nameTr
+            "zh" -> if (nameZh.isNotBlank()) return nameZh
+            "es" -> if (nameEs.isNotBlank()) return nameEs
+            "ar" -> if (nameAr.isNotBlank()) return nameAr
+            "hi" -> if (nameHi.isNotBlank()) return nameHi
+            "pt" -> if (namePt.isNotBlank()) return namePt
+        }
+        
+        // 2. If no native field, apply Global/Turkish logic
+        return if (locale == "tr") {
+            if (nameTr.isNotBlank()) nameTr else name
+        } else {
+            // ENGLISH/GLOBAL MODE (for en, zh, es, ar, hi, pt etc.)
+            
+            // 1. First, try translating 'name' (Global name field)
+            val translatedName = TranslationHelper.translate(name)
+            if (translatedName != name) return translatedName
+            
+            // 2. If 'name' is English-like (no Turkish specific chars), trust it as English
+            if (name.isNotBlank() && !isLikelyTurkish(name)) return name
+            
+            // 3. If 'name' is Turkish-like, try 'nameTr' (Local name field)
+            if (nameTr.isNotBlank() && !isLikelyTurkish(nameTr)) return nameTr
+            
+            // 4. Try translating 'nameTr'
+            val translatedTr = TranslationHelper.translate(nameTr)
+            if (translatedTr != nameTr) return translatedTr
+            
+            // 5. Final attempt: Deep translation
+            val deep = TranslationHelper.translate(name)
+            if (deep != name) return deep
+            
+            // Fallback to name, then nameTr
+            if (name.isNotBlank()) name else nameTr
+        }
+    }
+
+private fun isLikelyTurkish(text: String): Boolean {
+    val turkishChars = charArrayOf('ç', 'ğ', 'ı', 'ö', 'ş', 'ü', 'Ç', 'Ğ', 'İ', 'Ö', 'Ş', 'Ü')
+    return text.any { it in turkishChars }
 }

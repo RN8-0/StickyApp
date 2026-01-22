@@ -151,7 +151,8 @@
                     android:layout_height="wrap_content"
                     android:text="@string/premium"
                     android:textSize="10sp"
-                    android:textColor="@color/premium_text"
+                    android:textColor="@color/premium_text_on_gold"
+                    android:textStyle="bold"
                     android:background="@drawable/badge_premium"
                     android:paddingHorizontal="8dp"
                     android:paddingVertical="2dp" />

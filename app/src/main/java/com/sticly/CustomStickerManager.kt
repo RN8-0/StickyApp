@@ -40,7 +40,8 @@ object CustomStickerManager {
         @SerializedName("publisher") val publisher: String = "Sticky Kullanıcısı",
         @SerializedName("sticker_count") var stickerCount: Int = 0,
         @SerializedName("version") var version: Int = 1, // Long timestamp yerine Int counter
-        @SerializedName("created_at") val createdAt: Long = System.currentTimeMillis()
+        @SerializedName("created_at") val createdAt: Long = System.currentTimeMillis(),
+        @SerializedName("is_animated") var isAnimated: Boolean = false
     )
 
     /**
@@ -134,13 +135,14 @@ object CustomStickerManager {
      * Yeni bir özel paket oluşturur
      * @return Oluşturulan paketin ID'si
      */
-    fun createPack(context: Context, name: String): String {
+    fun createPack(context: Context, name: String, isAnimated: Boolean = false): String {
         val packId = "custom_${UUID.randomUUID().toString().take(8)}"
         val packDir = getPackDir(context, packId)
         
         val pack = CustomPack(
             id = packId,
-            name = name.ifEmpty { "Paketim" }
+            name = name.ifEmpty { "Paketim" },
+            isAnimated = isAnimated
         )
         
         // pack_info.json kaydet
@@ -544,7 +546,7 @@ object CustomStickerManager {
      */
     fun isPackValid(context: Context, packId: String): Boolean {
         val pack = getPackInfo(context, packId) ?: return false
-        return pack.stickerCount >= 3
+        return pack.stickerCount >= 1
     }
 
     /**
@@ -589,7 +591,7 @@ object CustomStickerManager {
             tray = trayName,
             stickers = stickers,
             isPremium = false,
-            isAnimated = false
+            isAnimated = customPack.isAnimated
         )
     }
 

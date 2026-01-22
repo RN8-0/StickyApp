@@ -37,6 +37,9 @@ import kotlinx.coroutines.withContext
 import java.io.File
 
 class DetailsActivity : AppCompatActivity() {
+    override fun attachBaseContext(newBase: android.content.Context) {
+        super.attachBaseContext(LocaleHelper.onAttach(newBase))
+    }
 
     private lateinit var packId: String
     private lateinit var btnAction: MaterialButton
@@ -121,7 +124,7 @@ class DetailsActivity : AppCompatActivity() {
         // Görüntülenme sayısını artır (Firebase'e yaz)
         StickerRepository.incrementViewCount(pack.id, pack.isPremium)
 
-        findViewById<android.widget.TextView>(R.id.name).text = pack.name
+        findViewById<android.widget.TextView>(R.id.name).text = pack.localizedName
 
         btnAction = findViewById(R.id.btnAction)
         premiumButtonsContainer = findViewById(R.id.premiumButtonsContainer)
@@ -213,7 +216,7 @@ class DetailsActivity : AppCompatActivity() {
         } else {
             // Silme modundan çıkıldı
             selectedIndices.clear()
-            findViewById<android.widget.TextView>(R.id.name).text = currentPack?.name
+            findViewById<android.widget.TextView>(R.id.name).text = currentPack?.localizedName
             btnConfirmDelete.visibility = View.GONE
         }
     }
@@ -400,10 +403,30 @@ class DetailsActivity : AppCompatActivity() {
                 }
             }
 
-            // Her iki butona da tıklandığında satın alma başlat
-            // Premium Badge ve Price butonlarını bağla
-            findViewById<MaterialButton>(R.id.btnPremiumBadge).setOnClickListener { launchPremiumPurchase() }
-            findViewById<MaterialButton>(R.id.btnPrice).setOnClickListener { launchPremiumPurchase() }
+            // Fiyat butonu rengini tema rengine çek (Primary) - Kullanıcı Talebi
+            findViewById<MaterialButton>(R.id.btnPrice).backgroundTintList = 
+                ColorStateList.valueOf(ContextCompat.getColor(this, R.color.primary))
+            
+            // Fiyat metnini dinamik fiyattan çek (Eğer varsa)
+            if (pack.priceTRY.isNotEmpty()) {
+                val price = pack.priceTRY.trim()
+                val formatted = if (price.contains("TL") || price.contains("₺") || price.contains("$") || price.contains("€")) {
+                    price.replace("TL", "₺")
+                } else {
+                    "₺$price"
+                }
+                findViewById<MaterialButton>(R.id.btnPrice).text = formatted
+            }
+            
+            // Premium Badge ve Price butonlarını PremiumActivity'ye bağla - Kullanıcı Talebi
+            findViewById<MaterialButton>(R.id.btnPremiumBadge).setOnClickListener { 
+                val intent = Intent(this, PremiumActivity::class.java)
+                startActivity(intent)
+            }
+            findViewById<MaterialButton>(R.id.btnPrice).setOnClickListener { 
+                val intent = Intent(this, PremiumActivity::class.java)
+                startActivity(intent)
+            }
         } else {
             // Normal paket
             btnAction.visibility = View.VISIBLE
@@ -432,7 +455,7 @@ class DetailsActivity : AppCompatActivity() {
             action = "com.whatsapp.intent.action.ENABLE_STICKER_PACK"
             putExtra("sticker_pack_id", pack.id)
             putExtra("sticker_pack_authority", "${packageName}.stickers")
-            putExtra("sticker_pack_name", pack.name)
+            putExtra("sticker_pack_name", pack.localizedName)
             // KRITIK: WhatsApp'ın provider'dan okuyabilmesi için izin ver
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
@@ -476,7 +499,7 @@ class DetailsActivity : AppCompatActivity() {
             action = "com.whatsapp.intent.action.ENABLE_STICKER_PACK"
             putExtra("sticker_pack_id", pack.id)
             putExtra("sticker_pack_authority", "${packageName}.stickers")
-            putExtra("sticker_pack_name", pack.name)
+            putExtra("sticker_pack_name", pack.localizedName)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
 
@@ -515,8 +538,8 @@ class DetailsActivity : AppCompatActivity() {
 
         lifecycleScope.launch {
             try {
-                // 1. Veriyi tazele (IO)
-                val packs = withContext(Dispatchers.IO) { StickerRepository.loadPacks(this@DetailsActivity) }
+                // 1. Veriyi tazele (IO) - ForceRefresh=true ile önbelleği baypas et
+                val packs = withContext(Dispatchers.IO) { StickerRepository.loadPacks(this@DetailsActivity, forceRefresh = true) }
                 val updatedPack = packs.find { it.id == packId }
                 
                 if (updatedPack != null) {
@@ -629,9 +652,13 @@ class DetailsActivity : AppCompatActivity() {
     private fun showStickerPreview(sticker: Sticker, isLocked: Boolean = false) {
         val dialog = Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen)
         dialog.requestWindowFeature(Window.FEATURE_NO_TITLE)
+        val previewBgColor = ContextCompat.getColor(this@DetailsActivity, R.color.preview_bg)
         dialog.window?.apply {
-            setBackgroundDrawable(android.graphics.drawable.ColorDrawable(ContextCompat.getColor(this@DetailsActivity, R.color.overlay_dark)))
+            setBackgroundDrawable(android.graphics.drawable.ColorDrawable(previewBgColor))
             setLayout(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT)
+            // Status bar ve navigation bar renklerini ayarla
+            statusBarColor = previewBgColor
+            navigationBarColor = previewBgColor
         }
 
         val view = LayoutInflater.from(this).inflate(R.layout.dialog_sticker_preview, null)
@@ -692,11 +719,6 @@ class DetailsActivity : AppCompatActivity() {
             }
         }
 
-        // Kapat butonu (Yeni eklendi)
-        view.findViewById<View>(R.id.btnClose)?.setOnClickListener {
-            dialog.dismiss()
-        }
-
         // Tasarımdaki animasyonlu açılış
         view.scaleX = 0.7f
         view.scaleY = 0.7f
@@ -707,7 +729,7 @@ class DetailsActivity : AppCompatActivity() {
             .scaleY(1f)
             .alpha(1f)
             .setDuration(250)
-            .setInterpolator(OvershootInterpolator(1.1f))
+            .setInterpolator(android.view.animation.OvershootInterpolator(1.1f))
             .start()
 
         // Ekrana tıklandığında da kapat (Referans projeyle aynı)
@@ -763,17 +785,6 @@ class DetailsActivity : AppCompatActivity() {
             return
         }
         
-        val stickerCount = pack.stickers.size
-        if (stickerCount < 3) {
-            val needed = 3 - stickerCount
-            androidx.appcompat.app.AlertDialog.Builder(this)
-                .setTitle("Yetersiz Çıkartma")
-                .setMessage(getString(R.string.need_more_stickers, needed))
-                .setPositiveButton(R.string.ok, null)
-                .show()
-            return
-        }
-
         if (pack.id.startsWith("custom_") && !CustomStickerManager.hasCover(this, pack.id)) {
             Toast.makeText(this, "Lütfen önce bir kapak resmi ayarlayın", Toast.LENGTH_LONG).show()
             return
@@ -813,7 +824,7 @@ class DetailsActivity : AppCompatActivity() {
             action = "com.whatsapp.intent.action.ENABLE_STICKER_PACK"
             putExtra("sticker_pack_id", pack.id)
             putExtra("sticker_pack_authority", "${packageName}.stickers")
-            putExtra("sticker_pack_name", pack.name)
+            putExtra("sticker_pack_name", pack.localizedName)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
 
@@ -907,7 +918,7 @@ class DetailsActivity : AppCompatActivity() {
             action = "com.whatsapp.intent.action.ENABLE_STICKER_PACK"
             putExtra("sticker_pack_id", pack.id)
             putExtra("sticker_pack_authority", "${packageName}.stickers")
-            putExtra("sticker_pack_name", pack.name)
+            putExtra("sticker_pack_name", pack.localizedName)
             // KRITIK: WhatsApp'ın provider'dan okuyabilmesi için izin ver
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }

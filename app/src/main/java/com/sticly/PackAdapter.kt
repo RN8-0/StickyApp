@@ -37,6 +37,7 @@ class PackAdapter(
         val btnFavorite: ImageButton = v.findViewById(R.id.btnFavorite)
         val btnDelete: ImageButton = v.findViewById(R.id.btnDelete)
         val downloadCount: TextView = v.findViewById(R.id.downloadCount)
+        val premiumPrice: TextView = v.findViewById(R.id.premiumPrice)
     }
 
     override fun onCreateViewHolder(p: ViewGroup, vt: Int) =
@@ -46,9 +47,9 @@ class PackAdapter(
         val pack = items[pos]
         val context = h.itemView.context
 
-        h.name.text = pack.name
+        h.name.text = pack.localizedName
         h.pub.text = pack.pub
-        h.count.text = "${pack.stickers.size} stickers"
+        h.count.text = context.getString(R.string.sticker_count, pack.stickers.size)
         h.itemView.setOnClickListener { click(pack) }
 
         // Check if pack is installed
@@ -77,6 +78,18 @@ class PackAdapter(
 
         // Premium container (badge + fiyat) - kullanıcı erişimi yoksa göster
         h.premiumContainer.visibility = if (isPremiumPack && !hasAccess && !isInstalled) View.VISIBLE else View.GONE
+        
+        if (h.premiumContainer.visibility == View.VISIBLE) {
+            val locale = context.resources.configuration.locales[0]
+            val rawPrice = pack.priceTRY.trim().replace(Regex("[^0-9,.]"), "")
+            
+            val formatted = when {
+                locale.country == "TR" -> "₺$rawPrice"
+                listOf("DE", "FR", "IT", "ES", "NL", "BE", "AT", "PT", "FI", "GR", "IE", "SK", "SI", "EE", "LV", "LT", "MT", "CY", "LU").contains(locale.country) -> "€${pack.priceEUR.trim().replace(Regex("[^0-9,.]"), "")}"
+                else -> "$${pack.priceUSD.trim().replace(Regex("[^0-9,.]"), "")}"
+            }
+            h.premiumPrice.text = formatted
+        }
 
         // Yeni badge - son 7 gün içinde eklenen paketler
         val isNew = isPackNew(pack.createdAt)

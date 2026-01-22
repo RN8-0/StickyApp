@@ -4,7 +4,9 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/drawer"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="match_parent"
+    android:focusable="true"
+    android:focusableInTouchMode="true">
 
     <FrameLayout
         android:layout_width="match_parent"
@@ -13,29 +15,31 @@
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:orientation="vertical">
+            android:orientation="vertical"
+            android:background="@color/background">
 
             <!-- Toolbar -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="56dp"
-                android:background="@color/primary"
+                android:background="@color/toolbar_bg"
                 android:gravity="center_vertical"
                 android:orientation="horizontal"
-                android:paddingHorizontal="12dp">
+                android:paddingHorizontal="16dp"
+                android:elevation="4dp">
 
                 <ImageView
                     android:layout_width="36dp"
                     android:layout_height="36dp"
                     android:src="@drawable/ic_logo_white"
-                    app:tint="@color/text_on_primary" />
+                    app:tint="@color/white"
+                    android:layout_marginEnd="12dp" />
 
                 <!-- Title and Subtitle Container -->
                 <LinearLayout
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:layout_marginStart="12dp"
                     android:orientation="vertical">
 
                     <TextView
@@ -43,7 +47,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="@string/app_name"
-                        android:textColor="@color/text_on_primary"
+                        android:textColor="@color/toolbar_text"
                         android:textSize="22sp"
                         android:textStyle="bold"
                         android:fontFamily="sans-serif-medium" />
@@ -54,29 +58,31 @@
                         android:layout_height="wrap_content"
                         android:text="@string/your_stickers"
                         android:textColor="@color/text_on_primary_secondary"
-                        android:textSize="13sp"
-                        android:textStyle="normal"
-                        android:fontFamily="sans-serif"
+                        android:textSize="12sp"
                         android:visibility="gone" />
 
                 </LinearLayout>
 
                 <ImageButton
                     android:id="@+id/btnTheme"
-                    android:layout_width="48dp"
-                    android:layout_height="48dp"
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
                     android:background="?selectableItemBackgroundBorderless"
                     android:src="@drawable/ic_moon"
-                    app:tint="@color/text_on_primary"
+                    app:tint="@color/toolbar_icon"
+                    android:scaleType="fitCenter"
+                    android:padding="10dp"
                     android:contentDescription="Toggle theme" />
 
                 <ImageButton
                     android:id="@+id/menuBtn"
-                    android:layout_width="48dp"
-                    android:layout_height="48dp"
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
                     android:background="?selectableItemBackgroundBorderless"
                     android:src="@drawable/ic_menu"
-                    app:tint="@color/text_on_primary"
+                    app:tint="@color/toolbar_icon"
+                    android:scaleType="fitCenter"
+                    android:padding="10dp"
                     android:contentDescription="Menu" />
             </LinearLayout>
 
@@ -84,265 +90,331 @@
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:padding="12dp"
-                android:background="@color/primary"
-            android:gravity="center_vertical">
-
-            <EditText
-                android:id="@+id/searchBox"
-                android:layout_width="0dp"
-                android:layout_height="44dp"
-                android:layout_weight="1"
-                android:background="@drawable/search_bg"
-                android:drawableStart="@drawable/ic_search"
-                android:drawablePadding="12dp"
-                android:hint="@string/search_hint"
-                android:inputType="text"
                 android:paddingHorizontal="16dp"
-                android:textSize="14sp"
-                android:maxLines="1"
-                android:imeOptions="actionSearch" />
+                android:paddingVertical="12dp"
+                android:background="@color/toolbar_bg"
+                android:gravity="center_vertical">
 
-            <ImageButton
-                android:id="@+id/btnFilter"
-                android:layout_width="44dp"
-                android:layout_height="44dp"
-                android:layout_marginStart="8dp"
-                android:background="@drawable/search_bg"
-                android:src="@drawable/ic_filter"
-                android:padding="10dp"
-                android:scaleType="fitCenter"
-                android:contentDescription="@string/filter" />
-        </LinearLayout>
+                <EditText
+                    android:id="@+id/searchBox"
+                    android:layout_width="0dp"
+                    android:layout_height="44dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/search_bg"
+                    android:drawableStart="@drawable/ic_search"
+                    android:drawablePadding="12dp"
+                    android:hint="@string/search_hint"
+                    android:textColorHint="@color/text_hint"
+                    android:textColor="@color/text_primary"
+                    android:inputType="text"
+                    android:paddingHorizontal="16dp"
+                    android:textSize="14sp"
+                    android:maxLines="1"
+                    android:imeOptions="actionSearch" />
 
-        <!-- Content Container -->
-        <FrameLayout
-            android:layout_width="match_parent"
-            android:layout_height="match_parent">
+                <ImageButton
+                    android:id="@+id/btnFilter"
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
+                    android:layout_marginStart="12dp"
+                    android:background="@drawable/search_bg"
+                    android:src="@drawable/ic_filter"
+                    app:tint="@color/text_secondary"
+                    android:padding="12dp"
+                    android:scaleType="fitCenter"
+                    android:contentDescription="@string/filter" />
+            </LinearLayout>
 
-            <!-- Pull to Refresh + Sticker Packs List -->
-            <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
-                android:id="@+id/swipeRefresh"
+            <!-- Content Container -->
+            <FrameLayout
                 android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:visibility="gone">
+                android:layout_height="0dp"
+                android:layout_weight="1">
 
-                <androidx.recyclerview.widget.RecyclerView
-                    android:id="@+id/rv"
+                <!-- Pull to Refresh + Content -->
+                <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+                    android:id="@+id/swipeRefresh"
                     android:layout_width="match_parent"
                     android:layout_height="match_parent"
-                    android:background="@drawable/chat_wallpaper_pattern"
-                    android:clipToPadding="false"
-                    android:padding="8dp" />
+                    android:visibility="gone">
 
-            </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
+                    <androidx.core.widget.NestedScrollView
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:fillViewport="true">
 
-            <!-- Loading Overlay -->
-            <LinearLayout
-                android:id="@+id/loadingOverlay"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:background="@color/primary"
-                android:gravity="center"
-                android:orientation="vertical">
-
-                <ImageView
-                    android:layout_width="120dp"
-                    android:layout_height="120dp"
-                    android:src="@drawable/ic_logo_white"
-                    app:tint="@color/text_on_primary" />
-
-                <ProgressBar
-                    android:layout_width="36dp"
-                    android:layout_height="36dp"
-                    android:layout_marginTop="32dp"
-                    android:indeterminateTint="@color/text_on_primary" />
-
-            </LinearLayout>
-
-            <!-- FAB Overlay -->
-            <View
-                android:id="@+id/fabOverlay"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:background="@color/overlay_dark"
-                android:visibility="gone"
-                android:elevation="4dp"
-                android:clickable="true"
-                android:focusable="true" />
-
-            <!-- FAB Menu Items -->
-            <LinearLayout
-                android:id="@+id/fabMenuContainer"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="bottom|end"
-                android:orientation="vertical"
-                android:gravity="end"
-                android:paddingEnd="16dp"
-                android:paddingBottom="88dp"
-                android:clipToPadding="false"
-                android:visibility="gone"
-                android:elevation="6dp">
-
-                <!-- Create Sticker Option -->
-                <LinearLayout
-                    android:id="@+id/fabActionCreate"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:gravity="center_vertical"
-                    android:layout_marginBottom="16dp"
-                    android:clickable="true"
-                    android:focusable="true"
-                    android:background="?selectableItemBackground">
-
-                    <androidx.cardview.widget.CardView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginEnd="8dp"
-                        app:cardCornerRadius="20dp"
-                        app:cardElevation="8dp"
-                        app:cardBackgroundColor="#25D366">
-
-                        <TextView
-                            android:layout_width="wrap_content"
+                        <LinearLayout
+                            android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="@string/create_sticker_option"
-                            android:textColor="@color/fab_content_color"
-                            android:textStyle="bold"
-                            android:textSize="14sp"
-                            android:paddingHorizontal="16dp"
-                            android:paddingVertical="10dp" />
-                    </androidx.cardview.widget.CardView>
+                            android:orientation="vertical"
+                            android:paddingBottom="80dp">
 
-                    <com.google.android.material.floatingactionbutton.FloatingActionButton
-                        android:id="@+id/fabCreateIcon"
+                            <!-- Category Chips (Horizontal Scroll) -->
+                            <HorizontalScrollView
+                                android:id="@+id/categoryScrollView"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:scrollbars="none"
+                                android:paddingVertical="12dp"
+                                android:clipToPadding="false">
+
+                                <com.google.android.material.chip.ChipGroup
+                                    android:id="@+id/categoryChipGroup"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:paddingHorizontal="16dp"
+                                    app:singleSelection="true"
+                                    app:chipSpacingHorizontal="8dp" />
+
+                            </HorizontalScrollView>
+
+                            <!-- Top Stickers Carousel -->
+                            <LinearLayout
+                                android:id="@+id/carouselContainer"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:orientation="vertical"
+                                android:layout_marginBottom="8dp">
+
+                                <TextView
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:text="@string/popular_stickers"
+                                    android:textColor="@color/text_primary"
+                                    android:textSize="18sp"
+                                    android:textStyle="bold"
+                                    android:paddingHorizontal="16dp"
+                                    android:paddingBottom="12dp" />
+
+                                <androidx.viewpager2.widget.ViewPager2
+                                    android:id="@+id/topStickersCarousel"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="180dp"
+                                    android:clipToPadding="false"
+                                    android:clipChildren="false"
+                                    android:paddingHorizontal="32dp" />
+
+                                <!-- Carousel Indicators -->
+                                <LinearLayout
+                                    android:id="@+id/carouselIndicator"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:layout_gravity="center_horizontal"
+                                    android:orientation="horizontal"
+                                    android:paddingTop="12dp"
+                                    android:paddingBottom="8dp" />
+
+                            </LinearLayout>
+
+                            <!-- All Stickers Title -->
+                            <TextView
+                                android:id="@+id/allStickersTitle"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="@string/all_stickers"
+                                android:textColor="@color/text_primary"
+                                android:textSize="18sp"
+                                android:textStyle="bold"
+                                android:paddingHorizontal="16dp"
+                                android:paddingTop="8dp"
+                                android:paddingBottom="12dp" />
+
+                            <!-- Sticker Packs List -->
+                            <androidx.recyclerview.widget.RecyclerView
+                                android:id="@+id/rv"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:nestedScrollingEnabled="false"
+                                android:clipToPadding="false"
+                                android:paddingHorizontal="8dp" />
+
+                        </LinearLayout>
+
+                    </androidx.core.widget.NestedScrollView>
+
+                </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
+
+                <!-- Loading Overlay -->
+                <LinearLayout
+                    android:id="@+id/loadingOverlay"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:background="@color/background"
+                    android:gravity="center"
+                    android:orientation="vertical">
+
+                    <ImageView
+                        android:layout_width="100dp"
+                        android:layout_height="100dp"
+                        android:src="@drawable/ic_logo_white"
+                        app:tint="@color/accent" />
+
+                    <ProgressBar
+                        android:layout_width="40dp"
+                        android:layout_height="40dp"
+                        android:layout_marginTop="24dp"
+                        android:indeterminateTint="@color/accent" />
+
+                </LinearLayout>
+
+            </FrameLayout>
+
+            <!-- Bottom Navigation Bar (4 tabs) -->
+            <LinearLayout
+                android:id="@+id/bottomNav"
+                android:layout_width="match_parent"
+                android:layout_height="60dp"
+                android:background="@color/bottom_nav_bg"
+                android:orientation="horizontal"
+                android:elevation="8dp"
+                android:gravity="center">
+
+                <!-- Tab: Explore -->
+                <LinearLayout
+                    android:id="@+id/tabExplore"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:gravity="center"
+                    android:background="?selectableItemBackground">
+                    <ImageView
+                        android:id="@+id/iconExplore"
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        android:src="@drawable/ic_home"
+                        app:tint="@color/bottom_nav_active" />
+                    <TextView
+                        android:id="@+id/textExplore"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:text="@string/explore"
+                        android:textSize="10sp"
+                        android:textColor="@color/bottom_nav_active"
+                        android:textStyle="bold" />
+                </LinearLayout>
+
+                <!-- Tab: Favorites -->
+                <LinearLayout
+                    android:id="@+id/tabFavorites"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:gravity="center"
+                    android:background="?selectableItemBackground">
+                    <ImageView
+                        android:id="@+id/iconFavorites"
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        android:src="@drawable/ic_favorite"
+                        app:tint="@color/bottom_nav_inactive" />
+                    <TextView
+                        android:id="@+id/textFavorites"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:text="@string/filter_favorites"
+                        android:textSize="10sp"
+                        android:textColor="@color/bottom_nav_inactive" />
+                </LinearLayout>
+
+                <!-- Tab: Create -->
+                <LinearLayout
+                    android:id="@+id/tabCreate"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:gravity="center"
+                    android:background="?selectableItemBackground">
+                    <ImageView
+                        android:id="@+id/iconCreate"
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
                         android:src="@drawable/ic_create_sticker"
-                        app:fabSize="mini"
-                        app:tint="@color/fab_content_color"
-                        app:backgroundTint="@color/primary"
-                        android:clickable="false" />
+                        app:tint="@color/bottom_nav_inactive" />
+                    <TextView
+                        android:id="@+id/textCreate"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:text="@string/create_sticker_option"
+                        android:textSize="10sp"
+                        android:textColor="@color/bottom_nav_inactive" />
                 </LinearLayout>
 
-                <!-- Your Stickers Option -->
+                <!-- Tab: My Stickers -->
                 <LinearLayout
-                    android:id="@+id/fabActionMyStickers"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:gravity="center_vertical"
-                    android:layout_marginBottom="16dp"
-                    android:clickable="true"
-                    android:focusable="true"
+                    android:id="@+id/tabMyStickers"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:gravity="center"
                     android:background="?selectableItemBackground">
-
-                    <androidx.cardview.widget.CardView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginEnd="8dp"
-                        app:cardCornerRadius="20dp"
-                        app:cardElevation="8dp"
-                        app:cardBackgroundColor="#25D366">
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="@string/my_stickers_option"
-                            android:textColor="@color/fab_content_color"
-                            android:textStyle="bold"
-                            android:textSize="14sp"
-                            android:paddingHorizontal="16dp"
-                            android:paddingVertical="10dp" />
-                    </androidx.cardview.widget.CardView>
-
-                    <com.google.android.material.floatingactionbutton.FloatingActionButton
-                        android:id="@+id/fabMyStickersIcon"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
+                    <ImageView
+                        android:id="@+id/iconMyStickers"
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
                         android:src="@drawable/ic_sticker"
-                        app:fabSize="mini"
-                        app:tint="@color/fab_content_color"
-                        app:backgroundTint="@color/primary"
-                        android:clickable="false" />
+                        app:tint="@color/bottom_nav_inactive" />
+                    <TextView
+                        android:id="@+id/textMyStickers"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:text="@string/my_stickers_tab"
+                        android:textSize="10sp"
+                        android:textColor="@color/bottom_nav_inactive" />
                 </LinearLayout>
 
             </LinearLayout>
 
-            <!-- Add Custom Sticker FAB - Sadece Çıkartmalarınız modunda görünür -->
-            <com.google.android.material.floatingactionbutton.FloatingActionButton
-                android:id="@+id/fabAddCustom"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="bottom|end"
-                android:layout_margin="16dp"
-                android:src="@drawable/ic_add"
-                android:contentDescription="Çıkartma Ekle"
-                android:visibility="gone"
-                app:tint="@color/fab_content_color"
-                app:backgroundTint="@color/primary"
-                app:fabSize="normal"
-                android:elevation="8dp" />
-
-            <!-- Main FAB -->
-            <com.google.android.material.floatingactionbutton.FloatingActionButton
-                android:id="@+id/fabMain"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="bottom|end"
-                android:layout_margin="16dp"
-                android:src="@drawable/ic_add"
-                android:contentDescription="@string/create_sticker"
-                app:tint="@color/fab_content_color"
-                app:backgroundTint="@color/primary"
-                android:elevation="6dp" />
-
-        </FrameLayout>
-
-    </LinearLayout>
-
+        </LinearLayout>
     </FrameLayout>
 
     <!-- Navigation Drawer -->
     <LinearLayout
         android:id="@+id/navDrawer"
-        android:layout_width="280dp"
+        android:layout_width="300dp"
         android:layout_height="match_parent"
         android:layout_gravity="end"
         android:orientation="vertical"
-        android:background="?android:colorBackground">
+        android:background="@color/surface">
 
         <!-- Header -->
         <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="180dp"
-            android:background="@color/primary"
+            android:layout_height="200dp"
+            android:background="@color/toolbar_bg"
             android:gravity="center"
             android:orientation="vertical"
-            android:padding="16dp">
+            android:padding="20dp">
 
             <ImageView
-                android:layout_width="72dp"
-                android:layout_height="72dp"
+                android:layout_width="80dp"
+                android:layout_height="80dp"
                 android:src="@drawable/ic_logo_white"
-                app:tint="@color/text_on_primary" />
+                app:tint="@color/white" />
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
                 android:text="@string/app_name"
-                android:textColor="@color/text_on_primary"
-                android:textSize="24sp"
+                android:textColor="@color/toolbar_text"
+                android:textSize="26sp"
                 android:textStyle="bold" />
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
-                android:text="v1.0"
+                android:text="v2.1"
                 android:textColor="@color/text_on_primary_secondary"
-                android:textSize="12sp" />
+                android:textSize="14sp" />
 
         </LinearLayout>
 
@@ -354,9 +426,8 @@
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="vertical">
-
-
+                android:orientation="vertical"
+                android:paddingVertical="8dp">
 
                 <!-- Premium -->
                 <LinearLayout
@@ -365,42 +436,71 @@
                     android:layout_height="56dp"
                     android:background="?selectableItemBackground"
                     android:gravity="center_vertical"
-                    android:paddingHorizontal="16dp">
+                    android:paddingHorizontal="20dp">
 
                     <ImageView
                         android:layout_width="24dp"
                         android:layout_height="24dp"
-                        android:src="@drawable/ic_premium" />
+                        android:src="@drawable/ic_premium"
+                        app:tint="@color/premium_gold" />
 
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginStart="16dp"
+                        android:layout_marginStart="20dp"
                         android:text="@string/premium"
+                        android:textColor="@color/text_primary"
                         android:textSize="16sp"
                         android:textStyle="bold" />
 
                 </LinearLayout>
 
-                <!-- Satın Alımları Geri Yükle -->
+                <!-- Restore Purchases -->
                 <LinearLayout
                     android:id="@+id/navRestorePurchases"
                     android:layout_width="match_parent"
                     android:layout_height="56dp"
                     android:background="?selectableItemBackground"
                     android:gravity="center_vertical"
-                    android:paddingHorizontal="16dp">
+                    android:paddingHorizontal="20dp">
 
                     <ImageView
                         android:layout_width="24dp"
                         android:layout_height="24dp"
-                        android:src="@drawable/ic_restore" />
+                        android:src="@drawable/ic_restore"
+                        app:tint="@color/text_secondary" />
 
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginStart="16dp"
+                        android:layout_marginStart="20dp"
                         android:text="@string/restore_purchases"
+                        android:textColor="@color/text_primary"
+                        android:textSize="16sp" />
+
+                </LinearLayout>
+
+                <!-- Language -->
+                <LinearLayout
+                    android:id="@+id/navLanguage"
+                    android:layout_width="match_parent"
+                    android:layout_height="56dp"
+                    android:background="?selectableItemBackground"
+                    android:gravity="center_vertical"
+                    android:paddingHorizontal="20dp">
+
+                    <ImageView
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        android:src="@drawable/ic_globe"
+                        app:tint="@color/text_secondary" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="20dp"
+                        android:text="@string/language"
+                        android:textColor="@color/text_primary"
                         android:textSize="16sp" />
 
                 </LinearLayout>
@@ -408,96 +508,106 @@
                 <View
                     android:layout_width="match_parent"
                     android:layout_height="1dp"
+                    android:layout_marginVertical="8dp"
+                    android:layout_marginHorizontal="20dp"
                     android:background="@color/divider" />
 
-                <!-- Bize Ulaşın -->
+                <!-- Contact -->
                 <LinearLayout
                     android:id="@+id/navContact"
                     android:layout_width="match_parent"
                     android:layout_height="56dp"
                     android:background="?selectableItemBackground"
                     android:gravity="center_vertical"
-                    android:paddingHorizontal="16dp">
+                    android:paddingHorizontal="20dp">
 
                     <ImageView
                         android:layout_width="24dp"
                         android:layout_height="24dp"
-                        android:src="@drawable/ic_contact" />
+                        android:src="@drawable/ic_contact"
+                        app:tint="@color/text_secondary" />
 
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginStart="16dp"
+                        android:layout_marginStart="20dp"
                         android:text="@string/contact_us"
+                        android:textColor="@color/text_primary"
                         android:textSize="16sp" />
 
                 </LinearLayout>
 
-                <!-- Bizi Puanlayın -->
+                <!-- Rate -->
                 <LinearLayout
                     android:id="@+id/navRate"
                     android:layout_width="match_parent"
                     android:layout_height="56dp"
                     android:background="?selectableItemBackground"
                     android:gravity="center_vertical"
-                    android:paddingHorizontal="16dp">
+                    android:paddingHorizontal="20dp">
 
                     <ImageView
                         android:layout_width="24dp"
                         android:layout_height="24dp"
-                        android:src="@drawable/ic_rate" />
+                        android:src="@drawable/ic_rate"
+                        app:tint="@color/text_secondary" />
 
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginStart="16dp"
+                        android:layout_marginStart="20dp"
                         android:text="@string/rate_us"
+                        android:textColor="@color/text_primary"
                         android:textSize="16sp" />
 
                 </LinearLayout>
 
-                <!-- Sticker Öner -->
+                <!-- Suggest -->
                 <LinearLayout
                     android:id="@+id/navSuggest"
                     android:layout_width="match_parent"
                     android:layout_height="56dp"
                     android:background="?selectableItemBackground"
                     android:gravity="center_vertical"
-                    android:paddingHorizontal="16dp">
+                    android:paddingHorizontal="20dp">
 
                     <ImageView
                         android:layout_width="24dp"
                         android:layout_height="24dp"
-                        android:src="@drawable/ic_suggest" />
+                        android:src="@drawable/ic_suggest"
+                        app:tint="@color/text_secondary" />
 
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginStart="16dp"
+                        android:layout_marginStart="20dp"
                         android:text="@string/suggest_sticker"
+                        android:textColor="@color/text_primary"
                         android:textSize="16sp" />
 
                 </LinearLayout>
 
-                <!-- Paylaş -->
+                <!-- Share -->
                 <LinearLayout
                     android:id="@+id/navShare"
                     android:layout_width="match_parent"
                     android:layout_height="56dp"
                     android:background="?selectableItemBackground"
                     android:gravity="center_vertical"
-                    android:paddingHorizontal="16dp">
+                    android:paddingHorizontal="20dp">
 
                     <ImageView
                         android:layout_width="24dp"
                         android:layout_height="24dp"
-                        android:src="@drawable/ic_share" />
+                        android:src="@drawable/ic_share"
+                        app:tint="@color/text_secondary" />
 
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginStart="16dp"
+                        android:layout_marginStart="20dp"
                         android:text="@string/share_app"
+                        android:textColor="@color/text_primary"
                         android:textSize="16sp" />
 
                 </LinearLayout>
@@ -505,96 +615,106 @@
                 <View
                     android:layout_width="match_parent"
                     android:layout_height="1dp"
+                    android:layout_marginVertical="8dp"
+                    android:layout_marginHorizontal="20dp"
                     android:background="@color/divider" />
 
-                <!-- SSS -->
+                <!-- FAQ -->
                 <LinearLayout
                     android:id="@+id/navFaq"
                     android:layout_width="match_parent"
                     android:layout_height="56dp"
                     android:background="?selectableItemBackground"
                     android:gravity="center_vertical"
-                    android:paddingHorizontal="16dp">
+                    android:paddingHorizontal="20dp">
 
                     <ImageView
                         android:layout_width="24dp"
                         android:layout_height="24dp"
-                        android:src="@drawable/ic_faq" />
+                        android:src="@drawable/ic_faq"
+                        app:tint="@color/text_secondary" />
 
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginStart="16dp"
+                        android:layout_marginStart="20dp"
                         android:text="@string/faq"
+                        android:textColor="@color/text_primary"
                         android:textSize="16sp" />
 
                 </LinearLayout>
 
-                <!-- Hakkında -->
+                <!-- About -->
                 <LinearLayout
                     android:id="@+id/navAbout"
                     android:layout_width="match_parent"
                     android:layout_height="56dp"
                     android:background="?selectableItemBackground"
                     android:gravity="center_vertical"
-                    android:paddingHorizontal="16dp">
+                    android:paddingHorizontal="20dp">
 
                     <ImageView
                         android:layout_width="24dp"
                         android:layout_height="24dp"
-                        android:src="@drawable/ic_info" />
+                        android:src="@drawable/ic_info"
+                        app:tint="@color/text_secondary" />
 
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginStart="16dp"
+                        android:layout_marginStart="20dp"
                         android:text="@string/about"
+                        android:textColor="@color/text_primary"
                         android:textSize="16sp" />
 
                 </LinearLayout>
 
-                <!-- Bildirim Ayarları -->
+                <!-- Notifications -->
                 <LinearLayout
                     android:id="@+id/navNotifications"
                     android:layout_width="match_parent"
                     android:layout_height="56dp"
                     android:background="?selectableItemBackground"
                     android:gravity="center_vertical"
-                    android:paddingHorizontal="16dp">
+                    android:paddingHorizontal="20dp">
 
                     <ImageView
                         android:layout_width="24dp"
                         android:layout_height="24dp"
-                        android:src="@drawable/ic_notification" />
+                        android:src="@drawable/ic_notification"
+                        app:tint="@color/text_secondary" />
 
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginStart="16dp"
+                        android:layout_marginStart="20dp"
                         android:text="@string/notification_settings"
+                        android:textColor="@color/text_primary"
                         android:textSize="16sp" />
 
                 </LinearLayout>
 
-                <!-- Gizlilik Politikası -->
+                <!-- Privacy -->
                 <LinearLayout
                     android:id="@+id/navPrivacy"
                     android:layout_width="match_parent"
                     android:layout_height="56dp"
                     android:background="?selectableItemBackground"
                     android:gravity="center_vertical"
-                    android:paddingHorizontal="16dp">
+                    android:paddingHorizontal="20dp">
 
                     <ImageView
                         android:layout_width="24dp"
                         android:layout_height="24dp"
-                        android:src="@drawable/ic_privacy" />
+                        android:src="@drawable/ic_privacy"
+                        app:tint="@color/text_secondary" />
 
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginStart="16dp"
+                        android:layout_marginStart="20dp"
                         android:text="@string/privacy_policy"
+                        android:textColor="@color/text_primary"
                         android:textSize="16sp" />
 
                 </LinearLayout>

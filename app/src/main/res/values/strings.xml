@@ -1,203 +1,275 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Sticky</string>
-    <string name="search_hint">Paket ara…</string>
-    <string name="theme">Tema</string>
-    <string name="faq">Sıkça Sorulan Sorular</string>
-    <string name="about">Hakkında</string>
-    <string name="theme_system">Sistem (Varsayılan)</string>
-    <string name="theme_light">Aydınlık</string>
-    <string name="theme_dark">Karanlık</string>
-    <string name="about_title">Sticky Hakkında</string>
-    <string name="about_message">Sticky v1.0\n\nWhatsApp için sticker paketleri uygulaması.\n\nGeliştirici: Sticky Team</string>
-    <string name="faq_title">Sıkça Sorulan Sorular</string>
-    <string name="faq_content">Sticker nasıl eklenir?\nBir paket seçin ve \"WhatsApp\'a Ekle\" butonuna tıklayın.\n\nSticker neden eklenmiyor?\nWhatsApp\'ın güncel olduğundan emin olun.\n\nKaç sticker ekleyebilirim?\nİstediğiniz kadar paket ekleyebilirsiniz.</string>
-    <string name="ok">Tamam</string>
-    <string name="cancel">İptal</string>
+    <string name="search_hint">Search packs…</string>
+    <string name="theme">Theme</string>
+    <string name="faq">FAQ</string>
+    <string name="about">About</string>
+    <string name="theme_system">System (Default)</string>
+    <string name="theme_light">Light</string>
+    <string name="theme_dark">Dark</string>
+    <string name="about_title">About Sticky</string>
+    <string name="about_message">Sticky v2.0\n\nSticker packs app for WhatsApp.\n\nDeveloper: Sticky Team</string>
+    <string name="faq_title">Frequently Asked Questions</string>
+    <string name="faq_content">How to add stickers?\nSelect a pack and click the \"Add to WhatsApp\" button.\n\nWhy aren\'t stickers being added?\nMake sure WhatsApp is up to date.\n\nHow many stickers can I add?\nYou can add as many packs as you want.</string>
+    <string name="ok">OK</string>
+    <string name="cancel">Cancel</string>
 
     <!-- Drawer Menu -->
-    <string name="contact_us">Bize Ulaşın</string>
-    <string name="rate_us">Bizi Puanlayın</string>
+    <string name="contact_us">Contact Us</string>
+    <string name="rate_us">Rate Us</string>
     <string name="premium">Premium</string>
-    <string name="suggest_sticker">Sticker Öner</string>
-    <string name="share_app">Paylaş</string>
-    <string name="privacy_policy">Gizlilik Politikası</string>
-    <string name="notification_settings">Bildirim Ayarları</string>
+    <string name="suggest_sticker">Suggest Sticker</string>
+    <string name="share_app">Share App</string>
+    <string name="privacy_policy">Privacy Policy</string>
+    <string name="notification_settings">Notification Settings</string>
+    <string name="language">Language</string>
+    <string name="select_language">Select Language</string>
 
     <!-- Contact Us -->
-    <string name="contact_title">Bize Ulaşın</string>
-    <string name="contact_subtitle">Sorularınız veya önerileriniz için bize yazın</string>
-    <string name="contact_name_hint">Adınız</string>
-    <string name="contact_email_hint">E-posta adresiniz</string>
-    <string name="contact_subject_hint">Konu</string>
-    <string name="contact_message_hint">Mesajınız</string>
-    <string name="send">Gönder</string>
-    <string name="sending">Gönderiliyor…</string>
-    <string name="message_sent">Mesajınız başarıyla gönderildi!</string>
-    <string name="message_error">Mesaj gönderilemedi. Lütfen tekrar deneyin.</string>
-    <string name="fill_all_fields">Lütfen tüm alanları doldurun.</string>
-    <string name="invalid_email">Geçerli bir e-posta adresi girin.</string>
+    <string name="contact_title">Contact Us</string>
+    <string name="contact_subtitle">Write to us for your questions or suggestions</string>
+    <string name="contact_name_hint">Your Name</string>
+    <string name="contact_email_hint">Your Email</string>
+    <string name="contact_subject_hint">Subject</string>
+    <string name="contact_message_hint">Your Message</string>
+    <string name="send">Send</string>
+    <string name="sending">Sending…</string>
+    <string name="message_sent">Your message has been sent successfully!</string>
+    <string name="message_error">Message could not be sent. Please try again.</string>
+    <string name="fill_all_fields">Please fill in all fields.</string>
+    <string name="invalid_email">Enter a valid email address.</string>
 
     <!-- Premium -->
-    <string name="premium_title">Premium Üyelik</string>
-    <string name="premium_description">Tek seferlik satın alım ile:\n\n• Reklamsız deneyim\n• Premium sticker paketleri\n• Öncelikli destek</string>
-    <string name="premium_price">₺49,99</string>
-    <string name="sticker_price">₺4,99</string>
-    <string name="buy_premium">Satın Al</string>
-    <string name="premium_active">Premium Aktif</string>
-    <string name="premium_purchased">Premium satın alındı!</string>
+    <string name="premium_title">Premium Membership</string>
+    <string name="premium_description">With a one-time purchase:\n\n• Ad-free experience\n• Premium sticker packs\n• Priority support</string>
+    <string name="premium_price">$4.99</string>
+    <string name="sticker_price">$0.49</string>
+    <string name="buy_premium">Buy Now</string>
+    <string name="premium_active">Premium Active</string>
+    <string name="premium_purchased">Premium purchased!</string>
 
     <!-- Suggest Sticker -->
-    <string name="suggest_title">Sticker Öner</string>
-    <string name="suggest_hint">Hangi sticker paketini görmek istersiniz?</string>
-    <string name="suggestion_sent">Öneriniz için teşekkürler!</string>
+    <string name="suggest_title">Suggest Sticker</string>
+    <string name="suggest_hint">Which sticker pack would you like to see?</string>
+    <string name="suggestion_sent">Thanks for your suggestion!</string>
 
     <!-- Share -->
-    <string name="share_text">Sticky uygulamasını deneyin! WhatsApp için harika stickerlar: https://play.google.com/store/apps/details?id=com.sticly</string>
+    <string name="share_text">Try the Sticky app! Great stickers for WhatsApp: https://play.google.com/store/apps/details?id=com.sticly</string>
 
     <!-- Privacy -->
-    <string name="privacy_title">Gizlilik Politikası</string>
-    <string name="privacy_content">Gizlilik Politikası\n\nBu uygulama, kullanıcı deneyimini iyileştirmek için bazı bilgileri toplayabilir.\n\nToplanan Veriler:\n• Cihaz bilgileri\n• Uygulama kullanım istatistikleri\n\nVerileriniz üçüncü taraflarla paylaşılmaz.\n\nSorularınız için: privacy@sticky.com</string>
+    <string name="privacy_title">Privacy Policy</string>
+    <string name="privacy_content">Privacy Policy\n\nThis app may collect some information to improve user experience.\n\nCollected Data:\n• Device information\n• App usage statistics\n\nYour data is not shared with third parties.\n\nFor questions: privacy@sticky.com</string>
 
     <!-- Notifications -->
-    <string name="notifications_title">Bildirim Ayarları</string>
-    <string name="notification_new_packs">Yeni sticker paketleri</string>
-    <string name="notification_new_packs_desc">Yeni paket eklendiğinde bildirim al</string>
-    <string name="notifications_saved">Ayarlar kaydedildi</string>
-    <string name="notifications_enabled">🔔 Bildirimler açıldı! Yeni paketlerden haberdar olacaksınız.</string>
-    <string name="notifications_disabled">🔕 Bildirimler kapatıldı.</string>
+    <string name="notifications_title">Notification Settings</string>
+    <string name="notification_new_packs">New sticker packs</string>
+    <string name="notification_new_packs_desc">Get notified when a new pack is added</string>
+    <string name="notifications_saved">Settings saved</string>
+    <string name="notifications_enabled">🔔 Notifications enabled! You will be informed about new packs.</string>
+    <string name="notifications_disabled">🔕 Notifications disabled.</string>
 
     <!-- Internet -->
-    <string name="no_internet_title">İnternet Bağlantısı Yok</string>
-    <string name="no_internet_message">Bu uygulama internet bağlantısı gerektirir. Lütfen bağlantınızı kontrol edin.</string>
-    <string name="retry">Tekrar Dene</string>
-    <string name="exit">Çıkış</string>
+    <string name="no_internet_title">No Internet Connection</string>
+    <string name="no_internet_message">This app requires an internet connection. Please check your connection.</string>
+    <string name="retry">Retry</string>
+    <string name="exit">Exit</string>
 
     <!-- Sticker Pack -->
-    <string name="add_to_whatsapp">WhatsApp\'a Ekle</string>
-    <string name="remove_from_whatsapp">WhatsApp\'tan Kaldır</string>
-    <string name="confirm_remove">Kaldır</string>
-    <string name="pack_added">Paket eklendi!</string>
-    <string name="pack_removed">Paket kaldırıldı</string>
-    <string name="pack_removed_from_whatsapp">Çıkartma WhatsApp\'tan kaldırıldı</string>
-    <string name="installed">Yüklü</string>
-    <string name="unlock_premium">Premium\'u Aç</string>
-    <string name="premium_required_title">Premium Gerekli</string>
-    <string name="premium_required_message">Bu sticker paketine erişmek için Premium üyelik gereklidir.\n\nPremium ile:\n• Tüm sticker paketlerine erişim\n• Reklamsız deneyim\n• Öncelikli destek</string>
-    <string name="whatsapp_not_installed_title">WhatsApp Yüklü Değil</string>
-    <string name="whatsapp_not_installed_message">Bu özelliği kullanabilmek için cihazınızda WhatsApp yüklü olmalıdır.\n\nWhatsApp\'ı yüklemek ister misiniz?</string>
-    <string name="whatsapp_not_installed">WhatsApp yüklü değil</string>
-    <string name="remove_pack_title">Paketi Kaldır</string>
-    <string name="remove_pack_message">Bu sticker paketini kaldırmak istediğinizden emin misiniz?</string>
-    <string name="play_store">Play Store\'a Git</string>
-    <string name="downloading">İndiriliyor…</string>
-    <string name="download_failed">İndirme başarısız</string>
-    <string name="error">Hata: %s</string>
-    <string name="pack_loading">Paket yükleniyor…</string>
-    <string name="pack_not_found">Paket bulunamadı</string>
-    <string name="pack_load_failed">Paket yüklenemedi</string>
+    <string name="add_to_whatsapp">Add to WhatsApp</string>
+    <string name="remove_from_whatsapp">Remove from WhatsApp</string>
+    <string name="confirm_remove">Remove</string>
+    <string name="pack_added">Pack added!</string>
+    <string name="pack_removed">Pack removed</string>
+    <string name="pack_removed_from_whatsapp">Sticker removed from WhatsApp</string>
+    <string name="installed">Installed</string>
+    <string name="unlock_premium">Unlock Premium</string>
+    <string name="premium_required_title">Premium Required</string>
+    <string name="premium_required_message">Premium membership is required to access this sticker pack.\n\nWith Premium:\n• Access to all sticker packs\n• Ad-free experience\n• Priority support</string>
+    <string name="whatsapp_not_installed_title">WhatsApp Not Installed</string>
+    <string name="whatsapp_not_installed_message">WhatsApp must be installed on your device to use this feature.\n\nWould you like to install WhatsApp?</string>
+    <string name="whatsapp_not_installed">WhatsApp not installed</string>
+    <string name="remove_pack_title">Remove Pack</string>
+    <string name="remove_pack_message">Are you sure you want to remove this sticker pack?</string>
+    <string name="play_store">Go to Play Store</string>
+    <string name="downloading">Downloading…</string>
+    <string name="download_failed">Download failed</string>
+    <string name="error">Error: %s</string>
+    <string name="pack_loading">Loading pack…</string>
+    <string name="pack_not_found">Pack not found</string>
+    <string name="pack_load_failed">Pack could not be loaded</string>
 
     <!-- Premium Promo Dialog -->
-    <string name="premium_promo_title">Reklamsız Deneyim</string>
-    <string name="premium_promo_message">Reklamların bazen can sıkıcı olabildiğinin farkındayız.\n\nUygulamamızı geliştirebilmek ve yeni çıkartmalar ekleyebilmek için küçük de olsa bir gelire ihtiyacımız var.\n\nReklamsız kullanım ve tüm premium çıkartmalar için tek seferlik Premium Üyelik alabilirsin 💙</string>
-    <string name="get_premium">Premium Üyelik Al</string>
-    <string name="maybe_later">Belki Sonra</string>
+    <string name="premium_promo_title">Ad-Free Experience</string>
+    <string name="premium_promo_message">We know ads can be annoying sometimes.\n\nWe need a small income to improve our app and add new stickers.\n\nYou can get a one-time Premium Membership for ad-free use and all premium stickers 💙</string>
+    <string name="get_premium">Get Premium Membership</string>
+    <string name="maybe_later">Maybe Later</string>
 
     <!-- Premium Preview -->
-    <string name="tap_to_unlock">Premium\'u açmak için dokun</string>
+    <string name="tap_to_unlock">Tap to unlock Premium</string>
 
     <!-- WhatsApp Sticker Removal Info -->
-    <string name="whatsapp_removal_info_title">Bilgilendirme</string>
-    <string name="whatsapp_removal_info_message">Çıkartma paketi uygulamamızdan kaldırıldı.\n\nWhatsApp\'tan da kaldırmak için:\nWhatsApp → Ayarlar → Çıkartmalar → Çıkartmalarım bölümünden manuel olarak silebilirsiniz.\n\n(WhatsApp API\'si otomatik silmeyi desteklememektedir)</string>
+    <string name="whatsapp_removal_info_title">Information</string>
+    <string name="whatsapp_removal_info_message">The sticker pack has been removed from our app.\n\nTo also remove it from WhatsApp:\nYou can delete it manually from WhatsApp → Settings → Stickers → My Stickers section.\n\n(WhatsApp API does not support automatic deletion)</string>
 
     <!-- Filter -->
-    <string name="filter">Filtrele</string>
-    <string name="filter_all">Tümü</string>
-    <string name="filter_installed">Yüklü</string>
+    <string name="filter">Filter</string>
+    <string name="filter_all">All</string>
+    <string name="filter_installed">Installed</string>
     <string name="filter_premium">Premium</string>
-    <string name="filter_favorites">Favoriler</string>
-    <string name="filter_purchased">Satın Alınanlar</string>
+    <string name="filter_favorites">Favorites</string>
+    <string name="filter_purchased">Purchased</string>
 
     <!-- Restore Purchases -->
-    <string name="restore_purchases">Satın Alımları Geri Yükle</string>
-    <string name="restore_success">Satın alımlarınız geri yüklendi!</string>
-    <string name="restore_not_found">Geri yüklenecek satın alım bulunamadı</string>
-    <string name="restore_error">Geri yükleme başarısız. Lütfen tekrar deneyin.</string>
-    <string name="restoring">Geri yükleniyor…</string>
+    <string name="restore_purchases">Restore Purchases</string>
+    <string name="restore_success">Your purchases have been restored!</string>
+    <string name="restore_not_found">No purchases found to restore</string>
+    <string name="restore_error">Restore failed. Please try again.</string>
+    <string name="restoring">Restoring…</string>
 
     <!-- Badges -->
-    <string name="new_badge">YENİ</string>
-    <string name="add_to_favorites">Favorilere ekle</string>
-    <string name="added_to_favorites">Favorilere eklendi</string>
-    <string name="removed_from_favorites">Favorilerden kaldırıldı</string>
-    <string name="download_count">%d kişi ekledi</string>
+    <string name="new_badge">NEW</string>
+    <string name="add_to_favorites">Add to favorites</string>
+    <string name="added_to_favorites">Added to favorites</string>
+    <string name="removed_from_favorites">Removed from favorites</string>
+    <string name="download_count">%d people added</string>
 
     <!-- Categories -->
-    <string name="filter_category">Kategori</string>
-    <string name="category_all">Tüm Kategoriler</string>
-    <string name="category_funny">Komik</string>
-    <string name="category_romantic">Romantik</string>
-    <string name="category_sports">Spor</string>
-    <string name="category_series">Dizi/Film</string>
-    <string name="category_animals">Hayvanlar</string>
-    <string name="category_memes">Memeler</string>
+    <string name="filter_category">Category</string>
+    <string name="category_all">All Categories</string>
+    <string name="category_funny">Funny</string>
+    <string name="category_romantic">Romantic</string>
+    <string name="category_sports">Sports</string>
+    <string name="category_series">Series/Movie</string>
+    <string name="category_animals">Animals</string>
+    <string name="category_memes">Memes</string>
+    <string name="category_kissing">Kissing</string>
+    <string name="category_emoji">Emoji</string>
+    <string name="category_anime">Anime</string>
+    <string name="category_gaming">Gaming</string>
+    <string name="category_music">Music</string>
+    <string name="category_food">Food</string>
+    <string name="category_nature">Nature</string>
+    <string name="category_celebration">Celebration</string>
+    <string name="category_other">Other</string>
+
+    <!-- Home Screen -->
+    <string name="popular_stickers">🔥 Popular Stickers</string>
+    <string name="all_stickers">All Stickers</string>
 
     <!-- Search -->
-    <string name="recent_searches">Son Aramalar</string>
-    <string name="popular_searches">Popüler Aramalar</string>
-    <string name="clear_history">Geçmişi Temizle</string>
+    <string name="recent_searches">Recent Searches</string>
+    <string name="popular_searches">Popular Searches</string>
+    <string name="clear_history">Clear History</string>
 
     <!-- Sticker Maker -->
-    <string name="create_sticker">Kendi Stickerını Yap</string>
-    <string name="my_stickers">Kendi Yaptıklarım</string>
-    <string name="select_photo">Galeriden Seç</string>
-    <string name="take_photo">Fotoğraf Çek</string>
-    <string name="remove_background">Arka Planı Kaldır</string>
-    <string name="add_to_pack">Pakete Ekle</string>
-    <string name="create_new_pack">Yeni Paket Oluştur</string>
-    <string name="pack_name">Paket Adı</string>
-    <string name="select_pack">Paket Seçin</string>
-    <string name="create_and_add">Oluştur ve Ekle</string>
-    <string name="sticker_maker_info">• Sticker 512x512 piksel olmalı\n• WhatsApp için en az 3 sticker gerekli\n• Maksimum 30 sticker eklenebilir</string>
-    <string name="select_photo_hint">Bir fotoğraf seçin veya çekin</string>
-    <string name="filter_custom">Kendi Yaptıklarım</string>
-    <string name="sticker_added">Sticker eklendi!</string>
-    <string name="add_more_sticker">Daha Ekle</string>
-    <string name="stickers_in_pack">Paketteki Stickerlar</string>
-    <string name="need_more_stickers">WhatsApp için %d sticker daha gerekli</string>
-    <string name="pack_ready">Paket WhatsApp\'a eklenmeye hazır!</string>
-    <string name="your_stickers">Çıkartmalarınız</string>
-    <string name="create_pack">Çıkartma Paketi Oluştur</string>
-    <string name="delete_pack">Paketi Sil</string>
-    <string name="delete_pack_confirm">Bu paketi silmek istediğinize emin misiniz?\n\n(Bu işlem paketi WhatsApp\'tan da kaldıracaktır)</string>
-    <string name="yes">Evet</string>
-    <string name="no">Hayır</string>
-    <string name="processing_background">Arka plan temizleniyor…</string>
-    <string name="bg_removal_error">Arka plan temizlenemedi</string>
-    <string name="create_sticker_option">Çıkartma Yap</string>
-    <string name="my_stickers_option">Çıkartmalarınız</string>
-    <string name="update_whatsapp">WhatsApp\'ta Güncelle</string>
-    <string name="add_remove_sticker">Çıkartma Ekle / Sil</string>
-    <string name="delete_selected">Seçilenleri Sil (%d)</string>
-    <string name="selection_mode_title">Silinecekleri Seçin</string>
-    <string name="add_sticker">Çıkartma Ekle</string>
-    <string name="delete_mode">Silme Modu</string>
+    <string name="create_sticker">Create Your Own Sticker</string>
+    <string name="my_creations">My Creations</string>
+    <string name="select_photo">Select from Gallery</string>
+    <string name="take_photo">Take Photo</string>
+    <string name="remove_background">Remove Background</string>
+    <string name="add_to_pack">Add to Pack</string>
+    <string name="create_new_pack">Create New Pack</string>
+    <string name="pack_name">Pack Name</string>
+    <string name="select_pack">Select Pack</string>
+    <string name="create_and_add">Create and Add</string>
+    <string name="sticker_maker_info">• Sticker must be 512x512 pixels\n• At least 3 stickers are required for WhatsApp\n• Maximum 30 stickers can be added</string>
+    <string name="select_photo_hint">Select or take a photo</string>
+    <string name="filter_custom">My Creations</string>
+    <string name="sticker_added">Sticker added!</string>
+    <string name="add_more_sticker">Add More</string>
+    <string name="stickers_in_pack">Stickers in Pack</string>
+    <string name="need_more_stickers">%d more stickers required for WhatsApp</string>
+    <string name="pack_ready">Pack is ready to be added to WhatsApp!</string>
+    <string name="your_stickers">Your Stickers</string>
+    <string name="create_pack">Create Sticker Pack</string>
+    <string name="delete_pack">Delete Pack</string>
+    <string name="delete_pack_confirm">Are you sure you want to delete this pack?\n\n(This action will also remove the pack from WhatsApp)</string>
+    <string name="yes">Yes</string>
+    <string name="no">No</string>
+    <string name="processing_background">Clearing background…</string>
+    <string name="bg_removal_error">Background could not be cleared</string>
+    <string name="create_sticker_option">Make Sticker</string>
+    <string name="my_stickers_option">Your Stickers</string>
+    <string name="update_whatsapp">Update on WhatsApp</string>
+    <string name="add_remove_sticker">Add / Delete Sticker</string>
+    <string name="delete_selected">Delete Selected (%d)</string>
+    <string name="selection_mode_title">Select to Delete</string>
+    <string name="add_sticker">Add Sticker</string>
+    <string name="delete_mode">Delete Mode</string>
 
     <!-- Loading States -->
-    <string name="stickers_loading">Çıkartmalar yükleniyor…</string>
-    <string name="stickers_load_failed">Çıkartmalar yüklenemedi</string>
+    <string name="stickers_loading">Loading stickers…</string>
+    <string name="stickers_load_failed">Stickers could not be loaded</string>
 
     <!-- Remove Instructions -->
-    <string name="remove_instructions_title">Nasıl Kaldırılır?</string>
-    <string name="remove_instructions_message">WhatsApp\'ın çıkartma paketlerini kaldırma ekranını açıyoruz.\n\nAçılan ekranda \"Sil\" seçeneğine tıklayarak paketi kaldırabilirsiniz.</string>
-    <string name="go_to_whatsapp">WhatsApp\'a Git</string>
+    <string name="remove_instructions_title">How to Remove?</string>
+    <string name="remove_instructions_message">We are opening the WhatsApp sticker pack removal screen.\n\nYou can remove the pack by clicking the \"Delete\" option on the opened screen.</string>
+    <string name="go_to_whatsapp">Go to WhatsApp</string>
 
     <!-- Pack Still Installed Warning -->
-    <string name="pack_still_installed_title">Paket Hâlâ Yüklü</string>
-    <string name="pack_still_installed_message">Görünüşe göre paket hâlâ WhatsApp\'a ekli.\n\nManuel olarak kaldırmak için:\n1. WhatsApp\'ı açın\n2. Bir sohbette çıkartma simgesine dokunun\n3. Sağ üstten \"+\" simgesine dokunun\n4. \"Çıkartmalarım\" sekmesinden paketi bulun\n5. Çöp kutusu simgesine dokunun</string>
+    <string name="pack_still_installed_title">Pack Still Installed</string>
+    <string name="pack_still_installed_message">It seems the pack is still added to WhatsApp.\n\nTo remove manually:\n1. Open WhatsApp\n2. Tap the sticker icon in a chat\n3. Tap the \"+\" icon at the top right\n4. Find the pack in the \"My Stickers\" tab\n5. Tap the trash can icon</string>
 
     <!-- WhatsApp Errors -->
-    <string name="whatsapp_not_available_title">WhatsApp Kullanılamıyor</string>
-    <string name="whatsapp_not_available_message">WhatsApp açılamadı. Lütfen şunları kontrol edin:\n\n• WhatsApp\'ın yüklü olduğundan\n• WhatsApp\'a giriş yaptığınızdan\n• WhatsApp\'ın güncel olduğundan\n\nemin olun.</string>
-    <string name="whatsapp_error_detailed">WhatsApp hatası: %s\n\nLütfen WhatsApp\'ın düzgün çalıştığından emin olun.</string>
+    <string name="whatsapp_not_available_title">WhatsApp Unavailable</string>
+    <string name="whatsapp_not_available_message">WhatsApp could not be opened. Please check:\n\n• WhatsApp is installed\n• You are logged into WhatsApp\n• WhatsApp is up to date.</string>
+    <string name="whatsapp_error_detailed">WhatsApp error: %s\n\nPlease make sure WhatsApp is working correctly.</string>
+    <string name="sticker_count">%d stickers</string>
+    <string name="no_custom_packs">You don\'t have any sticker packs yet. Create one now!</string>
+    <string name="pack_deleted_whatsapp_sync">Pack deleted and WhatsApp sync triggered. It may take a few seconds.</string>
+    <string name="pack_delete_failed">Pack could not be deleted</string>
+    <string name="static_sticker">Static Sticker</string>
+    <string name="animated_sticker">Animated Sticker</string>
+    <string name="select_video_gif">Select a Video or GIF</string>
+    <string name="select_photo_maker">Select a Photo</string>
+    <string name="select_video_gif_btn">Select Video/GIF</string>
+    <string name="select_photo_btn">Select Photo</string>
+    <string name="convert_and_add">Convert and Add</string>
+    <string name="back">Back</string>
+    <string name="undo">Undo</string>
+    <string name="animated_sticker_coming_soon">Animated sticker support coming soon!</string>
+    <string name="pack_updated">Your pack has been updated!</string>
+    <string name="free">Free</string>
+    <string name="converting">Converting…</string>
+    <string name="preparing_webp">Preparing video for WebP format</string>
+    <string name="ai_analyzing">AI is analyzing the subject</string>
+    <string name="buy_premium_with_price">Get Premium - %s</string>
+    <string name="explore">Explore</string>
+    <string name="my_stickers_tab">My Stickers</string>
+    <string name="select_plan">Select Your Plan</string>
+    <string name="premium_experience_detail">Upgrade your Sticky experience</string>
+    <string name="premium_experience_detail_long">Take your Sticky experience to the next level</string>
+    <string name="forever">forever</string>
+    <string name="basic_packs">Basic packs</string>
+    <string name="create_stickers">Create stickers</string>
+    <string name="ai_background">AI background</string>
+    <string name="premium_packs">Premium packs</string>
+    <string name="ad_free">Ad-free</string>
+    <string name="ad_free_experience">Ad-free experience</string>
+    <string name="current_plan">Current Plan</string>
+    <string name="recommended">⭐ RECOMMENDED</string>
+    <string name="one_time_payment">one-time payment</string>
+    <string name="one_time">one-time</string>
+    <string name="all_packs">All packs</string>
+    <string name="all_premium_packs">All Premium Packs</string>
+    <string name="unlimited_access_detail">Unlimited access to hundreds of specially designed premium sticker packs</string>
+    <string name="ad_free_detail">Uninterrupted usage without any ads</string>
+    <string name="lifetime_access">Lifetime Access</string>
+    <string name="lifetime_access_detail">Become a premium member forever with a one-time payment</string>
+    <string name="no_subscription_note">💡 One-time payment, no subscription!\nYou can restore your purchases anytime.</string>
+    <string name="premium_advantages">Premium Advantages</string>
+    <string name="how_to_create_sticker">How would you like to create a sticker?</string>
+    <string name="create_static_desc">Create quickly from photos</string>
+    <string name="create_animated_desc">Make WebP from videos or GIFs</string>
+    <string name="tap_to_select_file">Tap to select a file</string>
+    <string name="change_media">Change Media</string>
+    <string name="ai_remove_bg">AI Remove Background</string>
+    <string name="save_sticker">Save Sticker</string>
+    <string name="preparing_modern_version">Preparing Modern Version</string>
+    <string name="processing_for_quality">Processing for highest quality</string>
+    <string name="enter_pack_name">Enter pack name</string>
+    <string name="media_load_error">Media could not be loaded</string>
+    <string name="error_occurred">An error occurred</string>
+    <string name="home_desc">Home</string>
 </resources>

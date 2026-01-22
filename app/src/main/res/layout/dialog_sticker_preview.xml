@@ -22,6 +22,7 @@
         android:layout_margin="16dp"
         android:background="?selectableItemBackgroundBorderless"
         android:src="@drawable/ic_close"
+        android:visibility="gone"
         app:tint="@android:color/white" />
 
     <!-- Lock overlay for premium stickers -->

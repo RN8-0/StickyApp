@@ -153,7 +153,7 @@ class StickerProvider : ContentProvider() {
         getAllPacks().forEach { pack ->
             cursor.addRow(arrayOf(
                 pack.id,
-                pack.name,
+                pack.localizedName,
                 pack.pub,
                 pack.tray,
                 "",
@@ -175,7 +175,7 @@ class StickerProvider : ContentProvider() {
         getPack(identifier)?.let { pack ->
             cursor.addRow(arrayOf(
                 pack.id,
-                pack.name,
+                pack.localizedName,
                 pack.pub,
                 pack.tray,
                 "",

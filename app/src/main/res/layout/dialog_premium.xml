@@ -28,7 +28,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
-                android:text="Planını Seç"
+                android:text="@string/select_plan"
                 android:textSize="22sp"
                 android:textStyle="bold"
                 android:textColor="@color/text_primary" />
@@ -37,7 +37,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
-                android:text="Sticky deneyimini yükselt"
+                android:text="@string/premium_experience_detail"
                 android:textSize="14sp"
                 android:textColor="@color/text_secondary" />
 
@@ -70,7 +70,7 @@
                     <TextView
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="Ücretsiz"
+                        android:text="@string/free"
                         android:textSize="16sp"
                         android:textStyle="bold"
                         android:textColor="@color/text_primary"
@@ -114,7 +114,7 @@
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:layout_marginStart="8dp"
-                                android:text="Temel paketler"
+                                android:text="@string/basic_packs"
                                 android:textSize="12sp"
                                 android:textColor="@color/text_primary" />
                         </LinearLayout>
@@ -135,7 +135,7 @@
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:layout_marginStart="8dp"
-                                android:text="Çıkartma oluştur"
+                                android:text="@string/create_stickers"
                                 android:textSize="12sp"
                                 android:textColor="@color/text_primary" />
                         </LinearLayout>
@@ -156,7 +156,7 @@
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:layout_marginStart="8dp"
-                                android:text="AI arka plan"
+                                android:text="@string/ai_background"
                                 android:textSize="12sp"
                                 android:textColor="@color/text_primary" />
                         </LinearLayout>
@@ -177,7 +177,7 @@
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:layout_marginStart="8dp"
-                                android:text="Premium paketler"
+                                android:text="@string/premium_packs"
                                 android:textSize="12sp"
                                 android:textColor="@color/text_hint" />
                         </LinearLayout>
@@ -198,7 +198,7 @@
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:layout_marginStart="8dp"
-                                android:text="Reklamsız"
+                                android:text="@string/ad_free"
                                 android:textSize="12sp"
                                 android:textColor="@color/text_hint" />
                         </LinearLayout>
@@ -211,7 +211,7 @@
                         android:layout_height="wrap_content"
                         android:layout_marginTop="8dp"
                         android:padding="10dp"
-                        android:text="Mevcut Plan"
+                        android:text="@string/current_plan"
                         android:textSize="12sp"
                         android:textStyle="bold"
                         android:textColor="@color/text_secondary"
@@ -242,7 +242,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:padding="6dp"
-                        android:text="⭐ ÖNERİLEN"
+                        android:text="@string/recommended"
                         android:textSize="10sp"
                         android:textStyle="bold"
                         android:textColor="@android:color/white"
@@ -311,7 +311,7 @@
                                     android:layout_width="wrap_content"
                                     android:layout_height="wrap_content"
                                     android:layout_marginStart="8dp"
-                                    android:text="Tüm paketler"
+                                    android:text="@string/all_packs"
                                     android:textSize="12sp"
                                     android:textStyle="bold"
                                     android:textColor="@color/text_primary" />
@@ -333,7 +333,7 @@
                                     android:layout_width="wrap_content"
                                     android:layout_height="wrap_content"
                                     android:layout_marginStart="8dp"
-                                    android:text="Çıkartma oluştur"
+                                    android:text="@string/create_stickers"
                                     android:textSize="12sp"
                                     android:textColor="@color/text_primary" />
                             </LinearLayout>
@@ -354,7 +354,7 @@
                                     android:layout_width="wrap_content"
                                     android:layout_height="wrap_content"
                                     android:layout_marginStart="8dp"
-                                    android:text="AI arka plan"
+                                    android:text="@string/ai_background"
                                     android:textSize="12sp"
                                     android:textColor="@color/text_primary" />
                             </LinearLayout>
@@ -375,7 +375,7 @@
                                     android:layout_width="wrap_content"
                                     android:layout_height="wrap_content"
                                     android:layout_marginStart="8dp"
-                                    android:text="Premium paketler"
+                                    android:text="@string/premium_packs"
                                     android:textSize="12sp"
                                     android:textStyle="bold"
                                     android:textColor="@color/premium_gold" />
@@ -397,7 +397,7 @@
                                     android:layout_width="wrap_content"
                                     android:layout_height="wrap_content"
                                     android:layout_marginStart="8dp"
-                                    android:text="Reklamsız"
+                                    android:text="@string/ad_free"
                                     android:textSize="12sp"
                                     android:textStyle="bold"
                                     android:textColor="@color/premium_gold" />
@@ -432,7 +432,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
-            android:text="💡 Tek seferlik ödeme, ömür boyu erişim. Abonelik yok!"
+            android:text="@string/no_subscription_note"
             android:textSize="12sp"
             android:textColor="@color/text_secondary"
             android:gravity="center" />

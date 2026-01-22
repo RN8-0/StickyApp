@@ -35,12 +35,18 @@
 
         <activity android:name=".DetailsActivity" />
 
+        <activity android:name=".PremiumActivity" />
+
         <activity
             android:name=".ContactActivity"
             android:parentActivityName=".MainActivity" />
 
         <activity
             android:name=".StickerMakerActivity"
+            android:parentActivityName=".MainActivity" />
+
+        <activity
+            android:name=".SuggestActivity"
             android:parentActivityName=".MainActivity" />
 
         <!-- FileProvider for camera photos -->

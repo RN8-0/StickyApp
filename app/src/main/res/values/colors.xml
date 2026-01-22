@@ -1,58 +1,57 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- Primary Colors -->
-    <color name="primary">#25D366</color>
-    <color name="primary_dark">#1DA851</color>
-    <color name="primary_light">#5EE89A</color>
-    <color name="accent">#25D366</color>
+    <color name="primary">#00A884</color>
+    <color name="primary_dark">#008069</color>
+    <color name="accent">#00A884</color>
 
     <!-- Background Colors -->
-    <color name="background">#F5F5F5</color>
-    <color name="surface">#FFFFFF</color>
-    <color name="surface_variant">#E8E8E8</color>
+    <color name="background">#FFFFFF</color>
+    <color name="surface">#F8F9FA</color>
     <color name="card_bg">#FFFFFF</color>
-    <color name="search_bg">#EEEEEE</color>
-    <color name="toolbar_bg">@color/primary</color>
+    <color name="toolbar_bg">#00A884</color>
+    <color name="bottom_nav_bg">#00A884</color>
+    <color name="toolbar_icon">#FFFFFF</color>
+    <color name="toolbar_text">#FFFFFF</color>
+    <color name="bottom_nav_active">#FFFFFF</color>
+    <color name="bottom_nav_inactive">#B2DFDB</color>
+    <color name="search_bg">#FFFFFF</color>
+    <color name="chip_bg">#E0F2F1</color>
 
     <!-- Text Colors -->
-    <color name="text_primary">#212121</color>
-    <color name="text_secondary">#757575</color>
-    <color name="text_hint">#9E9E9E</color>
+    <color name="text_primary">#2C3E50</color>
+    <color name="text_secondary">#7F8C8D</color>
+    <color name="text_hint">#BDC3C7</color>
     <color name="text_on_primary">#FFFFFF</color>
-    <color name="text_on_primary_secondary">#E0FFFFFF</color>
+    <color name="text_on_primary_secondary">#B8E6C9</color>
 
-    <!-- Utility Colors -->
+    <!-- Basic Colors -->
     <color name="white">#FFFFFF</color>
     <color name="black">#000000</color>
+    <color name="grey">#BDC3C7</color>
     <color name="divider">#E0E0E0</color>
-    <color name="overlay_dark">#99000000</color>
 
     <!-- Status Colors -->
-    <color name="success">#4CAF50</color>
-    <color name="error">#D32F2F</color>
-    <color name="warning">#FFC107</color>
-    <color name="info">#2196F3</color>
-    <color name="remove_red">#D32F2F</color>
+    <color name="danger">#E74C3C</color>
+    <color name="warning">#F1C40F</color>
+    <color name="success">#00A884</color>
 
-    <!-- Feature Colors -->
-    <color name="premium_gold">#FFD700</color>
-    <color name="premium_text">#000000</color>
-    <color name="purple_accent">#9C27B0</color>
-    <color name="blue_accent">#2196F3</color>
-    <color name="delete_red">#F44336</color>
-    <color name="whatsapp_green">#25D366</color>
-
-    <!-- Chat Pattern -->
-    <color name="chat_pattern_dark">#D9D2C9</color>
-    <color name="chat_pattern_light">#F0EBE3</color>
-
-    <!-- Selection -->
-    <color name="selection_overlay">#802196F3</color>
-
-    <!-- Icon Tints -->
-    <color name="icon_tint_primary">@color/text_primary</color>
-    <color name="icon_tint_secondary">@color/text_secondary</color>
-
-    <!-- FAB Content Color (icons and text on FAB) -->
+    <!-- Brand Colors -->
+    <color name="whatsapp_green">#00A884</color>
+    <color name="blue_accent">#00A884</color>
     <color name="fab_content_color">#FFFFFF</color>
+    <color name="premium_gold">#FFD700</color>
+    <color name="premium_text">#FFD700</color>
+    <color name="premium_text_on_gold">#3E2723</color>
+    <color name="delete_red">#E74C3C</color>
+    <color name="selection_overlay">#8000A884</color>
+    <color name="chat_pattern_light">#E0F2F1</color>
+    <color name="purple_accent">#9B59B6</color>
+    <color name="surface_variant">#F5F5F5</color>
+    <color name="remove_red">#E74C3C</color>
+    <color name="chat_pattern_dark">#B2DFDB</color>
+    <color name="overlay_dark">#80000000</color>
+
+    <!-- Sticker Preview -->
+    <color name="preview_bg">#FFFFFF</color>
 </resources>

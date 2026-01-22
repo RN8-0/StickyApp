@@ -1,0 +1,128 @@
+package com.sticly
+
+import android.os.Bundle
+import android.widget.Toast
+import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.app.AppCompatDelegate
+import com.google.android.material.button.MaterialButton
+import com.google.android.material.chip.Chip
+import com.google.android.material.chip.ChipGroup
+import com.google.android.material.textfield.TextInputEditText
+import com.google.firebase.firestore.FirebaseFirestore
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
+class SuggestActivity : AppCompatActivity() {
+
+    private lateinit var inputSuggestion: TextInputEditText
+    private lateinit var categoryChipGroup: ChipGroup
+    private lateinit var btnSend: MaterialButton
+    private var selectedCategory: String = ""
+
+    private val categories = listOf(
+        "funny" to R.string.category_funny,
+        "romantic" to R.string.category_romantic,
+        "memes" to R.string.category_memes,
+        "animals" to R.string.category_animals,
+        "anime" to R.string.category_anime,
+        "sports" to R.string.category_sports,
+        "series" to R.string.category_series,
+        "emoji" to R.string.category_emoji,
+        "other" to R.string.category_other
+    )
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        applyTheme()
+        super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_suggest)
+
+        inputSuggestion = findViewById(R.id.inputSuggestion)
+        categoryChipGroup = findViewById(R.id.categoryChipGroup)
+        btnSend = findViewById(R.id.btnSend)
+
+        findViewById<android.widget.ImageButton>(R.id.btnBack).setOnClickListener {
+            finish()
+        }
+
+        setupCategoryChips()
+
+        btnSend.setOnClickListener {
+            sendSuggestion()
+        }
+    }
+
+    private fun setupCategoryChips() {
+        categories.forEach { (key, stringRes) ->
+            val chip = Chip(this).apply {
+                text = getString(stringRes)
+                isCheckable = true
+                isCheckedIconVisible = true
+                setChipBackgroundColorResource(R.color.chip_bg)
+                setTextColor(getColor(R.color.text_primary))
+                chipStrokeWidth = 0f
+                setOnCheckedChangeListener { _, isChecked ->
+                    if (isChecked) {
+                        selectedCategory = key
+                        setChipBackgroundColorResource(R.color.accent)
+                        setTextColor(getColor(R.color.white))
+                    } else {
+                        setChipBackgroundColorResource(R.color.chip_bg)
+                        setTextColor(getColor(R.color.text_primary))
+                    }
+                }
+            }
+            categoryChipGroup.addView(chip)
+        }
+    }
+
+    private fun sendSuggestion() {
+        val suggestion = inputSuggestion.text?.toString()?.trim() ?: ""
+
+        if (suggestion.isEmpty()) {
+            Toast.makeText(this, R.string.fill_all_fields, Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        btnSend.isEnabled = false
+        btnSend.text = getString(R.string.sending)
+
+        val db = FirebaseFirestore.getInstance()
+        val now = Date()
+        val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale("tr", "TR"))
+        val timeFormat = SimpleDateFormat("HH:mm:ss", Locale("tr", "TR"))
+
+        val data = hashMapOf(
+            "suggestion" to suggestion,
+            "category" to selectedCategory,
+            "timestamp" to System.currentTimeMillis(),
+            "date" to dateFormat.format(now),
+            "time" to timeFormat.format(now)
+        )
+
+        db.collection("suggestions")
+            .add(data)
+            .addOnSuccessListener {
+                Toast.makeText(this, R.string.suggestion_sent, Toast.LENGTH_SHORT).show()
+                finish()
+            }
+            .addOnFailureListener {
+                btnSend.isEnabled = true
+                btnSend.text = getString(R.string.send)
+                Toast.makeText(this, R.string.message_error, Toast.LENGTH_SHORT).show()
+            }
+    }
+
+    private fun applyTheme() {
+        val prefs = getSharedPreferences("settings", MODE_PRIVATE)
+        when (prefs.getInt("theme", 0)) {
+            0 -> AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM)
+            1 -> AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO)
+            2 -> AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_YES)
+        }
+    }
+
+    override fun attachBaseContext(newBase: android.content.Context) {
+        super.attachBaseContext(LocaleHelper.onAttach(newBase))
+    }
+}

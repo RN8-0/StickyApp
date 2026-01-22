@@ -1,0 +1,262 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Sticky</string>
+    <string name="search_hint">Buscar paquetes…</string>
+    <string name="theme">Tema</string>
+    <string name="faq">Preguntas frecuentes</string>
+    <string name="about">Acerca de</string>
+    <string name="theme_system">Sistema (predeterminado)</string>
+    <string name="theme_light">Claro</string>
+    <string name="theme_dark">Oscuro</string>
+    <string name="about_title">Acerca de Sticky</string>
+    <string name="about_message">Sticky v2.0\n\nApp de paquetes de stickers para WhatsApp.\n\nDesarrollador: Equipo Sticky</string>
+    <string name="faq_title">Preguntas frecuentes</string>
+    <string name="faq_content">¿Cómo añadir stickers?\nSelecciona un paquete y pulsa el botón \"Añadir a WhatsApp\".\n\n¿Por qué no se añaden los stickers?\nAsegúrate de que WhatsApp esté actualizado.\n\n¿Cuántos stickers puedo añadir?\nPuedes añadir todos los paquetes que quieras.</string>
+    <string name="ok">Aceptar</string>
+    <string name="cancel">Cancelar</string>
+
+    <!-- Drawer Menu -->
+    <string name="contact_us">Contáctanos</string>
+    <string name="rate_us">Califícanos</string>
+    <string name="premium">Premium</string>
+    <string name="suggest_sticker">Sugerir sticker</string>
+    <string name="share_app">Compartir app</string>
+    <string name="privacy_policy">Política de privacidad</string>
+    <string name="notification_settings">Ajustes de notificaciones</string>
+    <string name="language">Idioma</string>
+    <string name="select_language">Seleccionar idioma</string>
+
+    <!-- Contact Us -->
+    <string name="contact_title">Contáctanos</string>
+    <string name="contact_subtitle">Escríbenos para tus dudas o sugerencias</string>
+    <string name="contact_name_hint">Tu nombre</string>
+    <string name="contact_email_hint">Tu email</string>
+    <string name="contact_subject_hint">Asunto</string>
+    <string name="contact_message_hint">Tu mensaje</string>
+    <string name="send">Enviar</string>
+    <string name="sending">Enviando…</string>
+    <string name="message_sent">¡Tu mensaje ha sido enviado con éxito!</string>
+    <string name="message_error">No se pudo enviar el mensaje. Reinténtalo.</string>
+    <string name="fill_all_fields">Por favor, rellena todos los campos.</string>
+    <string name="invalid_email">Introduce un email válido.</string>
+
+    <!-- Premium -->
+    <string name="premium_title">Membresía Premium</string>
+    <string name="premium_description">Con una compra única:\n\n• Experiencia sin anuncios\n• Paquetes de stickers premium\n• Soporte prioritario</string>
+    <string name="premium_price">$4.99</string>
+    <string name="sticker_price">$0.49</string>
+    <string name="buy_premium">Comprar ahora</string>
+    <string name="premium_active">Premium activo</string>
+    <string name="premium_purchased">¡Premium comprado!</string>
+
+    <!-- Suggest Sticker -->
+    <string name="suggest_title">Sugerir sticker</string>
+    <string name="suggest_hint">¿Qué paquete de stickers te gustaría ver?</string>
+    <string name="suggestion_sent">¡Gracias por tu sugerencia!</string>
+
+    <!-- Share -->
+    <string name="share_text">¡Prueba la app Sticky! Geniales stickers para WhatsApp: https://play.google.com/store/apps/details?id=com.sticly</string>
+
+    <!-- Privacy -->
+    <string name="privacy_title">Política de privacidad</string>
+    <string name="privacy_content">Política de Privacidad\n\nEsta app puede recoger información para mejorar la experiencia.\n\nDatos recogidos:\n• Info del dispositivo\n• Estadísticas de uso\n\nTus datos no se comparten con terceros.\n\nDudas: privacy@sticky.com</string>
+
+    <!-- Notifications -->
+    <string name="notifications_title">Ajustes de notificaciones</string>
+    <string name="notification_new_packs">Nuevos paquetes</string>
+    <string name="notification_new_packs_desc">Recibe avisos cuando se añada un paquete</string>
+    <string name="notifications_saved">Ajustes guardados</string>
+    <string name="notifications_enabled">🔔 ¡Notificaciones activadas! Te informaremos sobre nuevos paquetes.</string>
+    <string name="notifications_disabled">🔕 Notificaciones desactivadas.</string>
+
+    <!-- Internet -->
+    <string name="no_internet_title">Sin conexión</string>
+    <string name="no_internet_message">Esta app requiere conexión a internet. Revisa tu conexión.</string>
+    <string name="retry">Reintentar</string>
+    <string name="exit">Salir</string>
+
+    <!-- Sticker Pack -->
+    <string name="add_to_whatsapp">Añadir a WhatsApp</string>
+    <string name="remove_from_whatsapp">Quitar de WhatsApp</string>
+    <string name="confirm_remove">Quitar</string>
+    <string name="pack_added">¡Paquete añadido!</string>
+    <string name="pack_removed">Paquete quitado</string>
+    <string name="pack_removed_from_whatsapp">Sticker quitado de WhatsApp</string>
+    <string name="installed">Instalado</string>
+    <string name="unlock_premium">Desbloquear Premium</string>
+    <string name="premium_required_title">Requiere Premium</string>
+    <string name="premium_required_message">Se requiere membresía Premium para acceder a este paquete.\n\nCon Premium:\n• Acceso a todos los paquetes\n• Sin anuncios\n• Soporte prioritario</string>
+    <string name="whatsapp_not_installed_title">WhatsApp no instalado</string>
+    <string name="whatsapp_not_installed_message">WhatsApp debe estar instalado para usar esta función.\n\n¿Quieres instalarlo?</string>
+    <string name="whatsapp_not_installed">WhatsApp no instalado</string>
+    <string name="remove_pack_title">Quitar paquete</string>
+    <string name="remove_pack_message">¿Seguro que quieres quitar este paquete de stickers?</string>
+    <string name="play_store">Ir a Play Store</string>
+    <string name="downloading">Descargando…</string>
+    <string name="download_failed">Error en descarga</string>
+    <string name="error">Error: %s</string>
+    <string name="pack_loading">Cargando paquete…</string>
+    <string name="pack_not_found">No se encontró el paquete</string>
+    <string name="pack_load_failed">Error al cargar el paquete</string>
+
+    <!-- Premium Promo Dialog -->
+    <string name="premium_promo_title">Sin anuncios</string>
+    <string name="premium_promo_message">Los anuncios pueden ser molestos.\n\nNecesitamos ingresos para mejorar la app.\n\nCompra Premium una vez y disfruta sin anuncios y con todos los stickers 💙</string>
+    <string name="get_premium">Hacerse Premium</string>
+    <string name="maybe_later">Quizás más tarde</string>
+
+    <!-- Premium Preview -->
+    <string name="tap_to_unlock">Toca para desbloquear Premium</string>
+
+    <!-- WhatsApp Sticker Removal Info -->
+    <string name="whatsapp_removal_info_title">Información</string>
+    <string name="whatsapp_removal_info_message">El paquete se quitó de nuestra app.\n\nPara quitarlo también de WhatsApp:\nBórralo manualmente en WhatsApp → Ajustes → Stickers → Mis Stickers.\n\n(WhatsApp no permite el borrado automático)</string>
+
+    <!-- Filter -->
+    <string name="filter">Filtro</string>
+    <string name="filter_all">Todos</string>
+    <string name="filter_installed">Instalados</string>
+    <string name="filter_premium">Premium</string>
+    <string name="filter_favorites">Favoritos</string>
+    <string name="filter_purchased">Comprados</string>
+
+    <!-- Restore Purchases -->
+    <string name="restore_purchases">Restaurar compras</string>
+    <string name="restore_success">¡Compras restauradas!</string>
+    <string name="restore_not_found">No hay compras para restaurar</string>
+    <string name="restore_error">Error al restaurar. Reinténtalo.</string>
+    <string name="restoring">Restaurando…</string>
+
+    <!-- Badges -->
+    <string name="new_badge">NUEVO</string>
+    <string name="add_to_favorites">Añadir a favoritos</string>
+    <string name="added_to_favorites">Añadido a favoritos</string>
+    <string name="removed_from_favorites">Quitado de favoritos</string>
+    <string name="download_count">%d personas lo añadieron</string>
+
+    <!-- Categories -->
+    <string name="filter_category">Categoría</string>
+    <string name="category_all">Todas</string>
+    <string name="category_funny">Divertidos</string>
+    <string name="category_romantic">Románticos</string>
+    <string name="category_sports">Deportes</string>
+    <string name="category_series">Series/Películas</string>
+    <string name="category_animals">Animales</string>
+    <string name="category_memes">Memes</string>
+
+    <!-- Search -->
+    <string name="recent_searches">Búsquedas recientes</string>
+    <string name="popular_searches">Búsquedas populares</string>
+    <string name="clear_history">Borrar historial</string>
+
+    <!-- Sticker Maker -->
+    <string name="create_sticker">Crea tu propio sticker</string>
+    <string name="my_creations">Mis creaciones</string>
+    <string name="select_photo">Galería</string>
+    <string name="take_photo">Tomar foto</string>
+    <string name="remove_background">Quitar fondo</string>
+    <string name="add_to_pack">Añadir al paquete</string>
+    <string name="create_new_pack">Crear nuevo paquete</string>
+    <string name="pack_name">Nombre del paquete</string>
+    <string name="select_pack">Seleccionar paquete</string>
+    <string name="create_and_add">Crear y añadir</string>
+    <string name="sticker_maker_info">• Debe ser 512x512 px\n• Mínimo 3 stickers para WhatsApp\n• Máximo 30 stickers por paquete</string>
+    <string name="select_photo_hint">Elige o toma una foto</string>
+    <string name="filter_custom">Mis creaciones</string>
+    <string name="sticker_added">¡Sticker añadido!</string>
+    <string name="add_more_sticker">Añadir más</string>
+    <string name="stickers_in_pack">Stickers en el paquete</string>
+    <string name="need_more_stickers">Faltan %d stickers para WhatsApp</string>
+    <string name="pack_ready">¡Paquete listo para WhatsApp!</string>
+    <string name="your_stickers">Tus stickers</string>
+    <string name="create_pack">Crear paquete</string>
+    <string name="delete_pack">Borrar paquete</string>
+    <string name="delete_pack_confirm">¿Seguro que quieres borrar este paquete?\n\n(Se quitará también de WhatsApp)</string>
+    <string name="yes">Sí</string>
+    <string name="no">No</string>
+    <string name="processing_background">Quitando fondo…</string>
+    <string name="bg_removal_error">No se pudo quitar el fondo</string>
+    <string name="create_sticker_option">Hacer sticker</string>
+    <string name="my_stickers_option">Tus stickers</string>
+    <string name="update_whatsapp">Actualizar en WhatsApp</string>
+    <string name="add_remove_sticker">Añadir / Borrar stickers</string>
+    <string name="delete_selected">Borrar seleccionados (%d)</string>
+    <string name="selection_mode_title">Selecciona para borrar</string>
+    <string name="add_sticker">Añadir sticker</string>
+    <string name="delete_mode">Modo borrado</string>
+
+    <!-- Loading States -->
+    <string name="stickers_loading">Cargando stickers…</string>
+    <string name="stickers_load_failed">Error al cargar stickers</string>
+
+    <!-- Remove Instructions -->
+    <string name="remove_instructions_title">¿Cómo quitar?</string>
+    <string name="remove_instructions_message">Estamos abriendo la gestión de stickers de WhatsApp.\n\nPuedes quitar el paquete pulsando \"Borrar\".</string>
+    <string name="go_to_whatsapp">Ir a WhatsApp</string>
+
+    <!-- Pack Still Installed Warning -->
+    <string name="pack_still_installed_title">Aún instalado</string>
+    <string name="pack_still_installed_message">Parece que el paquete sigue en WhatsApp.\n\nPara quitarlo:\n1. Abre WhatsApp\n2. Toca stickers en un chat\n3. Toca el \"+\"\n4. Busca el paquete en \"Mis Stickers\"\n5. Toca el icono de papelera</string>
+
+    <!-- WhatsApp Errors -->
+    <string name="whatsapp_not_available_title">WhatsApp no disponible</string>
+    <string name="whatsapp_not_available_message">No se pudo abrir WhatsApp. Revisa que:\n\n• Esté instalado\n• Estés identificado\n• Esté actualizado.</string>
+    <string name="whatsapp_error_detailed">Error de WhatsApp: %s\n\nRevisa que funcione correctamente.</string>
+    <string name="sticker_count">%d stickers</string>
+    <string name="no_custom_packs">Aún no tienes paquetes. ¡Crea uno!</string>
+    <string name="pack_deleted_whatsapp_sync">Paquete borrado. La sincronización puede tardar.</string>
+    <string name="pack_delete_failed">Error al borrar paquete</string>
+    <string name="static_sticker">Sticker estático</string>
+    <string name="animated_sticker">Sticker animado</string>
+    <string name="select_video_gif">Elige un Vídeo o GIF</string>
+    <string name="select_photo_maker">Elige una Foto</string>
+    <string name="select_video_gif_btn">Elegir Vídeo/GIF</string>
+    <string name="select_photo_btn">Elegir Foto</string>
+    <string name="convert_and_add">Convertir y añadir</string>
+    <string name="back">Atrás</string>
+    <string name="undo">Deshacer</string>
+    <string name="animated_sticker_coming_soon">¡Stickers animados pronto!</string>
+    <string name="pack_updated">¡Paquete actualizado!</string>
+    <string name="free">Gratis</string>
+    <string name="converting">Convirtiendo…</string>
+    <string name="preparing_webp">Preparando vídeo para WebP</string>
+    <string name="ai_analyzing">IA analizando sujeto</string>
+    <string name="buy_premium_with_price">Obtener Premium - %s</string>
+    <string name="explore">Explorar</string>
+    <string name="my_stickers_tab">Mis Stickers</string>
+    <string name="select_plan">Elige tu plan</string>
+    <string name="premium_experience_detail">Mejora tu experiencia Sticky</string>
+    <string name="premium_experience_detail_long">Lleva Sticky al siguiente nivel</string>
+    <string name="forever">para siempre</string>
+    <string name="basic_packs">Paquetes básicos</string>
+    <string name="create_stickers">Crear stickers</string>
+    <string name="ai_background">Fondo IA</string>
+    <string name="premium_packs">Paquetes premium</string>
+    <string name="ad_free">Sin anuncios</string>
+    <string name="ad_free_experience">Experiencia sin anuncios</string>
+    <string name="current_plan">Plan actual</string>
+    <string name="recommended">⭐ RECOMENDADO</string>
+    <string name="one_time_payment">pago único</string>
+    <string name="one_time">único</string>
+    <string name="all_packs">Todos los paquetes</string>
+    <string name="all_premium_packs">Paquetes Premium</string>
+    <string name="unlimited_access_detail">Acceso ilimitado a cientos de stickers premium</string>
+    <string name="ad_free_detail">Uso ininterrumpido sin anuncios</string>
+    <string name="lifetime_access">Acceso de por vida</string>
+    <string name="lifetime_access_detail">Pago único para ser premium siempre</string>
+    <string name="no_subscription_note">💡 ¡Pago único, no es suscripción!\nPuedes restaurar tus compras cuando quieras.</string>
+    <string name="premium_advantages">Ventajas Premium</string>
+    <string name="how_to_create_sticker">¿Cómo quieres crear el sticker?</string>
+    <string name="create_static_desc">Rápido desde fotos</string>
+    <string name="create_animated_desc">WebP desde vídeos o GIFs</string>
+    <string name="tap_to_select_file">Toca para elegir archivo</string>
+    <string name="change_media">Cambiar素材</string>
+    <string name="ai_remove_bg">Quitar fondo con IA</string>
+    <string name="save_sticker">Guardar sticker</string>
+    <string name="preparing_modern_version">Preparando versión moderna</string>
+    <string name="processing_for_quality">Procesando máxima calidad</string>
+    <string name="enter_pack_name">Nombre del paquete</string>
+    <string name="media_load_error">Error al cargar素材</string>
+    <string name="error_occurred">Ocurrió un error</string>
+    <string name="home_desc">Inicio</string>
+</resources>

@@ -326,7 +326,7 @@
                 android:layout_weight="1"
                 android:layout_marginEnd="8dp"
                 android:text="@string/premium"
-                android:textColor="@color/premium_text"
+                android:textColor="@color/premium_text_on_gold"
                 android:textSize="18sp"
                 android:textStyle="bold"
                 android:textAllCaps="false"
@@ -334,7 +334,7 @@
                 app:cornerRadius="28dp"
                 app:icon="@drawable/ic_gem"
                 app:iconGravity="textStart"
-                app:iconTint="@color/premium_text" />
+                app:iconTint="@color/premium_text_on_gold" />
 
             <!-- Price Button -->
             <com.google.android.material.button.MaterialButton

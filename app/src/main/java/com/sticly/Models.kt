@@ -5,6 +5,12 @@ import com.google.gson.annotations.SerializedName
 data class Pack(
     @SerializedName("identifier") val id: String = "",
     @SerializedName("name") val name: String = "",
+    @SerializedName("name_tr") val nameTr: String = "",
+    @SerializedName("name_zh") val nameZh: String = "",
+    @SerializedName("name_es") val nameEs: String = "",
+    @SerializedName("name_ar") val nameAr: String = "",
+    @SerializedName("name_hi") val nameHi: String = "",
+    @SerializedName("name_pt") val namePt: String = "",
     @SerializedName("publisher") val pub: String = "",
     @SerializedName("publisher_email") val email: String = "",
     @SerializedName("privacy_policy_website") val privacy: String = "",
@@ -20,7 +26,19 @@ data class Pack(
     val createdAt: String = "",  // Oluşturulma tarihi (ISO format)
     val category: String = "",   // Kategori (komik, romantik, spor, dizi_film, vb.)
     val downloadCount: Int = 0,  // İndirme/ekleme sayısı
-    val isAnimated: Boolean = false // Animasyonlu paket mi?
+    val favoriteCount: Int = 0,  // Favori sayısı
+    val isAnimated: Boolean = false, // Animasyonlu paket mi?
+    val isActive: Boolean = true, // Paket aktif mi?
+    val priceTRY: String = "",    // TRY fiyatı (örn: "4,99 TL")
+    val priceUSD: String = "",    // USD fiyatı (örn: "$0.99")
+    val priceEUR: String = ""     // EUR fiyatı (örn: "€0.99")
+)
+
+data class BillingSettings(
+    val priceTRY: String = "69,99 TL",
+    val priceUSD: String = "$4.99",
+    val priceEUR: String = "€4.49",
+    val updatedAt: String = ""
 )
 
 data class Sticker(

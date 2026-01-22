@@ -16,56 +16,38 @@ class BillingManager(
     private var billingClient: BillingClient? = null
     private var premiumProductDetails: ProductDetails? = null
     private var stickerProductDetails: MutableMap<String, ProductDetails> = mutableMapOf()
-
     companion object {
-        // Premium abonelik - tüm stickerlar için (69,99 TL)
+        // Premium abonelikler - Bölgesel SKU'lar
         const val PREMIUM_PRODUCT_ID = "premium_lifetime"
+        const val PREMIUM_TRY_SKU = "premium_try"
+        const val PREMIUM_USD_SKU = "premium_usd"
+        const val PREMIUM_EUR_SKU = "premium_eur"
 
         // Tekil sticker paketi satın alma (7,99 TL)
-        // Play Console'da oluşturulacak ürün ID'si: sticker_pack_<pack_id>
         const val STICKER_PACK_PREFIX = "sticker_pack_"
     }
 
-    init {
-        setupBillingClient()
-    }
-
-    private fun setupBillingClient() {
-        billingClient = BillingClient.newBuilder(context)
-            .setListener(this)
-            .enablePendingPurchases()
-            .build()
-
-        billingClient?.startConnection(object : BillingClientStateListener {
-            override fun onBillingSetupFinished(billingResult: BillingResult) {
-                if (billingResult.responseCode == BillingClient.BillingResponseCode.OK) {
-                    queryProducts()
-                    checkExistingPurchases()
-                }
-            }
-
-            override fun onBillingServiceDisconnected() {
-                // Retry connection
-            }
-        })
-    }
-
     private fun queryProducts() {
-        // Premium ürünü sorgula
-        val premiumProductList = listOf(
+        val skus = listOf(PREMIUM_PRODUCT_ID, PREMIUM_TRY_SKU, PREMIUM_USD_SKU, PREMIUM_EUR_SKU)
+        
+        val productList = skus.map { sku ->
             QueryProductDetailsParams.Product.newBuilder()
-                .setProductId(PREMIUM_PRODUCT_ID)
+                .setProductId(sku)
                 .setProductType(BillingClient.ProductType.INAPP)
                 .build()
-        )
+        }
 
-        val premiumParams = QueryProductDetailsParams.newBuilder()
-            .setProductList(premiumProductList)
+        val params = QueryProductDetailsParams.newBuilder()
+            .setProductList(productList)
             .build()
 
-        billingClient?.queryProductDetailsAsync(premiumParams) { billingResult, productDetailsList ->
+        billingClient?.queryProductDetailsAsync(params) { billingResult, productDetailsList ->
             if (billingResult.responseCode == BillingClient.BillingResponseCode.OK) {
-                premiumProductDetails = productDetailsList.firstOrNull()
+                // premiumProductDetails default olarak premium_lifetime'ı tutsun
+                premiumProductDetails = productDetailsList.find { it.productId == PREMIUM_PRODUCT_ID }
+                // Diğerlerini stickerProductDetails gibi bir yere veya ayrı alanlara koyabiliriz
+                // Ama şimdilik productDetailsList'i bir map'te tutalım daha kolay erişim için
+                productDetailsList.forEach { stickerProductDetails[it.productId] = it }
             }
         }
     }
@@ -124,10 +106,12 @@ class BillingManager(
     }
 
     /**
-     * Premium satın alma başlat (69,99 TL)
+     * Premium satın alma başlat
+     * @param productId İsteğe bağlı SKU (premium_try, premium_usd vb.). Boşsa varsayılanı kullanır.
      */
-    fun launchPurchase(activity: Activity) {
-        val product = premiumProductDetails ?: return
+    fun launchPurchase(activity: Activity, productId: String? = null) {
+        val targetSku = productId ?: PREMIUM_PRODUCT_ID
+        val product = stickerProductDetails[targetSku] ?: premiumProductDetails ?: return
 
         val productDetailsParamsList = listOf(
             BillingFlowParams.ProductDetailsParams.newBuilder()

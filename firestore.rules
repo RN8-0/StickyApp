@@ -1,0 +1,34 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Sticker paketleri - herkes okuyabilir
+    match /stickers/{document=**} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+    
+    // Premium sticker paketleri - herkes okuyabilir
+    match /premium_stickers/{document=**} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+    
+    // Ayarlar - herkes okuyabilir, sadece auth yazabilir
+    match /settings/{document=**} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+    
+    // Mesajlar - herkes yazabilir (anonim kullanıcılar için), sadece auth okuyabilir
+    match /messages/{document=**} {
+      allow create: if true;
+      allow read, update, delete: if request.auth != null;
+    }
+    
+    // Öneriler - herkes yazabilir (anonim kullanıcılar için), sadece auth okuyabilir
+    match /suggestions/{document=**} {
+      allow create: if true;
+      allow read, update, delete: if request.auth != null;
+    }
+  }
+}

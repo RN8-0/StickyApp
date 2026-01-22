@@ -50,6 +50,7 @@
             android:layout_marginTop="24dp"
             android:text="@string/get_premium"
             android:textAllCaps="false"
+            android:textColor="@color/premium_text_on_gold"
             app:backgroundTint="@color/premium_gold"
             app:cornerRadius="12dp" />
 

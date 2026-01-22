@@ -7,6 +7,12 @@ export interface Sticker {
 export interface StickerPack {
     id: string;
     name: string;
+    name_tr: string;
+    name_zh: string;
+    name_es: string;
+    name_ar: string;
+    name_hi: string;
+    name_pt: string;
     publisher: string;
     publisher_email: string;
     privacy_policy_website: string;
@@ -22,5 +28,29 @@ export interface StickerPack {
     sticker_count: number;
     image_data_version: string;
     is_active: boolean;
+    price_try: string;
+    price_usd: string;
+    price_eur: string;
     stickers: Sticker[];
 }
+
+export interface ContactMessage {
+    id: string;
+    name: string;
+    email: string;
+    subject: string;
+    message: string;
+    timestamp: number;
+    date: string;
+    time: string;
+    status: 'read' | 'unread';
+}
+
+export interface StickerSuggestion {
+    id: string;
+    suggestion: string;
+    timestamp: number;
+    date: string;
+    time: string;
+}
+

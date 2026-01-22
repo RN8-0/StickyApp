@@ -1,0 +1,262 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Sticky</string>
+    <string name="search_hint">搜索贴纸包…</string>
+    <string name="theme">主题</string>
+    <string name="faq">常见问题</string>
+    <string name="about">关于</string>
+    <string name="theme_system">系统默认</string>
+    <string name="theme_light">浅色模式</string>
+    <string name="theme_dark">深色模式</string>
+    <string name="about_title">关于 Sticky</string>
+    <string name="about_message">Sticky v2.0\n\nWhatsApp 贴纸包应用。\n\n开发者：Sticky 团队</string>
+    <string name="faq_title">常见问题</string>
+    <string name="faq_content">如何添加贴纸？\n选择一个包并点击“添加到 WhatsApp”按钮。\n\n为什么贴纸无法添加？\n请确保 WhatsApp 是最新版本。\n\n我可以添加多少个贴纸？\n您可以添加任意数量的包。</string>
+    <string name="ok">确定</string>
+    <string name="cancel">取消</string>
+
+    <!-- Drawer Menu -->
+    <string name="contact_us">联系我们</string>
+    <string name="rate_us">给我们评分</string>
+    <string name="premium">高级版</string>
+    <string name="suggest_sticker">建议贴纸</string>
+    <string name="share_app">分享应用</string>
+    <string name="privacy_policy">隐私政策</string>
+    <string name="notification_settings">通知设置</string>
+    <string name="language">语言</string>
+    <string name="select_language">选择语言</string>
+
+    <!-- Contact Us -->
+    <string name="contact_title">联系我们</string>
+    <string name="contact_subtitle">向我们发送您的反馈或建议</string>
+    <string name="contact_name_hint">您的姓名</string>
+    <string name="contact_email_hint">您的电子邮件</string>
+    <string name="contact_subject_hint">主题</string>
+    <string name="contact_message_hint">您的留言</string>
+    <string name="send">发送</string>
+    <string name="sending">正在发送…</string>
+    <string name="message_sent">您的留言已成功发送！</string>
+    <string name="message_error">无法发送留言。请重试。</string>
+    <string name="fill_all_fields">请填写所有字段。</string>
+    <string name="invalid_email">请输入有效的电子邮件地址。</string>
+
+    <!-- Premium -->
+    <string name="premium_title">高级会员</string>
+    <string name="premium_description">一次性购买：\n\n• 无广告体验\n• 高级贴纸包\n• 优先支持</string>
+    <string name="premium_price">$4.99</string>
+    <string name="sticker_price">$0.49</string>
+    <string name="buy_premium">立即购买</string>
+    <string name="premium_active">高级版已激活</string>
+    <string name="premium_purchased">已购买高级版！</string>
+
+    <!-- Suggest Sticker -->
+    <string name="suggest_title">建议贴纸</string>
+    <string name="suggest_hint">您想看到哪些贴纸包？</string>
+    <string name="suggestion_sent">感谢您的建议！</string>
+
+    <!-- Share -->
+    <string name="share_text">试试 Sticky 应用！优秀的 WhatsApp 贴纸：https://play.google.com/store/apps/details?id=com.sticly</string>
+
+    <!-- Privacy -->
+    <string name="privacy_title">隐私政策</string>
+    <string name="privacy_content">隐私政策\n\n本应用可能会收集一些信息以改善用户体验。\n\n收集的数据：\n• 设备信息\n• 应用使用统计\n\n您的数据不会与第三方共享。\n\n如有问题：privacy@sticky.com</string>
+
+    <!-- Notifications -->
+    <string name="notifications_title">通知设置</string>
+    <string name="notification_new_packs">新贴纸包</string>
+    <string name="notification_new_packs_desc">添加新包时获得通知</string>
+    <string name="notifications_saved">设置已保存</string>
+    <string name="notifications_enabled">🔔 通知已启用！您将收到有关新贴纸包的信息。</string>
+    <string name="notifications_disabled">🔕 通知已禁用。</string>
+
+    <!-- Internet -->
+    <string name="no_internet_title">无网络连接</string>
+    <string name="no_internet_message">此应用需要网络连接。请检查您的连接。</string>
+    <string name="retry">重试</string>
+    <string name="exit">退出</string>
+
+    <!-- Sticker Pack -->
+    <string name="add_to_whatsapp">添加到 WhatsApp</string>
+    <string name="remove_from_whatsapp">从 WhatsApp 移除</string>
+    <string name="confirm_remove">确定移除</string>
+    <string name="pack_added">已添加！</string>
+    <string name="pack_removed">已移除</string>
+    <string name="pack_removed_from_whatsapp">贴纸已从 WhatsApp 移除</string>
+    <string name="installed">已安装</string>
+    <string name="unlock_premium">解锁高级版</string>
+    <string name="premium_required_title">需要高级版</string>
+    <string name="premium_required_message">需要高级会员才能访问此贴纸包。\n\n加入高级版：\n• 访问所有贴纸包\n• 无广告体验\n• 优先支持</string>
+    <string name="whatsapp_not_installed_title">未安装 WhatsApp</string>
+    <string name="whatsapp_not_installed_message">您的设备必须安装 WhatsApp 才能使用此功能。\n\n您要安装 WhatsApp 吗？</string>
+    <string name="whatsapp_not_installed">未安装 WhatsApp</string>
+    <string name="remove_pack_title">移除包</string>
+    <string name="remove_pack_message">您确定要移除此贴纸包吗？</string>
+    <string name="play_store">前往应用商店</string>
+    <string name="downloading">正在下载…</string>
+    <string name="download_failed">下载失败</string>
+    <string name="error">错误：%s</string>
+    <string name="pack_loading">正在加载包…</string>
+    <string name="pack_not_found">找不到包</string>
+    <string name="pack_load_failed">无法加载包</string>
+
+    <!-- Premium Promo Dialog -->
+    <string name="premium_promo_title">无广告体验</string>
+    <string name="premium_promo_message">我们知道广告有时很烦人。\n\n我们需要一点收入来改进应用并添加新贴纸。\n\n您可以一次性购买高级会员，享受无广告体验和所有高级贴纸 💙</string>
+    <string name="get_premium">获取高级会员</string>
+    <string name="maybe_later">稍后再说</string>
+
+    <!-- Premium Preview -->
+    <string name="tap_to_unlock">点击以解锁高级版</string>
+
+    <!-- WhatsApp Sticker Removal Info -->
+    <string name="whatsapp_removal_info_title">信息</string>
+    <string name="whatsapp_removal_info_message">贴纸包已从我们的应用中移除。\n\n要同时从 WhatsApp 中移除：\n您可以前往 WhatsApp → 设置 → 贴纸 → 我的贴纸手动删除。\n\n(WhatsApp API 不支持自动删除)</string>
+
+    <!-- Filter -->
+    <string name="filter">过滤</string>
+    <string name="filter_all">全部</string>
+    <string name="filter_installed">已安装</string>
+    <string name="filter_premium">高级</string>
+    <string name="filter_favorites">收藏夹</string>
+    <string name="filter_purchased">已购买</string>
+
+    <!-- Restore Purchases -->
+    <string name="restore_purchases">恢复购买</string>
+    <string name="restore_success">您的购买已恢复！</string>
+    <string name="restore_not_found">未找到可恢复的购买</string>
+    <string name="restore_error">恢复失败。请重试。</string>
+    <string name="restoring">正在恢复…</string>
+
+    <!-- Badges -->
+    <string name="new_badge">新</string>
+    <string name="add_to_favorites">加入收藏</string>
+    <string name="added_to_favorites">已加入收藏</string>
+    <string name="removed_from_favorites">已从收藏中移除</string>
+    <string name="download_count">%d 人已添加</string>
+
+    <!-- Categories -->
+    <string name="filter_category">类别</string>
+    <string name="category_all">所有类别</string>
+    <string name="category_funny">幽默</string>
+    <string name="category_romantic">浪漫</string>
+    <string name="category_sports">体育</string>
+    <string name="category_series">影剧</string>
+    <string name="category_animals">动物</string>
+    <string name="category_memes">梗图</string>
+
+    <!-- Search -->
+    <string name="recent_searches">最近搜索</string>
+    <string name="popular_searches">热门搜索</string>
+    <string name="clear_history">清除历史</string>
+
+    <!-- Sticker Maker -->
+    <string name="create_sticker">创建您自己的贴纸</string>
+    <string name="my_creations">我的作品</string>
+    <string name="select_photo">从相册选择</string>
+    <string name="take_photo">拍照</string>
+    <string name="remove_background">去除背景</string>
+    <string name="add_to_pack">添加到包</string>
+    <string name="create_new_pack">创建新包</string>
+    <string name="pack_name">包名称</string>
+    <string name="select_pack">选择包</string>
+    <string name="create_and_add">创建并添加</string>
+    <string name="sticker_maker_info">• 贴纸必须为 512x512 像素\n• WhatsApp 至少需要 3 张贴纸\n• 最多可添加 30 张贴纸</string>
+    <string name="select_photo_hint">选择或拍摄照片</string>
+    <string name="filter_custom">我的作品</string>
+    <string name="sticker_added">贴纸已添加！</string>
+    <string name="add_more_sticker">添加更多</string>
+    <string name="stickers_in_pack">包内的贴纸</string>
+    <string name="need_more_stickers">WhatsApp 还需要 %d 张贴纸</string>
+    <string name="pack_ready">贴纸包已准备好添加到 WhatsApp！</string>
+    <string name="your_stickers">您的贴纸</string>
+    <string name="create_pack">创建贴纸包</string>
+    <string name="delete_pack">删除包</string>
+    <string name="delete_pack_confirm">您确定要删除此包吗？\n\n（此操作也将从 WhatsApp 中移除该包）</string>
+    <string name="yes">是</string>
+    <string name="no">否</string>
+    <string name="processing_background">正在去除背景…</string>
+    <string name="bg_removal_error">无法去除背景</string>
+    <string name="create_sticker_option">制作贴纸</string>
+    <string name="my_stickers_option">您的贴纸</string>
+    <string name="update_whatsapp">在 WhatsApp 上更新</string>
+    <string name="add_remove_sticker">添加 / 删除贴纸</string>
+    <string name="delete_selected">删除所选 (%d)</string>
+    <string name="selection_mode_title">选择以删除</string>
+    <string name="add_sticker">添加贴纸</string>
+    <string name="delete_mode">删除模式</string>
+
+    <!-- Loading States -->
+    <string name="stickers_loading">正在加载贴纸…</string>
+    <string name="stickers_load_failed">无法加载贴纸</string>
+
+    <!-- Remove Instructions -->
+    <string name="remove_instructions_title">如何移除？</string>
+    <string name="remove_instructions_message">我们将打开 WhatsApp 贴纸包管理屏幕。\n\n您可以通过点击屏幕上的“删除”选项来移除该包。</string>
+    <string name="go_to_whatsapp">前往 WhatsApp</string>
+
+    <!-- Pack Still Installed Warning -->
+    <string name="pack_still_installed_title">包仍已安装</string>
+    <string name="pack_still_installed_message">看来贴纸包仍存在于 WhatsApp 中。\n\n手动移除：\n1. 打开 WhatsApp\n2. 点击聊天中的贴纸图标\n3. 点击右上角的“+”图标\n4. 在“我的贴纸”选项卡中找到该包\n5. 点击垃圾桶图标</string>
+
+    <!-- WhatsApp Errors -->
+    <string name="whatsapp_not_available_title">WhatsApp 不可用</string>
+    <string name="whatsapp_not_available_message">无法打开 WhatsApp。请检查：\n\n• 已安装 WhatsApp\n• 已登录 WhatsApp\n• WhatsApp 已是最新版本。</string>
+    <string name="whatsapp_error_detailed">WhatsApp 错误：%s\n\n请确保 WhatsApp 运行正常。</string>
+    <string name="sticker_count">%d 张贴纸</string>
+    <string name="no_custom_packs">您还没有贴纸包。立即创建一个！</string>
+    <string name="pack_deleted_whatsapp_sync">包已删除并触发 WhatsApp 同步。可能需要几秒钟。</string>
+    <string name="pack_delete_failed">无法删除包</string>
+    <string name="static_sticker">静态贴纸</string>
+    <string name="animated_sticker">动态贴纸</string>
+    <string name="select_video_gif">选择视频或 GIF</string>
+    <string name="select_photo_maker">选择照片</string>
+    <string name="select_video_gif_btn">选择视频/GIF</string>
+    <string name="select_photo_btn">选择照片</string>
+    <string name="convert_and_add">转换并添加</string>
+    <string name="back">返回</string>
+    <string name="undo">撤销</string>
+    <string name="animated_sticker_coming_soon">动态贴纸支持即将推出！</string>
+    <string name="pack_updated">您的包已更新！</string>
+    <string name="free">免费</string>
+    <string name="converting">正在转换…</string>
+    <string name="preparing_webp">正在为 WebP 格式准备视频</string>
+    <string name="ai_analyzing">AI 正在分析主体</string>
+    <string name="buy_premium_with_price">获取高级版 - %s</string>
+    <string name="explore">探索</string>
+    <string name="my_stickers_tab">我的贴纸</string>
+    <string name="select_plan">选择方案</string>
+    <string name="premium_experience_detail">升级您的 Sticky 体验</string>
+    <string name="premium_experience_detail_long">将您的 Sticky 体验提升到新水平</string>
+    <string name="forever">永久</string>
+    <string name="basic_packs">基础包</string>
+    <string name="create_stickers">创建贴纸</string>
+    <string name="ai_background">AI 背景</string>
+    <string name="premium_packs">高级包</string>
+    <string name="ad_free">无广告</string>
+    <string name="ad_free_experience">无广告体验</string>
+    <string name="current_plan">当前方案</string>
+    <string name="recommended">⭐ 推荐</string>
+    <string name="one_time_payment">一次性付款</string>
+    <string name="one_time">一次性</string>
+    <string name="all_packs">所有包</string>
+    <string name="all_premium_packs">所有高级包</string>
+    <string name="unlimited_access_detail">无限访问数百个特别设计的高级贴纸包</string>
+    <string name="ad_free_detail">使用过程中没有任何广告打扰</string>
+    <string name="lifetime_access">终身访问</string>
+    <string name="lifetime_access_detail">一次性付款，永久成为高级会员</string>
+    <string name="no_subscription_note">💡 一次性付款，非订阅制！\n您可以随时恢复购买。</string>
+    <string name="premium_advantages">高级版优势</string>
+    <string name="how_to_create_sticker">您想如何创建贴纸？</string>
+    <string name="create_static_desc">从照片快速创建</string>
+    <string name="create_animated_desc">从视频或 GIF 制作 WebP</string>
+    <string name="tap_to_select_file">点击选择文件</string>
+    <string name="change_media">更改素材</string>
+    <string name="ai_remove_bg">AI 去除背景</string>
+    <string name="save_sticker">保存贴纸</string>
+    <string name="preparing_modern_version">准备现代版本</string>
+    <string name="processing_for_quality">高质量处理中</string>
+    <string name="enter_pack_name">输入包名称</string>
+    <string name="media_load_error">无法加载媒体素材</string>
+    <string name="error_occurred">发生错误</string>
+    <string name="home_desc">首页</string>
+</resources>

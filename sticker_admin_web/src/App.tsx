@@ -5,6 +5,7 @@ import {
   getDocs,
   deleteDoc,
   doc,
+  getDoc,
   updateDoc,
   arrayRemove,
   setDoc,
@@ -35,7 +36,15 @@ import {
   ChevronRight,
   TrendingUp,
   BarChart3,
-  Heart
+  Heart,
+  DollarSign,
+  Globe,
+  CreditCard,
+  Mail,
+  MessageSquare,
+  Lightbulb,
+  Check,
+  Clock
 } from 'lucide-react';
 import {
   BarChart,
@@ -46,7 +55,7 @@ import {
   Tooltip,
   ResponsiveContainer
 } from 'recharts';
-import type { StickerPack, Sticker } from './types';
+import type { StickerPack, Sticker, ContactMessage, StickerSuggestion } from './types';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { stickerProcessor } from './utils/stickerProcessor';
@@ -57,13 +66,19 @@ function cn(...inputs: ClassValue[]) {
 
 function App() {
   const [user, setUser] = useState<User | null>(null);
+  console.log("STICKY ADMIN V3 LOADING...");
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [packs, setPacks] = useState<StickerPack[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedPack, setSelectedPack] = useState<StickerPack | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'stats'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'stats' | 'settings' | 'messages'>('dashboard');
+
+  // Mail System States
+  const [messages, setMessages] = useState<ContactMessage[]>([]);
+  const [suggestions, setSuggestions] = useState<StickerSuggestion[]>([]);
+  const [messagesSubTab, setMessagesSubTab] = useState<'messages' | 'suggestions'>('messages');
 
   // Modals
   const [showNewPackModal, setShowNewPackModal] = useState(false);
@@ -73,6 +88,12 @@ function App() {
   // Form States
   const [newPackData, setNewPackData] = useState({
     name: '',
+    name_tr: '',
+    name_zh: '',
+    name_es: '',
+    name_ar: '',
+    name_hi: '',
+    name_pt: '',
     publisher: '',
     publisher_email: '',
     privacy_policy_website: '',
@@ -80,10 +101,20 @@ function App() {
     category: 'Mizah',
     is_premium: false,
     is_active: true,
-    is_animated: true
+    is_animated: true,
+    price_try: '4,99',
+    price_usd: '1',
+    price_eur: '1'
   });
   const [editFormData, setEditFormData] = useState<Partial<StickerPack>>({});
   const [uploadProgress, setUploadProgress] = useState<{ current: number, total: number, message?: string } | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<string>('Yükleniyor...');
+  const [updateStatus, setUpdateStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [globalPrices, setGlobalPrices] = useState({
+    try: '69,99',
+    usd: '7,99',
+    eur: '6,99'
+  });
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (u) => {
@@ -93,6 +124,131 @@ function App() {
     });
     return unsubscribe;
   }, []);
+
+  useEffect(() => {
+    if (activeTab === 'settings') {
+      fetchGlobalSettings();
+    }
+    if (activeTab === 'messages') {
+      fetchMessages();
+      fetchSuggestions();
+    }
+  }, [activeTab]);
+
+  const fetchMessages = async () => {
+    try {
+      const snapshot = await getDocs(collection(db, 'messages'));
+      const msgs: ContactMessage[] = snapshot.docs.map(d => ({
+        id: d.id,
+        ...d.data()
+      } as ContactMessage));
+      setMessages(msgs.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)));
+    } catch (e) {
+      console.error("Mesajlar yüklenirken hata:", e);
+    }
+  };
+
+  const fetchSuggestions = async () => {
+    try {
+      const snapshot = await getDocs(collection(db, 'suggestions'));
+      const suggs: StickerSuggestion[] = snapshot.docs.map(d => ({
+        id: d.id,
+        ...d.data()
+      } as StickerSuggestion));
+      setSuggestions(suggs.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)));
+    } catch (e) {
+      console.error("Öneriler yüklenirken hata:", e);
+    }
+  };
+
+  const markMessageAsRead = async (messageId: string) => {
+    try {
+      await updateDoc(doc(db, 'messages', messageId), { status: 'read' });
+      setMessages(messages.map(m => m.id === messageId ? { ...m, status: 'read' } : m));
+    } catch (e) {
+      console.error("Mesaj okundu işaretlenemedi:", e);
+    }
+  };
+
+  const deleteMessage = async (messageId: string) => {
+    if (!window.confirm("Bu mesajı silmek istediğinize emin misiniz?")) return;
+    try {
+      await deleteDoc(doc(db, 'messages', messageId));
+      setMessages(messages.filter(m => m.id !== messageId));
+    } catch (e) {
+      console.error("Mesaj silinemedi:", e);
+    }
+  };
+
+  const deleteSuggestion = async (suggestionId: string) => {
+    if (!window.confirm("Bu öneriyi silmek istediğinize emin misiniz?")) return;
+    try {
+      await deleteDoc(doc(db, 'suggestions', suggestionId));
+      setSuggestions(suggestions.filter(s => s.id !== suggestionId));
+    } catch (e) {
+      console.error("Öneri silinemedi:", e);
+    }
+  };
+
+  const fetchGlobalSettings = async () => {
+    try {
+      const docRef = doc(db, 'settings', 'billing');
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setGlobalPrices({
+          try: cleanPrice(data.price_try || '69,99'),
+          usd: cleanPrice(data.price_usd || '7,99'),
+          eur: cleanPrice(data.price_eur || '6,99')
+        });
+        if (data.updated_at) {
+          const date = data.updated_at.toDate();
+          const time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          setLastUpdated(`Bugün, ${time}`);
+        }
+      }
+    } catch (e) {
+      console.error("Fiyatlar yüklenirken hata:", e);
+    }
+  };
+
+  const cleanPrice = (price: string) => {
+    if (!price) return '';
+    // Sadece sayıları, virgül ve noktayı tut (TL, $, € sembollerini temizle)
+    return price.replace(/[^0-9,.]/g, '').trim();
+  };
+
+  const handleUpdateGlobalPrices = async () => {
+    console.log("UPDATE BUTTON CLICKED");
+    if (!window.confirm("Tüm uygulama fiyatlarını güncelliyorsunuz. Emin misiniz?")) return;
+
+    setIsProcessing(true);
+    setUpdateStatus('idle');
+
+    try {
+      const billingRef = doc(db, 'settings', 'billing');
+      const payload = {
+        price_try: cleanPrice(globalPrices.try),
+        price_usd: cleanPrice(globalPrices.usd),
+        price_eur: cleanPrice(globalPrices.eur),
+        updated_at: serverTimestamp()
+      };
+
+      console.log("Saving payload:", payload);
+      await setDoc(billingRef, payload, { merge: true });
+
+      setUpdateStatus('success');
+      alert("✅ BAŞARI: Fiyatlar başarıyla buluta kaydedildi! Uygulamada anında görebilirsiniz.");
+      await fetchGlobalSettings();
+    } catch (e: any) {
+      console.error("KRITIK HATA:", e);
+      setUpdateStatus('error');
+      alert("❌ HATA: Kaydetme sırasında bir sorun oluştu: " + (e.message || "Bilinmeyen hata"));
+    } finally {
+      setIsProcessing(false);
+      setTimeout(() => setUpdateStatus('idle'), 5000);
+    }
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -113,8 +269,22 @@ function App() {
       const premiumPacks = await getDocs(collection(db, 'premium_stickers'));
 
       const allPacks: StickerPack[] = [
-        ...normalPacks.docs.map(d => ({ id: d.id, ...d.data(), is_premium: false, is_animated: d.data().is_animated ?? false } as StickerPack)),
-        ...premiumPacks.docs.map(d => ({ id: d.id, ...d.data(), is_premium: true, is_animated: d.data().is_animated ?? false } as StickerPack))
+        ...normalPacks.docs.map(d => ({
+          id: d.id, ...d.data(),
+          is_premium: false,
+          is_animated: d.data().is_animated ?? false,
+          price_try: d.data().price_try ?? '',
+          price_usd: d.data().price_usd ?? '',
+          price_eur: d.data().price_eur ?? ''
+        } as StickerPack)),
+        ...premiumPacks.docs.map(d => ({
+          id: d.id, ...d.data(),
+          is_premium: true,
+          is_animated: d.data().is_animated ?? false,
+          price_try: d.data().price_try ?? '',
+          price_usd: d.data().price_usd ?? '',
+          price_eur: d.data().price_eur ?? ''
+        } as StickerPack))
       ];
 
       setPacks(allPacks.sort((a, b) => a.name.localeCompare(b.name)));
@@ -134,17 +304,26 @@ function App() {
 
       const packData: any = {
         name: newPackData.name,
+        name_tr: newPackData.name_tr,
+        name_zh: newPackData.name_zh || '',
+        name_es: newPackData.name_es || '',
+        name_ar: newPackData.name_ar || '',
+        name_hi: newPackData.name_hi || '',
+        name_pt: newPackData.name_pt || '',
         publisher: newPackData.publisher,
         publisher_email: "contact@sticly.com",
         category: newPackData.category,
         is_premium: newPackData.is_premium,
-        is_animated: newPackData.is_animated,
+        is_animated: true, // Always animated
         download_count: 0,
         view_count: 0,
         favorite_count: 0,
         sticker_count: 0,
         image_data_version: "1",
         is_active: newPackData.is_active,
+        price_try: newPackData.is_premium ? cleanPrice(newPackData.price_try) : '',
+        price_usd: newPackData.is_premium ? cleanPrice(newPackData.price_usd) : '',
+        price_eur: newPackData.is_premium ? cleanPrice(newPackData.price_eur) : '',
         stickers: [],
         tray_url: "",
         created_at: serverTimestamp()
@@ -158,6 +337,12 @@ function App() {
       setShowNewPackModal(false);
       setNewPackData({
         name: '',
+        name_tr: '',
+        name_zh: '',
+        name_es: '',
+        name_ar: '',
+        name_hi: '',
+        name_pt: '',
         publisher: '',
         publisher_email: '',
         privacy_policy_website: '',
@@ -165,7 +350,10 @@ function App() {
         category: 'Mizah',
         is_premium: false,
         is_active: true,
-        is_animated: true
+        is_animated: true,
+        price_try: '4,99 TL',
+        price_usd: '$0.99',
+        price_eur: '€0.99'
       });
       alert("Yeni hareketli paket oluşturuldu. Şimdi video/gif ekleyebilirsiniz.");
     } catch (e) {
@@ -179,10 +367,20 @@ function App() {
     if (!selectedPack || !editFormData) return;
     setIsProcessing(true);
     try {
-      const oldCollection = selectedPack.is_premium ? 'premium_stickers' : 'stickers';
-      const newCollection = editFormData.is_premium ? 'premium_stickers' : 'stickers';
+      const updatedData = { ...editFormData };
+      if (updatedData.is_premium) {
+        updatedData.price_try = cleanPrice(updatedData.price_try || '');
+        updatedData.price_usd = cleanPrice(updatedData.price_usd || '');
+        updatedData.price_eur = cleanPrice(updatedData.price_eur || '');
+      } else {
+        updatedData.price_try = '';
+        updatedData.price_usd = '';
+        updatedData.price_eur = '';
+      }
+      updatedData.image_data_version = Date.now().toString();
 
-      const updatedData = { ...editFormData, image_data_version: Date.now().toString() };
+      const oldCollection = selectedPack.is_premium ? 'premium_stickers' : 'stickers';
+      const newCollection = updatedData.is_premium ? 'premium_stickers' : 'stickers';
 
       if (oldCollection !== newCollection) {
         // Move document between collections
@@ -200,7 +398,7 @@ function App() {
       setPacks(packs.map(p => p.id === selectedPack.id ? updated : p));
       setSelectedPack(updated);
       setShowEditPackModal(false);
-      alert("Paket bilgileri ve tipi başarıyla güncellendi.");
+      alert("Paket bilgileri ve tipi başarıyla güncellendi. Uygulamada yansıması birkaç dakika sürebilir (Önbellek nedeniyle).");
     } catch (e) {
       alert("Hata: " + e);
     } finally {
@@ -484,7 +682,8 @@ function App() {
   }
 
   const filteredPacks = packs.filter(p =>
-    p.name?.toLowerCase().includes(searchTerm.toLowerCase())
+    p.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    p.name_tr?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
@@ -551,6 +750,25 @@ function App() {
           >
             <BarChart3 size={24} />
           </button>
+          <button
+            onClick={() => setActiveTab('messages')}
+            className={cn("p-3 rounded-2xl transition-all relative", activeTab === 'messages' ? "bg-primary text-white shadow-lg" : "text-textSec hover:bg-hover")}
+            title="Mesajlar"
+          >
+            <Mail size={24} />
+            {messages.filter(m => m.status === 'unread').length > 0 && (
+              <span className="absolute -top-1 -right-1 bg-danger text-white text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center">
+                {messages.filter(m => m.status === 'unread').length}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab('settings')}
+            className={cn("p-3 rounded-2xl transition-all", activeTab === 'settings' ? "bg-primary text-white shadow-lg" : "text-textSec hover:bg-hover")}
+            title="Fiyat Ayarları"
+          >
+            <CreditCard size={24} />
+          </button>
         </div>
 
         {activeTab === 'dashboard' ? (
@@ -606,7 +824,12 @@ function App() {
                         )}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <h3 className="font-bold text-sm truncate text-white">{pack.name}</h3>
+                        <h3 className="font-bold text-sm truncate text-white">
+                          {pack.name}
+                          {pack.name_tr && pack.name_tr !== pack.name && (
+                            <span className="text-textSec font-normal ml-2">({pack.name_tr})</span>
+                          )}
+                        </h3>
                         <div className="flex items-center gap-2 mt-1.5">
                           <span className="text-[10px] bg-white/5 px-2 py-0.5 rounded-full text-textSec font-semibold">
                             {pack.sticker_count} Sticker
@@ -689,7 +912,12 @@ function App() {
                       </label>
                       <button
                         onClick={() => {
-                          setEditFormData({ ...selectedPack });
+                          setEditFormData({
+                            ...selectedPack,
+                            price_try: cleanPrice(selectedPack.price_try || ''),
+                            price_usd: cleanPrice(selectedPack.price_usd || ''),
+                            price_eur: cleanPrice(selectedPack.price_eur || '')
+                          });
                           setShowEditPackModal(true);
                         }}
                         className="flex items-center gap-2 px-6 py-3.5 bg-card hover:bg-hover border border-white/5 rounded-2xl text-sm font-bold transition-all text-textSec hover:text-textMain"
@@ -755,7 +983,7 @@ function App() {
               </div>
             )}
           </>
-        ) : (
+        ) : activeTab === 'stats' ? (
           <div className="flex-1 overflow-y-auto p-12 custom-scrollbar bg-background">
             <div className="max-w-6xl mx-auto space-y-12">
               <div className="flex items-center justify-between">
@@ -975,11 +1203,266 @@ function App() {
               </div>
             </div>
           </div>
-        )}
+        ) : activeTab === 'settings' ? (
+          <div className="flex-1 overflow-y-auto p-12 custom-scrollbar bg-background">
+            <div className="max-w-4xl mx-auto space-y-12 animate-in fade-in duration-500">
+              <div>
+                <h2 className="text-4xl font-black text-white">SİSTEM AYARLARI (GÜNCEL)</h2>
+                <p className="text-textSec">Uygulama genelindeki sistem ve ödeme ayarları</p>
+              </div>
+
+              <div className="grid grid-cols-1 gap-8">
+                {/* Billing Settings Card */}
+                <div className="glass p-10 rounded-[2.5rem] bg-gradient-to-br from-primary/5 to-transparent border border-white/5 shadow-2xl">
+                  <div className="flex items-center gap-5 mb-10">
+                    <div className="bg-primary/20 w-14 h-14 rounded-2xl flex items-center justify-center text-primary shadow-lg shadow-primary/10">
+                      <CreditCard size={28} />
+                    </div>
+                    <div>
+                      <h3 className="text-2xl font-black text-white">Ödeme Ayarları</h3>
+                      <p className="text-sm text-textSec font-semibold">Tüm uygulama için tek seferlik satın alım fiyatları</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                    <div className="space-y-3">
+                      <label className="text-xs font-bold text-textSec uppercase tracking-widest flex items-center gap-2">
+                        <Globe size={14} className="text-primary" /> TÜRKİYE (TL)
+                      </label>
+                      <input
+                        type="text"
+                        value={globalPrices.try}
+                        onChange={(e) => setGlobalPrices({ ...globalPrices, try: e.target.value })}
+                        placeholder="Örn: 69,99"
+                        className="w-full bg-card/60 border border-white/10 rounded-2xl px-5 py-4 text-white font-bold outline-none focus:ring-2 focus:ring-primary focus:bg-background transition-all"
+                      />
+                      <p className="text-[10px] text-textSec font-medium pl-1">Yerel fiyatlandırma (TRY)</p>
+                    </div>
+                    <div className="space-y-3">
+                      <label className="text-xs font-bold text-textSec uppercase tracking-widest flex items-center gap-2">
+                        <DollarSign size={14} className="text-accent" /> GLOBAL (USD)
+                      </label>
+                      <input
+                        type="text"
+                        value={globalPrices.usd}
+                        onChange={(e) => setGlobalPrices({ ...globalPrices, usd: e.target.value })}
+                        placeholder="Örn: 4.99"
+                        className="w-full bg-card/60 border border-white/10 rounded-2xl px-5 py-4 text-white font-bold outline-none focus:ring-2 focus:ring-accent focus:bg-background transition-all"
+                      />
+                      <p className="text-[10px] text-textSec font-medium pl-1">Global pazar fiyatı (USD)</p>
+                    </div>
+                    <div className="space-y-3">
+                      <label className="text-xs font-bold text-textSec uppercase tracking-widest flex items-center gap-2">
+                        <Globe size={14} className="text-warning" /> AVRUPA (EUR)
+                      </label>
+                      <input
+                        type="text"
+                        value={globalPrices.eur}
+                        onChange={(e) => setGlobalPrices({ ...globalPrices, eur: e.target.value })}
+                        placeholder="Örn: 4.49"
+                        className="w-full bg-card/60 border border-white/10 rounded-2xl px-5 py-4 text-white font-bold outline-none focus:ring-2 focus:ring-warning focus:bg-background transition-all"
+                      />
+                      <p className="text-[10px] text-textSec font-medium pl-1">Avrupa bölgesi fiyatı (EUR)</p>
+                    </div>
+                  </div>
+
+                  <div className="mt-12 flex gap-4">
+                    <button
+                      onClick={handleUpdateGlobalPrices}
+                      disabled={isProcessing}
+                      className={cn(
+                        "flex-1 py-5 rounded-2xl font-black shadow-xl transition-all flex items-center justify-center gap-3 disabled:opacity-50",
+                        updateStatus === 'success' ? "bg-warning text-background shadow-warning/20 scale-[1.05]" :
+                          updateStatus === 'error' ? "bg-danger text-white" :
+                            "bg-primary text-white shadow-primary/20 hover:scale-[1.02]"
+                      )}
+                    >
+                      <Save size={22} /> {
+                        isProcessing ? 'GÜNCELLENİYOR...' :
+                          updateStatus === 'success' ? 'KAYDEDİLDİ ✅' :
+                            updateStatus === 'error' ? 'HATA ❌' :
+                              'TÜM FİYATLARI GÜNCELLE'
+                      }
+                    </button>
+                    <div className="w-1/4 bg-white/5 rounded-2xl border border-white/10 flex flex-col items-center justify-center p-4">
+                      <span className="text-[10px] font-black text-textSec uppercase">SON GÜNCELLEME</span>
+                      <span className="text-xs font-bold text-white mt-1">{lastUpdated || 'Bilinmiyor'}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* System Settings Notification */}
+                <div className="bg-primary/5 border border-primary/20 p-6 rounded-[2rem] flex items-center gap-5">
+                  <div className="bg-primary/20 p-4 rounded-xl">
+                    <Info className="text-primary" size={24} />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-black text-white uppercase tracking-tight">Senkronizasyon Bilgisi</h4>
+                    <p className="text-xs text-textSec leading-relaxed mt-1">
+                      Burada yaptığınız değişiklikler Firebase üzerinden anlık olarak tüm kullanıcılara yansır.
+                      Anlık bildirim gönderimi bu ayarlar güncellendiğinde tetiklenebilir.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : activeTab === 'messages' ? (
+          /* Messages Panel */
+          <div className="flex-1 overflow-y-auto p-12 custom-scrollbar bg-background">
+            <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in duration-500">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-4xl font-black text-white">MESAJLAR VE ÖNERİLER</h2>
+                  <p className="text-textSec">Uygulama kullanıcılarından gelen iletişim talepleri</p>
+                </div>
+                <button
+                  onClick={() => { fetchMessages(); fetchSuggestions(); }}
+                  className="p-3 hover:bg-hover rounded-xl transition-all active:scale-95 text-textSec hover:text-primary"
+                  title="Yenile"
+                >
+                  <RefreshCcw size={24} />
+                </button>
+              </div>
+
+              {/* Sub Tabs */}
+              <div className="flex bg-hover rounded-2xl p-1.5 gap-1">
+                <button
+                  onClick={() => setMessagesSubTab('messages')}
+                  className={cn(
+                    "flex-1 py-3 px-6 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2",
+                    messagesSubTab === 'messages' ? "bg-primary text-white shadow-lg" : "text-textSec hover:text-white"
+                  )}
+                >
+                  <MessageSquare size={18} />
+                  Mesajlar
+                  {messages.length > 0 && (
+                    <span className="bg-white/20 px-2 py-0.5 rounded-full text-xs">{messages.length}</span>
+                  )}
+                </button>
+                <button
+                  onClick={() => setMessagesSubTab('suggestions')}
+                  className={cn(
+                    "flex-1 py-3 px-6 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2",
+                    messagesSubTab === 'suggestions' ? "bg-warning text-background shadow-lg" : "text-textSec hover:text-white"
+                  )}
+                >
+                  <Lightbulb size={18} />
+                  Sticker Önerileri
+                  {suggestions.length > 0 && (
+                    <span className="bg-white/20 px-2 py-0.5 rounded-full text-xs">{suggestions.length}</span>
+                  )}
+                </button>
+              </div>
+
+              {/* Messages Content */}
+              {messagesSubTab === 'messages' ? (
+                <div className="space-y-4">
+                  {messages.length === 0 ? (
+                    <div className="glass rounded-[2rem] p-12 text-center">
+                      <MessageSquare className="mx-auto text-textSec mb-4" size={48} />
+                      <h3 className="text-xl font-bold text-white">Henüz mesaj yok</h3>
+                      <p className="text-textSec mt-2">Kullanıcılar uygulamadan mesaj gönderdiğinde burada görünecek.</p>
+                    </div>
+                  ) : (
+                    messages.map(msg => (
+                      <div
+                        key={msg.id}
+                        className={cn(
+                          "glass rounded-2xl p-6 border transition-all",
+                          msg.status === 'unread' ? "border-primary/50 bg-primary/5" : "border-white/5"
+                        )}
+                      >
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex-1 space-y-3">
+                            <div className="flex items-center gap-3">
+                              {msg.status === 'unread' && (
+                                <span className="bg-primary text-white text-[10px] font-black px-2 py-1 rounded-full uppercase">Yeni</span>
+                              )}
+                              <h4 className="text-lg font-bold text-white">{msg.subject || 'Konu belirtilmemiş'}</h4>
+                            </div>
+                            <div className="flex items-center gap-4 text-sm text-textSec">
+                              <span className="font-semibold">{msg.name}</span>
+                              <span>•</span>
+                              <a href={`mailto:${msg.email}`} className="text-primary hover:underline">{msg.email}</a>
+                              <span>•</span>
+                              <span className="flex items-center gap-1">
+                                <Clock size={14} />
+                                {msg.date} {msg.time}
+                              </span>
+                            </div>
+                            <p className="text-sm text-textMain leading-relaxed bg-hover/50 rounded-xl p-4">{msg.message}</p>
+                          </div>
+                          <div className="flex flex-col gap-2">
+                            {msg.status === 'unread' && (
+                              <button
+                                onClick={() => markMessageAsRead(msg.id)}
+                                className="p-2.5 hover:bg-primary/20 text-primary rounded-xl transition-all"
+                                title="Okundu olarak işaretle"
+                              >
+                                <Check size={18} />
+                              </button>
+                            )}
+                            <button
+                              onClick={() => deleteMessage(msg.id)}
+                              className="p-2.5 hover:bg-danger/20 text-danger rounded-xl transition-all"
+                              title="Sil"
+                            >
+                              <Trash2 size={18} />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {suggestions.length === 0 ? (
+                    <div className="glass rounded-[2rem] p-12 text-center">
+                      <Lightbulb className="mx-auto text-textSec mb-4" size={48} />
+                      <h3 className="text-xl font-bold text-white">Henüz öneri yok</h3>
+                      <p className="text-textSec mt-2">Kullanıcılar sticker önerisi gönderdiğinde burada görünecek.</p>
+                    </div>
+                  ) : (
+                    suggestions.map(sugg => (
+                      <div
+                        key={sugg.id}
+                        className="glass rounded-2xl p-6 border border-white/5 transition-all hover:border-warning/30"
+                      >
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex-1 space-y-2">
+                            <div className="flex items-center gap-3">
+                              <div className="bg-warning/20 p-2 rounded-xl">
+                                <Lightbulb className="text-warning" size={20} />
+                              </div>
+                              <span className="text-sm text-textSec flex items-center gap-1">
+                                <Clock size={14} />
+                                {sugg.date} {sugg.time}
+                              </span>
+                            </div>
+                            <p className="text-base text-white font-medium leading-relaxed bg-hover/50 rounded-xl p-4">{sugg.suggestion}</p>
+                          </div>
+                          <button
+                            onClick={() => deleteSuggestion(sugg.id)}
+                            className="p-2.5 hover:bg-danger/20 text-danger rounded-xl transition-all"
+                            title="Sil"
+                          >
+                            <Trash2 size={18} />
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        ) : null}
       </main>
 
       {/* Footer / Status Bar */}
-      <footer className="glass h-8 px-6 flex items-center justify-between text-[10px] font-bold text-textSec uppercase tracking-widest border-t border-white/5">
+      <footer className="glass h-8 px-6 flex items-center justify-between text-[10px] font-bold text-textSec uppercase tracking-widest border-t border-white/5 fixed bottom-0 left-0 right-0 z-30">
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-2">
             <div className="w-1.5 h-1.5 bg-primary rounded-full shadow-sm shadow-primary/50" />
@@ -999,32 +1482,172 @@ function App() {
       <Modal show={showNewPackModal} onClose={() => setShowNewPackModal(false)} title="Yeni Paket Oluştur">
         <div className="space-y-6">
           <p className="text-sm text-textSec">StickyApp veritabanına doğrudan el ile yeni paket ekleyin.</p>
-          <div className="grid grid-cols-2 gap-4">
-            <Input
-              label="Paket Adı"
-              placeholder="Örn: Komik Çıkartmalar"
-              value={newPackData.name}
-              onChange={(e: any) => setNewPackData({ ...newPackData, name: e.target.value })}
-            />
-            <Input
-              label="Yayıncı"
-              placeholder="Sticky"
-              value={newPackData.publisher}
-              onChange={(e: any) => setNewPackData({ ...newPackData, publisher: e.target.value })}
-            />
+
+          {/* Çoklu Dil Desteği */}
+          <div className="bg-gradient-to-r from-primary/10 to-transparent border border-primary/20 rounded-2xl p-4 space-y-4">
+            <div className="flex items-center gap-2 mb-2">
+              <Globe className="text-primary" size={20} />
+              <span className="text-sm font-bold text-white">Çoklu Dil Desteği</span>
+              <span className="text-xs text-textSec ml-auto">Uygulamada seçilen dile göre görünür</span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="flex items-center gap-2 text-sm font-medium text-textSec mb-1">
+                  <span>🇬🇧</span> İngilizce (Varsayılan)
+                </label>
+                <input
+                  type="text"
+                  placeholder="Funny Cats"
+                  className="w-full bg-bgSecondary border border-white/10 rounded-lg p-2.5 text-white placeholder:text-white/30"
+                  value={newPackData.name}
+                  onChange={(e: any) => setNewPackData({ ...newPackData, name: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="flex items-center gap-2 text-sm font-medium text-textSec mb-1">
+                  <span>🇹🇷</span> Türkçe
+                </label>
+                <input
+                  type="text"
+                  placeholder="Komik Kediler"
+                  className="w-full bg-bgSecondary border border-white/10 rounded-lg p-2.5 text-white placeholder:text-white/30"
+                  value={newPackData.name_tr}
+                  onChange={(e: any) => setNewPackData({ ...newPackData, name_tr: e.target.value })}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <label className="flex items-center gap-2 text-sm font-medium text-textSec mb-1">
+                  <span>🇨🇳</span> Çince
+                </label>
+                <input
+                  type="text"
+                  placeholder="搞笑猫咪"
+                  className="w-full bg-bgSecondary border border-white/10 rounded-lg p-2.5 text-white placeholder:text-white/30"
+                  value={newPackData.name_zh}
+                  onChange={(e: any) => setNewPackData({ ...newPackData, name_zh: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="flex items-center gap-2 text-sm font-medium text-textSec mb-1">
+                  <span>🇪🇸</span> İspanyolca
+                </label>
+                <input
+                  type="text"
+                  placeholder="Gatos Graciosos"
+                  className="w-full bg-bgSecondary border border-white/10 rounded-lg p-2.5 text-white placeholder:text-white/30"
+                  value={newPackData.name_es}
+                  onChange={(e: any) => setNewPackData({ ...newPackData, name_es: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="flex items-center gap-2 text-sm font-medium text-textSec mb-1">
+                  <span>🇸🇦</span> Arapça
+                </label>
+                <input
+                  type="text"
+                  placeholder="قطط مضحكة"
+                  className="w-full bg-bgSecondary border border-white/10 rounded-lg p-2.5 text-white placeholder:text-white/30 text-right"
+                  dir="rtl"
+                  value={newPackData.name_ar}
+                  onChange={(e: any) => setNewPackData({ ...newPackData, name_ar: e.target.value })}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="flex items-center gap-2 text-sm font-medium text-textSec mb-1">
+                  <span>🇮🇳</span> Hintçe
+                </label>
+                <input
+                  type="text"
+                  placeholder="मज़ेदार बिल्लियाँ"
+                  className="w-full bg-bgSecondary border border-white/10 rounded-lg p-2.5 text-white placeholder:text-white/30"
+                  value={newPackData.name_hi}
+                  onChange={(e: any) => setNewPackData({ ...newPackData, name_hi: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="flex items-center gap-2 text-sm font-medium text-textSec mb-1">
+                  <span>🇧🇷</span> Portekizce
+                </label>
+                <input
+                  type="text"
+                  placeholder="Gatos Engraçados"
+                  className="w-full bg-bgSecondary border border-white/10 rounded-lg p-2.5 text-white placeholder:text-white/30"
+                  value={newPackData.name_pt}
+                  onChange={(e: any) => setNewPackData({ ...newPackData, name_pt: e.target.value })}
+                />
+              </div>
+            </div>
           </div>
+          <Input
+            label="Yayıncı"
+            placeholder="Sticky"
+            value={newPackData.publisher}
+            onChange={(e: any) => setNewPackData({ ...newPackData, publisher: e.target.value })}
+          />
           <Input
             label="Yayıncı E-posta"
             value={newPackData.publisher_email}
             onChange={(e: any) => setNewPackData({ ...newPackData, publisher_email: e.target.value })}
           />
+          <div>
+            <label className="text-xs font-bold text-textSec uppercase mb-2 block">Kategori</label>
+            <select
+              className="w-full bg-hover rounded-xl px-4 py-2.5 text-sm outline-none border-none text-white cursor-pointer"
+              value={newPackData.category}
+              onChange={(e) => setNewPackData({ ...newPackData, category: e.target.value })}
+            >
+              <option>Mizah</option>
+              <option>Aşk</option>
+              <option>Dini</option>
+              <option>Eğlence</option>
+              <option>Arka Plan</option>
+            </select>
+          </div>
+          <div className="flex bg-hover rounded-xl p-1 gap-1">
+            <button
+              onClick={() => setNewPackData({ ...newPackData, is_premium: false })}
+              className={cn("flex-1 py-2 rounded-lg text-[10px] font-black transition-all", !newPackData.is_premium ? "bg-primary text-white" : "text-textSec")}
+            >NORMAL PAKET</button>
+            <button
+              onClick={() => setNewPackData({ ...newPackData, is_premium: true })}
+              className={cn("flex-1 py-2 rounded-lg text-[10px] font-black transition-all", newPackData.is_premium ? "bg-warning text-background" : "text-textSec")}
+            >PREMIUM PAKET</button>
+          </div>
+
+          {newPackData.is_premium === true && (
+            <div className="grid grid-cols-3 gap-4 animate-in fade-in slide-in-from-top-2 duration-200">
+              <Input
+                label="Fiyat (TL)"
+                value={newPackData.price_try}
+                onChange={(e: any) => setNewPackData({ ...newPackData, price_try: e.target.value })}
+              />
+              <Input
+                label="Fiyat (USD)"
+                value={newPackData.price_usd}
+                onChange={(e: any) => setNewPackData({ ...newPackData, price_usd: e.target.value })}
+              />
+              <Input
+                label="Fiyat (EUR)"
+                value={newPackData.price_eur}
+                onChange={(e: any) => setNewPackData({ ...newPackData, price_eur: e.target.value })}
+              />
+            </div>
+          )}
+
           <div className="bg-primary/5 border border-primary/20 p-4 rounded-xl flex items-center gap-3">
             <RefreshCcw className="text-primary animate-spin" size={20} />
-            <span className="text-xs text-textMain/70 font-bold uppercase">HAREKETLİ PAKET (VIDEO/GIF) MODU AKTİF</span>
+            <span className="text-xs text-textMain/70 font-bold uppercase">HAREKETLİ PAKET MODALI AKTİF</span>
           </div>
           <div className="bg-primary/5 border border-primary/20 p-4 rounded-xl flex items-center gap-3">
             <Info className="text-primary" size={20} />
-            <span className="text-xs text-textMain/70 uppercase font-bold">Yeni hareketli paket oluşturduktan sonra video ekleme paneli açılacaktır.</span>
+            <span className="text-xs text-textMain/70 uppercase font-bold">Yeni paket oluşturduktan sonra video ekleme paneli açılacaktır.</span>
           </div>
           <button
             onClick={handleCreatePack}
@@ -1040,18 +1663,113 @@ function App() {
       < Modal show={showEditPackModal} onClose={() => setShowEditPackModal(false)} title="Uygulama Bilgilerini Düzenle" >
         {selectedPack && (
           <div className="space-y-6">
-            <div className="grid grid-cols-2 gap-4">
-              <Input
-                label="Paket Adı"
-                value={editFormData.name}
-                onChange={(e: any) => setEditFormData({ ...editFormData, name: e.target.value })}
-              />
-              <Input
-                label="Yayıncı"
-                value={editFormData.publisher}
-                onChange={(e: any) => setEditFormData({ ...editFormData, publisher: e.target.value })}
-              />
+            {/* Çoklu Dil Desteği */}
+            <div className="bg-gradient-to-r from-primary/10 to-transparent border border-primary/20 rounded-2xl p-4 space-y-4">
+              <div className="flex items-center gap-2 mb-2">
+                <Globe className="text-primary" size={20} />
+                <span className="text-sm font-bold text-white">Çoklu Dil Desteği</span>
+                <span className="text-xs text-textSec ml-auto">Uygulamada seçilen dile göre görünür</span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="flex items-center gap-2 text-sm font-medium text-textSec mb-1">
+                    <span>🇬🇧</span> İngilizce (Varsayılan)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Funny Cats"
+                    className="w-full bg-bgSecondary border border-white/10 rounded-lg p-2.5 text-white placeholder:text-white/30"
+                    value={editFormData.name}
+                    onChange={(e: any) => setEditFormData({ ...editFormData, name: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="flex items-center gap-2 text-sm font-medium text-textSec mb-1">
+                    <span>🇹🇷</span> Türkçe
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Komik Kediler"
+                    className="w-full bg-bgSecondary border border-white/10 rounded-lg p-2.5 text-white placeholder:text-white/30"
+                    value={editFormData.name_tr}
+                    onChange={(e: any) => setEditFormData({ ...editFormData, name_tr: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="flex items-center gap-2 text-sm font-medium text-textSec mb-1">
+                    <span>🇨🇳</span> Çince
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="搞笑猫咪"
+                    className="w-full bg-bgSecondary border border-white/10 rounded-lg p-2.5 text-white placeholder:text-white/30"
+                    value={editFormData.name_zh}
+                    onChange={(e: any) => setEditFormData({ ...editFormData, name_zh: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="flex items-center gap-2 text-sm font-medium text-textSec mb-1">
+                    <span>🇪🇸</span> İspanyolca
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Gatos Graciosos"
+                    className="w-full bg-bgSecondary border border-white/10 rounded-lg p-2.5 text-white placeholder:text-white/30"
+                    value={editFormData.name_es}
+                    onChange={(e: any) => setEditFormData({ ...editFormData, name_es: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="flex items-center gap-2 text-sm font-medium text-textSec mb-1">
+                    <span>🇸🇦</span> Arapça
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="قطط مضحكة"
+                    className="w-full bg-bgSecondary border border-white/10 rounded-lg p-2.5 text-white placeholder:text-white/30 text-right"
+                    dir="rtl"
+                    value={editFormData.name_ar}
+                    onChange={(e: any) => setEditFormData({ ...editFormData, name_ar: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="flex items-center gap-2 text-sm font-medium text-textSec mb-1">
+                    <span>🇮🇳</span> Hintçe
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="मज़ेदार बिल्लियाँ"
+                    className="w-full bg-bgSecondary border border-white/10 rounded-lg p-2.5 text-white placeholder:text-white/30"
+                    value={editFormData.name_hi}
+                    onChange={(e: any) => setEditFormData({ ...editFormData, name_hi: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="flex items-center gap-2 text-sm font-medium text-textSec mb-1">
+                    <span>🇧🇷</span> Portekizce
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Gatos Engraçados"
+                    className="w-full bg-bgSecondary border border-white/10 rounded-lg p-2.5 text-white placeholder:text-white/30"
+                    value={editFormData.name_pt}
+                    onChange={(e: any) => setEditFormData({ ...editFormData, name_pt: e.target.value })}
+                  />
+                </div>
+              </div>
             </div>
+            <Input
+              label="Yayıncı"
+              value={editFormData.publisher}
+              onChange={(e: any) => setEditFormData({ ...editFormData, publisher: e.target.value })}
+            />
             <Input
               label="Yayıncı E-posta"
               value={editFormData.publisher_email}
@@ -1098,18 +1816,31 @@ function App() {
                 </div>
               </div>
             </div>
+            {editFormData.is_premium === true && (
+              <div className="grid grid-cols-3 gap-4 animate-in fade-in slide-in-from-top-2 duration-200">
+                <Input
+                  label="Fiyat (TL)"
+                  value={editFormData.price_try}
+                  onChange={(e: any) => setEditFormData({ ...editFormData, price_try: e.target.value })}
+                />
+                <Input
+                  label="Fiyat (USD)"
+                  value={editFormData.price_usd}
+                  onChange={(e: any) => setEditFormData({ ...editFormData, price_usd: e.target.value })}
+                />
+                <Input
+                  label="Fiyat (EUR)"
+                  value={editFormData.price_eur}
+                  onChange={(e: any) => setEditFormData({ ...editFormData, price_eur: e.target.value })}
+                />
+              </div>
+            )}
             <div className="flex items-center gap-4">
               <div className="flex-1">
                 <label className="text-xs font-bold text-textSec uppercase mb-2 block">Paket Türü</label>
-                <div className="flex bg-hover rounded-xl p-1 gap-1">
-                  <button
-                    onClick={() => setEditFormData({ ...editFormData, is_animated: false })}
-                    className={cn("flex-1 py-2 rounded-lg text-[10px] font-black transition-all", !editFormData.is_animated ? "bg-primary text-white" : "text-textSec")}
-                  >STATİK</button>
-                  <button
-                    onClick={() => setEditFormData({ ...editFormData, is_animated: true })}
-                    className={cn("flex-1 py-2 rounded-lg text-[10px] font-black transition-all", editFormData.is_animated ? "bg-accent text-white" : "text-textSec")}
-                  >HAREKETLİ</button>
+                <div className="bg-primary/10 border border-primary/20 p-2.5 rounded-xl flex items-center justify-center gap-2">
+                  <RefreshCcw className="text-primary animate-spin" size={14} />
+                  <span className="text-[10px] text-primary font-black uppercase">HAREKETLİ (ZORUNLU)</span>
                 </div>
               </div>
               <div className="flex-1">

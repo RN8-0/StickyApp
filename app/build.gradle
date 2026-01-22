@@ -83,4 +83,7 @@ dependencies {
 
     // ML Kit Selfie Segmentation
     implementation 'com.google.mlkit:segmentation-selfie:16.0.0-beta4'
+
+    // FFmpeg Kit for video/GIF to WebP conversion (Temporarily disabled due to dependency issues)
+    // implementation 'com.arthenica:ffmpeg-kit-full:4.5'
 }

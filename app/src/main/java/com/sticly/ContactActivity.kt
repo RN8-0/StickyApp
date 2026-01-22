@@ -16,6 +16,10 @@ import java.util.Locale
 
 class ContactActivity : AppCompatActivity() {
 
+    override fun attachBaseContext(newBase: android.content.Context) {
+        super.attachBaseContext(LocaleHelper.onAttach(newBase))
+    }
+
     private lateinit var inputName: TextInputEditText
     private lateinit var inputEmail: TextInputEditText
     private lateinit var inputSubject: TextInputEditText
