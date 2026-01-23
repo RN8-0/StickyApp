@@ -4,9 +4,12 @@ import android.content.*
 import android.content.res.AssetFileDescriptor
 import android.database.Cursor
 import android.database.MatrixCursor
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.ParcelFileDescriptor
 import java.io.File
+import java.io.FileOutputStream
 
 class StickerProvider : ContentProvider() {
 
@@ -195,9 +198,12 @@ class StickerProvider : ContentProvider() {
     private fun getStickersForPack(identifier: String): Cursor {
         val cursor = MatrixCursor(STICKER_COLUMNS)
         getPack(identifier)?.stickers?.forEach { sticker ->
+            // WhatsApp requires at least one valid emoji - filter out empty strings
+            val validEmojis = sticker.emojis?.filter { it.isNotBlank() }
+            val emojiString = if (validEmojis.isNullOrEmpty()) "😀" else validEmojis.joinToString(",")
             cursor.addRow(arrayOf(
                 sticker.file,
-                sticker.emojis?.joinToString(",") ?: "😀"
+                emojiString
             ))
         }
         return cursor
@@ -211,6 +217,24 @@ class StickerProvider : ContentProvider() {
 
         val identifier = pathSegments[1]
         val fileName = pathSegments[2]
+
+        android.util.Log.d("StickerProvider", "openAssetFile: $identifier / $fileName")
+
+        // Animasyonlu paketlerde tray dosyası için özel işlem
+        if (fileName.startsWith("tray")) {
+            val pack = getPack(identifier)
+            android.util.Log.d("StickerProvider", "Tray request - pack=${pack?.id}, isAnimated=${pack?.isAnimated}")
+
+            if (pack?.isAnimated == true) {
+                // Animasyonlu paketler için tray MUTLAKA PNG olmalı (WhatsApp gereksinimi)
+                val pngFile = getTrayAsPngForAnimated(identifier, fileName)
+                android.util.Log.d("StickerProvider", "PNG file: $pngFile, exists=${pngFile?.exists()}")
+                if (pngFile != null && pngFile.exists()) {
+                    val pfd = ParcelFileDescriptor.open(pngFile, ParcelFileDescriptor.MODE_READ_ONLY)
+                    return AssetFileDescriptor(pfd, 0, pngFile.length())
+                }
+            }
+        }
 
         // 1. Custom paketler için filesDir/custom_stickers kontrol et (KALICI DEPOLAMA)
         if (identifier.startsWith("custom_")) {
@@ -236,12 +260,103 @@ class StickerProvider : ContentProvider() {
         }
     }
 
+    /**
+     * Animasyonlu paketler için tray dosyasını PNG olarak döndürür.
+     * WhatsApp animasyonlu paketler için 96x96 PNG tray gerektirir.
+     * Kaynak dosya PNG veya WebP olabilir - her ikisini de destekler.
+     */
+    private fun getTrayAsPngForAnimated(identifier: String, originalFileName: String): File? {
+        return try {
+            android.util.Log.d("StickerProvider", "getTrayAsPngForAnimated: $identifier / $originalFileName")
+
+            // Standart PNG çıktı dosyası (cached)
+            val outputPngFile = File(context!!.cacheDir, "$CACHE_DIR/$identifier/tray_whatsapp.png")
+            if (outputPngFile.exists() && outputPngFile.length() > 0) {
+                android.util.Log.d("StickerProvider", "Cached PNG exists: ${outputPngFile.absolutePath}")
+                return outputPngFile
+            }
+
+            // Kaynak dosyayı bul (PNG veya WebP olabilir)
+            var sourceFile: File? = null
+
+            // 1. Önce orijinal dosya adıyla dene (admin panelinden gelen)
+            val cacheDir = File(context!!.cacheDir, "$CACHE_DIR/$identifier")
+            val originalFile = File(cacheDir, originalFileName)
+            if (originalFile.exists() && originalFile.length() > 0) {
+                sourceFile = originalFile
+                android.util.Log.d("StickerProvider", "Found original tray: ${originalFile.absolutePath}")
+            }
+
+            // 2. Cache'de tray ile başlayan dosyaları ara (PNG veya WebP)
+            if (sourceFile == null && cacheDir.exists()) {
+                sourceFile = cacheDir.listFiles()?.find {
+                    it.name.startsWith("tray") && (it.name.endsWith(".png") || it.name.endsWith(".webp"))
+                }
+                if (sourceFile != null) {
+                    android.util.Log.d("StickerProvider", "Found tray by search: ${sourceFile.absolutePath}")
+                }
+            }
+
+            // 3. Custom paketler için filesDir'da ara
+            if (sourceFile == null && identifier.startsWith("custom_")) {
+                val customDir = File(context!!.filesDir, "custom_stickers/$identifier")
+                if (customDir.exists()) {
+                    sourceFile = customDir.listFiles()?.find {
+                        it.name.startsWith("tray") && (it.name.endsWith(".png") || it.name.endsWith(".webp"))
+                    }
+                    if (sourceFile != null) {
+                        android.util.Log.d("StickerProvider", "Found custom tray: ${sourceFile.absolutePath}")
+                    }
+                }
+            }
+
+            if (sourceFile == null || !sourceFile.exists()) {
+                android.util.Log.e("StickerProvider", "Tray source file not found for $identifier")
+                return null
+            }
+
+            // Kaynak dosyayı decode et
+            val bitmap = BitmapFactory.decodeFile(sourceFile.absolutePath)
+            if (bitmap == null) {
+                android.util.Log.e("StickerProvider", "Failed to decode tray bitmap: ${sourceFile.absolutePath}")
+                return null
+            }
+
+            // 96x96 boyutuna ölçekle (WhatsApp gereksinimi)
+            val scaled = Bitmap.createScaledBitmap(bitmap, 96, 96, true)
+
+            // PNG olarak kaydet
+            outputPngFile.parentFile?.mkdirs()
+            FileOutputStream(outputPngFile).use { out ->
+                scaled.compress(Bitmap.CompressFormat.PNG, 100, out)
+            }
+
+            if (bitmap != scaled) scaled.recycle()
+            bitmap.recycle()
+
+            android.util.Log.d("StickerProvider", "PNG created: ${outputPngFile.absolutePath}, size=${outputPngFile.length()}")
+            outputPngFile
+        } catch (e: Exception) {
+            android.util.Log.e("StickerProvider", "Error in getTrayAsPngForAnimated", e)
+            null
+        }
+    }
+
     override fun getType(uri: Uri): String {
         return when (uriMatcher.match(uri)) {
             METADATA_CODE -> "vnd.android.cursor.dir/vnd.$authority.$METADATA"
             METADATA_CODE_FOR_SINGLE_PACK -> "vnd.android.cursor.item/vnd.$authority.$METADATA"
             STICKERS_CODE -> "vnd.android.cursor.dir/vnd.$authority.$STICKERS"
-            STICKERS_ASSET_CODE -> "image/webp"
+            STICKERS_ASSET_CODE -> {
+                val fileName = uri.lastPathSegment ?: ""
+                val identifier = if (uri.pathSegments.size >= 2) uri.pathSegments[1] else ""
+                // Animasyonlu paketlerde tray için PNG
+                if (fileName.startsWith("tray")) {
+                    val pack = getPack(identifier)
+                    if (pack?.isAnimated == true) return "image/png"
+                }
+                "image/webp"
+            }
             else -> "image/webp"
         }
     }

@@ -477,7 +477,7 @@ function App() {
         newStickers.push({
           image_file: fileName,
           url: url,
-          emojis: [""]
+          emojis: ["😀"]  // WhatsApp requires at least one valid emoji
         });
       }
 
@@ -531,7 +531,7 @@ function App() {
       });
 
       const collectionName = selectedPack.is_premium ? 'premium_stickers' : 'stickers';
-      const fileName = `tray_${Date.now()}.webp`;
+      const fileName = `tray_${Date.now()}.png`;
       const storagePath = `${collectionName}/${selectedPack.id}/${fileName}`;
       const storageRef = ref(storage, storagePath);
 

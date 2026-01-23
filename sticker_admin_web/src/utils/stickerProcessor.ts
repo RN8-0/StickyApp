@@ -8,6 +8,7 @@ export type StickerProgress = {
 };
 
 const STICKER_SIZE = 512;
+const TRAY_SIZE = 96; // WhatsApp tray ikonu boyutu
 const MAX_DURATION = 3; // saniye
 
 class StickerProcessor {
@@ -44,52 +45,120 @@ class StickerProcessor {
 
     /**
      * Hareketli görsel işleme (MP4/GIF): 3sn kırpma ve WebP dönüşümü
+     * WhatsApp gereksinimleri:
+     * - Format: Animated WebP
+     * - Boyut: 512x512 piksel
+     * - Süre: Max 3 saniye
+     * - Dosya boyutu: Max 500KB
+     * - FPS: 8-30 arası (önerilen: 10-20)
      */
     async processAnimated(file: File, onProgress?: (p: StickerProgress) => void): Promise<Blob> {
         await this.load();
         const ffmpeg = this.ffmpeg!;
         const inputName = `input_${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.]/g, '')}`;
         const outputName = 'output.webp';
+        const MAX_SIZE = 500 * 1024; // 500KB WhatsApp limiti
 
         onProgress?.({ message: 'FFmpeg yükleniyor...', percentage: 10 });
         await ffmpeg.writeFile(inputName, await fetchFile(file));
 
-        onProgress?.({ message: 'Dönüştürülüyor (MP4/GIF -> WebP)...', percentage: 30 });
+        // İlk deneme - yüksek kalite
+        let quality = 75;
+        let blob: Blob;
 
-        await ffmpeg.exec([
-            '-i', inputName,
-            '-t', MAX_DURATION.toString(),
-            '-vf', `scale='if(gt(iw,ih),512,-1)':'if(gt(iw,ih),-1,512)',pad=512:512:(512-iw)/2:(512-ih)/2:color=black@0,fps=20`,
-            '-lossless', '0',
-            '-compression_level', '4',
-            '-qscale', '75',
-            '-loop', '0',
-            outputName
-        ]);
+        do {
+            onProgress?.({ message: `Dönüştürülüyor (kalite: ${quality})...`, percentage: 30 + (75 - quality) });
 
-        const data = await ffmpeg.readFile(outputName);
-        onProgress?.({ message: 'Tamamlandı!', percentage: 100 });
+            // WhatsApp uyumlu animasyonlu WebP parametreleri
+            await ffmpeg.exec([
+                '-i', inputName,
+                '-t', MAX_DURATION.toString(),
+                // Video filtresi: 512x512 boyutlandır, şeffaf padding, 10 fps
+                '-vf', `scale=512:512:force_original_aspect_ratio=decrease,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=0x00000000,fps=10`,
+                // WebP codec ayarları
+                '-c:v', 'libwebp',
+                '-lossless', '0',
+                '-compression_level', '6',
+                '-q:v', quality.toString(),
+                '-loop', '0',
+                '-preset', 'default',
+                '-an',
+                '-vsync', '0',
+                outputName
+            ]);
+
+            const data = await ffmpeg.readFile(outputName);
+            const buffer = (data as Uint8Array).buffer as ArrayBuffer;
+            blob = new Blob([buffer], { type: 'image/webp' });
+
+            // Boyut kontrolü - 500KB'dan büyükse kaliteyi düşür
+            if (blob.size > MAX_SIZE && quality > 10) {
+                quality -= 10;
+                await ffmpeg.deleteFile(outputName);
+            } else {
+                break;
+            }
+        } while (quality >= 10);
+
+        onProgress?.({ message: `Tamamlandı! (${Math.round(blob.size / 1024)}KB)`, percentage: 100 });
 
         // Temizlik
         await ffmpeg.deleteFile(inputName);
-        await ffmpeg.deleteFile(outputName);
+        try { await ffmpeg.deleteFile(outputName); } catch { }
 
-        // buffer cast to ArrayBuffer to avoid SharedArrayBuffer issues in some environments
-        const buffer = (data as Uint8Array).buffer as ArrayBuffer;
-        return new Blob([buffer], { type: 'image/webp' });
+        return blob;
     }
 
     /**
-     * Tray (Kapak) görseli işleme
+     * Tray (Kapak) görseli işleme - WhatsApp için 96x96 PNG formatında
      */
     async processTray(file: File, onProgress?: (p: StickerProgress) => void): Promise<Blob> {
-        return this.processStatic(file, onProgress);
+        onProgress?.({ message: 'Arka plan siliniyor...', percentage: 20 });
+
+        // Arka plan silme
+        const removedBgBlob = await removeBackground(file, {
+            progress: (message: string) => {
+                onProgress?.({ message: `Arka plan siliniyor: ${message}`, percentage: 80 });
+            }
+        });
+
+        onProgress?.({ message: 'Boyutlandırılıyor (96x96 PNG)...', percentage: 90 });
+        return this.resizeAndCenterTray(removedBgBlob);
     }
 
-    private async resizeAndCenter(blob: Blob): Promise<Blob> {
+    /**
+     * Tray için 96x96 PNG boyutlandırma
+     */
+    private async resizeAndCenterTray(blob: Blob): Promise<Blob> {
         return new Promise((resolve) => {
             const img = new Image();
             img.onload = () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = TRAY_SIZE;
+                canvas.height = TRAY_SIZE;
+                const ctx = canvas.getContext('2d')!;
+
+                const scale = Math.min(TRAY_SIZE / img.width, TRAY_SIZE / img.height);
+                const nw = img.width * scale;
+                const nh = img.height * scale;
+                const nx = (TRAY_SIZE - nw) / 2;
+                const ny = (TRAY_SIZE - nh) / 2;
+
+                ctx.drawImage(img, nx, ny, nw, nh);
+                canvas.toBlob((result) => {
+                    resolve(result!);
+                }, 'image/png'); // WhatsApp için PNG formatı
+            };
+            img.src = URL.createObjectURL(blob);
+        });
+    }
+
+    private async resizeAndCenter(blob: Blob): Promise<Blob> {
+        const MAX_STATIC_SIZE = 100 * 1024; // 100KB WhatsApp limit for static stickers
+
+        return new Promise((resolve) => {
+            const img = new Image();
+            img.onload = async () => {
                 const canvas = document.createElement('canvas');
                 canvas.width = STICKER_SIZE;
                 canvas.height = STICKER_SIZE;
@@ -102,9 +171,23 @@ class StickerProcessor {
                 const ny = (STICKER_SIZE - nh) / 2;
 
                 ctx.drawImage(img, nx, ny, nw, nh);
-                canvas.toBlob((result) => {
-                    resolve(result!);
-                }, 'image/webp', 0.8);
+
+                // Try with decreasing quality until under 100KB limit
+                let quality = 0.9;
+                let result: Blob | null = null;
+
+                while (quality >= 0.1) {
+                    result = await new Promise<Blob | null>(res => {
+                        canvas.toBlob(res, 'image/webp', quality);
+                    });
+
+                    if (result && result.size <= MAX_STATIC_SIZE) {
+                        break;
+                    }
+                    quality -= 0.1;
+                }
+
+                resolve(result || blob);
             };
             img.src = URL.createObjectURL(blob);
         });

@@ -255,7 +255,7 @@ object StickerRepository {
                 category = data["category"] as? String ?: "",
                 downloadCount = (data["download_count"] as? Long)?.toInt() ?: 0,
                 favoriteCount = (data["favorite_count"] as? Long)?.toInt() ?: 0,
-                isAnimated = data["animated_sticker_pack"] as? Boolean ?: false,
+                isAnimated = (data["is_animated"] as? Boolean) ?: (data["animated_sticker_pack"] as? Boolean) ?: false,
                 isActive = data["is_active"] as? Boolean ?: true,
                 priceTRY = data["price_try"] as? String ?: "",
                 priceUSD = data["price_usd"] as? String ?: "",

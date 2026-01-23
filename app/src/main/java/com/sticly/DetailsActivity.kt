@@ -18,8 +18,8 @@ import android.view.animation.OvershootInterpolator
 import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.LinearLayout
-import android.widget.Toast
 import android.widget.*
+import com.google.android.material.snackbar.Snackbar
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
@@ -572,10 +572,8 @@ class DetailsActivity : AppCompatActivity() {
             }
 
             if (isCurrentlyWhitelisted) {
-                // EĞER WhatsApp'ta varsa -> KALDIR moduna geç
                 removeFromWhatsApp()
             } else {
-                // EĞER WhatsApp'ta yoksa -> EKLE
                 addToWhatsApp(pack)
             }
         }
@@ -643,7 +641,7 @@ class DetailsActivity : AppCompatActivity() {
 
                 btnAction.text = getString(R.string.add_to_whatsapp)
                 btnAction.setIconResource(R.drawable.ic_add)
-                btnAction.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this@DetailsActivity, R.color.primary))
+                btnAction.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this@DetailsActivity, R.color.whatsapp_green))
                 installedIcon.visibility = View.GONE
             }
         }
@@ -653,11 +651,12 @@ class DetailsActivity : AppCompatActivity() {
         val dialog = Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen)
         dialog.requestWindowFeature(Window.FEATURE_NO_TITLE)
         val previewBgColor = ContextCompat.getColor(this@DetailsActivity, R.color.preview_bg)
+        val toolbarColor = ContextCompat.getColor(this@DetailsActivity, R.color.primary)
         dialog.window?.apply {
             setBackgroundDrawable(android.graphics.drawable.ColorDrawable(previewBgColor))
             setLayout(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT)
-            // Status bar ve navigation bar renklerini ayarla
-            statusBarColor = previewBgColor
+            // Status bar ana sayfadaki toolbar ile aynı renk olacak
+            statusBarColor = toolbarColor
             navigationBarColor = previewBgColor
         }
 
@@ -804,7 +803,6 @@ class DetailsActivity : AppCompatActivity() {
 
     private fun removeFromWhatsApp() {
         currentPack?.let { pack ->
-            // Önce bilgilendirme dialog'u göster
             androidx.appcompat.app.AlertDialog.Builder(this)
                 .setTitle(R.string.remove_instructions_title)
                 .setMessage(R.string.remove_instructions_message)
@@ -986,7 +984,7 @@ class DetailsActivity : AppCompatActivity() {
                     } else if (!isWhitelisted && wasInstalled) {
                         // Kaldırıldı (kullanıcı WhatsApp'tan kaldırmış olabilir)
                         PreferencesHelper.removeInstalledPack(this@DetailsActivity, packId)
-                        Toast.makeText(this@DetailsActivity, R.string.pack_removed_from_whatsapp, Toast.LENGTH_SHORT).show()
+                        showThemedSnackbar(getString(R.string.pack_removed_from_whatsapp))
                     }
 
                     updateButton()
@@ -1005,7 +1003,7 @@ class DetailsActivity : AppCompatActivity() {
                     } else {
                         // Başarıyla kaldırıldı
                         PreferencesHelper.removeInstalledPack(this@DetailsActivity, packId)
-                        Toast.makeText(this@DetailsActivity, R.string.pack_removed_from_whatsapp, Toast.LENGTH_SHORT).show()
+                        showThemedSnackbar(getString(R.string.pack_removed_from_whatsapp))
                     }
 
                     updateButton()
@@ -1040,6 +1038,14 @@ class DetailsActivity : AppCompatActivity() {
 
         dialog.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
         dialog.show()
+    }
+
+    private fun showThemedSnackbar(message: String) {
+        val rootView = findViewById<View>(android.R.id.content)
+        val snackbar = Snackbar.make(rootView, message, Snackbar.LENGTH_SHORT)
+        snackbar.setBackgroundTint(ContextCompat.getColor(this, R.color.card_bg))
+        snackbar.setTextColor(ContextCompat.getColor(this, R.color.text_primary))
+        snackbar.show()
     }
 
     override fun onDestroy() {

@@ -10,7 +10,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:background="@color/primary"
+        android:background="@color/toolbar_bg"
         android:paddingBottom="12dp">
 
         <!-- Top bar: Back button + App name + Logo -->
@@ -304,7 +304,7 @@
             android:textColor="@color/text_on_primary"
             android:textSize="16sp"
             android:textAllCaps="false"
-            app:backgroundTint="@color/primary"
+            app:backgroundTint="@color/whatsapp_green"
             app:cornerRadius="28dp"
             app:icon="@drawable/ic_add"
             app:iconGravity="textStart"
