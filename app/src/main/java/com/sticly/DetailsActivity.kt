@@ -807,14 +807,8 @@ class DetailsActivity : AppCompatActivity() {
 
     private fun removeFromWhatsApp() {
         currentPack?.let { pack ->
-            com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
-                .setTitle(R.string.remove_instructions_title)
-                .setMessage(R.string.remove_instructions_message)
-                .setPositiveButton(R.string.go_to_whatsapp) { _, _ ->
-                    launchWhatsAppRemove(pack)
-                }
-                .setNegativeButton(R.string.cancel, null)
-                .show()
+            // Kullanıcı talebi üzerine bilgilendirme mesajı kaldırıldı, direkt WhatsApp'a yönlendiriliyor.
+            launchWhatsAppRemove(pack)
         }
     }
 
