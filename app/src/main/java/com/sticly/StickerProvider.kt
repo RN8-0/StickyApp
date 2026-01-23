@@ -220,19 +220,12 @@ class StickerProvider : ContentProvider() {
 
         android.util.Log.d("StickerProvider", "openAssetFile: $identifier / $fileName")
 
-        // Animasyonlu paketlerde tray dosyası için özel işlem
+        // WhatsApp tray dosyası için özel işlem (Hangi paket olursa olsun PNG 96x96 olmalı)
         if (fileName.startsWith("tray")) {
-            val pack = getPack(identifier)
-            android.util.Log.d("StickerProvider", "Tray request - pack=${pack?.id}, isAnimated=${pack?.isAnimated}")
-
-            if (pack?.isAnimated == true) {
-                // Animasyonlu paketler için tray MUTLAKA PNG olmalı (WhatsApp gereksinimi)
-                val pngFile = getTrayAsPngForAnimated(identifier, fileName)
-                android.util.Log.d("StickerProvider", "PNG file: $pngFile, exists=${pngFile?.exists()}")
-                if (pngFile != null && pngFile.exists()) {
-                    val pfd = ParcelFileDescriptor.open(pngFile, ParcelFileDescriptor.MODE_READ_ONLY)
-                    return AssetFileDescriptor(pfd, 0, pngFile.length())
-                }
+            val pngFile = getTrayAsPngForWhatsApp(identifier, fileName)
+            if (pngFile != null && pngFile.exists()) {
+                val pfd = ParcelFileDescriptor.open(pngFile, ParcelFileDescriptor.MODE_READ_ONLY)
+                return AssetFileDescriptor(pfd, 0, pngFile.length())
             }
         }
 
@@ -261,13 +254,13 @@ class StickerProvider : ContentProvider() {
     }
 
     /**
-     * Animasyonlu paketler için tray dosyasını PNG olarak döndürür.
-     * WhatsApp animasyonlu paketler için 96x96 PNG tray gerektirir.
-     * Kaynak dosya PNG veya WebP olabilir - her ikisini de destekler.
+     * WhatsApp için tray dosyasını 96x96 PNG olarak döndürür.
+     * WhatsApp uygulama standartları gereği tray MUTLAKA 96x96 PNG olmalıdır.
+     * Kaynak dosya yüksek çözünürlüklü (512x512) PNG veya WebP olabilir.
      */
-    private fun getTrayAsPngForAnimated(identifier: String, originalFileName: String): File? {
+    private fun getTrayAsPngForWhatsApp(identifier: String, originalFileName: String): File? {
         return try {
-            android.util.Log.d("StickerProvider", "getTrayAsPngForAnimated: $identifier / $originalFileName")
+            android.util.Log.d("StickerProvider", "getTrayAsPngForWhatsApp: $identifier / $originalFileName")
 
             // Standart PNG çıktı dosyası (cached)
             val outputPngFile = File(context!!.cacheDir, "$CACHE_DIR/$identifier/tray_whatsapp.png")
@@ -350,10 +343,9 @@ class StickerProvider : ContentProvider() {
             STICKERS_ASSET_CODE -> {
                 val fileName = uri.lastPathSegment ?: ""
                 val identifier = if (uri.pathSegments.size >= 2) uri.pathSegments[1] else ""
-                // Animasyonlu paketlerde tray için PNG
+                // Tray için daima PNG döndür (WhatsApp standardı)
                 if (fileName.startsWith("tray")) {
-                    val pack = getPack(identifier)
-                    if (pack?.isAnimated == true) return "image/png"
+                    return "image/png"
                 }
                 "image/webp"
             }

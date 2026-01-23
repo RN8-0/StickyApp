@@ -4,26 +4,53 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:layout_marginHorizontal="8dp"
-    app:cardCornerRadius="16dp"
-    app:cardElevation="4dp"
-    app:cardBackgroundColor="@color/card_bg">
+    app:cardBackgroundColor="@android:color/transparent"
+    app:cardElevation="0dp"
+    app:cardMaxElevation="0dp"
+    app:cardPreventCornerOverlap="false"
+    app:cardUseCompatPadding="false">
 
     <FrameLayout
         android:layout_width="match_parent"
-        android:layout_height="match_parent">
+        android:layout_height="match_parent"
+        android:padding="12dp">
 
-        <!-- Background Gradient -->
-        <View
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:background="@drawable/carousel_gradient" />
+        <!-- Sticker Pack Info (Center Left) -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_vertical|start"
+            android:orientation="vertical"
+            android:layout_marginEnd="160dp">
 
-        <!-- Sticker Preview -->
+            <TextView
+                android:id="@+id/txtName"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/text_primary"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:maxLines="2"
+                android:ellipsize="end" />
+
+            <TextView
+                android:id="@+id/txtCount"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:textColor="@color/text_secondary"
+                android:alpha="0.8"
+                android:textSize="13sp" />
+
+        </LinearLayout>
+
+        <!-- Sticker Preview ONLY (Far Right - Vertically Centered) -->
         <ImageView
-            android:id="@+id/imgTray"
-            android:layout_width="100dp"
-            android:layout_height="100dp"
-            android:layout_gravity="center"
+            android:id="@+id/id_imgTray_transparent"
+            android:layout_width="150dp"
+            android:layout_height="150dp"
+            android:layout_gravity="center_vertical|end"
+            android:padding="4dp"
             android:scaleType="fitCenter" />
 
         <!-- Premium Badge -->
@@ -31,8 +58,7 @@
             android:id="@+id/premiumBadge"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_gravity="top|end"
-            android:layout_margin="12dp"
+            android:layout_gravity="top|start"
             android:background="@drawable/badge_premium"
             android:paddingHorizontal="10dp"
             android:paddingVertical="4dp"
@@ -41,35 +67,6 @@
             android:textSize="10sp"
             android:textStyle="bold"
             android:visibility="gone" />
-
-        <!-- Bottom Info -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_gravity="bottom"
-            android:background="@drawable/carousel_bottom_gradient"
-            android:orientation="vertical"
-            android:padding="16dp">
-
-            <TextView
-                android:id="@+id/txtName"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:textColor="@color/white"
-                android:textSize="16sp"
-                android:textStyle="bold"
-                android:maxLines="1"
-                android:ellipsize="end" />
-
-            <TextView
-                android:id="@+id/txtCount"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:textColor="@color/white"
-                android:alpha="0.8"
-                android:textSize="12sp" />
-
-        </LinearLayout>
 
     </FrameLayout>
 

@@ -9,6 +9,7 @@
     <color name="background">#FFFFFF</color>
     <color name="surface">#F8F9FA</color>
     <color name="card_bg">#FFFFFF</color>
+    <color name="carousel_bg">#FFFFFF</color>
     <color name="toolbar_bg">#00A884</color>
     <color name="bottom_nav_bg">#00A884</color>
     <color name="toolbar_icon">#FFFFFF</color>

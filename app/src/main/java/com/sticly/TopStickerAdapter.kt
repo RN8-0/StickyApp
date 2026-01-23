@@ -32,7 +32,7 @@ class TopStickerAdapter(
     override fun getItemCount(): Int = packs.size
 
     inner class ViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
-        private val imgTray: ImageView = itemView.findViewById(R.id.imgTray)
+        private val imgTray: ImageView = itemView.findViewById(R.id.id_imgTray_transparent)
         private val txtName: TextView = itemView.findViewById(R.id.txtName)
         private val txtCount: TextView = itemView.findViewById(R.id.txtCount)
         private val premiumBadge: View = itemView.findViewById(R.id.premiumBadge)

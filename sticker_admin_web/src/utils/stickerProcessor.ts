@@ -8,7 +8,7 @@ export type StickerProgress = {
 };
 
 const STICKER_SIZE = 512;
-const TRAY_SIZE = 96; // WhatsApp tray ikonu boyutu
+const TRAY_SIZE = 512; // Artık 512x512 (App içi kalite için), Android tarafı WhatsApp için 96'ya düşürecek.
 const MAX_DURATION = 3; // saniye
 
 class StickerProcessor {
@@ -113,17 +113,8 @@ class StickerProcessor {
      * Tray (Kapak) görseli işleme - WhatsApp için 96x96 PNG formatında
      */
     async processTray(file: File, onProgress?: (p: StickerProgress) => void): Promise<Blob> {
-        onProgress?.({ message: 'Arka plan siliniyor...', percentage: 20 });
-
-        // Arka plan silme
-        const removedBgBlob = await removeBackground(file, {
-            progress: (message: string) => {
-                onProgress?.({ message: `Arka plan siliniyor: ${message}`, percentage: 80 });
-            }
-        });
-
-        onProgress?.({ message: 'Boyutlandırılıyor (96x96 PNG)...', percentage: 90 });
-        return this.resizeAndCenterTray(removedBgBlob);
+        onProgress?.({ message: 'Boyutlandırılıyor (512x512 PNG)...', percentage: 50 });
+        return this.resizeAndCenterTray(file);
     }
 
     /**

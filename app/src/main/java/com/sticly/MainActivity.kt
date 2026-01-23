@@ -351,10 +351,10 @@ class MainActivity : AppCompatActivity() {
                 val current = topStickersCarousel.currentItem
                 val next = if (current >= itemCount - 1) 0 else current + 1
                 topStickersCarousel.setCurrentItem(next, true)
-                carouselHandler?.postDelayed(this, 5000)
+                carouselHandler?.postDelayed(this, 3500)
             }
         }
-        carouselHandler?.postDelayed(carouselRunnable!!, 5000)
+        carouselHandler?.postDelayed(carouselRunnable!!, 3500)
     }
 
     private fun stopAutoScroll() {
