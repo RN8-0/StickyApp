@@ -189,10 +189,7 @@
                                 <androidx.viewpager2.widget.ViewPager2
                                     android:id="@+id/topStickersCarousel"
                                     android:layout_width="match_parent"
-                                    android:layout_height="180dp"
-                                    android:clipToPadding="false"
-                                    android:clipChildren="false"
-                                    android:paddingHorizontal="32dp" />
+                                    android:layout_height="180dp" />
 
                                 <!-- Carousel Indicators -->
                                 <LinearLayout

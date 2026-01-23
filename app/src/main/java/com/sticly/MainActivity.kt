@@ -286,17 +286,7 @@ class MainActivity : AppCompatActivity() {
             startActivity(Intent(this, DetailsActivity::class.java).putExtra("id", pack.id))
         }
         topStickersCarousel.adapter = carouselAdapter
-        topStickersCarousel.offscreenPageLimit = 3
-
-        // Add page transformer for card effect
-        val pageMargin = resources.getDimensionPixelOffset(R.dimen.carousel_page_margin)
-        val pageOffset = resources.getDimensionPixelOffset(R.dimen.carousel_page_offset)
-        topStickersCarousel.setPageTransformer { page, position ->
-            val offset = position * -(2 * pageOffset + pageMargin)
-            page.translationX = offset
-            page.scaleY = 1 - (0.15f * kotlin.math.abs(position))
-            page.alpha = 0.5f + (1 - kotlin.math.abs(position)) * 0.5f
-        }
+        // Sadece aktif kartın görünmesi için transformer kaldırıldı.
 
         topStickersCarousel.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
             override fun onPageSelected(position: Int) {
