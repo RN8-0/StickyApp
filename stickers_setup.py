@@ -224,15 +224,34 @@ def start_dev_server():
         input()
         return
 
-    print_colored("[*] Vite geliştirme sunucusu başlatılıyor...", "green")
+    # Check for node_modules
+    if not os.path.exists("sticker_admin_web/node_modules"):
+        print_colored("[!] Bağımlılıklar eksik. Yükleniyor...", "yellow")
+        success, _, err = run_command("npm install", cwd="sticker_admin_web", shell=True)
+        if not success:
+            print_colored(f"[✗] Yükleme hatası: {err}", "red")
+            input()
+            return
+
+    import webbrowser
+    print_colored("[*] Lokal sunucu başlatılıyor ve tarayıcı açılıyor...", "green")
     print_colored("[!] Durdurmak için CTRL+C tuşuna basın.\n", "yellow")
     
+    # Start vite with open flag
     try:
-        subprocess.run("npm run dev", cwd="sticker_admin_web", shell=True)
+        # 'npm run dev -- --open' passes --open to the underlying vite command
+        subprocess.run("npm run dev -- --open", cwd="sticker_admin_web", shell=True)
     except KeyboardInterrupt:
         print("\n[i] Sunucu durduruldu.")
     
     input("\nMenüye dönmek için ENTER'a basın...")
+
+def open_live_panel():
+    import webbrowser
+    url = "https://sticky-dcd20.web.app"
+    print_colored(f"[*] Canlı panel açılıyor: {url}", "cyan")
+    webbrowser.open(url)
+    time.sleep(1)
 
 def firebase_deploy():
     clear_screen()
@@ -297,8 +316,9 @@ def main_menu():
             ("1", "Sistem Kontrolü & Kurulum", "Gereksinimleri ve eksik dosyaları denetler"),
             ("2", "GitHub'a Push Et", "Değişiklikleri otomatik olarak commit ve push yapar"),
             ("3", "Web Admin Panelini Başlat", "Lokal geliştirme sunucusunu (Vite) açar"),
-            ("4", "Firebase'e Yayınla (Deploy)", "Web panelini canlıya alır"),
-            ("5", "Proje Temizliği (Clean)", "Geçici ve derleme dosyalarını siler"),
+            ("4", "Canlı Paneli Aç (Web)", "Yayınlanmış olan paneli tarayıcıda açar"),
+            ("5", "Firebase'e Yayınla (Deploy)", "Web panelini canlıya alır"),
+            ("6", "Proje Temizliği (Clean)", "Geçici ve derleme dosyalarını siler"),
             ("0", "Çıkış", "")
         ]
         
@@ -310,8 +330,9 @@ def main_menu():
         if choice == "1": check_dependencies()
         elif choice == "2": github_sync()
         elif choice == "3": start_dev_server()
-        elif choice == "4": firebase_deploy()
-        elif choice == "5": clean_project()
+        elif choice == "4": open_live_panel()
+        elif choice == "5": firebase_deploy()
+        elif choice == "6": clean_project()
         elif choice == "0": break
         else:
             print_colored("\n  [!] Geçersiz seçim!", "yellow")

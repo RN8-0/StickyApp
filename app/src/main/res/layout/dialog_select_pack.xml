@@ -71,6 +71,6 @@
         android:textColor="@android:color/white"
         android:textStyle="bold"
         android:textAllCaps="false"
-        app:backgroundTint="@color/primary" />
+        app:backgroundTint="@color/accent" />
 
 </LinearLayout>

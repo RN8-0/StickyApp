@@ -244,7 +244,7 @@ class DetailsActivity : AppCompatActivity() {
             return
         }
 
-        androidx.appcompat.app.AlertDialog.Builder(this)
+        com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
             .setTitle(R.string.delete_mode)
             .setMessage("${selectedIndices.size} adet çıkartmayı silmek istediğinize emin misiniz?\n\nWhatsApp'tan da güncellenecektir.")
             .setPositiveButton(R.string.yes) { _, _ ->
@@ -273,7 +273,7 @@ class DetailsActivity : AppCompatActivity() {
     }
 
     private fun showDeletePackDialog(pack: Pack) {
-        androidx.appcompat.app.AlertDialog.Builder(this)
+        com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
             .setTitle(R.string.delete_pack)
             .setMessage(R.string.delete_pack_confirm)
             .setPositiveButton(R.string.yes) { _, _ ->
@@ -291,7 +291,7 @@ class DetailsActivity : AppCompatActivity() {
     }
 
     private fun showDeleteStickerDialog(packId: String, index: Int) {
-        androidx.appcompat.app.AlertDialog.Builder(this)
+        com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
             .setTitle("Çıkartmayı Sil")
             .setMessage("Bu çıkartmayı silmek istediğinize emin misiniz?\n\n(Bu işlem WhatsApp'tan da kaldırılmasını tetikleyecektir)")
             .setPositiveButton(R.string.yes) { _, _ ->
@@ -580,7 +580,7 @@ class DetailsActivity : AppCompatActivity() {
     }
 
     private fun showRemoveInstructionsDialog() {
-        androidx.appcompat.app.AlertDialog.Builder(this)
+        com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
             .setTitle(R.string.remove_from_whatsapp)
             .setMessage("WhatsApp'ın kısıtlamaları nedeniyle bir paketi uygulama içinden otomatik olarak silemiyoruz.\n\n" +
                     "Kaldırmak için:\n" +
@@ -624,6 +624,8 @@ class DetailsActivity : AppCompatActivity() {
 
                 btnAction.text = getString(R.string.remove_from_whatsapp)
                 btnAction.setIconResource(R.drawable.ic_delete)
+                btnAction.setTextColor(ContextCompat.getColor(this@DetailsActivity, R.color.white))
+                btnAction.setIconTintResource(R.color.white)
                 btnAction.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this@DetailsActivity, R.color.remove_red))
                 installedIcon.visibility = View.VISIBLE
             } else {
@@ -641,7 +643,9 @@ class DetailsActivity : AppCompatActivity() {
 
                 btnAction.text = getString(R.string.add_to_whatsapp)
                 btnAction.setIconResource(R.drawable.ic_add)
-                btnAction.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this@DetailsActivity, R.color.whatsapp_green))
+                btnAction.setTextColor(ContextCompat.getColor(this@DetailsActivity, R.color.white))
+                btnAction.setIconTintResource(R.color.white)
+                btnAction.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this@DetailsActivity, R.color.accent))
                 installedIcon.visibility = View.GONE
             }
         }
@@ -769,7 +773,7 @@ class DetailsActivity : AppCompatActivity() {
     private fun addToWhatsApp(pack: Pack) {
         // WhatsApp kontrolü
         if (!isWhatsAppInstalled()) {
-            androidx.appcompat.app.AlertDialog.Builder(this)
+            com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
                 .setTitle(R.string.whatsapp_not_installed_title)
                 .setMessage(R.string.whatsapp_not_installed_message)
                 .setPositiveButton(R.string.play_store) { _, _ ->
@@ -803,7 +807,7 @@ class DetailsActivity : AppCompatActivity() {
 
     private fun removeFromWhatsApp() {
         currentPack?.let { pack ->
-            androidx.appcompat.app.AlertDialog.Builder(this)
+            com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
                 .setTitle(R.string.remove_instructions_title)
                 .setMessage(R.string.remove_instructions_message)
                 .setPositiveButton(R.string.go_to_whatsapp) { _, _ ->
@@ -849,7 +853,7 @@ class DetailsActivity : AppCompatActivity() {
      * WhatsApp kullanılamıyor dialog'u göster
      */
     private fun showWhatsAppNotAvailableDialog() {
-        androidx.appcompat.app.AlertDialog.Builder(this)
+        com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
             .setTitle(R.string.whatsapp_not_available_title)
             .setMessage(R.string.whatsapp_not_available_message)
             .setPositiveButton(R.string.play_store) { _, _ ->
@@ -867,7 +871,7 @@ class DetailsActivity : AppCompatActivity() {
      * Paket hâlâ yüklü uyarısı göster
      */
     private fun showPackStillInstalledWarning() {
-        androidx.appcompat.app.AlertDialog.Builder(this)
+        com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
             .setTitle(R.string.pack_still_installed_title)
             .setMessage(R.string.pack_still_installed_message)
             .setPositiveButton(R.string.ok, null)
@@ -1022,7 +1026,7 @@ class DetailsActivity : AppCompatActivity() {
     private fun showPremiumPromoDialog() {
         val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_premium_promo, null)
 
-        val dialog = androidx.appcompat.app.AlertDialog.Builder(this)
+        val dialog = com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
             .setView(dialogView)
             .setCancelable(true)
             .create()

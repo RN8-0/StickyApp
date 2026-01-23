@@ -489,8 +489,9 @@ class StickerMakerActivity : AppCompatActivity() {
         override fun onBindViewHolder(holder: ViewHolder, position: Int) {
             val pack = packs[position]
             holder.tvName.text = pack.name
-            holder.tvName.setTextColor(Color.BLACK)
+            holder.tvName.setTextColor(ContextCompat.getColor(this@StickerMakerActivity, R.color.text_primary))
             holder.tvCount.text = "${pack.stickerCount} sticker"
+            holder.tvCount.setTextColor(ContextCompat.getColor(this@StickerMakerActivity, R.color.text_secondary))
         }
         override fun getItemCount() = packs.size
     }

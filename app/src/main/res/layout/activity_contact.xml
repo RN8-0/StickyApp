@@ -13,11 +13,11 @@
             android:id="@+id/toolbar"
             android:layout_width="match_parent"
             android:layout_height="?attr/actionBarSize"
-            android:background="@color/primary"
+            android:background="@color/toolbar_bg"
             app:navigationIcon="@drawable/ic_back"
-            app:navigationIconTint="@android:color/white"
+            app:navigationIconTint="@color/toolbar_icon"
             app:title="@string/contact_us"
-            app:titleTextColor="@android:color/white" />
+            app:titleTextColor="@color/toolbar_text" />
 
     </com.google.android.material.appbar.AppBarLayout>
 
@@ -45,6 +45,8 @@
                     android:layout_height="80dp"
                     android:src="@drawable/ic_contact_large"
                     android:background="@drawable/circle_bg"
+                    android:backgroundTint="@color/accent"
+                    app:tint="@color/white"
                     android:padding="20dp" />
 
                 <TextView
@@ -64,8 +66,8 @@
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="16dp"
                 style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
-                app:boxStrokeColor="@color/primary"
-                app:hintTextColor="@color/primary">
+                app:boxStrokeColor="@color/accent"
+                app:hintTextColor="@color/accent">
 
                 <com.google.android.material.textfield.TextInputEditText
                     android:id="@+id/inputName"
@@ -83,8 +85,8 @@
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="16dp"
                 style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
-                app:boxStrokeColor="@color/primary"
-                app:hintTextColor="@color/primary">
+                app:boxStrokeColor="@color/accent"
+                app:hintTextColor="@color/accent">
 
                 <com.google.android.material.textfield.TextInputEditText
                     android:id="@+id/inputEmail"
@@ -102,8 +104,8 @@
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="16dp"
                 style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
-                app:boxStrokeColor="@color/primary"
-                app:hintTextColor="@color/primary">
+                app:boxStrokeColor="@color/accent"
+                app:hintTextColor="@color/accent">
 
                 <com.google.android.material.textfield.TextInputEditText
                     android:id="@+id/inputSubject"
@@ -121,8 +123,8 @@
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="24dp"
                 style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
-                app:boxStrokeColor="@color/primary"
-                app:hintTextColor="@color/primary">
+                app:boxStrokeColor="@color/accent"
+                app:hintTextColor="@color/accent">
 
                 <com.google.android.material.textfield.TextInputEditText
                     android:id="@+id/inputMessage"
@@ -141,11 +143,14 @@
                 android:layout_width="match_parent"
                 android:layout_height="56dp"
                 android:text="@string/send"
+                android:textColor="@color/white"
                 android:textSize="16sp"
                 app:cornerRadius="28dp"
                 app:icon="@drawable/ic_send"
                 app:iconGravity="textStart"
-                app:iconPadding="8dp" />
+                app:iconPadding="8dp"
+                app:iconTint="@color/white"
+                app:backgroundTint="@color/accent" />
 
             <!-- Progress -->
             <ProgressBar

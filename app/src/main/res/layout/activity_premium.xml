@@ -141,7 +141,7 @@
                                     android:layout_width="20dp"
                                     android:layout_height="20dp"
                                     android:src="@drawable/ic_check_circle"
-                                    app:tint="@color/success" />
+                                    app:tint="@color/accent" />
                                 <TextView
                                     android:layout_width="wrap_content"
                                     android:layout_height="wrap_content"
@@ -162,7 +162,7 @@
                                     android:layout_width="20dp"
                                     android:layout_height="20dp"
                                     android:src="@drawable/ic_check_circle"
-                                    app:tint="@color/success" />
+                                    app:tint="@color/accent" />
                                 <TextView
                                     android:layout_width="wrap_content"
                                     android:layout_height="wrap_content"
@@ -183,7 +183,7 @@
                                     android:layout_width="20dp"
                                     android:layout_height="20dp"
                                     android:src="@drawable/ic_check_circle"
-                                    app:tint="@color/success" />
+                                    app:tint="@color/accent" />
                                 <TextView
                                     android:layout_width="wrap_content"
                                     android:layout_height="wrap_content"
@@ -306,7 +306,7 @@
                                 android:text="₺--,--"
                                 android:textSize="32sp"
                                 android:textStyle="bold"
-                                android:textColor="@color/primary"
+                                android:textColor="@color/accent"
                                 android:gravity="center" />
 
                             <TextView
@@ -340,7 +340,7 @@
                                         android:layout_width="20dp"
                                         android:layout_height="20dp"
                                         android:src="@drawable/ic_check_circle"
-                                        app:tint="@color/success" />
+                                        app:tint="@color/accent" />
                                     <TextView
                                         android:layout_width="wrap_content"
                                         android:layout_height="wrap_content"
@@ -362,7 +362,7 @@
                                         android:layout_width="20dp"
                                         android:layout_height="20dp"
                                         android:src="@drawable/ic_check_circle"
-                                        app:tint="@color/success" />
+                                        app:tint="@color/accent" />
                                     <TextView
                                         android:layout_width="wrap_content"
                                         android:layout_height="wrap_content"
@@ -451,7 +451,7 @@
                                 android:textSize="15sp"
                                 android:textStyle="bold"
                                 android:textColor="@android:color/white"
-                                app:backgroundTint="@color/primary"
+                                app:backgroundTint="@color/accent"
                                 app:cornerRadius="14dp"
                                 app:elevation="0dp" />
 
@@ -655,7 +655,7 @@
                 android:padding="12dp"
                 android:text="@string/restore_purchases"
                 android:textSize="14sp"
-                android:textColor="@color/primary"
+                android:textColor="@color/accent"
                 android:textStyle="bold" />
 
         </LinearLayout>

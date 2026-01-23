@@ -45,13 +45,15 @@
     <color name="premium_text_on_gold">#3E2723</color>
     <color name="delete_red">#E74C3C</color>
     <color name="selection_overlay">#8000A884</color>
-    <color name="chat_pattern_light">#E0F2F1</color>
+    <color name="chat_pattern_light">#FFFFFF</color>
     <color name="purple_accent">#9B59B6</color>
     <color name="surface_variant">#F5F5F5</color>
     <color name="remove_red">#E74C3C</color>
-    <color name="chat_pattern_dark">#B2DFDB</color>
+    <color name="chat_pattern_dark">#FFFFFF</color>
     <color name="overlay_dark">#80000000</color>
 
     <!-- Sticker Preview -->
     <color name="preview_bg">#FFFFFF</color>
+    <!-- Custom Button Colors -->
+    <color name="background_removal_text_color">@color/accent</color>
 </resources>
