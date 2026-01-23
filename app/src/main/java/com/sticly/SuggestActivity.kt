@@ -21,14 +21,14 @@ class SuggestActivity : AppCompatActivity() {
     private var selectedCategory: String = ""
 
     private val categories = listOf(
-        "funny" to R.string.category_funny,
-        "romantic" to R.string.category_romantic,
+        "humor" to R.string.category_humor,
+        "love" to R.string.category_love,
         "memes" to R.string.category_memes,
         "animals" to R.string.category_animals,
         "anime" to R.string.category_anime,
         "sports" to R.string.category_sports,
-        "series" to R.string.category_series,
-        "emoji" to R.string.category_emoji,
+        "movie" to R.string.category_movie,
+        "gaming" to R.string.category_gaming,
         "other" to R.string.category_other
     )
 

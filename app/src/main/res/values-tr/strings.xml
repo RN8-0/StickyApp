@@ -136,13 +136,33 @@
 
     <!-- Categories -->
     <string name="filter_category">Kategori</string>
-    <string name="category_all">Tüm Kategoriler</string>
-    <string name="category_funny">Komik</string>
-    <string name="category_romantic">Romantik</string>
-    <string name="category_sports">Spor</string>
-    <string name="category_series">Dizi/Film</string>
-    <string name="category_animals">Hayvanlar</string>
-    <string name="category_memes">Memeler</string>
+    <string name="category_all">✨ Tümü</string>
+    <string name="popular_stickers">🔥 Popüler Paketler</string>
+    <string name="all_stickers">💎 Tüm Paketler</string>
+    <string name="category_humor">😂 Mizah</string>
+    <string name="category_love">❤️ Aşk</string>
+    <string name="category_religious">🕌 Dini</string>
+    <string name="category_entertainment">🎉 Eğlence</string>
+    <string name="category_background">🌅 Arka Plan</string>
+    <string name="category_morning">☀️ Günaydın</string>
+    <string name="category_night">🌙 İyi Geceler</string>
+    <string name="category_birthday">🎂 Doğum Günü</string>
+    <string name="category_congrats">👏 Tebrikler</string>
+    <string name="category_animals">🐱 Hayvanlar</string>
+    <string name="category_sports">⚽ Spor</string>
+    <string name="category_gaming">🎮 Oyun</string>
+    <string name="category_movie">🎬 Film &amp; Dizi</string>
+    <string name="category_music">🎵 Müzik</string>
+    <string name="category_food">🍔 Yemek</string>
+    <string name="category_emoji">😊 Emoji</string>
+    <string name="category_cars">🚗 Araba</string>
+    <string name="category_motivation">⚡ Motivasyon</string>
+    <string name="category_cute">🧸 Sevimli</string>
+    <string name="category_text">✍️ Metin/Yazı</string>
+    <string name="category_anime">⛩️ Anime</string>
+    <string name="category_memes">🎭 Memeler</string>
+    <string name="category_nature">🌿 Doğa</string>
+    <string name="category_other">📂 Diğer</string>
 
     <!-- Search -->
     <string name="recent_searches">Son Aramalar</string>
@@ -216,6 +236,7 @@
     <string name="back">Geri</string>
     <string name="undo">Geri Al</string>
     <string name="animated_sticker_coming_soon">Hareketli çıkartma desteği yakında!</string>
+    <string name="animated_sticker_coming_soon_short">YAKINDA</string>
     <string name="pack_updated">Paketiniz güncellendi!</string>
     <string name="free">Ücretsiz</string>
     <string name="converting">Dönüştürülüyor…</string>

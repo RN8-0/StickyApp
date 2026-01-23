@@ -136,26 +136,35 @@
 
     <!-- Categories -->
     <string name="filter_category">Category</string>
-    <string name="category_all">All Categories</string>
-    <string name="category_funny">Funny</string>
-    <string name="category_romantic">Romantic</string>
-    <string name="category_sports">Sports</string>
-    <string name="category_series">Series/Movie</string>
-    <string name="category_animals">Animals</string>
-    <string name="category_memes">Memes</string>
-    <string name="category_kissing">Kissing</string>
-    <string name="category_emoji">Emoji</string>
-    <string name="category_anime">Anime</string>
-    <string name="category_gaming">Gaming</string>
-    <string name="category_music">Music</string>
-    <string name="category_food">Food</string>
-    <string name="category_nature">Nature</string>
-    <string name="category_celebration">Celebration</string>
-    <string name="category_other">Other</string>
+    <string name="category_all">✨ All</string>
+    <string name="popular_stickers">🔥 Popular Stickers</string>
+    <string name="all_stickers">💎 All Stickers</string>
+    <string name="category_humor">😂 Humor</string>
+    <string name="category_love">❤️ Love</string>
+    <string name="category_religious">🕌 Religious</string>
+    <string name="category_entertainment">🎉 Entertainment</string>
+    <string name="category_background">🌅 Background</string>
+    <string name="category_morning">☀️ Morning</string>
+    <string name="category_night">🌙 Night</string>
+    <string name="category_birthday">🎂 Birthday</string>
+    <string name="category_congrats">👏 Congratulations</string>
+    <string name="category_animals">🐱 Animals</string>
+    <string name="category_sports">⚽ Sports</string>
+    <string name="category_gaming">🎮 Gaming</string>
+    <string name="category_movie">🎬 Movie &amp; TV</string>
+    <string name="category_music">🎵 Music</string>
+    <string name="category_food">🍔 Food</string>
+    <string name="category_emoji">😊 Emoji</string>
+    <string name="category_cars">🚗 Cars</string>
+    <string name="category_motivation">⚡ Motivation</string>
+    <string name="category_cute">🧸 Cute</string>
+    <string name="category_text">✍️ Text</string>
+    <string name="category_anime">⛩️ Anime</string>
+    <string name="category_memes">🎭 Memes</string>
+    <string name="category_nature">🌿 Nature</string>
+    <string name="category_other">📂 Other</string>
 
     <!-- Home Screen -->
-    <string name="popular_stickers">🔥 Popular Stickers</string>
-    <string name="all_stickers">All Stickers</string>
 
     <!-- Search -->
     <string name="recent_searches">Recent Searches</string>
@@ -229,6 +238,7 @@
     <string name="back">Back</string>
     <string name="undo">Undo</string>
     <string name="animated_sticker_coming_soon">Animated sticker support coming soon!</string>
+    <string name="animated_sticker_coming_soon_short">SOON</string>
     <string name="pack_updated">Your pack has been updated!</string>
     <string name="free">Free</string>
     <string name="converting">Converting…</string>

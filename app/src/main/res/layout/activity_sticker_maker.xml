@@ -148,66 +148,87 @@
                             </LinearLayout>
                         </androidx.cardview.widget.CardView>
 
-                        <!-- Hareketli Kartı -->
+                        <!-- Hareketli Kartı (Kilitli) -->
                         <androidx.cardview.widget.CardView
                             android:id="@+id/cardAnimatedType"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
+                            android:alpha="0.6"
                             app:cardCornerRadius="20dp"
-                            app:cardElevation="4dp"
+                            app:cardElevation="2dp"
                             app:cardBackgroundColor="@color/card_bg">
 
-                            <LinearLayout
+                            <RelativeLayout
                                 android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:orientation="horizontal"
-                                android:padding="24dp"
-                                android:gravity="center_vertical"
-                                android:background="?selectableItemBackground">
-
-                                <View
-                                    android:layout_width="56dp"
-                                    android:layout_height="56dp"
-                                    android:background="@drawable/bg_circle_primary"
-                                    android:backgroundTint="@color/accent" />
-
-                                <ImageView
-                                    android:layout_width="28dp"
-                                    android:layout_height="28dp"
-                                    android:layout_marginStart="-42dp"
-                                    android:src="@drawable/ic_video"
-                                    app:tint="@color/white" />
+                                android:layout_height="wrap_content">
 
                                 <LinearLayout
-                                    android:layout_width="0dp"
+                                    android:layout_width="match_parent"
                                     android:layout_height="wrap_content"
-                                    android:layout_weight="1"
-                                    android:layout_marginStart="24dp"
-                                    android:orientation="vertical">
+                                    android:orientation="horizontal"
+                                    android:padding="24dp"
+                                    android:gravity="center_vertical">
 
-                                    <TextView
-                                        android:layout_width="wrap_content"
-                                        android:layout_height="wrap_content"
-                                        android:text="@string/animated_sticker"
-                                        android:textColor="@color/text_primary"
-                                        android:textSize="18sp"
-                                        android:textStyle="bold" />
+                                    <View
+                                        android:layout_width="56dp"
+                                        android:layout_height="56dp"
+                                        android:background="@drawable/bg_circle_primary"
+                                        android:backgroundTint="@color/accent" />
 
-                                    <TextView
-                                        android:layout_width="wrap_content"
+                                    <ImageView
+                                        android:layout_width="28dp"
+                                        android:layout_height="28dp"
+                                        android:layout_marginStart="-42dp"
+                                        android:src="@drawable/ic_video"
+                                        app:tint="@color/white" />
+
+                                    <LinearLayout
+                                        android:layout_width="0dp"
                                         android:layout_height="wrap_content"
-                                        android:text="@string/create_animated_desc"
-                                        android:textColor="@color/text_secondary"
-                                        android:textSize="13sp" />
+                                        android:layout_weight="1"
+                                        android:layout_marginStart="24dp"
+                                        android:orientation="vertical">
+
+                                        <TextView
+                                            android:layout_width="wrap_content"
+                                            android:layout_height="wrap_content"
+                                            android:text="@string/animated_sticker"
+                                            android:textColor="@color/text_primary"
+                                            android:textSize="18sp"
+                                            android:textStyle="bold" />
+
+                                        <TextView
+                                            android:layout_width="wrap_content"
+                                            android:layout_height="wrap_content"
+                                            android:text="@string/create_animated_desc"
+                                            android:textColor="@color/text_secondary"
+                                            android:textSize="13sp" />
+                                    </LinearLayout>
+
+                                    <ImageView
+                                        android:layout_width="20dp"
+                                        android:layout_height="20dp"
+                                        android:src="@drawable/ic_lock"
+                                        app:tint="@color/text_hint" />
                                 </LinearLayout>
 
-                                <ImageView
-                                    android:layout_width="20dp"
-                                    android:layout_height="20dp"
-                                    android:src="@drawable/ic_back"
-                                    android:rotation="180"
-                                    app:tint="@color/text_hint" />
-                            </LinearLayout>
+                                <!-- Coming Soon Badge -->
+                                <TextView
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:layout_alignParentEnd="true"
+                                    android:layout_alignParentTop="true"
+                                    android:layout_marginTop="12dp"
+                                    android:layout_marginEnd="12dp"
+                                    android:background="@drawable/bg_coming_soon"
+                                    android:paddingHorizontal="10dp"
+                                    android:paddingVertical="4dp"
+                                    android:text="@string/animated_sticker_coming_soon_short"
+                                    android:textColor="@color/white"
+                                    android:textSize="10sp"
+                                    android:textStyle="bold" />
+
+                            </RelativeLayout>
                         </androidx.cardview.widget.CardView>
 
                     </LinearLayout>

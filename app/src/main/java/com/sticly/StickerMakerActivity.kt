@@ -146,8 +146,7 @@ class StickerMakerActivity : AppCompatActivity() {
         }
 
         cardAnimated.setOnClickListener {
-            isAnimatedMode = true
-            enterEditorMode()
+            Toast.makeText(this, R.string.animated_sticker_coming_soon, Toast.LENGTH_SHORT).show()
         }
 
         btnSelectMedia.setOnClickListener {

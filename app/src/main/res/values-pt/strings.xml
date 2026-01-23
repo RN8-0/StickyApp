@@ -136,13 +136,31 @@
 
     <!-- Categories -->
     <string name="filter_category">Categoria</string>
-    <string name="category_all">Todas as Categorias</string>
-    <string name="category_funny">Engraçado</string>
-    <string name="category_romantic">Romântico</string>
-    <string name="category_sports">Esportes</string>
-    <string name="category_series">Séries/Filmes</string>
-    <string name="category_animals">Animais</string>
-    <string name="category_memes">Memes</string>
+    <string name="category_all">✨ Tudo</string>
+    <string name="category_humor">😂 Humor</string>
+    <string name="category_love">❤️ Amor</string>
+    <string name="category_religious">🕌 Religioso</string>
+    <string name="category_entertainment">🎉 Entretenimento</string>
+    <string name="category_background">🌅 Fundo</string>
+    <string name="category_morning">☀️ Bom dia</string>
+    <string name="category_night">🌙 Boa noite</string>
+    <string name="category_birthday">🎂 Aniversário</string>
+    <string name="category_congrats">👏 Parabéns</string>
+    <string name="category_animals">🐱 Animais</string>
+    <string name="category_sports">⚽ Esportes</string>
+    <string name="category_gaming">🎮 Jogos</string>
+    <string name="category_movie">🎬 Cinema e TV</string>
+    <string name="category_music">🎵 Música</string>
+    <string name="category_food">🍔 Comida</string>
+    <string name="category_emoji">😊 Emoji</string>
+    <string name="category_cars">🚗 Carros</string>
+    <string name="category_motivation">⚡ Motivação</string>
+    <string name="category_cute">🧸 Fofo</string>
+    <string name="category_text">✍️ Texto</string>
+    <string name="category_anime">⛩️ Anime</string>
+    <string name="category_memes">🎭 Memes</string>
+    <string name="category_nature">🌿 Natureza</string>
+    <string name="category_other">📂 Outro</string>
 
     <!-- Search -->
     <string name="recent_searches">Buscas Recentes</string>

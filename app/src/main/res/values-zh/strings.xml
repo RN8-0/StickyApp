@@ -136,13 +136,31 @@
 
     <!-- Categories -->
     <string name="filter_category">类别</string>
-    <string name="category_all">所有类别</string>
-    <string name="category_funny">幽默</string>
-    <string name="category_romantic">浪漫</string>
-    <string name="category_sports">体育</string>
-    <string name="category_series">影剧</string>
-    <string name="category_animals">动物</string>
-    <string name="category_memes">梗图</string>
+    <string name="category_all">✨ 所有</string>
+    <string name="category_humor">😂 幽默</string>
+    <string name="category_love">❤️ 爱情</string>
+    <string name="category_religious">🕌 宗教</string>
+    <string name="category_entertainment">🎉 娱乐</string>
+    <string name="category_background">🌅 背景</string>
+    <string name="category_morning">☀️ 早安</string>
+    <string name="category_night">🌙 晚安</string>
+    <string name="category_birthday">🎂 生日</string>
+    <string name="category_congrats">👏 恭喜</string>
+    <string name="category_animals">🐱 动物</string>
+    <string name="category_sports">⚽ 体育</string>
+    <string name="category_gaming">🎮 游戏</string>
+    <string name="category_movie">🎬 电影与电视</string>
+    <string name="category_music">🎵 音乐</string>
+    <string name="category_food">🍔 食物</string>
+    <string name="category_emoji">😊 表情符号</string>
+    <string name="category_cars">🚗 汽车</string>
+    <string name="category_motivation">⚡ 动力</string>
+    <string name="category_cute">🧸 可爱</string>
+    <string name="category_text">✍️ 文本</string>
+    <string name="category_anime">⛩️ 动漫</string>
+    <string name="category_memes">🎭 梗图</string>
+    <string name="category_nature">🌿 自然</string>
+    <string name="category_other">📂 其他</string>
 
     <!-- Search -->
     <string name="recent_searches">最近搜索</string>

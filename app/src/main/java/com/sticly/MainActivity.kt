@@ -365,7 +365,73 @@ class MainActivity : AppCompatActivity() {
 
     private fun Int.dpToPx(): Int = (this * resources.displayMetrics.density).toInt()
 
+    private fun getCategoryStringRes(key: String): Int {
+        return when (key) {
+            "all" -> R.string.category_all
+            "humor" -> R.string.category_humor
+            "love" -> R.string.category_love
+            "religious" -> R.string.category_religious
+            "entertainment" -> R.string.category_entertainment
+            "background" -> R.string.category_background
+            "morning" -> R.string.category_morning
+            "night" -> R.string.category_night
+            "birthday" -> R.string.category_birthday
+            "congrats" -> R.string.category_congrats
+            "animals" -> R.string.category_animals
+            "sports" -> R.string.category_sports
+            "gaming" -> R.string.category_gaming
+            "movie" -> R.string.category_movie
+            "music" -> R.string.category_music
+            "food" -> R.string.category_food
+            "emoji" -> R.string.category_emoji
+            "cars" -> R.string.category_cars
+            "motivation" -> R.string.category_motivation
+            "cute" -> R.string.category_cute
+            "text" -> R.string.category_text
+            "anime" -> R.string.category_anime
+            "memes" -> R.string.category_memes
+            "nature" -> R.string.category_nature
+            "other" -> R.string.category_other
+            else -> 0
+        }
+    }
+
+    private fun normalizeCategoryKey(key: String): String {
+        val k = key.lowercase(Locale.ROOT).trim()
+        return when {
+            k == "all" || k == "tümü" || k == "todo" || k.contains("tüm kategoriler") || k.contains("all categories") -> "all"
+            k.contains("mizah") || k.contains("komik") || k.contains("humor") || k.contains("funny") -> "humor"
+            k.contains("aşk") || k.contains("love") || k.contains("amor") -> "love"
+            k.contains("dini") || k.contains("religious") -> "religious"
+            k.contains("eğlence") || k.contains("entertainment") -> "entertainment"
+            k.contains("arka plan") || k.contains("background") -> "background"
+            k.contains("günaydın") || k.contains("morning") -> "morning"
+            k.contains("iyi geceler") || k.contains("night") -> "night"
+            k.contains("doğum günü") || k.contains("birthday") -> "birthday"
+            k.contains("tebrik") || k.contains("congrats") -> "congrats"
+            k.contains("hayvan") || k.contains("animal") -> "animals"
+            k.contains("spor") || k.contains("sport") -> "sports"
+            k.contains("oyun") || k.contains("gaming") -> "gaming"
+            k.contains("film") || k.contains("dizi") || k.contains("movie") || k.contains("series") -> "movie"
+            k.contains("müzik") || k.contains("music") -> "music"
+            k.contains("yemek") || k.contains("food") -> "food"
+            k.contains("emoji") -> "emoji"
+            k.contains("araba") || k.contains("car") -> "cars"
+            k.contains("motivasyon") || k.contains("motivation") -> "motivation"
+            k.contains("sevimli") || k.contains("cute") -> "cute"
+            k.contains("metin") || k.contains("yazı") || k.contains("text") -> "text"
+            k.contains("anime") -> "anime"
+            k.contains("meme") -> "memes"
+            k.contains("doğa") || k.contains("nature") -> "nature"
+            else -> {
+                // Eğer key zaten bir id ise (örn: "music"), onu döndür
+                if (getCategoryStringRes(k) != 0) k else k.replace(" ", "_")
+            }
+        }
+    }
+
     private fun setupCategoryChips() {
+        if (!::categoryChipGroup.isInitialized) return
         categoryChipGroup.removeAllViews()
 
         // Firebase'den gelen paketlerdeki benzersiz kategorileri al
@@ -374,24 +440,39 @@ class MainActivity : AppCompatActivity() {
 
         val uniqueCategories = allPacks
             .filter { it.isActive && it.category.isNotBlank() && it.category != "custom" }
-            .map { it.category }
+            .map { normalizeCategoryKey(it.category) }
             .distinct()
             .sorted()
 
         dynamicCategories.addAll(uniqueCategories)
 
-        dynamicCategories.forEach { category ->
+        dynamicCategories.forEach { categoryKey ->
             val chip = Chip(this).apply {
-                text = if (category == "all") getString(R.string.category_all) else category
+                val resId = getCategoryStringRes(categoryKey)
+                if (resId != 0) {
+                    text = getString(resId)
+                } else {
+                    // getCategoryStringRes bulamadıysa getIdentifier'ı dene
+                    val dynResId = resources.getIdentifier("category_$categoryKey", "string", packageName)
+                    text = if (dynResId != 0) getString(dynResId) else {
+                        // Son çare: kelimeyi capitalize et ve varsa emoji ekle (çok kaba bir fallback)
+                        categoryKey.replace("_", " ").split(" ").joinToString(" ") { it.replaceFirstChar { char -> char.uppercase() } }
+                    }
+                }
                 isCheckable = true
-                isChecked = category == currentCategory
-                tag = category
-                setChipBackgroundColorResource(if (category == currentCategory) R.color.accent else R.color.chip_bg)
-                setTextColor(getColor(if (category == currentCategory) R.color.white else R.color.text_primary))
+                isChecked = categoryKey == currentCategory
+                tag = categoryKey
+                
+                // Emoji desteği ve görsel için padding/margin ayarları (isteğe bağlı)
+                chipStartPadding = 8.dpToPx().toFloat()
+                chipEndPadding = 8.dpToPx().toFloat()
+                
+                setChipBackgroundColorResource(if (categoryKey == currentCategory) R.color.accent else R.color.chip_bg)
+                setTextColor(getColor(if (categoryKey == currentCategory) R.color.white else R.color.text_primary))
                 chipStrokeWidth = 0f
                 setOnCheckedChangeListener { _, isChecked ->
                     if (isChecked) {
-                        currentCategory = category
+                        currentCategory = categoryKey
                         setChipBackgroundColorResource(R.color.accent)
                         setTextColor(getColor(R.color.white))
                         applyFilters()
@@ -600,7 +681,7 @@ class MainActivity : AppCompatActivity() {
             FilterType.ALL -> {
                 var result = filtered.filter { it.category != "custom" }
                 if (currentCategory != "all") {
-                    result = result.filter { it.category == currentCategory }
+                    result = result.filter { normalizeCategoryKey(it.category) == currentCategory }
                 }
                 result
             }
@@ -611,9 +692,7 @@ class MainActivity : AppCompatActivity() {
             FilterType.CUSTOM -> filtered.filter { it.category == "custom" }
         }
 
-        val sorted = filtered.sortedWith(compareByDescending<Pack> {
-            PreferencesHelper.isPackFavorite(this, it.id)
-        }.thenByDescending { it.downloadCount })
+        val sorted = filtered.sortedByDescending { it.downloadCount }
 
         adapter.updateList(sorted)
     }
@@ -633,20 +712,16 @@ class MainActivity : AppCompatActivity() {
 
     private fun showFilterMenu(anchor: View) {
         val popup = PopupMenu(this, anchor)
-        popup.menu.add(0, 0, 0, R.string.filter_all)
-        popup.menu.add(0, 1, 1, R.string.filter_favorites)
-        popup.menu.add(0, 2, 2, R.string.filter_installed)
-        popup.menu.add(0, 3, 3, R.string.filter_premium)
-        popup.menu.add(0, 4, 4, R.string.filter_purchased)
+        popup.menu.add(0, 2, 0, R.string.filter_installed)
+        popup.menu.add(0, 3, 1, R.string.filter_premium)
+        popup.menu.add(0, 4, 2, R.string.filter_purchased)
 
         popup.setOnMenuItemClickListener { item ->
             currentFilter = when (item.itemId) {
-                0 -> FilterType.ALL
-                1 -> FilterType.FAVORITES
                 2 -> FilterType.INSTALLED
                 3 -> FilterType.PREMIUM
                 4 -> FilterType.PURCHASED
-                else -> FilterType.ALL
+                else -> currentFilter
             }
             applyFilters()
             updateFilterIcon()

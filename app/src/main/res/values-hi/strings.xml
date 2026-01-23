@@ -136,13 +136,31 @@
 
     <!-- Categories -->
     <string name="filter_category">श्रेणी</string>
-    <string name="category_all">सभी श्रेणियां</string>
-    <string name="category_funny">मज़ेदार</string>
-    <string name="category_romantic">रोमांटिक</string>
-    <string name="category_sports">खेल</string>
-    <string name="category_series">सीरीज़/मूवी</string>
-    <string name="category_animals">जानवर</string>
-    <string name="category_memes">मीम्स</string>
+    <string name="category_all">✨ सभी</string>
+    <string name="category_humor">😂 हास्य</string>
+    <string name="category_love">❤️ प्यार</string>
+    <string name="category_religious">🕌 धार्मिक</string>
+    <string name="category_entertainment">🎉 मनोरंजन</string>
+    <string name="category_background">🌅 पृष्ठभूमि</string>
+    <string name="category_morning">☀️ सुप्रभात</string>
+    <string name="category_night">🌙 शुभ रात्रि</string>
+    <string name="category_birthday">🎂 जन्मदिन</string>
+    <string name="category_congrats">👏 बधाई हो</string>
+    <string name="category_animals">🐱 जानवर</string>
+    <string name="category_sports">⚽ खेल</string>
+    <string name="category_gaming">🎮 गेमिंग</string>
+    <string name="category_movie">🎬 फिल्म और टीवी</string>
+    <string name="category_music">🎵 संगीत</string>
+    <string name="category_food">🍔 भोजन</string>
+    <string name="category_emoji">😊 इमोजी</string>
+    <string name="category_cars">🚗 कार</string>
+    <string name="category_motivation">⚡ प्रेरणा</string>
+    <string name="category_cute">🧸 प्यारा</string>
+    <string name="category_text">✍️ टेक्स्ट</string>
+    <string name="category_anime">⛩️ एनीमे</string>
+    <string name="category_memes">🎭 मीम्स</string>
+    <string name="category_nature">🌿 प्रकृति</string>
+    <string name="category_other">📂 अन्य</string>
 
     <!-- Search -->
     <string name="recent_searches">हाल के सर्च</string>

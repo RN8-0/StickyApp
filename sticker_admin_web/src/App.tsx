@@ -64,6 +64,33 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+const CATEGORIES = [
+  { id: 'humor', name: 'Mizah', emoji: '😂' },
+  { id: 'love', name: 'Aşk', emoji: '❤️' },
+  { id: 'religious', name: 'Dini', emoji: '🕌' },
+  { id: 'entertainment', name: 'Eğlence', emoji: '🎉' },
+  { id: 'background', name: 'Arka Plan', emoji: '🌅' },
+  { id: 'morning', name: 'Günaydın', emoji: '☀️' },
+  { id: 'night', name: 'İyi Geceler', emoji: '🌙' },
+  { id: 'birthday', name: 'Doğum Günü', emoji: '🎂' },
+  { id: 'congrats', name: 'Tebrikler', emoji: '👏' },
+  { id: 'animals', name: 'Hayvanlar', emoji: '🐱' },
+  { id: 'sports', name: 'Spor', emoji: '⚽' },
+  { id: 'gaming', name: 'Oyun', emoji: '🎮' },
+  { id: 'movie', name: 'Film & Dizi', emoji: '🎬' },
+  { id: 'music', name: 'Müzik', emoji: '🎵' },
+  { id: 'food', name: 'Yemek', emoji: '🍔' },
+  { id: 'emoji', name: 'Emoji', emoji: '😊' },
+  { id: 'cars', name: 'Araba', emoji: '🚗' },
+  { id: 'motivation', name: 'Motivasyon', emoji: '⚡' },
+  { id: 'cute', name: 'Sevimli', emoji: '🧸' },
+  { id: 'text', name: 'Metin/Yazı', emoji: '✍️' },
+  { id: 'anime', name: 'Anime', emoji: '⛩️' },
+  { id: 'memes', name: 'Memes', emoji: '🎭' },
+  { id: 'nature', name: 'Doğa', emoji: '🌿' },
+  { id: 'other', name: 'Diğer', emoji: '📂' }
+];
+
 function App() {
   const [user, setUser] = useState<User | null>(null);
   console.log("STICKY ADMIN V3 LOADING...");
@@ -98,7 +125,7 @@ function App() {
     publisher_email: '',
     privacy_policy_website: '',
     license_agreement_website: '',
-    category: 'Mizah',
+    category: 'humor',
     is_premium: false,
     is_active: true,
     is_animated: true,
@@ -347,7 +374,7 @@ function App() {
         publisher_email: '',
         privacy_policy_website: '',
         license_agreement_website: '',
-        category: 'Mizah',
+        category: 'humor',
         is_premium: false,
         is_active: true,
         is_animated: true,
@@ -1603,11 +1630,9 @@ function App() {
               value={newPackData.category}
               onChange={(e) => setNewPackData({ ...newPackData, category: e.target.value })}
             >
-              <option>Mizah</option>
-              <option>Aşk</option>
-              <option>Dini</option>
-              <option>Eğlence</option>
-              <option>Arka Plan</option>
+              {CATEGORIES.map(cat => (
+                <option key={cat.id} value={cat.id}>{cat.emoji} {cat.name}</option>
+              ))}
             </select>
           </div>
           <div className="flex bg-hover rounded-xl p-1 gap-1">
@@ -1795,11 +1820,9 @@ function App() {
                   value={editFormData.category}
                   onChange={(e) => setEditFormData({ ...editFormData, category: e.target.value })}
                 >
-                  <option>Mizah</option>
-                  <option>Aşk</option>
-                  <option>Dini</option>
-                  <option>Eğlence</option>
-                  <option>Arka Plan</option>
+                  {CATEGORIES.map(cat => (
+                    <option key={cat.id} value={cat.id}>{cat.emoji} {cat.name}</option>
+                  ))}
                 </select>
               </div>
               <div className="flex-1">

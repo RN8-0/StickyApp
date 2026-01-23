@@ -136,13 +136,31 @@
 
     <!-- Categories -->
     <string name="filter_category">الفئة</string>
-    <string name="category_all">كل الفئات</string>
-    <string name="category_funny">مضحك</string>
-    <string name="category_romantic">رومانسي</string>
-    <string name="category_sports">رياضة</string>
-    <string name="category_series">أفلام / مسلسلات</string>
-    <string name="category_animals">حيوانات</string>
-    <string name="category_memes">ميمز</string>
+    <string name="category_all">✨ الكل</string>
+    <string name="category_humor">😂 مضحك</string>
+    <string name="category_love">❤️ حب</string>
+    <string name="category_religious">🕌 ديني</string>
+    <string name="category_entertainment">🎉 ترفيه</string>
+    <string name="category_background">🌅 خلفية</string>
+    <string name="category_morning">☀️ صباح الخير</string>
+    <string name="category_night">🌙 ليلة سعيدة</string>
+    <string name="category_birthday">🎂 عيد ميلاد</string>
+    <string name="category_congrats">👏 تهانينا</string>
+    <string name="category_animals">🐱 حيوانات</string>
+    <string name="category_sports">⚽ رياضة</string>
+    <string name="category_gaming">🎮 ألعاب</string>
+    <string name="category_movie">🎬 أفلام ومسلسلات</string>
+    <string name="category_music">🎵 موسيقى</string>
+    <string name="category_food">🍔 طعام</string>
+    <string name="category_emoji">😊 إيموجي</string>
+    <string name="category_cars">🚗 سيارات</string>
+    <string name="category_motivation">⚡ تحفيز</string>
+    <string name="category_cute">🧸 لطيف</string>
+    <string name="category_text">✍️ نص</string>
+    <string name="category_anime">⛩️ أنمي</string>
+    <string name="category_memes">🎭 ميمز</string>
+    <string name="category_nature">🌿 طبيعة</string>
+    <string name="category_other">📂 أخرى</string>
 
     <!-- Search -->
     <string name="recent_searches">عمليات البحث الأخيرة</string>
