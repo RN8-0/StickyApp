@@ -61,7 +61,7 @@ class StickyMessagingService : FirebaseMessagingService() {
         val largeIcon = BitmapFactory.decodeResource(resources, R.mipmap.ic_launcher)
 
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_notification)
+            .setSmallIcon(R.drawable.ic_notification_sticky) // Changed to use the new Sticky logo silhouette
             .setLargeIcon(largeIcon)
             .setContentTitle(decoratedTitle)
             .setContentText(body)

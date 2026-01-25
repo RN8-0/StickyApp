@@ -7,6 +7,8 @@ import android.view.View
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.appcompat.widget.Toolbar
 import com.google.android.material.button.MaterialButton
 import kotlinx.coroutines.CoroutineScope
@@ -63,6 +65,21 @@ class PremiumActivity : AppCompatActivity() {
         }
 
         updateUI()
+        setupEdgeToEdge()
+    }
+
+    private fun setupEdgeToEdge() {
+        val toolbar = findViewById<View>(R.id.toolbar)
+        val root = findViewById<View>(R.id.premium_root)
+        
+        ViewCompat.setOnApplyWindowInsetsListener(root) { _, insets ->
+            val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            
+            toolbar?.setPadding(toolbar.paddingLeft, systemBars.top, toolbar.paddingRight, toolbar.paddingBottom)
+            root?.setPadding(root.paddingLeft, root.paddingTop, root.paddingRight, systemBars.bottom)
+            
+            insets
+        }
     }
 
     private fun updateUI() {

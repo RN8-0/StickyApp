@@ -277,4 +277,37 @@
     <string name="media_load_error">A mídia não pôde ser carregada</string>
     <string name="error_occurred">Ocorreu um erro</string>
     <string name="home_desc">Home</string>
+
+    <!-- Editor Tool Names -->
+    <string name="change_media_short">Trocar</string>
+    <string name="crop_short">Cortar</string>
+    <string name="remove_bg_short">Fundo</string>
+    <string name="add_text_short">Texto</string>
+    <string name="add_emoji_short">Emoji</string>
+    <string name="reset_short">Reset</string>
+    <string name="border_short">Borda</string>
+    <string name="flip_h_short">Espelhar H</string>
+    <string name="flip_v_short">Espelhar V</string>
+    <string name="rotate_short">Girar</string>
+    <string name="filter_short">Filtro</string>
+    <string name="select_color">Escolha Cor</string>
+    <string name="select_font">Escolha Fonte</string>
+    <string name="brightness_short">Brilho</string>
+    <string name="contrast_short">Contraste</string>
+    <string name="saturation_short">Saturação</string>
+    <string name="draw_short">Desenhar</string>
+    <string name="eraser_short">Borracha</string>
+    <string name="select_filter">Escolha Filtro</string>
+    <string name="original">Original</string>
+    <string name="grayscale">P&amp;B</string>
+    <string name="sepia">Sépia</string>
+    <string name="vivid">Vívido</string>
+    <string name="cool">Frio</string>
+    <string name="warm">Quente</string>
+    <string name="vintage">Vintage</string>
+    <string name="adjustments">Ajustes</string>
+    <string name="et_sticker_text_hint">Digite seu texto…</string>
+    <string name="btn_add_text_label">Adicionar Texto</string>
+    <string name="text_size_label">Tamanho do Texto</string>
+    <string name="emoji_picker_title">Escolha Emoji</string>
 </resources>

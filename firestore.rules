@@ -1,16 +1,18 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Sticker paketleri - herkes okuyabilir
+    // Sticker paketleri - herkes okuyabilir, herkes istatistik güncelleyebilir
     match /stickers/{document=**} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow update: if true; // İstatistiklerin artması için anonim izne ihtiyaç var
+      allow create, delete: if request.auth != null;
     }
     
-    // Premium sticker paketleri - herkes okuyabilir
+    // Premium sticker paketleri
     match /premium_stickers/{document=**} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow update: if true; 
+      allow create, delete: if request.auth != null;
     }
     
     // Ayarlar - herkes okuyabilir, sadece auth yazabilir
@@ -29,6 +31,12 @@ service cloud.firestore {
     match /suggestions/{document=**} {
       allow create: if true;
       allow read, update, delete: if request.auth != null;
+    }
+
+    // Bildirimler - sadece auth yazabilir (Admin), herkes okuyabilir
+    match /notifications/{document=**} {
+      allow read: if true;
+      allow create, update, delete: if request.auth != null;
     }
   }
 }

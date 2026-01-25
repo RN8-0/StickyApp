@@ -3,6 +3,8 @@ package com.sticly
 import android.os.Bundle
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.appcompat.app.AppCompatDelegate
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.chip.Chip
@@ -49,6 +51,21 @@ class SuggestActivity : AppCompatActivity() {
 
         btnSend.setOnClickListener {
             sendSuggestion()
+        }
+        setupEdgeToEdge()
+    }
+
+    private fun setupEdgeToEdge() {
+        val root = findViewById<android.view.View>(R.id.suggest_root)
+        val toolbarLayout = findViewById<android.view.View>(R.id.toolbarLayout)
+        
+        ViewCompat.setOnApplyWindowInsetsListener(root) { _, insets ->
+            val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            
+            toolbarLayout?.setPadding(toolbarLayout.paddingLeft, systemBars.top, toolbarLayout.paddingRight, toolbarLayout.paddingBottom)
+            root?.setPadding(root.paddingLeft, root.paddingTop, root.paddingRight, systemBars.bottom)
+            
+            insets
         }
     }
 

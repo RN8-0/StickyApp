@@ -36,7 +36,6 @@ import {
   ChevronRight,
   TrendingUp,
   BarChart3,
-  Heart,
   DollarSign,
   Globe,
   CreditCard,
@@ -44,7 +43,11 @@ import {
   MessageSquare,
   Lightbulb,
   Check,
-  Clock
+  Clock,
+  Bell,
+  Send,
+  Filter,
+  ChevronDown
 } from 'lucide-react';
 import {
   BarChart,
@@ -100,7 +103,10 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [selectedPack, setSelectedPack] = useState<StickerPack | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'stats' | 'settings' | 'messages'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'stats' | 'settings' | 'messages' | 'notifications'>('dashboard');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'passive' | 'premium' | 'normal' | 'new'>('all');
+  const [statsFilter, setStatsFilter] = useState<'all' | 'active' | 'passive' | 'premium' | 'normal'>('all');
+  const [showFilterDropdown, setShowFilterDropdown] = useState(false);
 
   // Mail System States
   const [messages, setMessages] = useState<ContactMessage[]>([]);
@@ -142,6 +148,12 @@ function App() {
     usd: '7,99',
     eur: '6,99'
   });
+
+  // Notification States
+  const [notifTitle, setNotifTitle] = useState('Sticky');
+  const [notifBody, setNotifBody] = useState('');
+  const [notifImageUrl, setNotifImageUrl] = useState('');
+  const [isSendingNotif, setIsSendingNotif] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (u) => {
@@ -277,6 +289,31 @@ function App() {
     }
   };
 
+  const handleSendNotification = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!notifBody) return alert("Lütfen bildirim mesajını girin.");
+    if (!window.confirm("Bu bildirimi tüm kullanıcılara göndermek istediğinize emin misiniz?")) return;
+
+    setIsSendingNotif(true);
+    try {
+      const notifRef = collection(db, 'notifications');
+      await setDoc(doc(notifRef), {
+        title: notifTitle || 'Sticky',
+        body: notifBody,
+        imageUrl: notifImageUrl || '',
+        timestamp: serverTimestamp()
+      });
+      alert(" Bildirim kuyruğa alındı! Birkaç saniye içinde tüm cihazlara ulaşacak.");
+      setNotifBody('');
+      setNotifImageUrl('');
+    } catch (e: any) {
+      console.error("Bildirim gönderme hatası:", e);
+      alert("Hata: " + e.message);
+    } finally {
+      setIsSendingNotif(false);
+    }
+  };
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -296,24 +333,44 @@ function App() {
       const premiumPacks = await getDocs(collection(db, 'premium_stickers'));
 
       const allPacks: StickerPack[] = [
-        ...normalPacks.docs.map(d => ({
-          id: d.id, ...d.data(),
-          is_premium: false,
-          is_animated: d.data().is_animated ?? false,
-          price_try: d.data().price_try ?? '',
-          price_usd: d.data().price_usd ?? '',
-          price_eur: d.data().price_eur ?? ''
-        } as StickerPack)),
-        ...premiumPacks.docs.map(d => ({
-          id: d.id, ...d.data(),
-          is_premium: true,
-          is_animated: d.data().is_animated ?? false,
-          price_try: d.data().price_try ?? '',
-          price_usd: d.data().price_usd ?? '',
-          price_eur: d.data().price_eur ?? ''
-        } as StickerPack))
+        ...normalPacks.docs.map(d => {
+          const data = d.data();
+          const p = {
+            id: d.id,
+            ...data,
+            is_premium: false,
+            is_animated: data.is_animated ?? data.animated ?? false,
+            download_count: Number(data.download_count || data.downloadCount || data.downloads || 0),
+            view_count: Number(data.view_count || data.viewCount || data.views || 0),
+            favorite_count: Number(data.favorite_count || data.favoriteCount || data.favorites || 0),
+            sticker_count: Number(data.sticker_count || data.stickers?.length || 0),
+            price_try: data.price_try ?? data.priceTRY ?? '',
+            price_usd: data.price_usd ?? data.priceUSD ?? '',
+            price_eur: data.price_eur ?? data.priceEUR ?? ''
+          } as StickerPack;
+          return p;
+        }),
+        ...premiumPacks.docs.map(d => {
+          const data = d.data();
+          const p = {
+            id: d.id,
+            ...data,
+            is_premium: true,
+            is_animated: data.is_animated ?? data.animated ?? false,
+            download_count: Number(data.download_count || data.downloadCount || data.downloads || 0),
+            view_count: Number(data.view_count || data.viewCount || data.views || 0),
+            favorite_count: Number(data.favorite_count || data.favoriteCount || data.favorites || 0),
+            sticker_count: Number(data.sticker_count || data.stickers?.length || 0),
+            price_try: data.price_try ?? data.priceTRY ?? '',
+            price_usd: data.price_usd ?? data.priceUSD ?? '',
+            price_eur: data.price_eur ?? data.priceEUR ?? ''
+          } as StickerPack;
+          return p;
+        })
       ];
 
+      console.log("FETCHED PACKS DATA:");
+      console.table(allPacks.map(p => ({ name: p.name, dl: p.download_count, views: p.view_count })));
       setPacks(allPacks.sort((a, b) => a.name.localeCompare(b.name)));
     } catch (error) {
       console.error("Fetch error:", error);
@@ -708,10 +765,31 @@ function App() {
     );
   }
 
-  const filteredPacks = packs.filter(p =>
-    p.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    p.name_tr?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const isNew = (pack: StickerPack) => {
+    if (!pack.created_at) return false;
+    try {
+      const created = pack.created_at.toDate ? pack.created_at.toDate() : new Date(pack.created_at);
+      const diff = Date.now() - created.getTime();
+      return diff < 7 * 24 * 60 * 60 * 1000;
+    } catch (e) {
+      return false;
+    }
+  };
+
+  const filteredPacks = packs.filter(p => {
+    const matchesSearch = p.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      p.name_tr?.toLowerCase().includes(searchTerm.toLowerCase());
+
+    if (!matchesSearch) return false;
+
+    if (statusFilter === 'all') return true;
+    if (statusFilter === 'active') return p.is_active !== false;
+    if (statusFilter === 'passive') return p.is_active === false;
+    if (statusFilter === 'premium') return p.is_premium === true;
+    if (statusFilter === 'normal') return p.is_premium === false;
+    if (statusFilter === 'new') return isNew(p);
+    return true;
+  });
 
   return (
     <div className="min-h-screen bg-background text-textMain flex flex-col font-sans">
@@ -796,6 +874,13 @@ function App() {
           >
             <CreditCard size={24} />
           </button>
+          <button
+            onClick={() => setActiveTab('notifications')}
+            className={cn("p-3 rounded-2xl transition-all shadow-inner", activeTab === 'notifications' ? "bg-primary text-white shadow-lg" : "text-textSec hover:bg-hover")}
+            title="Bildirim Gönder"
+          >
+            <Bell size={24} />
+          </button>
         </div>
 
         {activeTab === 'dashboard' ? (
@@ -805,10 +890,63 @@ function App() {
               "border-r border-white/5 flex flex-col bg-card/30 transition-all duration-500",
               selectedPack ? "w-80" : "w-full"
             )}>
-              <div className="p-5 flex items-center justify-between">
-                <div className="flex flex-col">
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-textSec">Sticker Paketleri</span>
-                  <span className="text-lg font-bold">{filteredPacks.length} Paket</span>
+              <div className="p-5 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex flex-col">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-textSec">Sticker Paketleri</span>
+                    <span className="text-lg font-bold">{filteredPacks.length} Paket</span>
+                  </div>
+
+                  {/* Filter Dropdown */}
+                  <div className="relative">
+                    <button
+                      onClick={() => setShowFilterDropdown(!showFilterDropdown)}
+                      className={cn(
+                        "flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all border",
+                        statusFilter !== 'all'
+                          ? "bg-primary/20 border-primary text-primary"
+                          : "bg-white/5 border-white/5 text-textSec hover:bg-hover"
+                      )}
+                    >
+                      <Filter size={14} />
+                      {statusFilter === 'all' ? 'Filtrele' : statusFilter.toUpperCase()}
+                      <ChevronDown size={14} className={cn("transition-transform", showFilterDropdown && "rotate-180")} />
+                    </button>
+
+                    {showFilterDropdown && (
+                      <>
+                        <div
+                          className="fixed inset-0 z-30"
+                          onClick={() => setShowFilterDropdown(false)}
+                        />
+                        <div className="absolute right-0 top-full mt-2 w-48 glass rounded-2xl border border-white/10 shadow-2xl py-2 z-40 animate-in fade-in zoom-in-95 duration-200">
+                          {[
+                            { id: 'all', label: 'Tümü', icon: Grid },
+                            { id: 'active', label: 'Aktif Paketler', icon: Check },
+                            { id: 'passive', label: 'Pasif Paketler', icon: X },
+                            { id: 'premium', label: 'Premium Paketler', icon: DollarSign },
+                            { id: 'normal', label: 'Normal Paketler', icon: Package },
+                            { id: 'new', label: 'Yeni Eklenenler', icon: Clock }
+                          ].map(f => (
+                            <button
+                              key={f.id}
+                              onClick={() => {
+                                setStatusFilter(f.id as any);
+                                setShowFilterDropdown(false);
+                              }}
+                              className={cn(
+                                "w-full flex items-center gap-3 px-4 py-3 text-[11px] font-bold transition-all hover:bg-hover",
+                                statusFilter === f.id ? "text-primary bg-primary/5" : "text-textSec hover:text-white"
+                              )}
+                            >
+                              <f.icon size={14} className={statusFilter === f.id ? "text-primary" : "text-textSec"} />
+                              {f.label}
+                            </button>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -863,6 +1001,9 @@ function App() {
                           </span>
                           {pack.category && (
                             <span className="text-[10px] text-primary font-bold uppercase tracking-tighter">{pack.category}</span>
+                          )}
+                          {isNew(pack) && (
+                            <span className="px-1.5 py-0.5 bg-accent/20 text-accent text-[8px] font-black rounded-md animate-pulse">YENİ</span>
                           )}
                         </div>
                       </div>
@@ -1012,221 +1153,356 @@ function App() {
           </>
         ) : activeTab === 'stats' ? (
           <div className="flex-1 overflow-y-auto p-12 custom-scrollbar bg-background">
-            <div className="max-w-6xl mx-auto space-y-12">
+            <div className="max-w-6xl mx-auto space-y-12 animate-in fade-in duration-500">
               <div className="flex items-center justify-between">
                 <div>
-                  <h2 className="text-4xl font-black text-white">Detaylı İstatistikler</h2>
-                  <p className="text-textSec">Uygulama genelindeki performans verileri</p>
+                  <div className="flex items-center gap-3 mb-1">
+                    <BarChart3 className="text-primary" size={28} />
+                    <h2 className="text-4xl font-black text-white uppercase tracking-tighter">Performans Analizi</h2>
+                  </div>
+                  <p className="text-textSec font-medium">Uygulama genelindeki etkileşim ve verimlilik raporu</p>
                 </div>
-                <div className="bg-primary/10 px-6 py-3 rounded-2xl border border-primary/20">
-                  <span className="text-primary font-bold">Toplam {packs.length} Paket</span>
-                </div>
-              </div>
 
-              {/* High Level Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                <div className="glass p-8 rounded-[2.5rem] space-y-4 bg-gradient-to-br from-primary/10 to-transparent">
-                  <div className="bg-primary/20 w-12 h-12 rounded-2xl flex items-center justify-center text-primary">
-                    <Package size={24} />
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="text-3xl font-black text-white">{packs.reduce((acc, p) => acc + (p.download_count || 0), 0).toLocaleString()}</span>
-                    <span className="text-sm font-bold text-textSec uppercase tracking-widest">Toplam İndirme</span>
-                  </div>
-                </div>
-                <div className="glass p-8 rounded-[2.5rem] space-y-4 bg-gradient-to-br from-accent/10 to-transparent">
-                  <div className="bg-accent/20 w-12 h-12 rounded-2xl flex items-center justify-center text-accent">
-                    <Search size={24} />
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="text-3xl font-black text-white">{packs.reduce((acc, p) => acc + (p.view_count || 0), 0).toLocaleString()}</span>
-                    <span className="text-sm font-bold text-textSec uppercase tracking-widest">Toplam Görüntülenme</span>
-                  </div>
-                </div>
-                <div className="glass p-8 rounded-[2.5rem] space-y-4 bg-gradient-to-br from-warning/10 to-transparent">
-                  <div className="bg-warning/20 w-12 h-12 rounded-2xl flex items-center justify-center text-warning">
-                    <LogOut size={24} className="rotate-[270deg]" />
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="text-3xl font-black text-white">{packs.filter(p => p.is_premium).length}</span>
-                    <span className="text-sm font-bold text-textSec uppercase tracking-widest">Premium Paketler</span>
-                  </div>
-                </div>
-              </div>
+                <div className="flex items-center gap-4">
+                  {/* Stats Filter */}
+                  <div className="relative group">
+                    <button
+                      onClick={() => setShowFilterDropdown(!showFilterDropdown)}
+                      className={cn(
+                        "flex items-center gap-3 px-6 py-3 rounded-2xl text-xs font-black uppercase tracking-widest transition-all border shadow-xl",
+                        statsFilter !== 'all'
+                          ? "bg-primary/20 border-primary text-primary shadow-primary/10"
+                          : "bg-white/5 border-white/10 text-textSec hover:bg-hover active:scale-95"
+                      )}
+                    >
+                      <Filter size={16} />
+                      {statsFilter === 'all' ? 'Veri Filtrele' : `${statsFilter.toUpperCase()} VERİLER`}
+                      <ChevronDown size={16} className={cn("transition-transform duration-300", showFilterDropdown && "rotate-180")} />
+                    </button>
 
-              {/* Chart Section */}
-              <div className="glass p-10 rounded-[3rem] border border-white/5 space-y-8 bg-card/20 backdrop-blur-3xl relative overflow-hidden group">
-                <div className="absolute top-0 right-0 w-64 h-64 bg-primary/10 blur-[100px] rounded-full -translate-y-1/2 translate-x-1/2 group-hover:bg-primary/20 transition-all duration-1000" />
+                    {showFilterDropdown && (
+                      <>
+                        <div className="fixed inset-0 z-30" onClick={() => setShowFilterDropdown(false)} />
+                        <div className="absolute right-0 top-full mt-3 w-56 glass rounded-[2rem] border border-white/10 shadow-2xl py-3 z-40 animate-in fade-in zoom-in-95 duration-300 ring-1 ring-white/5">
+                          <div className="px-5 py-2 mb-2 border-b border-white/5">
+                            <span className="text-[10px] font-black text-textSec uppercase tracking-widest">Görünüm Ayarı</span>
+                          </div>
+                          {[
+                            { id: 'all', label: 'Tüm Paketler', icon: Grid, color: 'text-white' },
+                            { id: 'active', label: 'Aktif Olanlar', icon: Check, color: 'text-primary' },
+                            { id: 'passive', label: 'Pasif Olanlar', icon: X, color: 'text-danger' },
+                            { id: 'premium', label: 'Sadece Premium', icon: DollarSign, color: 'text-warning' },
+                            { id: 'normal', label: 'Sadece Normal', icon: Package, color: 'text-accent' }
+                          ].map(f => (
+                            <button
+                              key={f.id}
+                              onClick={() => {
+                                setStatsFilter(f.id as any);
+                                setShowFilterDropdown(false);
+                              }}
+                              className={cn(
+                                "w-full flex items-center gap-4 px-5 py-3.5 text-xs font-bold transition-all",
+                                statsFilter === f.id ? "bg-white/10 text-white" : "text-textSec hover:text-white hover:bg-white/5"
+                              )}
+                            >
+                              <f.icon size={16} className={f.color} />
+                              {f.label}
+                            </button>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
 
-                <div className="flex items-center justify-between relative z-10">
-                  <div className="space-y-1">
-                    <h3 className="text-2xl font-black flex items-center gap-3">
-                      <BarChart3 className="text-primary" size={28} />
-                      Paket Kıyaslama Analizi
-                    </h3>
-                    <p className="text-textSec text-sm font-medium">En popüler 10 paketin indirme ve görüntülenme oranları</p>
-                  </div>
-                  <div className="flex items-center gap-2 px-4 py-2 bg-white/5 rounded-xl border border-white/5">
-                    <div className="w-3 h-3 bg-primary rounded-full shadow-[0_0_10px_rgba(0,168,132,0.5)]" />
-                    <span className="text-[10px] font-black uppercase tracking-widest text-textSec">İndirme</span>
-                  </div>
-                  <div className="flex items-center gap-2 px-4 py-2 bg-white/5 rounded-xl border border-white/5">
-                    <div className="w-3 h-3 bg-accent rounded-full shadow-[0_0_10px_rgba(255,51,102,0.5)]" />
-                    <span className="text-[10px] font-black uppercase tracking-widest text-textSec">Görüntüleme</span>
-                  </div>
-                  <div className="flex items-center gap-2 px-4 py-2 bg-white/5 rounded-xl border border-white/5">
-                    <div className="w-3 h-3 bg-amber-400 rounded-full shadow-[0_0_10px_rgba(251,191,36,0.5)]" />
-                    <span className="text-[10px] font-black uppercase tracking-widest text-textSec">Favori</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="h-[450px] w-full mt-12 relative z-10">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart
-                    data={packs
-                      .sort((a, b) => (b.download_count || 0) - (a.download_count || 0))
-                      .slice(0, 10)
-                      .map(p => ({
-                        name: p.name.length > 12 ? p.name.substring(0, 10) + '..' : p.name,
-                        downloads: p.download_count || 0,
-                        views: p.view_count || 0,
-                        favorites: p.favorite_count || 0
-                      }))}
-                    margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
-                    barGap={8}
+                  <button
+                    onClick={fetchPacks}
+                    className="p-3.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl text-textSec transition-all active:scale-90"
+                    title="Verileri Güncelle"
                   >
-                    <defs>
-                      <linearGradient id="barGradientPrimary" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#00A884" stopOpacity={1} />
-                        <stop offset="100%" stopColor="#00A884" stopOpacity={0.6} />
-                      </linearGradient>
-                      <linearGradient id="barGradientAccent" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#34B7F1" stopOpacity={1} />
-                        <stop offset="100%" stopColor="#34B7F1" stopOpacity={0.6} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-                    <XAxis
-                      dataKey="name"
-                      axisLine={false}
-                      tickLine={false}
-                      tick={{ fill: '#888', fontSize: 9, fontWeight: 800 }}
-                      dy={15}
-                      interval={0}
-                      angle={-15}
-                      textAnchor="end"
-                    />
-                    <YAxis
-                      axisLine={false}
-                      tickLine={false}
-                      tick={{ fill: '#888', fontSize: 11, fontWeight: 700 }}
-                      dx={-10}
-                    />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: '#1E293B',
-                        border: '1px solid rgba(255,255,255,0.1)',
-                        borderRadius: '16px',
-                        boxShadow: '0 20px 25px -5px rgba(0,0,0,0.5)',
-                        padding: '12px'
-                      }}
-                      itemStyle={{ fontSize: '12px', fontWeight: 800, padding: '4px 0' }}
-                      labelStyle={{ color: '#fff', marginBottom: '8px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.05em' }}
-                      cursor={{ fill: 'rgba(255,255,255,0.02)' }}
-                    />
-                    <Bar
-                      dataKey="downloads"
-                      fill="url(#barGradientPrimary)"
-                      radius={[6, 6, 0, 0]}
-                      barSize={20}
-                      animationDuration={1500}
-                    />
-                    <Bar
-                      dataKey="views"
-                      fill="url(#barGradientAccent)"
-                      radius={[6, 6, 0, 0]}
-                      barSize={20}
-                      animationDuration={2000}
-                    />
-                    <Bar
-                      dataKey="favorites"
-                      fill="#FBBF24"
-                      radius={[6, 6, 0, 0]}
-                      barSize={20}
-                      animationDuration={2500}
-                    />
-                  </BarChart>
-                </ResponsiveContainer>
+                    <RefreshCcw size={20} className={loading ? 'animate-spin text-primary' : ''} />
+                  </button>
+                </div>
               </div>
-            </div>
 
-            {/* Top Packs Table */}
-            <div className="glass rounded-[2.5rem] overflow-hidden border border-white/5">
-              <div className="px-8 py-6 border-b border-white/5 bg-white/5 flex items-center justify-between">
-                <h3 className="text-xl font-bold flex items-center gap-3">
-                  <TrendingUp className="text-primary" size={24} /> En Popüler Paketler
-                </h3>
-                <button
-                  onClick={fetchPacks}
-                  className="p-2.5 hover:bg-white/10 rounded-xl transition-all active:scale-95 text-textSec hover:text-primary"
-                  title="İstatistikleri Yenile"
-                >
-                  <RefreshCcw size={20} className={cn(loading && 'animate-spin text-primary')} />
-                </button>
+              {/* Advanced Metrics Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                {((): any => {
+                  const sPacks = packs.filter(p => {
+                    if (statsFilter === 'all') return true;
+                    if (statsFilter === 'active') return p.is_active !== false;
+                    if (statsFilter === 'passive') return p.is_active === false;
+                    if (statsFilter === 'premium') return p.is_premium === true;
+                    if (statsFilter === 'normal') return p.is_premium === false;
+                    return true;
+                  });
+
+                  const totalDL = sPacks.reduce((acc, p) => acc + (p.download_count || 0), 0);
+                  const totalViews = sPacks.reduce((acc, p) => acc + (p.view_count || 0), 0);
+                  const totalStickers = sPacks.reduce((acc, p) => acc + (p.sticker_count || 0), 0);
+                  const avgCVR = totalViews > 0 ? (totalDL / totalViews) * 100 : 0;
+
+                  return (
+                    <>
+                      <div className="glass p-8 rounded-[2.5rem] bg-gradient-to-br from-primary/10 to-transparent border border-white/5 shadow-xl group hover:scale-[1.02] transition-all duration-500">
+                        <div className="flex items-center justify-between mb-6">
+                          <div className="bg-primary/20 p-3 rounded-2xl text-primary transform group-hover:rotate-12 transition-transform">
+                            <TrendingUp size={24} />
+                          </div>
+                          <span className="text-[10px] font-black text-primary/60 bg-primary/5 px-2 py-1 rounded-lg">ETKİLEŞİM</span>
+                        </div>
+                        <div className="space-y-1">
+                          <h4 className="text-xs font-bold text-textSec uppercase tracking-widest">Toplam İndirme</h4>
+                          <div className="text-4xl font-black text-white">{totalDL.toLocaleString()}</div>
+                        </div>
+                      </div>
+
+                      <div className="glass p-8 rounded-[2.5rem] bg-gradient-to-br from-accent/10 to-transparent border border-white/5 shadow-xl group hover:scale-[1.02] transition-all duration-500">
+                        <div className="flex items-center justify-between mb-6">
+                          <div className="bg-accent/20 p-3 rounded-2xl text-accent transform group-hover:rotate-12 transition-transform">
+                            <BarChart3 size={24} />
+                          </div>
+                          <span className="text-[10px] font-black text-accent/60 bg-accent/5 px-2 py-1 rounded-lg">ERİŞİM</span>
+                        </div>
+                        <div className="space-y-1">
+                          <h4 className="text-xs font-bold text-textSec uppercase tracking-widest">Görüntülenme</h4>
+                          <div className="text-4xl font-black text-white">{totalViews.toLocaleString()}</div>
+                        </div>
+                      </div>
+
+                      <div className="glass p-8 rounded-[2.5rem] bg-gradient-to-br from-warning/10 to-transparent border border-white/5 shadow-xl group hover:scale-[1.02] transition-all duration-500">
+                        <div className="flex items-center justify-between mb-6">
+                          <div className="bg-warning/20 p-3 rounded-2xl text-warning transform group-hover:rotate-12 transition-transform">
+                            <Lightbulb size={24} />
+                          </div>
+                          <span className="text-[10px] font-black text-warning/60 bg-warning/5 px-2 py-1 rounded-lg">VERİMLİLİK</span>
+                        </div>
+                        <div className="space-y-1">
+                          <h4 className="text-xs font-bold text-textSec uppercase tracking-widest">Dönüşüm (CVR)</h4>
+                          <div className="text-4xl font-black text-white">%{avgCVR.toFixed(1)}</div>
+                          <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden mt-2">
+                            <div className="h-full bg-warning" style={{ width: `${Math.min(100, avgCVR)}%` }} />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="glass p-8 rounded-[2.5rem] bg-gradient-to-br from-purple-500/10 to-transparent border border-white/5 shadow-xl group hover:scale-[1.02] transition-all duration-500">
+                        <div className="flex items-center justify-between mb-6">
+                          <div className="bg-purple-500/20 p-3 rounded-2xl text-purple-400 transform group-hover:rotate-12 transition-transform">
+                            <Grid size={24} />
+                          </div>
+                          <span className="text-[10px] font-black text-purple-400/60 bg-purple-500/5 px-2 py-1 rounded-lg">KÜTÜPHANE</span>
+                        </div>
+                        <div className="space-y-1">
+                          <h4 className="text-xs font-bold text-textSec uppercase tracking-widest">Toplam Sticker</h4>
+                          <div className="text-4xl font-black text-white">{totalStickers.toLocaleString()}</div>
+                          <p className="text-[10px] font-bold text-textSec">{sPacks.length} Paket İçerisinde</p>
+                        </div>
+                      </div>
+                    </>
+                  );
+                })()}
               </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="border-b border-white/5 bg-white/2">
-                      <th className="px-8 py-4 text-xs font-black uppercase text-textSec">Paket</th>
-                      <th className="px-8 py-4 text-xs font-black uppercase text-textSec">İndirme</th>
-                      <th className="px-8 py-4 text-xs font-black uppercase text-textSec">Görüntülenme</th>
-                      <th className="px-8 py-4 text-xs font-black uppercase text-textSec">Verimlilik (%)</th>
-                    </tr>
-                  </thead>
-                  <tbody>
+
+              {/* Chart & Ranking Section */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                {/* Visual Analysis */}
+                <div className="lg:col-span-2 glass p-10 rounded-[3rem] border border-white/5 bg-card/20 shadow-2xl relative overflow-hidden">
+                  <div className="flex items-center justify-between mb-10 relative z-10">
+                    <div className="space-y-1">
+                      <h3 className="text-2xl font-black text-white tracking-tight">Eğilim Analizi</h3>
+                      <p className="text-textSec text-sm">En popüler 10 paketin performans karşılaştırması</p>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full bg-primary shadow-[0_0_10px_rgba(0,168,132,0.4)]" />
+                        <span className="text-[10px] font-black text-textSec uppercase tracking-tighter">İndirme</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full bg-accent shadow-[0_0_10px_rgba(52,183,241,0.4)]" />
+                        <span className="text-[10px] font-black text-textSec uppercase tracking-tighter">Görüntüleme</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="h-[400px] w-full relative z-10">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart
+                        data={packs
+                          .filter(p => {
+                            if (statsFilter === 'all') return true;
+                            if (statsFilter === 'active') return p.is_active !== false;
+                            if (statsFilter === 'passive') return p.is_active === false;
+                            if (statsFilter === 'premium') return p.is_premium === true;
+                            if (statsFilter === 'normal') return p.is_premium === false;
+                            return true;
+                          })
+                          .sort((a, b) => (b.download_count || 0) - (a.download_count || 0))
+                          .slice(0, 10)
+                          .map(p => ({
+                            name: p.name.length > 10 ? p.name.substring(0, 8) + '..' : p.name,
+                            downloads: p.download_count || 0,
+                            views: p.view_count || 0
+                          }))}
+                        margin={{ top: 10, right: 10, left: 0, bottom: 20 }}
+                        barGap={12}
+                      >
+                        <defs>
+                          <linearGradient id="gPrimary" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#00A884" stopOpacity={1} />
+                            <stop offset="100%" stopColor="#00A884" stopOpacity={0.4} />
+                          </linearGradient>
+                          <linearGradient id="gAccent" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#34B7F1" stopOpacity={1} />
+                            <stop offset="100%" stopColor="#34B7F1" stopOpacity={0.4} />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="5 5" stroke="rgba(255,255,255,0.03)" vertical={false} />
+                        <XAxis dataKey="name" stroke="rgba(255,255,255,0.3)" fontSize={11} fontWeight="800" axisLine={false} tickLine={false} dy={15} />
+                        <YAxis stroke="rgba(255,255,255,0.3)" fontSize={11} fontWeight="800" axisLine={false} tickLine={false} tickFormatter={(v) => v >= 1000 ? `${v / 1000}k` : v} />
+                        <Tooltip
+                          contentStyle={{ backgroundColor: '#1A1D21', border: 'none', borderRadius: '16px', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)', padding: '16px' }}
+                          cursor={{ fill: 'rgba(255,255,255,0.02)' }}
+                          itemStyle={{ fontWeight: '900', fontSize: '13px' }}
+                        />
+                        <Bar dataKey="downloads" fill="url(#gPrimary)" radius={[8, 8, 2, 2]} name="İndirme" barSize={24} />
+                        <Bar dataKey="views" fill="url(#gAccent)" radius={[8, 8, 2, 2]} name="Görüntüleme" barSize={24} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                {/* Best Performers Mini Table */}
+                <div className="glass p-8 rounded-[3rem] border border-white/5 bg-card/20 shadow-2xl flex flex-col">
+                  <div className="mb-8">
+                    <h3 className="text-xl font-black text-white mb-1 uppercase tracking-tighter">🏆 Lider Tablosu</h3>
+                    <p className="text-[10px] font-bold text-textSec uppercase tracking-widest">En çok indirilen ilk 5</p>
+                  </div>
+                  <div className="flex-1 space-y-4">
                     {packs
+                      .filter(p => {
+                        if (statsFilter === 'all') return true;
+                        if (statsFilter === 'active') return p.is_active !== false;
+                        if (statsFilter === 'passive') return p.is_active === false;
+                        if (statsFilter === 'premium') return p.is_premium === true;
+                        if (statsFilter === 'normal') return p.is_premium === false;
+                        return true;
+                      })
                       .sort((a, b) => (b.download_count || 0) - (a.download_count || 0))
-                      .slice(0, 10)
-                      .map((pack, idx) => (
-                        <tr key={pack.id} className="border-b border-white/2 hover:bg-white/5 transition-colors group">
-                          <td className="px-8 py-5">
-                            <div className="flex items-center gap-4">
-                              <span className="text-xs font-mono text-textSec">#{idx + 1}</span>
-                              <div className="w-10 h-10 bg-hover rounded-xl flex items-center justify-center">
-                                {pack.tray_url ? <img src={pack.tray_url} className="w-8 h-8 object-contain" /> : <Package size={18} />}
-                              </div>
-                              <span className="font-bold text-sm text-white">{pack.name}</span>
-                            </div>
-                          </td>
-                          <td className="px-8 py-5">
-                            <span className="text-sm font-black text-primary">{(pack.download_count || 0).toLocaleString()}</span>
-                          </td>
-                          <td className="px-8 py-5 text-sm text-textSec">{(pack.view_count || 0).toLocaleString()}</td>
-                          <td className="px-8 py-5">
-                            <div className="flex items-center gap-2 text-amber-400">
-                              <Heart size={14} fill="currentColor" />
-                              <span className="text-sm font-black">{(pack.favorite_count || 0).toLocaleString()}</span>
-                            </div>
-                          </td>
-                          <td className="px-8 py-5">
-                            <div className="flex items-center gap-3">
-                              <div className="flex-1 h-1.5 bg-hover rounded-full overflow-hidden">
-                                <div
-                                  className="h-full bg-primary"
-                                  style={{ width: `${Math.min(100, ((pack.download_count || 0) / (pack.view_count || 1)) * 100)}%` }}
-                                />
-                              </div>
-                              <span className="text-[10px] font-black w-8">
-                                {Math.round(((pack.download_count || 0) / (pack.view_count || 1)) * 100)}%
-                              </span>
-                            </div>
-                          </td>
-                        </tr>
+                      .slice(0, 5)
+                      .map((p, i) => (
+                        <div key={p.id} className="flex items-center gap-4 p-3.5 rounded-2xl bg-white/2 border border-white/5 hover:bg-white/5 transition-all group">
+                          <div className={cn(
+                            "w-8 h-8 rounded-xl flex items-center justify-center font-black text-xs shrink-0 shadow-lg",
+                            i === 0 ? "bg-amber-400 text-black scale-110" :
+                              i === 1 ? "bg-slate-300 text-black" :
+                                i === 2 ? "bg-amber-700 text-white" : "bg-card text-textSec"
+                          )}>
+                            {i + 1}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-xs font-black text-white truncate group-hover:text-primary transition-colors">{p.name}</div>
+                            <div className="text-[9px] font-bold text-textSec uppercase tracking-tighter">{p.category}</div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-xs font-black text-primary">{(p.download_count || 0).toLocaleString()}</div>
+                            <div className="text-[8px] font-bold text-textSec uppercase">İndirme</div>
+                          </div>
+                        </div>
                       ))}
-                  </tbody>
-                </table>
+                  </div>
+                  <div className="mt-8 pt-6 border-t border-white/5">
+                    <div className="flex items-center justify-between text-xs font-black">
+                      <span className="text-textSec uppercase tracking-widest">Kapsam:</span>
+                      <span className="text-white bg-primary/20 px-2.5 py-1 rounded-lg border border-primary/20">{statsFilter.toUpperCase()}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Full Performance List */}
+              <div className="glass rounded-[3rem] border border-white/5 overflow-hidden shadow-2xl">
+                <div className="px-10 py-8 border-b border-white/5 bg-white/2 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="bg-primary p-2.5 rounded-xl">
+                      <Grid className="text-white" size={20} />
+                    </div>
+                    <h3 className="text-2xl font-black text-white tracking-tighter uppercase">Detaylı Performans Listesi</h3>
+                  </div>
+                </div>
+                <div className="overflow-x-auto custom-scrollbar">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-card">
+                        <th className="px-10 py-5 text-[10px] font-black uppercase tracking-widest text-textSec border-b border-white/5">Paket Bilgisi</th>
+                        <th className="px-10 py-5 text-[10px] font-black uppercase tracking-widest text-textSec border-b border-white/5 text-center">İndirme</th>
+                        <th className="px-10 py-5 text-[10px] font-black uppercase tracking-widest text-textSec border-b border-white/5 text-center">Görüntülenme</th>
+                        <th className="px-10 py-5 text-[10px] font-black uppercase tracking-widest text-textSec border-b border-white/5 text-center">Favori</th>
+                        <th className="px-10 py-5 text-[10px] font-black uppercase tracking-widest text-textSec border-b border-white/5 text-right w-64">Dönüşüm Oranı (CVR)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/2">
+                      {packs
+                        .filter(p => {
+                          if (statsFilter === 'all') return true;
+                          if (statsFilter === 'active') return p.is_active !== false;
+                          if (statsFilter === 'passive') return p.is_active === false;
+                          if (statsFilter === 'premium') return p.is_premium === true;
+                          if (statsFilter === 'normal') return p.is_premium === false;
+                          return true;
+                        })
+                        .sort((a, b) => (b.download_count || 0) - (a.download_count || 0))
+                        .map((p) => (
+                          <tr key={p.id} className="hover:bg-white/3 transition-all group">
+                            <td className="px-10 py-6">
+                              <div className="flex items-center gap-5">
+                                <div className="w-12 h-12 rounded-2xl bg-card border border-white/5 p-1 relative overflow-hidden group-hover:scale-110 transition-transform">
+                                  <img src={p.tray_url} className="w-full h-full object-contain" />
+                                  {p.is_premium && <div className="absolute top-0 right-0 w-3 h-3 bg-warning rounded-bl-lg" />}
+                                </div>
+                                <div className="min-w-0">
+                                  <div className="font-black text-white text-base group-hover:text-primary transition-colors truncate">{p.name}</div>
+                                  <div className="flex items-center gap-2 mt-1">
+                                    <span className="text-[10px] font-bold text-textSec uppercase tracking-widest">{p.category}</span>
+                                    <span className={cn(
+                                      "px-2 py-0.5 rounded-md text-[8px] font-black tracking-widest uppercase",
+                                      p.is_active !== false ? "bg-primary/20 text-primary" : "bg-danger/20 text-danger"
+                                    )}>
+                                      {p.is_active !== false ? 'AKTİF' : 'PASİF'}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-10 py-6 text-center">
+                              <span className="text-lg font-black text-primary">{(p.download_count || 0).toLocaleString()}</span>
+                            </td>
+                            <td className="px-10 py-6 text-center">
+                              <span className="text-lg font-black text-accent">{(p.view_count || 0).toLocaleString()}</span>
+                            </td>
+                            <td className="px-10 py-6 text-center">
+                              <span className="text-lg font-black text-warning">{(p.favorite_count || 0).toLocaleString()}</span>
+                            </td>
+                            <td className="px-10 py-6">
+                              <div className="flex items-center justify-end gap-5">
+                                <div className="flex-1 max-w-[120px] h-2 bg-white/5 rounded-full overflow-hidden shadow-inner">
+                                  <div
+                                    className={cn(
+                                      "h-full rounded-full shadow-[0_0_10px_rgba(0,0,0,0.5)] transition-all duration-1000 delay-300",
+                                      ((p.download_count || 0) / (p.view_count || 1)) * 100 > 25 ? "bg-primary" : "bg-warning"
+                                    )}
+                                    style={{ width: `${Math.min(100, ((p.download_count || 0) / (p.view_count || 1)) * 100)}%` }}
+                                  />
+                                </div>
+                                <span className="text-sm font-black text-white tabular-nums w-12 text-right">
+                                  {Math.round(((p.download_count || 0) / (p.view_count || 1)) * 100)}%
+                                </span>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           </div>
@@ -1334,8 +1610,114 @@ function App() {
               </div>
             </div>
           </div>
+        ) : activeTab === 'notifications' ? (
+          <div className="flex-1 overflow-y-auto p-12 custom-scrollbar bg-background">
+            <div className="max-w-3xl mx-auto space-y-12 animate-in fade-in duration-500">
+              <div>
+                <div className="flex items-center gap-4 mb-2">
+                  <Bell className="text-primary" size={32} />
+                  <h2 className="text-4xl font-black text-white">BİLDİRİM GÖNDER</h2>
+                </div>
+                <p className="text-textSec text-lg">Sticky uygulamasını kullanan tüm cihazlara anlık bildirim gönderin.</p>
+              </div>
+
+              <form onSubmit={handleSendNotification} className="space-y-8">
+                <div className="glass p-10 rounded-[2.5rem] bg-gradient-to-br from-primary/5 to-transparent border border-white/5 shadow-2xl space-y-8">
+                  <div className="space-y-3">
+                    <label className="text-xs font-bold text-textSec uppercase tracking-widest flex items-center gap-2">
+                      <Info size={14} className="text-primary" /> BİLDİRİM BAŞLIĞI
+                    </label>
+                    <input
+                      type="text"
+                      value={notifTitle}
+                      onChange={(e) => setNotifTitle(e.target.value)}
+                      placeholder="Sticky"
+                      className="w-full bg-card/60 border border-white/10 rounded-2xl px-5 py-4 text-white font-bold outline-none focus:ring-2 focus:ring-primary focus:bg-background transition-all"
+                    />
+                    <p className="text-[10px] text-textSec font-medium pl-1">Bildirimde görünecek kalın başlık. Boş bırakılırsa "Sticky" yazısı görünecektir.</p>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold text-textSec uppercase tracking-widest flex items-center gap-2">
+                        <MessageSquare size={14} className="text-accent" /> BİLDİRİM MESAJI
+                      </label>
+
+                      {/* Emojis Grid */}
+                      <div className="flex flex-wrap gap-1.5 max-w-[400px] justify-end">
+                        {['😊', '😂', '❤️', '🔥', '✨', '🚀', '🎉', '🌟', '💫', '🎁', '💎', '📱', '🌈', '🎭', '🐱', '🧿', '👑', '⚡', '🔔', '💯'].map(emoji => (
+                          <button
+                            key={emoji}
+                            type="button"
+                            onClick={() => setNotifBody(prev => prev + emoji)}
+                            className="w-8 h-8 flex items-center justify-center bg-card/40 hover:bg-accent/20 border border-white/5 rounded-lg text-sm transition-all hover:scale-110 active:scale-95"
+                          >
+                            {emoji}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <textarea
+                      required
+                      value={notifBody}
+                      onChange={(e) => setNotifBody(e.target.value)}
+                      placeholder="Sana özel harika yeni çıkartmalar geldi! Hemen göz at..."
+                      rows={4}
+                      className="w-full bg-card/60 border border-white/10 rounded-2xl px-5 py-4 text-white font-medium outline-none focus:ring-2 focus:ring-accent focus:bg-background transition-all resize-none shadow-inner"
+                    />
+                    <div className="flex items-center justify-between px-1">
+                      <p className="text-[10px] text-textSec font-medium">Kullanıcıların göreceği ana mesaj metni.</p>
+                      <p className="text-[10px] font-mono text-accent/60 font-bold">{notifBody.length} karakter</p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <label className="text-xs font-bold text-textSec uppercase tracking-widest flex items-center gap-2">
+                      <Package size={14} className="text-warning" /> RESİM URL (OPSİYONEL)
+                    </label>
+                    <input
+                      type="url"
+                      value={notifImageUrl}
+                      onChange={(e) => setNotifImageUrl(e.target.value)}
+                      placeholder="https://example.com/image.webp"
+                      className="w-full bg-card/60 border border-white/10 rounded-2xl px-5 py-4 text-white font-mono text-sm outline-none focus:ring-2 focus:ring-warning focus:bg-background transition-all"
+                    />
+                    <p className="text-[10px] text-textSec font-medium pl-1">Bildirimde görünecek büyük görsel bağlantısı.</p>
+                  </div>
+
+                  <div className="pt-4">
+                    <button
+                      type="submit"
+                      disabled={isSendingNotif || !notifBody}
+                      className={cn(
+                        "w-full py-5 rounded-2xl font-black shadow-xl transition-all flex items-center justify-center gap-3 disabled:opacity-50 text-white",
+                        isSendingNotif ? "bg-hover" : "bg-primary shadow-primary/20 hover:scale-[1.02] active:scale-[0.98]"
+                      )}
+                    >
+                      <Send size={22} className={cn(isSendingNotif && "animate-pulse")} />
+                      {isSendingNotif ? 'GÖNDERİLİYOR...' : 'ŞİMDİ GÖNDER'}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="bg-warning/5 border border-warning/20 p-8 rounded-[2rem] flex items-start gap-5">
+                  <div className="bg-warning/20 p-4 rounded-xl">
+                    <Info className="text-warning" size={24} />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-black text-warning uppercase tracking-tight">Dikkat & İpucu</h4>
+                    <ul className="text-xs text-textSec leading-relaxed mt-2 space-y-1 list-disc pl-4">
+                      <li>Bu bildirim uygulamada "stickers" kanalına abone olan tüm kullanıcılara gider.</li>
+                      <li>Sistemi gereksiz yere meşgul etmemek için günde en fazla 2-3 kez bildirim göndermeniz önerilir.</li>
+                      <li>Mesajın sonuna ilgi çekici emojiler eklemek kullanıcı etkileşimini %20 artırır! 🚀</li>
+                    </ul>
+                  </div>
+                </div>
+              </form>
+            </div>
+          </div>
         ) : activeTab === 'messages' ? (
-          /* Messages Panel */
           <div className="flex-1 overflow-y-auto p-12 custom-scrollbar bg-background">
             <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in duration-500">
               <div className="flex items-center justify-between">
@@ -1479,8 +1861,7 @@ function App() {
                           </button>
                         </div>
                       </div>
-                    ))
-                  )}
+                    )))}
                 </div>
               )}
             </div>
@@ -1488,7 +1869,6 @@ function App() {
         ) : null}
       </main>
 
-      {/* Footer / Status Bar */}
       <footer className="glass h-8 px-6 flex items-center justify-between text-[10px] font-bold text-textSec uppercase tracking-widest border-t border-white/5 fixed bottom-0 left-0 right-0 z-30">
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-2">
@@ -1682,10 +2062,10 @@ function App() {
             {isProcessing ? 'PAKET OLUŞTURULUYOR...' : 'OLUŞTUR VE BAŞLA'}
           </button>
         </div>
-      </Modal >
+      </Modal>
 
       {/* Edit Pack Modal */}
-      < Modal show={showEditPackModal} onClose={() => setShowEditPackModal(false)} title="Uygulama Bilgilerini Düzenle" >
+      <Modal show={showEditPackModal} onClose={() => setShowEditPackModal(false)} title="Uygulama Bilgilerini Düzenle">
         {selectedPack && (
           <div className="space-y-6">
             {/* Çoklu Dil Desteği */}
@@ -1893,50 +2273,52 @@ function App() {
             </button>
           </div>
         )}
-      </Modal >
+      </Modal>
 
       {/* Processing Overlay */}
-      {isProcessing && uploadProgress && (
-        <div className="fixed inset-0 z-[100] bg-background/90 backdrop-blur-xl flex flex-col items-center justify-center space-y-8 animate-in fade-in duration-300 p-6">
-          <div className="relative group">
-            <div className="absolute inset-0 bg-primary/20 blur-[60px] rounded-full animate-pulse" />
-            <div className="relative bg-card/60 p-8 rounded-[3rem] border border-white/10 shadow-2xl backdrop-blur-3xl">
-              <RefreshCcw className="text-primary animate-spin" size={60} />
+      {
+        isProcessing && uploadProgress && (
+          <div className="fixed inset-0 z-[100] bg-background/90 backdrop-blur-xl flex flex-col items-center justify-center space-y-8 animate-in fade-in duration-300 p-6">
+            <div className="relative group">
+              <div className="absolute inset-0 bg-primary/20 blur-[60px] rounded-full animate-pulse" />
+              <div className="relative bg-card/60 p-8 rounded-[3rem] border border-white/10 shadow-2xl backdrop-blur-3xl">
+                <RefreshCcw className="text-primary animate-spin" size={60} />
+              </div>
             </div>
-          </div>
 
-          <div className="text-center space-y-4 max-w-lg">
-            <h3 className="text-3xl font-black text-white tracking-tight uppercase">Çıkartmalar İşleniyor</h3>
-            <div className="bg-white/5 px-6 py-2 rounded-2xl border border-white/5 inline-block">
-              <p className="text-primary font-black uppercase tracking-[0.2em] text-[10px]">
-                {uploadProgress.message || 'Medyalar WhatsApp formatına dönüştürülüyor...'}
+            <div className="text-center space-y-4 max-w-lg">
+              <h3 className="text-3xl font-black text-white tracking-tight uppercase">Çıkartmalar İşleniyor</h3>
+              <div className="bg-white/5 px-6 py-2 rounded-2xl border border-white/5 inline-block">
+                <p className="text-primary font-black uppercase tracking-[0.2em] text-[10px]">
+                  {uploadProgress.message || 'Medyalar WhatsApp formatına dönüştürülüyor...'}
+                </p>
+              </div>
+            </div>
+
+            <div className="w-full max-w-md space-y-4">
+              <div className="flex items-center justify-between text-[10px] font-black text-textSec uppercase tracking-widest px-1">
+                <span>İşlem: {uploadProgress.current} / {uploadProgress.total}</span>
+                <span className="text-primary">{Math.round((uploadProgress.current / uploadProgress.total) * 100)}%</span>
+              </div>
+              <div className="w-full bg-white/5 h-3 rounded-full overflow-hidden border border-white/5 p-1">
+                <div
+                  className="h-full bg-gradient-to-r from-primary via-accent to-primary shadow-[0_0_20px_rgba(0,168,132,0.6)] transition-all duration-700 ease-out rounded-full"
+                  style={{ width: `${(uploadProgress.current / uploadProgress.total) * 100}%` }}
+                />
+              </div>
+            </div>
+
+            <div className="bg-primary/5 border border-primary/20 p-5 rounded-3xl flex items-center gap-4 max-w-sm">
+              <div className="bg-primary/20 p-2 rounded-xl text-primary">
+                <Info size={20} />
+              </div>
+              <p className="text-[10px] text-textMain/70 font-bold uppercase leading-relaxed text-left">
+                Video ve GIF işlemleri işlemci gücü gerektirir. Lütfen işlemi bölmeyin.
               </p>
             </div>
           </div>
-
-          <div className="w-full max-w-md space-y-4">
-            <div className="flex items-center justify-between text-[10px] font-black text-textSec uppercase tracking-widest px-1">
-              <span>İşlem: {uploadProgress.current} / {uploadProgress.total}</span>
-              <span className="text-primary">{Math.round((uploadProgress.current / uploadProgress.total) * 100)}%</span>
-            </div>
-            <div className="w-full bg-white/5 h-3 rounded-full overflow-hidden border border-white/5 p-1">
-              <div
-                className="h-full bg-gradient-to-r from-primary via-accent to-primary shadow-[0_0_20px_rgba(0,168,132,0.6)] transition-all duration-700 ease-out rounded-full"
-                style={{ width: `${(uploadProgress.current / uploadProgress.total) * 100}%` }}
-              />
-            </div>
-          </div>
-
-          <div className="bg-primary/5 border border-primary/20 p-5 rounded-3xl flex items-center gap-4 max-w-sm">
-            <div className="bg-primary/20 p-2 rounded-xl text-primary">
-              <Info size={20} />
-            </div>
-            <p className="text-[10px] text-textMain/70 font-bold uppercase leading-relaxed text-left">
-              Video ve GIF işlemleri işlemci gücü gerektirir. Lütfen işlemi bölmeyin.
-            </p>
-          </div>
-        </div>
-      )}
+        )
+      }
 
     </div >
   );

@@ -50,6 +50,10 @@ object StickerRepository {
         // Helper: Paketleri karışık sırala (ID hash'ine göre tutarlı sıralama)
         fun shufflePacks(packs: List<Pack>) = packs.sortedBy { it.id.hashCode() }
         
+        if (!forceRefresh && allPacksCache.isNotEmpty()) {
+            return@withContext allPacksCache
+        }
+
         val allPacks = mutableListOf<Pack>()
 
         try {
@@ -251,9 +255,17 @@ object StickerRepository {
                 stickers = stickers,
                 isPremium = isPremium,
                 storagePath = data["storagePath"] as? String ?: if (isPremium) "premium_stickers" else "stickers",
-                createdAt = data["created_at"] as? String ?: "",
+                createdAt = when (val time = data["created_at"]) {
+                    is com.google.firebase.Timestamp -> {
+                        val sdf = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+                        sdf.format(time.toDate())
+                    }
+                    is String -> time
+                    else -> ""
+                },
                 category = data["category"] as? String ?: "",
                 downloadCount = (data["download_count"] as? Long)?.toInt() ?: 0,
+                viewCount = (data["view_count"] as? Long)?.toInt() ?: 0,
                 favoriteCount = (data["favorite_count"] as? Long)?.toInt() ?: 0,
                 isAnimated = (data["is_animated"] as? Boolean) ?: (data["animated_sticker_pack"] as? Boolean) ?: false,
                 isActive = data["is_active"] as? Boolean ?: true,

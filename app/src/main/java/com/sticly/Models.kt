@@ -20,12 +20,13 @@ data class Pack(
     @SerializedName("tray_image_file") val tray: String = "",
     @SerializedName("stickers") val stickers: List<Sticker> = emptyList(),
     // Firebase alanları
-    val trayUrl: String = "",
+    var trayUrl: String = "",
     val isPremium: Boolean = false,
     val storagePath: String = "stickers",  // Firebase Storage klasör yolu (stickers veya premium_stickers)
     val createdAt: String = "",  // Oluşturulma tarihi (ISO format)
     val category: String = "",   // Kategori (komik, romantik, spor, dizi_film, vb.)
     val downloadCount: Int = 0,  // İndirme/ekleme sayısı
+    val viewCount: Int = 0,      // Görüntülenme sayısı
     val favoriteCount: Int = 0,  // Favori sayısı
     val isAnimated: Boolean = false, // Animasyonlu paket mi?
     val isActive: Boolean = true, // Paket aktif mi?
@@ -45,7 +46,7 @@ data class Sticker(
     @SerializedName("image_file") val file: String = "",
     @SerializedName("emojis") val emojis: List<String>? = null,
     // Firebase URL
-    val url: String = ""
+    var url: String = ""
 )
 
 data class Response(

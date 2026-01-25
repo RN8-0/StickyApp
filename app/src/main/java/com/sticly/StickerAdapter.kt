@@ -43,11 +43,22 @@ class StickerAdapter(
     override fun onCreateViewHolder(p: ViewGroup, vt: Int) =
         VH(LayoutInflater.from(p.context).inflate(R.layout.item_sticker, p, false))
 
+    // Lazy progress drawable for better performance
+    private fun getProgressDrawable(context: android.content.Context) = CircularProgressDrawable(context).apply {
+        strokeWidth = 5f
+        centerRadius = 30f
+        setColorSchemeColors(
+            context.getColor(R.color.primary),
+            context.getColor(R.color.premium_gold)
+        )
+        start()
+    }
+
     override fun onBindViewHolder(h: VH, pos: Int) {
         val sticker = items[pos]
         val context = h.itemView.context
 
-        // Kilit ikonu gizle
+        // Reset state
         h.lockIcon.visibility = View.GONE
         h.img.alpha = 1f
         h.img.rotation = 0f
@@ -75,69 +86,28 @@ class StickerAdapter(
 
         // Seçim UI'ını güncelle
         val isSelected = selectedPositions.contains(pos)
-        // Silme modunda checkbox container her zaman görünür
         h.checkboxContainer.visibility = if (isSelectionMode) View.VISIBLE else View.GONE
-        // Seçiliyse overlay ve check işareti görünür
         h.selectionOverlay.visibility = if (isSelectionMode && isSelected) View.VISIBLE else View.GONE
         h.selectedCheck.visibility = if (isSelectionMode && isSelected) View.VISIBLE else View.GONE
-        // Seçiliyse checkbox arka planını değiştir
         h.checkboxContainer.setBackgroundResource(
             if (isSelected) R.drawable.checkbox_selected else R.drawable.checkbox_border
         )
 
-        // Circular progress drawable oluştur
-        val circularProgress = CircularProgressDrawable(context).apply {
-            strokeWidth = 5f
-            centerRadius = 30f
-            setColorSchemeColors(
-                context.getColor(R.color.primary),
-                context.getColor(R.color.premium_gold)
-            )
-            start()
-        }
-
-        // Önce cache'de var mı kontrol et (en hızlı)
+        // Cache'de var mı kontrol et (en hızlı)
         val cachedFile = StickerRepository.getCachedStickerPath(context, packId, sticker.file)
 
-        // Glide listener - yükleme durumunu takip et
-        val glideListener = object : RequestListener<Drawable> {
-            override fun onLoadFailed(
-                e: GlideException?,
-                model: Any?,
-                target: Target<Drawable>,
-                isFirstResource: Boolean
-            ): Boolean {
-                h.progressBar.visibility = View.GONE
-                return false
-            }
-
-            override fun onResourceReady(
-                resource: Drawable,
-                model: Any,
-                target: Target<Drawable>?,
-                dataSource: DataSource,
-                isFirstResource: Boolean
-            ): Boolean {
-                h.progressBar.visibility = View.GONE
-                return false
-            }
-        }
-
-        // Cache signature - URL veya dosya adı değişince cache yenilensin
-        val cacheSignature = ObjectKey(sticker.url.ifEmpty { sticker.file })
+        // Glide request manager
+        val glide = Glide.with(context)
 
         when {
-            // 0. Özel paket kontrolü (filesDir/custom_stickers'dan yükle - KALICI DEPOLAMA)
+            // 0. Özel paket kontrolü
             packId.startsWith("custom_") -> {
                 h.progressBar.visibility = View.GONE
-                // KRITIK: filesDir/custom_stickers kullan (kalıcı depolama)
                 val customFile = CustomStickerManager.getCustomStickerPath(context, packId, sticker.file)
-                android.util.Log.d("StickerAdapter", "Loading custom sticker: ${customFile.absolutePath} exists=${customFile.exists()}")
                 if (customFile.exists()) {
-                    Glide.with(context)
-                        .load(customFile)
+                    glide.load(customFile)
                         .signature(ObjectKey(customFile.lastModified()))
-                        .diskCacheStrategy(DiskCacheStrategy.NONE) // Local file, memory cache is enough
+                        .diskCacheStrategy(DiskCacheStrategy.NONE)
                         .into(h.img)
                 } else {
                     h.img.setImageResource(R.drawable.transparent_placeholder)
@@ -146,25 +116,30 @@ class StickerAdapter(
             // 1. Cache'de varsa oradan yükle
             cachedFile.exists() && cachedFile.length() > 0 -> {
                 h.progressBar.visibility = View.GONE
-                Glide.with(context)
-                    .load(cachedFile)
+                glide.load(cachedFile)
                     .signature(ObjectKey(cachedFile.lastModified()))
-                    // .skipMemoryCache(true)
-                    .diskCacheStrategy(DiskCacheStrategy.NONE) // Local file, memory cache is enough
+                    .diskCacheStrategy(DiskCacheStrategy.NONE)
+                    .placeholder(R.drawable.transparent_placeholder)
                     .into(h.img)
             }
             // 2. Firebase URL varsa oradan yükle
             sticker.url.isNotEmpty() -> {
                 h.progressBar.visibility = View.VISIBLE
-                h.progressBar.isIndeterminate = true
-                Glide.with(context)
-                    .load(sticker.url)
-                    .placeholder(circularProgress as Drawable)
-                    .error(R.drawable.transparent_placeholder) // Use transparent placeholder
-                    .signature(cacheSignature)
-                    // .skipMemoryCache(true)
+                glide.load(sticker.url)
+                    .placeholder(getProgressDrawable(context))
+                    .error(R.drawable.transparent_placeholder)
+                    .signature(ObjectKey(sticker.url))
                     .diskCacheStrategy(DiskCacheStrategy.ALL)
-                    .listener(glideListener)
+                    .listener(object : RequestListener<Drawable> {
+                        override fun onLoadFailed(e: GlideException?, m: Any?, t: Target<Drawable>, isF: Boolean): Boolean {
+                            h.progressBar.visibility = View.GONE
+                            return false
+                        }
+                        override fun onResourceReady(r: Drawable, m: Any, t: Target<Drawable>?, d: DataSource, isF: Boolean): Boolean {
+                            h.progressBar.visibility = View.GONE
+                            return false
+                        }
+                    })
                     .into(h.img)
             }
             // 4. Lokal assets'ten yükle (Önceki "3. Lokal assets'ten yükle" bloğu bu sıraya kaydırılıyor)

@@ -32,6 +32,7 @@ export interface StickerPack {
     price_usd: string;
     price_eur: string;
     stickers: Sticker[];
+    created_at?: any;
 }
 
 export interface ContactMessage {

@@ -277,4 +277,37 @@
     <string name="media_load_error">فشل تحميل الوسائط</string>
     <string name="error_occurred">حدث خطأ</string>
     <string name="home_desc">الرئيسية</string>
+
+    <!-- Editor Tool Names -->
+    <string name="change_media_short">تغيير</string>
+    <string name="crop_short">قص</string>
+    <string name="remove_bg_short">الخلفية</string>
+    <string name="add_text_short">نص</string>
+    <string name="add_emoji_short">إيموجي</string>
+    <string name="reset_short">إعادة</string>
+    <string name="border_short">إطار</string>
+    <string name="flip_h_short">أفقي</string>
+    <string name="flip_v_short">عمودي</string>
+    <string name="rotate_short">تدوير</string>
+    <string name="filter_short">فلتر</string>
+    <string name="select_color">اختر اللون</string>
+    <string name="select_font">اختر الخط</string>
+    <string name="brightness_short">السطوع</string>
+    <string name="contrast_short">التباين</string>
+    <string name="saturation_short">التشبع</string>
+    <string name="draw_short">رسم</string>
+    <string name="eraser_short">ممحاة</string>
+    <string name="select_filter">اختر فلتر</string>
+    <string name="original">الأصلي</string>
+    <string name="grayscale">رمادي</string>
+    <string name="sepia">بني</string>
+    <string name="vivid">حيوي</string>
+    <string name="cool">بارد</string>
+    <string name="warm">دافئ</string>
+    <string name="vintage">كلاسيكي</string>
+    <string name="adjustments">تعديلات</string>
+    <string name="et_sticker_text_hint">أدخل النص…</string>
+    <string name="btn_add_text_label">إضافة نص</string>
+    <string name="text_size_label">حجم النص</string>
+    <string name="emoji_picker_title">اختر إيموجي</string>
 </resources>

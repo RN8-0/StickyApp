@@ -147,8 +147,7 @@ class PackAdapter(
                 pack.trayUrl.isNotEmpty() -> {
                     Glide.with(context)
                         .load(pack.trayUrl)
-                        .skipMemoryCache(true)
-                        .diskCacheStrategy(DiskCacheStrategy.NONE)
+                        .diskCacheStrategy(DiskCacheStrategy.ALL)
                         .into(h.tray)
                 }
                 else -> {

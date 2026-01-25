@@ -206,6 +206,7 @@
     <string name="delete_mode">Silme Modu</string>
 
     <!-- Loading States -->
+    <string name="stickers_preparing">WhatsApp için çıkartmalar hazırlanıyor…</string>
     <string name="stickers_loading">Çıkartmalar yükleniyor…</string>
     <string name="stickers_load_failed">Çıkartmalar yüklenemedi</string>
 
@@ -280,4 +281,37 @@
     <string name="media_load_error">Medya yüklenemedi</string>
     <string name="error_occurred">Hata oluştu</string>
     <string name="home_desc">Ana Sayfa</string>
+
+    <!-- Editor Tool Names -->
+    <string name="change_media_short">Değiştir</string>
+    <string name="crop_short">Kırp</string>
+    <string name="remove_bg_short">Arkaplan</string>
+    <string name="add_text_short">Metin</string>
+    <string name="add_emoji_short">Emoji</string>
+    <string name="reset_short">Sıfırla</string>
+    <string name="border_short">Çerçeve</string>
+    <string name="flip_h_short">Yatay</string>
+    <string name="flip_v_short">Dikey</string>
+    <string name="rotate_short">Döndür</string>
+    <string name="filter_short">Filtre</string>
+    <string name="select_color">Renk Seç</string>
+    <string name="select_font">Font Seç</string>
+    <string name="brightness_short">Parlaklık</string>
+    <string name="contrast_short">Kontrast</string>
+    <string name="saturation_short">Doygunluk</string>
+    <string name="draw_short">Çiz</string>
+    <string name="eraser_short">Silgi</string>
+    <string name="select_filter">Filtre Seç</string>
+    <string name="original">Orijinal</string>
+    <string name="grayscale">Siyah-Beyaz</string>
+    <string name="sepia">Sepya</string>
+    <string name="vivid">Canlı</string>
+    <string name="cool">Soğuk</string>
+    <string name="warm">Sıcak</string>
+    <string name="vintage">Vintage</string>
+    <string name="adjustments">Ayarlamalar</string>
+    <string name="et_sticker_text_hint">Metninizi girin…</string>
+    <string name="btn_add_text_label">Metin Ekle</string>
+    <string name="text_size_label">Metin Boyutu</string>
+    <string name="emoji_picker_title">Emoji Seç</string>
 </resources>

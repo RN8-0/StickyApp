@@ -12,14 +12,14 @@ if (keystorePropertiesFile.exists()) {
 
 android {
     namespace 'com.sticly'
-    compileSdk 34
+    compileSdk 35
 
     defaultConfig {
         applicationId "com.sticly"
         minSdk 24
-        targetSdk 34
-        versionCode 1
-        versionName "1.0"
+        targetSdk 35
+        versionCode 2
+        versionName "1.0.1"
     }
 
     signingConfigs {
@@ -83,6 +83,9 @@ dependencies {
 
     // ML Kit Selfie Segmentation
     implementation 'com.google.mlkit:segmentation-selfie:16.0.0-beta4'
+
+    // uCrop for image cropping
+    implementation 'com.github.yalantis:ucrop:2.2.8'
 
     // FFmpeg Kit for video/GIF to WebP conversion (Temporarily disabled due to dependency issues)
     // implementation 'com.arthenica:ffmpeg-kit-full:4.5'

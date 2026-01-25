@@ -277,4 +277,37 @@
     <string name="media_load_error">无法加载媒体素材</string>
     <string name="error_occurred">发生错误</string>
     <string name="home_desc">首页</string>
+
+    <!-- Editor Tool Names -->
+    <string name="change_media_short">更换</string>
+    <string name="crop_short">裁剪</string>
+    <string name="remove_bg_short">背景</string>
+    <string name="add_text_short">文字</string>
+    <string name="add_emoji_short">表情</string>
+    <string name="reset_short">重置</string>
+    <string name="border_short">边框</string>
+    <string name="flip_h_short">水平翻转</string>
+    <string name="flip_v_short">垂直翻转</string>
+    <string name="rotate_short">旋转</string>
+    <string name="filter_short">滤镜</string>
+    <string name="select_color">选择颜色</string>
+    <string name="select_font">选择字体</string>
+    <string name="brightness_short">亮度</string>
+    <string name="contrast_short">对比度</string>
+    <string name="saturation_short">饱和度</string>
+    <string name="draw_short">画笔</string>
+    <string name="eraser_short">橡皮擦</string>
+    <string name="select_filter">选择滤镜</string>
+    <string name="original">原图</string>
+    <string name="grayscale">黑白</string>
+    <string name="sepia">复古</string>
+    <string name="vivid">鲜艳</string>
+    <string name="cool">冷色</string>
+    <string name="warm">暖色</string>
+    <string name="vintage">怀旧</string>
+    <string name="adjustments">调整</string>
+    <string name="et_sticker_text_hint">输入文字…</string>
+    <string name="btn_add_text_label">添加文字</string>
+    <string name="text_size_label">文字大小</string>
+    <string name="emoji_picker_title">选择表情</string>
 </resources>

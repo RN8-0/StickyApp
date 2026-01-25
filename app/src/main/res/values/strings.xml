@@ -208,6 +208,7 @@
     <string name="delete_mode">Delete Mode</string>
 
     <!-- Loading States -->
+    <string name="stickers_preparing">Preparing stickers for WhatsApp…</string>
     <string name="stickers_loading">Loading stickers…</string>
     <string name="stickers_load_failed">Stickers could not be loaded</string>
 
@@ -282,4 +283,37 @@
     <string name="media_load_error">Media could not be loaded</string>
     <string name="error_occurred">An error occurred</string>
     <string name="home_desc">Home</string>
+    <string name="change_media_short">Change</string>
+    <string name="crop_short">Crop</string>
+    <string name="remove_bg_short">Remove BG</string>
+    <string name="add_text_short">Add Text</string>
+    <string name="add_emoji_short">Emoji</string>
+    <string name="reset_short">Reset</string>
+    <string name="et_sticker_text_hint">Enter your text…</string>
+    <string name="btn_add_text_label">Add Text</string>
+    <string name="text_size_label">Text Size</string>
+    <string name="emoji_picker_title">Select Emoji</string>
+
+    <!-- Editor Tool Names -->
+    <string name="border_short">Border</string>
+    <string name="flip_h_short">Flip H</string>
+    <string name="flip_v_short">Flip V</string>
+    <string name="rotate_short">Rotate</string>
+    <string name="filter_short">Filter</string>
+    <string name="select_color">Select Color</string>
+    <string name="select_font">Select Font</string>
+    <string name="brightness_short">Bright</string>
+    <string name="contrast_short">Contrast</string>
+    <string name="saturation_short">Saturation</string>
+    <string name="draw_short">Draw</string>
+    <string name="eraser_short">Eraser</string>
+    <string name="select_filter">Select Filter</string>
+    <string name="original">Original</string>
+    <string name="grayscale">Grayscale</string>
+    <string name="sepia">Sepia</string>
+    <string name="vivid">Vivid</string>
+    <string name="cool">Cool</string>
+    <string name="warm">Warm</string>
+    <string name="vintage">Vintage</string>
+    <string name="adjustments">Adjustments</string>
 </resources>

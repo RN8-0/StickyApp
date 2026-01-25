@@ -6,6 +6,8 @@ import android.view.View
 import android.widget.ProgressBar
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.textfield.TextInputEditText
@@ -47,6 +49,21 @@ class ContactActivity : AppCompatActivity() {
 
         btnSend.setOnClickListener {
             validateAndSend()
+        }
+        setupEdgeToEdge()
+    }
+
+    private fun setupEdgeToEdge() {
+        val root = findViewById<android.view.View>(R.id.contact_root)
+        val toolbar = findViewById<android.view.View>(R.id.toolbar)
+        
+        ViewCompat.setOnApplyWindowInsetsListener(root) { _, insets ->
+            val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            
+            toolbar?.setPadding(toolbar.paddingLeft, systemBars.top, toolbar.paddingRight, toolbar.paddingBottom)
+            root?.setPadding(root.paddingLeft, root.paddingTop, root.paddingRight, systemBars.bottom)
+            
+            insets
         }
     }
 

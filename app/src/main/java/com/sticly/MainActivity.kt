@@ -27,6 +27,8 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import androidx.viewpager2.widget.ViewPager2
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import com.google.android.material.chip.Chip
 import com.google.android.material.chip.ChipGroup
 import com.google.android.material.switchmaterial.SwitchMaterial
@@ -34,9 +36,13 @@ import com.google.android.material.textfield.TextInputEditText
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.messaging.FirebaseMessaging
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 
 class MainActivity : AppCompatActivity() {
 
@@ -131,6 +137,21 @@ class MainActivity : AppCompatActivity() {
         StickerRepository.startObservingPacks(this)
         observePacksUpdateFlow()
         checkAndRequestNotificationPermission()
+        setupEdgeToEdge()
+    }
+
+    private fun setupEdgeToEdge() {
+        val toolbarLayout = findViewById<View>(R.id.toolbarLayout)
+        val bottomNav = findViewById<View>(R.id.bottomNav)
+        
+        ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.drawer)) { _, insets ->
+            val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            
+            toolbarLayout?.setPadding(toolbarLayout.paddingLeft, systemBars.top, toolbarLayout.paddingRight, toolbarLayout.paddingBottom)
+            bottomNav?.setPadding(bottomNav.paddingLeft, bottomNav.paddingTop, bottomNav.paddingRight, systemBars.bottom)
+            
+            insets
+        }
     }
 
     private fun initViews() {
@@ -682,7 +703,36 @@ class MainActivity : AppCompatActivity() {
             FilterType.CUSTOM -> filtered.filter { it.category == "custom" }
         }
 
-        val sorted = filtered.sortedByDescending { it.downloadCount }
+        // Profesyonel Sıralama Algoritması (YouTube/Play Store Benzeri)
+        // Skor = ( (İndirme + Favori*5) * (1 + CVR) ) * Yenilik_Bonusu
+        val sorted = filtered.sortedByDescending { pack ->
+            val downloads = pack.downloadCount.toDouble()
+            val views = pack.viewCount.toDouble()
+            val favorites = pack.favoriteCount.toDouble()
+            
+            // 1. Verimlilik (CVR)
+            val cvr = if (views > 0) downloads / views else 0.0
+            
+            // 2. Etkileşim Skoru (Favoriler indirmeden 5 kat daha değerli)
+            val engagementScore = downloads + (favorites * 5.0)
+            
+            // 3. Yenilik Bonusu (Son 7 gün içindeyse skoru 3.5 katına çıkart - Daha belirgin olması için artırıldı)
+            var freshnessMultiplier = 1.0
+            if (pack.createdAt.isNotEmpty()) {
+                try {
+                    val format = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+                    val createdDate = format.parse(pack.createdAt)
+                    if (createdDate != null) {
+                        val diffDays = java.util.concurrent.TimeUnit.MILLISECONDS.toDays(System.currentTimeMillis() - createdDate.time)
+                        if (diffDays <= 7) freshnessMultiplier = 3.5 
+                    }
+                } catch (e: Exception) {}
+            }
+            
+            val finalScore = (engagementScore * (1.0 + cvr)) * freshnessMultiplier
+            Log.d("Ranking", "Pack: ${pack.name} | DL: $downloads | Fav: $favorites | CVR: ${String.format("%.2f", cvr)} | Fresh: $freshnessMultiplier | SCORE: ${String.format("%.1f", finalScore)}")
+            finalScore
+        }
 
         adapter.updateList(sorted)
     }
@@ -923,12 +973,56 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun deleteCustomPack(pack: Pack) {
+        lifecycleScope.launch {
+            val isWhitelisted = withContext(Dispatchers.IO) {
+                WhitelistCheck.isWhitelisted(this@MainActivity, pack.id)
+            }
+
+            if (isWhitelisted) {
+                showDeleteOptionsDialog(pack)
+            } else {
+                confirmAndDirectDelete(pack)
+            }
+        }
+    }
+
+    private fun showDeleteOptionsDialog(pack: Pack) {
+        val dialog = com.google.android.material.bottomsheet.BottomSheetDialog(this, R.style.TransparentBottomSheetDialog)
+        val view = layoutInflater.inflate(R.layout.dialog_delete_options, null)
+        dialog.setContentView(view)
+
+        view.findViewById<TextView>(R.id.tvTitle).text = pack.localizedName
+        
+        view.findViewById<View>(R.id.cardDeleteLocal).setOnClickListener {
+            dialog.dismiss()
+            confirmAndDirectDelete(pack)
+        }
+        
+        view.findViewById<View>(R.id.cardDeleteWhatsApp).setOnClickListener {
+            dialog.dismiss()
+            triggerWhatsAppRemove(pack)
+        }
+        
+        view.findViewById<Button>(R.id.btnCancel).setOnClickListener {
+            dialog.dismiss()
+        }
+
+        dialog.show()
+    }
+
+    private fun triggerWhatsAppRemove(pack: Pack) {
         pendingDeletePackId = pack.id
         waitingForWhatsAppReturn = true
-
+        
         lifecycleScope.launch {
-            wasPackInWhatsAppBeforeDelete = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            wasPackInWhatsAppBeforeDelete = withContext(Dispatchers.IO) {
                 WhitelistCheck.isWhitelisted(this@MainActivity, pack.id)
+            }
+
+            if (!wasPackInWhatsAppBeforeDelete) {
+                Toast.makeText(this@MainActivity, "Paket WhatsApp'ta ekli değil. Sadece uygulamadan siliniyor.", Toast.LENGTH_SHORT).show()
+                confirmAndDirectDelete(pack)
+                return@launch
             }
 
             val intent = Intent().apply {
@@ -944,9 +1038,25 @@ class MainActivity : AppCompatActivity() {
             } catch (e: Exception) {
                 pendingDeletePackId = null
                 waitingForWhatsAppReturn = false
-                Toast.makeText(this@MainActivity, "WhatsApp not installed", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@MainActivity, "WhatsApp yüklü değil", Toast.LENGTH_SHORT).show()
+                confirmAndDirectDelete(pack)
             }
         }
+    }
+
+    private fun confirmAndDirectDelete(pack: Pack) {
+        com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.delete_pack)
+            .setMessage(R.string.delete_pack_confirm)
+            .setPositiveButton(R.string.yes) { _, _ ->
+                if (CustomStickerManager.deletePack(this, pack.id)) {
+                    PreferencesHelper.removeInstalledPack(this, pack.id)
+                    Toast.makeText(this, "Paket başarıyla silindi", Toast.LENGTH_SHORT).show()
+                    refreshPacks()
+                }
+            }
+            .setNegativeButton(R.string.no, null)
+            .show()
     }
 
     @Suppress("DEPRECATION")

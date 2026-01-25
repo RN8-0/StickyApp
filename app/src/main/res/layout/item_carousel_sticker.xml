@@ -21,7 +21,7 @@
             android:layout_height="wrap_content"
             android:layout_gravity="center_vertical|start"
             android:orientation="vertical"
-            android:layout_marginEnd="160dp">
+            android:layout_marginEnd="130dp">
 
             <TextView
                 android:id="@+id/txtName"
@@ -47,8 +47,8 @@
         <!-- Sticker Preview ONLY (Far Right - Vertically Centered) -->
         <ImageView
             android:id="@+id/id_imgTray_transparent"
-            android:layout_width="150dp"
-            android:layout_height="150dp"
+            android:layout_width="120dp"
+            android:layout_height="120dp"
             android:layout_gravity="center_vertical|end"
             android:padding="4dp"
             android:scaleType="fitCenter" />
