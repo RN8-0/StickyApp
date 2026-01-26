@@ -145,37 +145,21 @@
             android:layout_height="match_parent"
             android:visibility="gone">
 
-            <!-- Top Tools -->
-            <LinearLayout
-                android:id="@+id/topToolsPanel"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center"
-                android:padding="8dp"
-                android:background="@drawable/bg_editor_container"
-                android:layout_margin="16dp"
-                app:layout_constraintTop_toTopOf="parent">
-                <include layout="@layout/item_editor_tool" android:id="@+id/toolReset" />
-                <include layout="@layout/item_editor_tool" android:id="@+id/toolChangeMedia" />
-                <include layout="@layout/item_editor_tool" android:id="@+id/toolCrop" />
-                <include layout="@layout/item_editor_tool" android:id="@+id/toolUndo" />
-            </LinearLayout>
+
 
             <!-- Preview Canvas -->
             <androidx.cardview.widget.CardView
                 android:id="@+id/previewCard"
                 android:layout_width="0dp"
                 android:layout_height="0dp"
-                app:cardCornerRadius="32dp"
-                app:cardElevation="8dp"
+                app:cardCornerRadius="24dp"
+                app:cardElevation="0dp"
                 app:cardBackgroundColor="@color/card_bg"
-                app:layout_constraintTop_toBottomOf="@id/topToolsPanel"
+                app:layout_constraintTop_toTopOf="parent"
                 app:layout_constraintBottom_toTopOf="@id/bottomToolsLayout"
                 app:layout_constraintLeft_toLeftOf="parent"
                 app:layout_constraintRight_toRightOf="parent"
-                android:layout_marginHorizontal="16dp"
-                android:layout_marginBottom="16dp">
+                android:layout_margin="12dp">
 
                 <FrameLayout
                     android:id="@+id/stickerEditorView"
@@ -188,7 +172,6 @@
                         android:layout_width="match_parent"
                         android:layout_height="match_parent"
                         android:scaleType="fitCenter"
-                        android:padding="24dp"
                         android:visibility="gone" />
 
                     <!-- Placeholder -->
@@ -249,13 +232,21 @@
                     android:layout_height="wrap_content"
                     android:scrollbars="none"
                     android:clipToPadding="false"
-                    android:layout_marginBottom="8dp">
+                    android:fillViewport="true"
+                    android:layout_marginBottom="12dp">
 
                     <LinearLayout
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:orientation="horizontal"
+                        android:gravity="center"
+                        android:paddingHorizontal="16dp"
                         android:paddingVertical="4dp">
+                        <include layout="@layout/item_editor_tool" android:id="@+id/toolReset" />
+                        <include layout="@layout/item_editor_tool" android:id="@+id/toolUndo" />
+                        <include layout="@layout/item_editor_tool" android:id="@+id/toolChangeMedia" />
+                        <include layout="@layout/item_editor_tool" android:id="@+id/toolCrop" />
+                        <View android:layout_width="1dp" android:layout_height="24dp" android:background="#20000000" android:layout_marginHorizontal="8dp" />
                         <include layout="@layout/item_editor_tool" android:id="@+id/toolRemoveBg" />
                         <include layout="@layout/item_editor_tool" android:id="@+id/toolBrush" />
                         <include layout="@layout/item_editor_tool" android:id="@+id/toolEraser" />

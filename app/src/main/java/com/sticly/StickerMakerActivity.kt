@@ -31,17 +31,21 @@ import android.text.TextWatcher
 // import com.arthenica.ffmpegkit.ReturnCode
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.textfield.TextInputEditText
-import com.google.mlkit.vision.common.InputImage
-import com.google.mlkit.vision.segmentation.Segmentation
-import com.google.mlkit.vision.segmentation.Segmenter
-import com.google.mlkit.vision.segmentation.SegmentationMask
-import com.google.mlkit.vision.segmentation.selfie.SelfieSegmenterOptions
+import com.google.mediapipe.framework.image.BitmapImageBuilder
+import com.google.mediapipe.framework.image.MPImage
+import com.google.mediapipe.framework.image.ByteBufferExtractor
+import com.google.mediapipe.tasks.core.BaseOptions
+import com.google.mediapipe.tasks.vision.core.RunningMode
+import com.google.mediapipe.tasks.vision.imagesegmenter.ImageSegmenter
+import com.google.mediapipe.tasks.vision.imagesegmenter.ImageSegmenter.ImageSegmenterOptions
+import java.nio.ByteBuffer
 import java.io.File
 import java.io.FileOutputStream
 import java.util.concurrent.TimeUnit
 import com.yalantis.ucrop.UCrop
 import com.yalantis.ucrop.UCropActivity
 import android.view.MotionEvent
+import android.view.ScaleGestureDetector
 import android.graphics.drawable.BitmapDrawable
 import android.view.Gravity
 import android.view.ViewGroup
@@ -109,7 +113,14 @@ class StickerMakerActivity : AppCompatActivity() {
     private var currentFilterMatrix: ColorMatrix? = null
     private var selectedFont = Typeface.DEFAULT_BOLD
 
-    private lateinit var segmenter: Segmenter
+    private var imageSegmenter: ImageSegmenter? = null
+    
+    private lateinit var scaleDetector: ScaleGestureDetector
+    private var scaleFactor = 1f
+    private var lastTouchX = 0f
+    private var lastTouchY = 0f
+    private var posX = 0f
+    private var posY = 0f
 
     private var selectedBitmap: Bitmap? = null
     private var originalBitmap: Bitmap? = null
@@ -169,11 +180,19 @@ class StickerMakerActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_sticker_maker)
 
-        // ML Kit Segmenter
-        val options = SelfieSegmenterOptions.Builder()
-            .setDetectorMode(SelfieSegmenterOptions.SINGLE_IMAGE_MODE)
-            .build()
-        segmenter = Segmentation.getClient(options)
+        // MediaPipe Image Segmenter
+        try {
+            val baseOptionsBuilder = BaseOptions.builder().setModelAssetPath("selfie_segmenter.tflite")
+            val optionsBuilder = ImageSegmenterOptions.builder()
+                .setBaseOptions(baseOptionsBuilder.build())
+                .setRunningMode(RunningMode.IMAGE)
+                .setOutputCategoryMask(true)
+                .setOutputConfidenceMasks(false)
+            imageSegmenter = ImageSegmenter.createFromOptions(this, optionsBuilder.build())
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
 
         targetPackId = intent.getStringExtra("packId")
 
@@ -191,6 +210,45 @@ class StickerMakerActivity : AppCompatActivity() {
         editorContainer = findViewById(R.id.editorContainer)
         typeSelectionContainer = findViewById(R.id.typeSelectionContainer)
         toolsPanel = editorContainer
+
+        // Initialize scale detector for Pinch-to-Zoom & Pan
+        scaleDetector = ScaleGestureDetector(this, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
+            override fun onScale(detector: ScaleGestureDetector): Boolean {
+                scaleFactor *= detector.scaleFactor
+                scaleFactor = scaleFactor.coerceIn(0.5f, 5.0f)
+                imagePreview.scaleX = scaleFactor
+                imagePreview.scaleY = scaleFactor
+                return true
+            }
+        })
+
+        imagePreview.setOnTouchListener { view, event ->
+            scaleDetector.onTouchEvent(event)
+            
+            // Handle panning when zoomed
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    lastTouchX = event.rawX
+                    lastTouchY = event.rawY
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    if (!scaleDetector.isInProgress) {
+                        val dx = event.rawX - lastTouchX
+                        val dy = event.rawY - lastTouchY
+                        
+                        posX += dx
+                        posY += dy
+                        
+                        view.translationX = posX
+                        view.translationY = posY
+                        
+                        lastTouchX = event.rawX
+                        lastTouchY = event.rawY
+                    }
+                }
+            }
+            true
+        }
         
         // Tool Views Binding
         toolChangeMedia = findViewById(R.id.toolChangeMedia)
@@ -416,9 +474,16 @@ class StickerMakerActivity : AppCompatActivity() {
         toolCrop.findViewById<ImageView>(R.id.icon).setImageResource(R.drawable.ic_crop)
         toolCrop.findViewById<TextView>(R.id.title).text = getString(R.string.crop_short)
 
-        // Remove Bg
-        toolRemoveBg.findViewById<ImageView>(R.id.icon).setImageResource(R.drawable.ic_check_circle)
-        toolRemoveBg.findViewById<TextView>(R.id.title).text = getString(R.string.remove_bg_short)
+        // Remove Bg - Premium Style (Yellow + Star)
+        toolRemoveBg.findViewById<com.google.android.material.card.MaterialCardView>(R.id.cardView).setCardBackgroundColor(Color.parseColor("#FFD700")) // Gold/Yellow
+        toolRemoveBg.findViewById<ImageView>(R.id.icon).apply {
+            setImageResource(R.drawable.ic_premium)
+            imageTintList = ColorStateList.valueOf(Color.BLACK)
+        }
+        toolRemoveBg.findViewById<TextView>(R.id.title).apply {
+            text = getString(R.string.remove_bg_short)
+            setTextColor(Color.parseColor("#8B4513")) // Brownish for contrast
+        }
 
         // Text
         toolText.findViewById<ImageView>(R.id.icon).setImageResource(R.drawable.ic_text)
@@ -549,10 +614,26 @@ class StickerMakerActivity : AppCompatActivity() {
         val defaultColor = ContextCompat.getColor(this, R.color.text_primary)
         val tools = listOf(toolRemoveBg, toolText, toolEmoji, toolBorder, toolFlipH, toolFlipV, toolRotate, toolFilters, toolAdjustments, toolBrush, toolEraser)
         tools.forEach { tool ->
-            tool.background = null
-            tool.findViewById<ImageView>(R.id.icon)?.imageTintList = ColorStateList.valueOf(defaultColor)
+            if (tool != toolRemoveBg) {
+                tool.background = null
+                tool.findViewById<ImageView>(R.id.icon)?.imageTintList = ColorStateList.valueOf(defaultColor)
+            } else {
+                // Keep premium style but maybe add a border if selected
+                if (view == toolRemoveBg) {
+                    tool.findViewById<com.google.android.material.card.MaterialCardView>(R.id.cardView)?.apply {
+                        strokeColor = accentColor
+                        strokeWidth = 4
+                    }
+                } else {
+                    tool.findViewById<com.google.android.material.card.MaterialCardView>(R.id.cardView)?.apply {
+                        strokeWidth = 0
+                    }
+                }
+            }
         }
-        view?.findViewById<ImageView>(R.id.icon)?.imageTintList = ColorStateList.valueOf(accentColor)
+        if (view != toolRemoveBg) {
+            view?.findViewById<ImageView>(R.id.icon)?.imageTintList = ColorStateList.valueOf(accentColor)
+        }
         selectedToolView = view
 
         // Pause drawing if switching tools
@@ -1471,22 +1552,34 @@ class StickerMakerActivity : AppCompatActivity() {
 
     private fun addOutlineInternal(src: Bitmap, width: Int, color: Int): Bitmap {
         if (width <= 0) return src
-        // Optimized for speed: Use a lower-precision alpha extraction for preview if needed
-        // For now, using a highly optimized draw loop
+        
+        val radius = width.toFloat()
+        
+        // Optimize: Cache the mask if the source bitmap haven't changed in shape (alpha)
+        if (maskSourceBitmap != src || cachedMaskAlpha == null) {
+            maskSourceBitmap = src
+            cachedMaskAlpha?.recycle()
+            cachedMaskAlpha = src.extractAlpha()
+        }
+        
+        val maskAlpha = cachedMaskAlpha ?: return src
+        
+        // Output needs to be slightly larger to accommodate the border if it's thick
+        // But for sticker maker, we keep original size to avoid scale issues, and instead 
+        // rely on internal padding if needed. For now, matching src size.
         val output = Bitmap.createBitmap(src.width, src.height, src.config ?: Bitmap.Config.ARGB_8888)
         val canvas = Canvas(output)
         
-        val radius = width.toFloat()
-        // Use PorterDuff for instant colorization of the copies
-        val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
         paint.colorFilter = PorterDuffColorFilter(color, PorterDuff.Mode.SRC_IN)
         
-        val steps = 8 // Perfect balance between quality and speed
+        // Draw the outline in multiple steps for a perfect solid border
+        val steps = 24 // High quality for "Edge Detection" style contour
         for (i in 0 until steps) {
             val angle = 2.0 * Math.PI * i / steps
             val dx = (radius * Math.cos(angle)).toFloat()
             val dy = (radius * Math.sin(angle)).toFloat()
-            canvas.drawBitmap(src, dx, dy, paint)
+            canvas.drawBitmap(maskAlpha, dx, dy, paint)
         }
         
         // Draw original on top
@@ -1955,7 +2048,7 @@ class StickerMakerActivity : AppCompatActivity() {
 
                 // Reset Remove BG Tool UI
                 toolRemoveBg.findViewById<TextView>(R.id.title).text = getString(R.string.remove_bg_short)
-                toolRemoveBg.findViewById<ImageView>(R.id.icon).setImageResource(R.drawable.ic_sticker)
+                toolRemoveBg.findViewById<ImageView>(R.id.icon).setImageResource(R.drawable.ic_premium)
             }
         } else {
             // If no background removal, reset to original
@@ -2014,6 +2107,16 @@ class StickerMakerActivity : AppCompatActivity() {
         originalBitmap = null
         backgroundRemoved = false
         imagePreview.visibility = View.GONE
+        
+        // Reset zoom/pan
+        scaleFactor = 1f
+        posX = 0f
+        posY = 0f
+        imagePreview.scaleX = 1f
+        imagePreview.scaleY = 1f
+        imagePreview.translationX = 0f
+        imagePreview.translationY = 0f
+        
         placeholderContainer.visibility = View.VISIBLE
         btnAddToPack.visibility = View.GONE
         tvMediaInfo.visibility = View.GONE
@@ -2057,7 +2160,7 @@ class StickerMakerActivity : AppCompatActivity() {
                         
                         // Reset Remove BG Tool UI
                         toolRemoveBg.findViewById<TextView>(R.id.title).text = getString(R.string.remove_bg_short)
-                        toolRemoveBg.findViewById<ImageView>(R.id.icon).setImageResource(R.drawable.ic_sticker)
+                        toolRemoveBg.findViewById<ImageView>(R.id.icon).setImageResource(R.drawable.ic_premium)
                         
                         imagePreview.setImageBitmap(selectedBitmap)
                         imagePreview.visibility = View.VISIBLE
@@ -2108,86 +2211,70 @@ class StickerMakerActivity : AppCompatActivity() {
     }
 
     private fun processRemoveBackground(bitmap: Bitmap) {
-        showProcessingOverlay(getString(R.string.processing_background), getString(R.string.ai_analyzing), R.drawable.ic_photo)
+        val segmenter = imageSegmenter
+        if (segmenter == null) {
+            Toast.makeText(this, "MediaPipe segmenter initialized değil. selfie_segmenter.tflite dosyası eksik olabilir.", Toast.LENGTH_LONG).show()
+            return
+        }
 
-        val inputImage = InputImage.fromBitmap(bitmap, 0)
-        segmenter.process(inputImage)
-            .addOnSuccessListener { mask: SegmentationMask ->
-                lifecycleScope.launch(Dispatchers.Default) {
-                    try {
-                        val maskBuffer = mask.buffer
-                        val width = bitmap.width
-                        val height = bitmap.height
-                        val resultBitmap = bitmap.copy(Bitmap.Config.ARGB_8888, true)
-                        val pixels = IntArray(width * height)
-                        bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
+        showProcessingOverlay(getString(R.string.processing_background), getString(R.string.ai_analyzing), R.drawable.ic_premium)
 
-                        // Read confidence values into array for processing
-                        val confidences = FloatArray(width * height)
-                        maskBuffer.rewind()
-                        for (i in confidences.indices) {
-                            if (maskBuffer.hasRemaining()) {
-                                confidences[i] = maskBuffer.float
-                            }
-                        }
-
-                        // Apply soft edge removal with better threshold
-                        // Lower threshold = more background removed
-                        val threshold = 0.3f
-                        val softEdgeWidth = 0.2f // For anti-aliasing
-
-                        for (y in 0 until height) {
-                            for (x in 0 until width) {
-                                val pos = y * width + x
-                                val confidence = confidences[pos]
-
-                                if (confidence < threshold) {
-                                    // Fully transparent - background
-                                    pixels[pos] = Color.TRANSPARENT
-                                } else if (confidence < threshold + softEdgeWidth) {
-                                    // Soft edge - partial transparency for anti-aliasing
-                                    val alpha = ((confidence - threshold) / softEdgeWidth * 255).toInt()
-                                    val originalColor = pixels[pos]
-                                    pixels[pos] = Color.argb(
-                                        alpha,
-                                        Color.red(originalColor),
-                                        Color.green(originalColor),
-                                        Color.blue(originalColor)
-                                    )
-                                }
-                                // else: keep original pixel
-                            }
-                        }
-
-                        resultBitmap.setPixels(pixels, 0, width, 0, 0, width, height)
-
-                        // Apply edge smoothing
-                        val smoothedBitmap = applyEdgeSmoothing(resultBitmap)
-
-                        withContext(Dispatchers.Main) {
-                            contentBitmap = smoothedBitmap
-                            applyAllEffects()
-                            backgroundRemoved = true
-
-                            toolRemoveBg.findViewById<TextView>(R.id.title).text = getString(R.string.undo)
-                            toolRemoveBg.findViewById<ImageView>(R.id.icon).setImageResource(R.drawable.ic_restore)
-
-                            hideProcessingOverlay()
-                        }
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                        withContext(Dispatchers.Main) {
-                            hideProcessingOverlay()
-                            Toast.makeText(this@StickerMakerActivity, getString(R.string.bg_removal_error), Toast.LENGTH_SHORT).show()
-                        }
+        lifecycleScope.launch(Dispatchers.Default) {
+            try {
+                // Convert bitmap to MediaPipe Image
+                val mpImage = BitmapImageBuilder(bitmap).build()
+                
+                // Run segmentation
+                val result = segmenter.segment(mpImage)
+                val categoryMask = result.categoryMask().get()
+                
+                val width = bitmap.width
+                val height = bitmap.height
+                
+                val byteBuffer = ByteBufferExtractor.extract(categoryMask)
+                byteBuffer.rewind()
+                
+                val resultBitmap = bitmap.copy(Bitmap.Config.ARGB_8888, true)
+                val pixels = IntArray(width * height)
+                bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
+                
+                // MediaPipe category mask: In Selfie Segmenter, foreground is typically 0, background is others.
+                // Let's ensure we are removing the background correctly.
+                for (i in pixels.indices) {
+                    val category = byteBuffer.get().toInt() and 0xFF
+                    if (category != 0) {
+                        pixels[i] = Color.TRANSPARENT
                     }
                 }
-            }
-            .addOnFailureListener { e ->
+                
+                resultBitmap.setPixels(pixels, 0, width, 0, 0, width, height)
+                
+                // Apply edge smoothing
+                val smoothedBitmap = applyEdgeSmoothing(resultBitmap)
+                
+                withContext(Dispatchers.Main) {
+                    contentBitmap = smoothedBitmap
+                    
+                    // Auto-apply a white border (contour) for better sticker look
+                    borderSize = 15f
+                    borderColor = Color.WHITE
+                    
+                    applyAllEffects()
+                    backgroundRemoved = true
+                    
+                    toolRemoveBg.findViewById<TextView>(R.id.title).text = getString(R.string.undo)
+                    toolRemoveBg.findViewById<ImageView>(R.id.icon).setImageResource(R.drawable.ic_restore)
+                    
+                    hideProcessingOverlay()
+                }
+            } catch (e: Exception) {
                 e.printStackTrace()
-                hideProcessingOverlay()
-                Toast.makeText(this, getString(R.string.error_occurred), Toast.LENGTH_SHORT).show()
+                withContext(Dispatchers.Main) {
+                    hideProcessingOverlay()
+                    Toast.makeText(this@StickerMakerActivity, getString(R.string.bg_removal_error), Toast.LENGTH_SHORT).show()
+                }
             }
+        }
     }
 
     private fun applyEdgeSmoothing(bitmap: Bitmap): Bitmap {
@@ -2473,7 +2560,7 @@ class StickerMakerActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        if (::segmenter.isInitialized) segmenter.close()
+        imageSegmenter?.close()
     }
 
     inner class PackSelectionAdapter(

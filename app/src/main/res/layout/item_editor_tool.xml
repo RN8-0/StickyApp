@@ -10,11 +10,13 @@
     android:clickable="true"
     android:focusable="true">
 
-    <androidx.cardview.widget.CardView
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/cardView"
         android:layout_width="48dp"
         android:layout_height="48dp"
         app:cardCornerRadius="14dp"
         app:cardElevation="0dp"
+        app:strokeWidth="0dp"
         app:cardBackgroundColor="@color/card_bg">
 
         <ImageView
@@ -25,7 +27,7 @@
             android:src="@drawable/ic_photo"
             app:tint="@color/text_primary" />
 
-    </androidx.cardview.widget.CardView>
+    </com.google.android.material.card.MaterialCardView>
 
     <TextView
         android:id="@+id/title"

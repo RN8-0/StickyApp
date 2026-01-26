@@ -81,8 +81,8 @@ dependencies {
     // SwipeRefreshLayout (CircularProgressDrawable için)
     implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.1.0'
 
-    // ML Kit Selfie Segmentation
-    implementation 'com.google.mlkit:segmentation-selfie:16.0.0-beta4'
+    // MediaPipe Tasks Vision
+    implementation 'com.google.mediapipe:tasks-vision:0.10.14'
 
     // uCrop for image cropping
     implementation 'com.github.yalantis:ucrop:2.2.8'
