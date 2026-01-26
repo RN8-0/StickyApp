@@ -10,7 +10,7 @@
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Paket Seçin"
+        android:text="@string/select_pack"
         android:textSize="20sp"
         android:textStyle="bold"
         android:textColor="@color/text_primary"
@@ -19,7 +19,7 @@
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Çıkartmanızı eklemek istediğiniz paketi seçin veya yeni bir tane oluşturun."
+        android:text="@string/select_pack_desc"
         android:textSize="14sp"
         android:textColor="@color/text_secondary"
         android:layout_marginBottom="20dp" />
@@ -55,7 +55,7 @@
             android:id="@+id/inputPackName"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="Yeni Paket Adı"
+            android:hint="@string/new_pack_name_hint"
             android:textColor="@color/text_primary"
             android:inputType="text"
             android:maxLength="30" />
@@ -67,7 +67,7 @@
         android:layout_width="match_parent"
         android:layout_height="56dp"
         app:cornerRadius="12dp"
-        android:text="Yeni Paket Oluştur ve Ekle"
+        android:text="@string/create_and_add_label"
         android:textColor="@android:color/white"
         android:textStyle="bold"
         android:textAllCaps="false"

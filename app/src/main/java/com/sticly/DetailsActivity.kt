@@ -710,7 +710,16 @@ class DetailsActivity : AppCompatActivity() {
             }
 
             if (isCurrentlyWhitelisted) {
-                removeFromWhatsApp()
+                // WhatsApp'ta (veya bizim öyle sandığımız durumda) "Kaldır"a basıldı.
+                // WhatsApp otomatik silmeyi desteklemediği için inten'le gönderince hata verebiliyor.
+                // Bunun yerine yerel durumumuzu güncelleyip kullanıcıya bilgi veriyoruz.
+                PreferencesHelper.removeInstalledPack(this@DetailsActivity, packId)
+                showThemedSnackbar(getString(R.string.pack_removed_from_whatsapp))
+                updateButton()
+                
+                // Opsiyonel: Eğer kullanıcı gerçekten WhatsApp'taki silme ekranına gitmek istiyorsa 
+                // bilgilendirici diyaloğu gösteriyoruz (intent hatasından kaçınmak için).
+                showRemoveInstructionsDialog()
             } else {
                 addToWhatsApp(pack)
             }
@@ -718,15 +727,12 @@ class DetailsActivity : AppCompatActivity() {
     }
 
     private fun showRemoveInstructionsDialog() {
+        val message = getString(R.string.pack_still_installed_message)
+        
         com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
-            .setTitle(R.string.remove_from_whatsapp)
-            .setMessage("WhatsApp'ın kısıtlamaları nedeniyle bir paketi uygulama içinden otomatik olarak silemiyoruz.\n\n" +
-                    "Kaldırmak için:\n" +
-                    "1. WhatsApp'ı açın\n" +
-                    "2. Bir sohbete girin\n" +
-                    "3. Çıkartma simgesine ve ardından '+' simgesine dokunun\n" +
-                    "4. 'Çıkartmalarım' sekmesinden bu paketi bulun ve çöp kutusuna dokunun.")
-            .setPositiveButton("WhatsApp'a Git") { _, _ ->
+            .setTitle(R.string.remove_instructions_title)
+            .setMessage(message)
+            .setPositiveButton(R.string.go_to_whatsapp) { _, _ ->
                 try {
                     val intent = packageManager.getLaunchIntentForPackage("com.whatsapp")
                         ?: packageManager.getLaunchIntentForPackage("com.whatsapp.w4b")
@@ -735,7 +741,7 @@ class DetailsActivity : AppCompatActivity() {
                     Toast.makeText(this, R.string.whatsapp_not_installed, Toast.LENGTH_SHORT).show()
                 }
             }
-            .setNegativeButton(R.string.cancel, null)
+            .setNegativeButton(R.string.ok, null)
             .show()
     }
 
@@ -941,8 +947,14 @@ class DetailsActivity : AppCompatActivity() {
 
     private fun removeFromWhatsApp() {
         currentPack?.let { pack ->
-            // Kullanıcı talebi üzerine bilgilendirme mesajı kaldırıldı, direkt WhatsApp'a yönlendiriliyor.
-            launchWhatsAppRemove(pack)
+            // Yerel durumu temizle
+            PreferencesHelper.removeInstalledPack(this, pack.id)
+            updateButton()
+            
+            // Kullanıcıyı direkt inten'le gönderince (ENABLE_STICKER_PACK) WhatsApp "böyle bir paket yok" 
+            // diyerek hata verebiliyor (özellikle manuel silinmişse). 
+            // Bu yüzden direkt yönlendirme yerine rehberlik diyaloğunu gösteriyoruz.
+            showRemoveInstructionsDialog()
         }
     }
 
@@ -1092,10 +1104,11 @@ class DetailsActivity : AppCompatActivity() {
                         val count = PreferencesHelper.incrementStickersAddedCount(this@DetailsActivity)
 
                         if (!PreferencesHelper.isPremium(this@DetailsActivity)) {
-                            if (count % 4 == 0 && !PreferencesHelper.wasPremiumPromoShownForCount(this@DetailsActivity, count)) {
-                                PreferencesHelper.markPremiumPromoShown(this@DetailsActivity, count)
-                                showPremiumPromoDialog()
-                            } else {
+                            // Sadece bu paketin ID'sini kontrol et (Custom mı?)
+                            val isCustom = packId.startsWith("custom_")
+                            
+                            // Kural: Kendi paketlerinde HER SEFERINDE, diğer paketlerde her 2 kerede bir.
+                            if (isCustom || count % 2 == 0) {
                                 AdManager.showInterstitial(this@DetailsActivity)
                             }
                         }
@@ -1141,11 +1154,16 @@ class DetailsActivity : AppCompatActivity() {
                 }
             }
             REQUEST_ADD_STICKER -> {
-                // StickerMaker'dan dönüldü, eğer paket yüklüyse WhatsApp'ı zorla güncelle
+                // StickerMaker'dan dönüldü, veriyi hemen tazele ki buton güncellensin
+                loadPackFromFirebase()
+                
+                // Eğer paket yüklüyse WhatsApp'ı zorla güncelle (Süreç bittiğinde butonu aktif etmeyi unutma)
                 if (PreferencesHelper.isPackInstalled(this, packId)) {
                     syncPackDataWithProgress(packId, "Yeni çıkartma eklendi, WhatsApp güncelleniyor...")
+                } else {
+                    btnAction.isEnabled = true
+                    updateButton()
                 }
-                // onResume zaten loadPackFromFirebase() çağıracak
             }
         }
     }

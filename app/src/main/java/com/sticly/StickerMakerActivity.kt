@@ -76,6 +76,7 @@ class StickerMakerActivity : AppCompatActivity() {
     private lateinit var tvProcessingSubtitle: TextView
     private lateinit var tvProcessingPercent: TextView
     private lateinit var processingIcon: ImageView
+    private lateinit var adContainerMaker: FrameLayout
     
     // Modern Editor Tools
     private lateinit var stickerEditorView: FrameLayout
@@ -215,6 +216,17 @@ class StickerMakerActivity : AppCompatActivity() {
         tvProcessingTitle = findViewById(R.id.tvProcessingTitle)
         tvProcessingSubtitle = findViewById(R.id.tvProcessingSubtitle)
         tvProcessingPercent = findViewById(R.id.tvProcessingPercent)
+        adContainerMaker = findViewById(R.id.adContainerMaker)
+        
+        if (!PreferencesHelper.isPremium(this)) {
+            AdManager.loadNativeAd(this, AdManager.NativeAdType.MAKER) { nativeAd ->
+                val adView = layoutInflater.inflate(R.layout.item_ad_native, null) as com.google.android.gms.ads.nativead.NativeAdView
+                AdManager.populateNativeAdView(nativeAd, adView)
+                adContainerMaker.removeAllViews()
+                adContainerMaker.addView(adView)
+                adContainerMaker.visibility = View.VISIBLE
+            }
+        }
         
         toolUndo.setOnClickListener { undoSticker() }
         toolUndo.visibility = View.GONE // Start hidden
@@ -2240,7 +2252,7 @@ class StickerMakerActivity : AppCompatActivity() {
         if (isProcessing) return
         
         isProcessing = true
-        showProcessingOverlay("Çıkartma Hazırlanıyor", "Lütfen bekleyin...", R.drawable.ic_sticker)
+        showProcessingOverlay(getString(R.string.preparing_sticker), getString(R.string.please_wait), R.drawable.ic_sticker)
         
         // We will process everything in a background thread
         lifecycleScope.launch(Dispatchers.Default) {
@@ -2298,7 +2310,7 @@ class StickerMakerActivity : AppCompatActivity() {
                             showSuccessDialog(targetPackId!!)
                             checkQueueAndProceed(suppressToast = true)
                         } else {
-                            Toast.makeText(this@StickerMakerActivity, "Hata: Paket dolu veya kayıt başarısız", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(this@StickerMakerActivity, getString(R.string.error_pack_full), Toast.LENGTH_SHORT).show()
                         }
                     } else {
                         // We shouldn't really be here as btnAddToPack handles this, but just in case
@@ -2311,7 +2323,7 @@ class StickerMakerActivity : AppCompatActivity() {
                 withContext(Dispatchers.Main) {
                     isProcessing = false
                     hideProcessingOverlay()
-                    Toast.makeText(this@StickerMakerActivity, "Kayıt sırasında hata oluştu", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this@StickerMakerActivity, getString(R.string.error_saving_sticker), Toast.LENGTH_SHORT).show()
                 }
             }
         }
@@ -2321,7 +2333,7 @@ class StickerMakerActivity : AppCompatActivity() {
         
         if (isAnimatedMode) {
             if (currentUriIndex < 0 || currentUriIndex >= selectedUris.size) {
-                Toast.makeText(this, "Hata: Medya bulunamadı", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, getString(R.string.error_media_not_found), Toast.LENGTH_SHORT).show()
                 return
             }
             val uri = selectedUris[currentUriIndex]
@@ -2345,7 +2357,7 @@ class StickerMakerActivity : AppCompatActivity() {
             if (bitmap != null) {
                 processStickerResult(bitmap)
             } else {
-                Toast.makeText(this, "Hata: Görsel hazır değil", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, getString(R.string.error_image_not_ready), Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -2392,7 +2404,7 @@ class StickerMakerActivity : AppCompatActivity() {
             background = ContextCompat.getDrawable(context, R.drawable.bg_editor_container)
             
             val title = TextView(context).apply {
-                text = "Tebrikler!"
+                text = getString(R.string.congratulations)
                 textSize = 22f
                 setTextColor(ContextCompat.getColor(context, R.color.text_primary))
                 setTypeface(null, Typeface.BOLD)
@@ -2402,7 +2414,7 @@ class StickerMakerActivity : AppCompatActivity() {
             addView(title)
             
             val desc = TextView(context).apply {
-                text = "Çıkartmanız başarıyla eklendi."
+                text = getString(R.string.sticker_added_success)
                 textSize = 16f
                 setTextColor(ContextCompat.getColor(context, R.color.text_secondary))
                 gravity = Gravity.CENTER
@@ -2416,7 +2428,7 @@ class StickerMakerActivity : AppCompatActivity() {
             }
             
             val btnViewPack = MaterialButton(context, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
-                text = "Paketi Gör"
+                text = getString(R.string.view_pack)
                 setTextColor(ContextCompat.getColor(context, R.color.text_primary))
                 setOnClickListener {
                     dialog.dismiss()
@@ -2430,7 +2442,7 @@ class StickerMakerActivity : AppCompatActivity() {
             }
             
             val btnOk = MaterialButton(context).apply {
-                text = "Tamam"
+                text = getString(R.string.ok)
                 setTextColor(Color.WHITE)
                 backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(context, R.color.accent))
                 setOnClickListener { dialog.dismiss() }

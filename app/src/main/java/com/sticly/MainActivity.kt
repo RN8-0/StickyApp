@@ -583,6 +583,10 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        
+        // Sticker Maker için reklamı önceden yükle (Anında gelmesi için)
+        AdManager.preloadMakerNativeAd(this)
+
         if (::adapter.isInitialized) {
             lifecycleScope.launch {
                 val customPacks = CustomStickerManager.getCustomPacks(this@MainActivity).mapNotNull { cp ->
@@ -729,12 +733,47 @@ class MainActivity : AppCompatActivity() {
                 } catch (e: Exception) {}
             }
             
-            val finalScore = (engagementScore * (1.0 + cvr)) * freshnessMultiplier
+        val finalScore = (engagementScore * (1.0 + cvr)) * freshnessMultiplier
             Log.d("Ranking", "Pack: ${pack.name} | DL: $downloads | Fav: $favorites | CVR: ${String.format("%.2f", cvr)} | Fresh: $freshnessMultiplier | SCORE: ${String.format("%.1f", finalScore)}")
             finalScore
         }
 
-        adapter.updateList(sorted)
+        // Reklamları listeye enjekte et
+        val itemsWithAds = mutableListOf<Any>()
+        if (sorted.isNotEmpty() && !PreferencesHelper.isPremium(this)) {
+            if (currentFilter == FilterType.FAVORITES) {
+                // Favoriler için özel kural: En az 2 paket varsa 2. paketten sonra 1 tane reklam
+                if (sorted.size >= 2) {
+                    sorted.forEachIndexed { index, pack ->
+                        itemsWithAds.add(pack)
+                        if (index == 1) { // 2. paketten sonra
+                            itemsWithAds.add("AD_FAVORITE_PLACEHOLDER")
+                        }
+                    }
+                } else {
+                    itemsWithAds.addAll(sorted)
+                }
+            } else {
+                // Ana sayfa ve diğer listeler için dinamik reklam mantığı (4-8 aralık)
+                var nextAdGap = (4..8).random()
+                var itemsSinceLastAd = 0
+                
+                sorted.forEachIndexed { index, pack ->
+                    itemsWithAds.add(pack)
+                    itemsSinceLastAd++
+                    
+                    if (itemsSinceLastAd >= nextAdGap && index != sorted.size - 1) {
+                        itemsWithAds.add("AD_PLACEHOLDER")
+                        itemsSinceLastAd = 0
+                        nextAdGap = (4..8).random()
+                    }
+                }
+            }
+        } else {
+            itemsWithAds.addAll(sorted)
+        }
+
+        adapter.updateList(itemsWithAds)
     }
 
     @Deprecated("Deprecated in Java")

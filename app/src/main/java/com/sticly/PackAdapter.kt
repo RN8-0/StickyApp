@@ -16,13 +16,22 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.concurrent.TimeUnit
+import com.google.android.gms.ads.nativead.NativeAd
+import com.google.android.gms.ads.nativead.NativeAdView
+import com.google.android.gms.ads.nativead.MediaView
+import android.widget.Button
 
 class PackAdapter(
-    private var items: List<Pack>,
+    private var items: List<Any>,
     private val click: (Pack) -> Unit,
     private val onFavoriteChanged: (() -> Unit)? = null,
     private val onDeleteClick: ((Pack) -> Unit)? = null
-) : RecyclerView.Adapter<PackAdapter.VH>() {
+) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
+
+    companion object {
+        private const val TYPE_PACK = 0
+        private const val TYPE_AD = 1
+    }
 
     class VH(v: View) : RecyclerView.ViewHolder(v) {
         val tray: ImageView = v.findViewById(R.id.tray)
@@ -40,11 +49,50 @@ class PackAdapter(
         val premiumPrice: TextView = v.findViewById(R.id.premiumPrice)
     }
 
-    override fun onCreateViewHolder(p: ViewGroup, vt: Int) =
-        VH(LayoutInflater.from(p.context).inflate(R.layout.item_pack, p, false))
+    class AdVH(v: View) : RecyclerView.ViewHolder(v) {
+        val adView: NativeAdView = v as NativeAdView
+        val headline: TextView = v.findViewById(R.id.ad_headline)
+        val body: TextView = v.findViewById(R.id.ad_body)
+        val callToAction: Button = v.findViewById(R.id.ad_call_to_action)
+        val icon: ImageView = v.findViewById(R.id.ad_app_icon)
+        val media: MediaView = v.findViewById(R.id.ad_media)
+    }
 
-    override fun onBindViewHolder(h: VH, pos: Int) {
-        val pack = items[pos]
+    override fun getItemViewType(position: Int): Int {
+        return if (items[position] is Pack) TYPE_PACK else TYPE_AD
+    }
+
+    override fun onCreateViewHolder(p: ViewGroup, vt: Int): RecyclerView.ViewHolder {
+        return if (vt == TYPE_PACK) {
+            VH(LayoutInflater.from(p.context).inflate(R.layout.item_pack, p, false))
+        } else {
+            AdVH(LayoutInflater.from(p.context).inflate(R.layout.item_ad_native, p, false))
+        }
+    }
+
+    override fun onBindViewHolder(holder: RecyclerView.ViewHolder, pos: Int) {
+        if (holder is VH) {
+            val pack = items[pos] as Pack
+            bindPack(holder, pack)
+        } else if (holder is AdVH) {
+            if (!PreferencesHelper.isPremium(holder.itemView.context)) {
+                val adType = if (items[pos] == "AD_FAVORITE_PLACEHOLDER") {
+                    AdManager.NativeAdType.FAVORITE
+                } else {
+                    AdManager.NativeAdType.LIST
+                }
+                
+                AdManager.loadNativeAd(holder.itemView.context, adType) { nativeAd ->
+                    AdManager.populateNativeAdView(nativeAd, holder.adView)
+                }
+            } else {
+                holder.itemView.visibility = View.GONE
+                holder.itemView.layoutParams = RecyclerView.LayoutParams(0, 0)
+            }
+        }
+    }
+
+    private fun bindPack(h: VH, pack: Pack) {
         val context = h.itemView.context
 
         h.name.text = pack.localizedName
@@ -60,7 +108,6 @@ class PackAdapter(
         // Özel paket mi?
         val isCustomPack = pack.category == "custom"
         if (isCustomPack) {
-            // Özel paketlerde favori butonu gizle, silme butonu göster
             h.btnFavorite.visibility = View.GONE
             h.btnDelete.visibility = View.VISIBLE
             h.btnDelete.setOnClickListener { onDeleteClick?.invoke(pack) }
@@ -73,10 +120,7 @@ class PackAdapter(
         val isPremiumPack = pack.isPremium
         val hasAccess = PreferencesHelper.hasAccessToPremiumPack(context, pack.id)
 
-        // Taç her zaman premium pakette göster
         h.crownIcon.visibility = if (isPremiumPack) View.VISIBLE else View.GONE
-
-        // Premium container (badge + fiyat) - kullanıcı erişimi yoksa göster
         h.premiumContainer.visibility = if (isPremiumPack && !hasAccess && !isInstalled) View.VISIBLE else View.GONE
         
         if (h.premiumContainer.visibility == View.VISIBLE) {
@@ -91,11 +135,11 @@ class PackAdapter(
             h.premiumPrice.text = formatted
         }
 
-        // Yeni badge - son 7 gün içinde eklenen paketler
+        // Yeni badge
         val isNew = isPackNew(pack.createdAt)
         h.newBadge.visibility = if (isNew) View.VISIBLE else View.GONE
 
-        // Favori butonu (Sadece özel olmayan paketler için)
+        // Favori butonu
         if (!isCustomPack) {
             val isFavorite = PreferencesHelper.isPackFavorite(context, pack.id)
             h.btnFavorite.setImageResource(
@@ -107,7 +151,6 @@ class PackAdapter(
                     if (newFavState) R.drawable.ic_favorite_filled else R.drawable.ic_favorite_border
                 )
 
-                // Firebase'e favori sayısını güncelle
                 if (newFavState) {
                     StickerRepository.incrementFavoriteCount(pack.id, pack.isPremium)
                 } else {
@@ -120,7 +163,7 @@ class PackAdapter(
             }
         }
 
-        // İndirme/ekleme sayısı
+        // İndirme sayısı
         if (pack.downloadCount > 0) {
             h.downloadCount.visibility = View.VISIBLE
             h.downloadCount.text = formatDownloadCount(pack.downloadCount)
@@ -128,36 +171,23 @@ class PackAdapter(
             h.downloadCount.visibility = View.GONE
         }
 
-        // Tray image yükleme
+        // Tray image
         if (isCustomPack) {
-            // Özel paketler için her zaman lokal dosyadan yükle
             val trayFile = CustomStickerManager.getTrayFile(context, pack.id)
             if (trayFile != null && trayFile.exists()) {
-                Glide.with(context)
-                    .load(trayFile)
-                    .skipMemoryCache(true)
-                    .diskCacheStrategy(DiskCacheStrategy.NONE)
-                    .into(h.tray)
+                Glide.with(context).load(trayFile).skipMemoryCache(true).diskCacheStrategy(DiskCacheStrategy.NONE).into(h.tray)
             } else {
                 h.tray.setImageResource(R.drawable.ic_sticker_placeholder)
             }
         } else {
-            // Normal paketler için mevcut mantık
             when {
                 pack.trayUrl.isNotEmpty() -> {
-                    Glide.with(context)
-                        .load(pack.trayUrl)
-                        .diskCacheStrategy(DiskCacheStrategy.ALL)
-                        .into(h.tray)
+                    Glide.with(context).load(pack.trayUrl).diskCacheStrategy(DiskCacheStrategy.ALL).into(h.tray)
                 }
                 else -> {
                     val cachedTray = StickerRepository.getCachedStickerPath(context, pack.id, pack.tray)
                     if (cachedTray.exists() && cachedTray.length() > 0) {
-                        Glide.with(context)
-                            .load(cachedTray)
-                            .signature(ObjectKey(cachedTray.lastModified()))
-                            .diskCacheStrategy(DiskCacheStrategy.NONE)
-                            .into(h.tray)
+                        Glide.with(context).load(cachedTray).signature(ObjectKey(cachedTray.lastModified())).diskCacheStrategy(DiskCacheStrategy.NONE).into(h.tray)
                     } else {
                         try {
                             val path = "${pack.id}/${pack.tray}"
@@ -176,7 +206,7 @@ class PackAdapter(
 
     override fun getItemCount() = items.size
 
-    fun updateList(newList: List<Pack>) {
+    fun updateList(newList: List<Any>) {
         items = newList
         notifyDataSetChanged()
     }
