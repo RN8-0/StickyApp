@@ -105,8 +105,10 @@ function App() {
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState<'dashboard' | 'stats' | 'settings' | 'messages' | 'notifications'>('dashboard');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'passive' | 'premium' | 'normal' | 'new'>('all');
+  const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [statsFilter, setStatsFilter] = useState<'all' | 'active' | 'passive' | 'premium' | 'normal'>('all');
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
+  const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
 
   // Mail System States
   const [messages, setMessages] = useState<ContactMessage[]>([]);
@@ -782,6 +784,9 @@ function App() {
 
     if (!matchesSearch) return false;
 
+    // Kategori Filtresi
+    if (categoryFilter !== 'all' && p.category !== categoryFilter) return false;
+
     if (statusFilter === 'all') return true;
     if (statusFilter === 'active') return p.is_active !== false;
     if (statusFilter === 'passive') return p.is_active === false;
@@ -888,7 +893,7 @@ function App() {
             {/* Sidebar / Pack List */}
             <div className={cn(
               "border-r border-white/5 flex flex-col bg-card/30 transition-all duration-500",
-              selectedPack ? "w-80" : "w-full"
+              selectedPack ? "w-[400px]" : "w-full"
             )}>
               <div className="p-5 space-y-4">
                 <div className="flex items-center justify-between">
@@ -898,54 +903,114 @@ function App() {
                   </div>
 
                   {/* Filter Dropdown */}
-                  <div className="relative">
-                    <button
-                      onClick={() => setShowFilterDropdown(!showFilterDropdown)}
-                      className={cn(
-                        "flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all border",
-                        statusFilter !== 'all'
-                          ? "bg-primary/20 border-primary text-primary"
-                          : "bg-white/5 border-white/5 text-textSec hover:bg-hover"
-                      )}
-                    >
-                      <Filter size={14} />
-                      {statusFilter === 'all' ? 'Filtrele' : statusFilter.toUpperCase()}
-                      <ChevronDown size={14} className={cn("transition-transform", showFilterDropdown && "rotate-180")} />
-                    </button>
+                  <div className="flex items-center gap-2">
+                    {/* Status Filter */}
+                    <div className="relative">
+                      <button
+                        onClick={() => {
+                          setShowFilterDropdown(!showFilterDropdown);
+                          setShowCategoryDropdown(false);
+                        }}
+                        className={cn(
+                          "flex items-center gap-2 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all border",
+                          statusFilter !== 'all'
+                            ? "bg-primary/20 border-primary text-primary"
+                            : "bg-white/5 border-white/5 text-textSec hover:bg-hover"
+                        )}
+                      >
+                        <Filter size={14} />
+                        {statusFilter === 'all' ? 'Filtrele' : statusFilter.toUpperCase()}
+                        <ChevronDown size={14} className={cn("transition-transform", showFilterDropdown && "rotate-180")} />
+                      </button>
 
-                    {showFilterDropdown && (
-                      <>
-                        <div
-                          className="fixed inset-0 z-30"
-                          onClick={() => setShowFilterDropdown(false)}
-                        />
-                        <div className="absolute right-0 top-full mt-2 w-48 glass rounded-2xl border border-white/10 shadow-2xl py-2 z-40 animate-in fade-in zoom-in-95 duration-200">
-                          {[
-                            { id: 'all', label: 'Tümü', icon: Grid },
-                            { id: 'active', label: 'Aktif Paketler', icon: Check },
-                            { id: 'passive', label: 'Pasif Paketler', icon: X },
-                            { id: 'premium', label: 'Premium Paketler', icon: DollarSign },
-                            { id: 'normal', label: 'Normal Paketler', icon: Package },
-                            { id: 'new', label: 'Yeni Eklenenler', icon: Clock }
-                          ].map(f => (
+                      {showFilterDropdown && (
+                        <>
+                          <div className="fixed inset-0 z-30" onClick={() => setShowFilterDropdown(false)} />
+                          <div className="absolute right-0 top-full mt-2 w-48 glass rounded-2xl border border-white/10 shadow-2xl py-2 z-40 animate-in fade-in zoom-in-95 duration-200">
+                            {[
+                              { id: 'all', label: 'Tümü', icon: Grid },
+                              { id: 'active', label: 'Aktif Paketler', icon: Check },
+                              { id: 'passive', label: 'Pasif Paketler', icon: X },
+                              { id: 'premium', label: 'Premium Paketler', icon: DollarSign },
+                              { id: 'normal', label: 'Normal Paketler', icon: Package },
+                              { id: 'new', label: 'Yeni Eklenenler', icon: Clock }
+                            ].map(f => (
+                              <button
+                                key={f.id}
+                                onClick={() => {
+                                  setStatusFilter(f.id as any);
+                                  setShowFilterDropdown(false);
+                                }}
+                                className={cn(
+                                  "w-full flex items-center gap-3 px-4 py-3 text-[11px] font-bold transition-all hover:bg-hover",
+                                  statusFilter === f.id ? "text-primary bg-primary/5" : "text-textSec hover:text-white"
+                                )}
+                              >
+                                <f.icon size={14} className={statusFilter === f.id ? "text-primary" : "text-textSec"} />
+                                {f.label}
+                              </button>
+                            ))}
+                          </div>
+                        </>
+                      )}
+                    </div>
+
+                    {/* Category Filter */}
+                    <div className="relative">
+                      <button
+                        onClick={() => {
+                          setShowCategoryDropdown(!showCategoryDropdown);
+                          setShowFilterDropdown(false);
+                        }}
+                        className={cn(
+                          "flex items-center gap-2 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all border",
+                          categoryFilter !== 'all'
+                            ? "bg-accent/20 border-accent text-accent"
+                            : "bg-white/5 border-white/5 text-textSec hover:bg-hover"
+                        )}
+                      >
+                        <Grid size={14} />
+                        {categoryFilter === 'all' ? 'Kategori' : CATEGORIES.find(c => c.id === categoryFilter)?.name.toUpperCase()}
+                        <ChevronDown size={14} className={cn("transition-transform", showCategoryDropdown && "rotate-180")} />
+                      </button>
+
+                      {showCategoryDropdown && (
+                        <>
+                          <div className="fixed inset-0 z-30" onClick={() => setShowCategoryDropdown(false)} />
+                          <div className="absolute right-0 top-full mt-2 w-56 glass rounded-2xl border border-white/10 shadow-2xl py-2 z-40 animate-in fade-in zoom-in-95 duration-200 max-h-[400px] overflow-y-auto custom-scrollbar">
                             <button
-                              key={f.id}
                               onClick={() => {
-                                setStatusFilter(f.id as any);
-                                setShowFilterDropdown(false);
+                                setCategoryFilter('all');
+                                setShowCategoryDropdown(false);
                               }}
                               className={cn(
                                 "w-full flex items-center gap-3 px-4 py-3 text-[11px] font-bold transition-all hover:bg-hover",
-                                statusFilter === f.id ? "text-primary bg-primary/5" : "text-textSec hover:text-white"
+                                categoryFilter === 'all' ? "text-accent bg-accent/5" : "text-textSec hover:text-white"
                               )}
                             >
-                              <f.icon size={14} className={statusFilter === f.id ? "text-primary" : "text-textSec"} />
-                              {f.label}
+                              <div className="w-5 h-5 flex items-center justify-center bg-white/5 rounded-lg text-xs">✨</div>
+                              Tümü (Hepsi)
                             </button>
-                          ))}
-                        </div>
-                      </>
-                    )}
+                            {CATEGORIES.map(cat => (
+                              <button
+                                key={cat.id}
+                                onClick={() => {
+                                  setCategoryFilter(cat.id);
+                                  setShowCategoryDropdown(false);
+                                }}
+                                className={cn(
+                                  "w-full flex items-center gap-3 px-4 py-3 text-[11px] font-bold transition-all hover:bg-hover",
+                                  categoryFilter === cat.id ? "text-accent bg-accent/5" : "text-textSec hover:text-white"
+                                )}
+                              >
+                                <div className="w-5 h-5 flex items-center justify-center bg-white/5 rounded-lg text-xs">{cat.emoji}</div>
+                                {cat.name}
+                              </button>
+                            ))}
+                          </div>
+                        </>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>

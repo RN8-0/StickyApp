@@ -76,10 +76,10 @@ class PackAdapter(
             bindPack(holder, pack)
         } else if (holder is AdVH) {
             if (!PreferencesHelper.isPremium(holder.itemView.context)) {
-                val adType = if (items[pos] == "AD_FAVORITE_PLACEHOLDER") {
-                    AdManager.NativeAdType.FAVORITE
-                } else {
-                    AdManager.NativeAdType.LIST
+                val adType = when (items[pos]) {
+                    "AD_FAVORITE_PLACEHOLDER" -> AdManager.NativeAdType.FAVORITE
+                    "AD_MY_STICKERS_PLACEHOLDER" -> AdManager.NativeAdType.MY_STICKERS
+                    else -> AdManager.NativeAdType.LIST
                 }
                 
                 AdManager.loadNativeAd(holder.itemView.context, adType) { nativeAd ->

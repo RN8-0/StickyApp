@@ -15,6 +15,7 @@ import com.google.android.gms.ads.nativead.MediaView
 import com.google.android.gms.ads.nativead.NativeAd
 import com.google.android.gms.ads.nativead.NativeAdOptions
 import com.google.android.gms.ads.nativead.NativeAdView
+import androidx.core.content.ContextCompat
 
 object AdManager {
 
@@ -26,6 +27,7 @@ object AdManager {
     private const val LIST_NATIVE_AD_ID = "ca-app-pub-1522897791319993/9417073326"
     private const val MAKER_NATIVE_AD_ID = "ca-app-pub-1522897791319993/2892861725"
     private const val FAV_NATIVE_AD_ID = "ca-app-pub-1522897791319993/7323061326"
+    private const val MY_STICKERS_NATIVE_AD_ID = "ca-app-pub-1522897791319993/3649030882"
 
     private var interstitialAd: InterstitialAd? = null
     private var isInitialized = false
@@ -121,7 +123,7 @@ object AdManager {
     }
 
     enum class NativeAdType {
-        LIST, MAKER, FAVORITE
+        LIST, MAKER, FAVORITE, MY_STICKERS
     }
 
     fun loadNativeAd(context: Context, type: NativeAdType = NativeAdType.LIST, onLoaded: (NativeAd) -> Unit) {
@@ -139,6 +141,7 @@ object AdManager {
         val adUnitId = when (type) {
             NativeAdType.MAKER -> MAKER_NATIVE_AD_ID
             NativeAdType.FAVORITE -> FAV_NATIVE_AD_ID
+            NativeAdType.MY_STICKERS -> MY_STICKERS_NATIVE_AD_ID
             else -> LIST_NATIVE_AD_ID
         }
         
@@ -149,7 +152,10 @@ object AdManager {
                     Log.e(TAG, "Native Ad Error: ${e.message} Code: ${e.code}")
                 }
             })
-            .withNativeAdOptions(NativeAdOptions.Builder().build())
+            .withNativeAdOptions(NativeAdOptions.Builder()
+                .setMediaAspectRatio(NativeAdOptions.NATIVE_MEDIA_ASPECT_RATIO_SQUARE)
+                .setVideoOptions(VideoOptions.Builder().setStartMuted(true).build())
+                .build())
             .build()
         adLoader.loadAd(AdRequest.Builder().build())
     }
@@ -161,14 +167,21 @@ object AdManager {
         adView.iconView = adView.findViewById(R.id.ad_app_icon)
         adView.mediaView = adView.findViewById(R.id.ad_media)
 
-        (adView.headlineView as? TextView)?.text = nativeAd.headline
+        (adView.headlineView as? TextView)?.apply {
+            text = nativeAd.headline
+            setTextColor(ContextCompat.getColor(context, R.color.text_primary))
+        }
+        
         nativeAd.mediaContent?.let { adView.mediaView?.setMediaContent(it) }
 
         if (nativeAd.body == null) {
             adView.bodyView?.visibility = View.INVISIBLE
         } else {
             adView.bodyView?.visibility = View.VISIBLE
-            (adView.bodyView as? TextView)?.text = nativeAd.body
+            (adView.bodyView as? TextView)?.apply {
+                text = nativeAd.body
+                setTextColor(ContextCompat.getColor(context, R.color.text_secondary))
+            }
         }
 
         if (nativeAd.callToAction == null) {

@@ -107,6 +107,11 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(s: Bundle?) {
         applyTheme()
+        if (PreferencesHelper.isFirstLaunch(this)) {
+            startActivity(Intent(this, OnboardingActivity::class.java))
+            finish()
+            return
+        }
         super.onCreate(s)
         setContentView(R.layout.activity_main)
 
@@ -748,6 +753,18 @@ class MainActivity : AppCompatActivity() {
                         itemsWithAds.add(pack)
                         if (index == 1) { // 2. paketten sonra
                             itemsWithAds.add("AD_FAVORITE_PLACEHOLDER")
+                        }
+                    }
+                } else {
+                    itemsWithAds.addAll(sorted)
+                }
+            } else if (currentFilter == FilterType.CUSTOM) {
+                // Stickerlarım (Custom) için özel kural: En az 1 paket varsa 1. paketten sonra 1 tane reklam
+                if (sorted.isNotEmpty()) {
+                    sorted.forEachIndexed { index, pack ->
+                        itemsWithAds.add(pack)
+                        if (index == 0) { // İlk paketten hemen sonra
+                            itemsWithAds.add("AD_MY_STICKERS_PLACEHOLDER")
                         }
                     }
                 } else {

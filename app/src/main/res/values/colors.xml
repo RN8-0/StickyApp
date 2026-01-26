@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- Primary Colors -->
-    <color name="primary">#00A884</color>
-    <color name="primary_dark">#008069</color>
-    <color name="accent">#00A884</color>
+    <color name="primary">#00C896</color>
+    <color name="primary_dark">#00A87E</color>
+    <color name="accent">#00C896</color>
 
     <!-- Background Colors -->
     <color name="background">#FFFFFF</color>
@@ -57,4 +57,11 @@
     <color name="preview_bg">#FFFFFF</color>
     <!-- Custom Button Colors -->
     <color name="background_removal_text_color">@color/accent</color>
+
+    <!-- Onboarding Colors (Always Dark) -->
+    <color name="onboarding_background">#000000</color>
+    <color name="onboarding_text_primary">#FFFFFF</color>
+    <color name="onboarding_text_secondary">#CCFFFFFF</color>
+    <color name="onboarding_card_bg">#1AFFFFFF</color>
+    <color name="onboarding_button_text">#FFFFFF</color>
 </resources>

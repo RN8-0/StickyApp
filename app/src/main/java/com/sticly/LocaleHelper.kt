@@ -14,23 +14,22 @@ object LocaleHelper {
 
     private fun getPersistedData(context: Context): String {
         val savedLang = PreferencesHelper.getLanguage(context)
-        if (savedLang.isNotEmpty()) return savedLang
-
-        // İlk açılışta sistem dilini kontrol et
-        val systemLocale = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            context.resources.configuration.locales[0]
-        } else {
-            @Suppress("DEPRECATION")
-            context.resources.configuration.locale
+        if (savedLang.isNotEmpty()) {
+            android.util.Log.d("LocaleHelper", "Using saved lang: $savedLang")
+            return savedLang
         }
 
-        val lang = when (systemLocale.language) {
-            "tr" -> "tr"
-            "en" -> "en"
-            else -> "en" // Varsayılan İngilizce
-        }
+        // Get system locale
+        val locale = Locale.getDefault()
+        val systemLang = locale.language
+        android.util.Log.d("LocaleHelper", "System lang detected via Locale.getDefault: $systemLang")
+
+        val supportedLangs = listOf("en", "tr", "zh", "es", "ar", "hi", "pt")
+        val lang = if (supportedLangs.contains(systemLang)) systemLang else "en"
         
-        // İlk açılışta dili kaydet
+        android.util.Log.d("LocaleHelper", "Final resolved lang: $lang")
+        
+        // Save for next time
         PreferencesHelper.setLanguage(context, lang)
         return lang
     }

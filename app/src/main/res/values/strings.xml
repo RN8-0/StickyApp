@@ -328,4 +328,38 @@
     <string name="warm">Warm</string>
     <string name="vintage">Vintage</string>
     <string name="adjustments">Adjustments</string>
+    
+    <!-- Onboarding -->
+    <string name="onboarding_skip">Skip</string>
+    <string name="onboarding_next">Next</string>
+    <string name="onboarding_start">Get Started</string>
+    
+    <string name="onboarding_1_title">Welcome to Sticky</string>
+    <string name="onboarding_1_desc">Discover hundreds of professional sticker packs and add them to your WhatsApp with one click.</string>
+    
+    <string name="onboarding_2_title">Create Your Own</string>
+    <string name="onboarding_2_desc">Turn your photos, videos, and GIFs into custom stickers with our advanced AI background removal.</string>
+    
+    <string name="onboarding_3_title">Stay Updated</string>
+    <string name="onboarding_3_desc">Enable notifications to be the first to know about new trending sticker packs added every week.</string>
+
+    <string name="onboarding_premium_title">Unlock Everything</string>
+    <string name="onboarding_premium_desc">Unleash the full power of Sticky and enjoy the ultimate experience.</string>
+    <string name="feature">Feature</string>
+    <string name="premium_plan">Premium</string>
+    <string name="free_plan">Free</string>
+    <string name="premium_ads">Ad Experience</string>
+    <string name="ads_free_value">No Ads</string>
+    <string name="ads_limited_value">With Ads</string>
+    <string name="premium_sticker_packs">Sticker Packs</string>
+    <string name="all_access">Unlimited</string>
+    <string name="basic_access">Basic</string>
+    <string name="premium_ai_removal">AI Background Removal</string>
+    <string name="unlimited">Unlimited</string>
+    <string name="limited">3 per day</string>
+    <string name="priority_support">Customer Support</string>
+    <string name="support_premium">Priority</string>
+    <string name="support_free">Standard</string>
+    <string name="premium_cta">Get Premium Now</string>
+    <string name="free_cta">Continue with Free</string>
 </resources>

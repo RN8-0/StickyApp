@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:padding="24dp"
+    android:background="@android:color/transparent">
+
+    <!-- Visual Area -->
+    <FrameLayout
+        android:id="@+id/visualContainer"
+        android:layout_width="match_parent"
+        android:layout_height="400dp"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toTopOf="@+id/tvTitle"
+        app:layout_constraintVertical_chainStyle="packed">
+
+        <!-- 3D Emoji - Seamlessly integrated with the black background -->
+        <ImageView
+            android:id="@+id/imgOnboardingIcon"
+            android:layout_width="320dp"
+            android:layout_height="320dp"
+            android:layout_gravity="center"
+            android:scaleType="fitCenter" />
+
+        <!-- 3D STICKY BRANDING OVERLAY (First page only) -->
+        <FrameLayout
+            android:id="@+id/stickyBrandContainer"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:visibility="gone">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_horizontal|bottom"
+                android:layout_marginBottom="10dp"
+                android:text="STICKY"
+                android:textColor="#00A884"
+                android:textSize="64sp"
+                android:textStyle="bold"
+                android:fontFamily="sans-serif-black"
+                android:letterSpacing="0.05"
+                android:shadowColor="#1A000000"
+                android:shadowDx="0"
+                android:shadowDy="8"
+                android:shadowRadius="10" />
+        </FrameLayout>
+
+    </FrameLayout>
+
+    <!-- Title -->
+    <TextView
+        android:id="@+id/tvTitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="20dp"
+        android:text="Title"
+        android:textColor="@color/onboarding_text_primary"
+        android:textSize="36sp"
+        android:textStyle="bold"
+        android:gravity="center"
+        android:fontFamily="sans-serif-black"
+        app:layout_constraintLeft_toLeftOf="parent"
+        app:layout_constraintRight_toRightOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/visualContainer"
+        app:layout_constraintBottom_toTopOf="@+id/tvDesc" />
+
+    <!-- Description -->
+    <TextView
+        android:id="@+id/tvDesc"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:text="Description"
+        android:textColor="@color/onboarding_text_secondary"
+        android:textSize="18sp"
+        android:gravity="center"
+        android:lineSpacingExtra="8dp"
+        android:fontFamily="sans-serif-medium"
+        android:paddingHorizontal="30dp"
+        app:layout_constraintTop_toBottomOf="@+id/tvTitle"
+        app:layout_constraintBottom_toBottomOf="parent" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>

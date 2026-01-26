@@ -326,4 +326,38 @@
     <string name="btn_add_text_label">Metin Ekle</string>
     <string name="text_size_label">Metin Boyutu</string>
     <string name="emoji_picker_title">Emoji Seç</string>
+
+    <!-- Onboarding -->
+    <string name="onboarding_skip">Atla</string>
+    <string name="onboarding_next">İleri</string>
+    <string name="onboarding_start">Başla</string>
+    
+    <string name="onboarding_1_title">Sticky\'e Hoş Geldin</string>
+    <string name="onboarding_1_desc">Yüzlerce profesyonel sticker paketini keşfet ve tek tıkla WhatsApp\'ına ekle.</string>
+    
+    <string name="onboarding_2_title">Kendin Tasarla</string>
+    <string name="onboarding_2_desc">Fotoğraf, video ve GIF\'lerini yapay zeka ile profesyonel stickerlara dönüştür.</string>
+    
+    <string name="onboarding_3_title">Haberdar Ol</string>
+    <string name="onboarding_3_desc">Yeni paketlerden ilk sen haberdar olmak için bildirimleri açmayı unutma.</string>
+
+    <string name="onboarding_premium_title">Sınırları Kaldır</string>
+    <string name="onboarding_premium_desc">Uygulamanın tüm gücünü serbest bırak ve en iyi deneyimi yaşa.</string>
+    <string name="feature">Özellik</string>
+    <string name="premium_plan">Premium</string>
+    <string name="free_plan">Ücretsiz</string>
+    <string name="premium_ads">Reklamlar</string>
+    <string name="ads_free_value">Yok</string>
+    <string name="ads_limited_value">Var</string>
+    <string name="premium_sticker_packs">Paketler</string>
+    <string name="all_access">Sınırsız</string>
+    <string name="basic_access">Temel</string>
+    <string name="premium_ai_removal">Yapay Zeka (AI)</string>
+    <string name="unlimited">Sınırsız</string>
+    <string name="limited">Günlük 3</string>
+    <string name="priority_support">Müşteri Desteği</string>
+    <string name="support_premium">Öncelikli</string>
+    <string name="support_free">Standart</string>
+    <string name="premium_cta">Şimdi Premium\'a Geç</string>
+    <string name="free_cta">Kısıtlı Sürümle Devam Et</string>
 </resources>

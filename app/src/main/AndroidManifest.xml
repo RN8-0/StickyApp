@@ -37,6 +37,8 @@
             </intent-filter>
         </activity>
 
+        <activity android:name=".OnboardingActivity" />
+
         <activity android:name=".DetailsActivity" />
 
         <activity android:name=".PremiumActivity" />

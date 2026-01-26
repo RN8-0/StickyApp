@@ -8,7 +8,7 @@
 
     <androidx.constraintlayout.widget.ConstraintLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="92dp"
         android:background="@drawable/card_bg_outline"
         android:padding="8dp">
 
@@ -16,25 +16,26 @@
         <com.google.android.gms.ads.nativead.MediaView
             android:id="@+id/ad_media"
             android:layout_width="100dp"
-            android:layout_height="80dp"
+            android:layout_height="76dp"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent"
             app:layout_constraintBottom_toBottomOf="parent" />
 
         <!-- Very small Ad Badge -->
         <TextView
+            android:id="@+id/ad_badge"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:background="@drawable/bg_badge_outline"
-            android:backgroundTint="#66000000"
+            android:layout_margin="4dp"
+            android:background="#A6000000"
             android:paddingHorizontal="4dp"
             android:paddingVertical="1dp"
             android:text="Reklam"
-            android:textColor="@color/white"
-            android:textSize="7sp"
-            app:layout_constraintBottom_toBottomOf="@id/ad_media"
+            android:textColor="#FFFFFF"
+            android:textSize="8sp"
+            android:textStyle="bold"
             app:layout_constraintStart_toStartOf="@id/ad_media"
-            android:layout_margin="4dp" />
+            app:layout_constraintTop_toTopOf="@id/ad_media" />
 
         <TextView
             android:id="@+id/ad_headline"
@@ -55,9 +56,8 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_marginStart="12dp"
-            android:layout_marginTop="2dp"
             android:ellipsize="end"
-            android:maxLines="2"
+            android:maxLines="1"
             android:textColor="@color/text_secondary"
             android:textSize="11sp"
             app:layout_constraintEnd_toEndOf="parent"
@@ -68,12 +68,11 @@
         <com.google.android.material.button.MaterialButton
             android:id="@+id/ad_call_to_action"
             android:layout_width="wrap_content"
-            android:layout_height="30dp"
-            android:layout_marginTop="4dp"
+            android:layout_height="28dp"
             android:insetTop="0dp"
             android:insetBottom="0dp"
             android:paddingHorizontal="10dp"
-            android:textColor="@color/white"
+            android:textColor="#FFFFFF"
             android:textSize="9sp"
             android:textStyle="bold"
             app:backgroundTint="@color/accent"
