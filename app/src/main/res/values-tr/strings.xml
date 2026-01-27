@@ -360,4 +360,49 @@
     <string name="support_free">Standart</string>
     <string name="premium_cta">Şimdi Premium\'a Geç</string>
     <string name="free_cta">Kısıtlı Sürümle Devam Et</string>
+
+    <!-- Photo Editor -->
+    <string name="select_image_source">Görsel Kaynağı Seç</string>
+    <string name="gallery">Galeri</string>
+    <string name="camera">Kamera</string>
+    <string name="edit_sticker">Çıkartmayı Düzenle</string>
+    <string name="brush_color">Fırça Rengi</string>
+    <string name="brush_size">Fırça Boyutu</string>
+    <string name="eraser_size">Silgi Boyutu</string>
+    <string name="border_options">Kenarlık Seçenekleri</string>
+    <string name="border_color">Kenarlık Rengi</string>
+    <string name="border_size">Kenarlık Kalınlığı</string>
+    <string name="apply">Uygula</string>
+    <string name="discard_changes">Değişiklikleri Sil?</string>
+    <string name="discard_changes_message">Yaptığın değişiklikler kaybolacak. Çıkmak istediğinden emin misin?</string>
+    <string name="discard">Sil</string>
+    <string name="error_loading_image">Görsel yüklenemedi</string>
+    <string name="redo">Yinele</string>
+    <string name="close">Kapat</string>
+
+    <!-- Sticker Maker Localization -->
+    <string name="placeholder_select_image">Başlamak için bir görsel seçin</string>
+    <string name="btn_select_image">Görsel Seç</string>
+    <string name="error_select_image_first">Önce bir görsel seçin</string>
+    <string name="error_bg_removal_unavailable">Arkaplan silme özelliği kullanılamıyor</string>
+    <string name="error_save_failed">Kaydetme başarısız: %s</string>
+    <string name="error_save_failed_generic">Kaydetme başarısız</string>
+    <string name="error_generic">Hata: %s</string>
+    <string name="sticker_count_suffix"> çıkartma</string>
+    <string name="error_set_cover_first">Lütfen önce bir kapak resmi ayarlayın</string>
+    <string name="sticker_deleted">Çıkartma silindi</string>
+    <string name="error_delete_failed">Silme işlemi başarısız</string>
+    <string name="pack_deleted_success">Paket başarıyla silindi</string>
+    <string name="delete_sticker">Çıkartmayı Sil</string>
+    <string name="delete_sticker_confirm">Bu çıkartmayı silmek istediğinize emin misiniz?\n\n(Bu işlem WhatsApp\'tan da kaldırılmasını tetikleyecektir)</string>
+    <string name="emoji_faces">Yüzler</string>
+    <string name="emoji_hearts">Kalpler</string>
+    <string name="emoji_hands">El Hareketleri</string>
+    <string name="emoji_symbols">Semboller</string>
+    <string name="emoji_animals">Hayvanlar</string>
+    <string name="emoji_food">Yiyecek</string>
+    <string name="emoji_nature">Doğa</string>
+    <string name="emoji_sport">Spor</string>
+    <string name="sync_whatsapp_msg">Yeni çıkartma eklendi, WhatsApp güncelleniyor...</string>
+    <string name="selection_count">Seçilen: %d</string>
 </resources>

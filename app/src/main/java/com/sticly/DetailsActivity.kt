@@ -140,7 +140,14 @@ class DetailsActivity : AppCompatActivity() {
                 // 1. Önce statik cache'e bak (Anında yükleme için)
                 var pack = StickerRepository.allPacksCache.find { it.id == packId }
                 
-                // 2. Eğer cache'de yoksa, lokal assets'ten hızlıca yüklemeyi dene (İlk açılışta gecikmeyi önlemek için)
+                // 2. Eğer custom paket ise ve cache'de yoksa, CustomStickerManager'dan yükle
+                if (pack == null && packId.startsWith("custom_")) {
+                    pack = withContext(Dispatchers.IO) {
+                        CustomStickerManager.toWhatsAppPack(this@DetailsActivity, packId)
+                    }
+                }
+
+                // 3. Eğer hala yoksa, lokal assets'ten hızlıca yüklemeyi dene (İlk açılışta gecikmeyi önlemek için)
                 if (pack == null) {
                     pack = withContext(Dispatchers.IO) { Loader.get(this@DetailsActivity, packId) }
                 }
@@ -152,8 +159,9 @@ class DetailsActivity : AppCompatActivity() {
                     showLoadingState(true)
                 }
 
-                // 3. Arka planda veriyi tazele veya tam listeyi çek (Değişiklik varsa yansısın)
-                val packs = withContext(Dispatchers.IO) { StickerRepository.loadPacks(this@DetailsActivity) }
+                // 4. Arka planda veriyi tazele veya tam listeyi çek (Değişiklik varsa yansısın)
+                // KRITIK: forceRefresh=true yaparak yeni oluşturulan veya değişen paketleri alıyoruz
+                val packs = withContext(Dispatchers.IO) { StickerRepository.loadPacks(this@DetailsActivity, forceRefresh = true) }
                 val updatedPack = packs.find { it.id == packId }
                 
                 if (updatedPack != null) {
@@ -240,7 +248,7 @@ class DetailsActivity : AppCompatActivity() {
             onSelectionChanged = { count ->
                 if (isDeleteMode) {
                     // Seçim sayısını başlıkta göster
-                    findViewById<android.widget.TextView>(R.id.name).text = if (count > 0) "Seçilen: $count" else getString(R.string.selection_mode_title)
+                    findViewById<android.widget.TextView>(R.id.name).text = if (count > 0) "${getString(R.string.selection_count, count)}" else getString(R.string.selection_mode_title)
                 }
             }
         )

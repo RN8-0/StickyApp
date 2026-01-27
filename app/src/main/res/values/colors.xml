@@ -31,6 +31,7 @@
     <color name="black">#000000</color>
     <color name="grey">#BDC3C7</color>
     <color name="divider">#E0E0E0</color>
+    <color name="ripple_color">#40000000</color>
 
     <!-- Status Colors -->
     <color name="danger">#E74C3C</color>

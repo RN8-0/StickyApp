@@ -237,7 +237,8 @@ class MainActivity : AppCompatActivity() {
         }
 
         tabCreate.setOnClickListener {
-            startActivity(Intent(this, StickerMakerActivity::class.java))
+            @Suppress("DEPRECATION")
+            startActivityForResult(Intent(this, StickerMakerActivity::class.java), REQUEST_STICKER_MAKER)
             overridePendingTransition(R.anim.fade_in, R.anim.fade_out)
         }
 
@@ -1026,6 +1027,7 @@ class MainActivity : AppCompatActivity() {
 
     companion object {
         private const val REQUEST_DELETE_PACK = 2001
+        private const val REQUEST_STICKER_MAKER = 2002
     }
 
     private fun deleteCustomPack(pack: Pack) {
@@ -1138,6 +1140,23 @@ class MainActivity : AppCompatActivity() {
                         refreshPacks()
                     }
                 }
+            }
+        }
+
+        // Handle sticker maker result - refresh custom packs immediately and switch to My Stickers
+        if (requestCode == REQUEST_STICKER_MAKER && resultCode == RESULT_OK) {
+            lifecycleScope.launch {
+                val customPacks = CustomStickerManager.getCustomPacks(this@MainActivity).mapNotNull { cp ->
+                    CustomStickerManager.toWhatsAppPack(this@MainActivity, cp.id)?.copy(category = "custom")
+                }
+                val firebasePacks = allPacks.filter { it.category != "custom" }
+                allPacks = firebasePacks + customPacks
+
+                // Switch to My Stickers tab to show the newly added sticker
+                currentFilter = FilterType.CUSTOM
+                carouselContainer.visibility = View.GONE
+                updateBottomNavUI()
+                applyFilters()
             }
         }
     }

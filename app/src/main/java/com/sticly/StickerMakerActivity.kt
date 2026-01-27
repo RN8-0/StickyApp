@@ -1,281 +1,357 @@
 package com.sticly
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.*
 import android.net.Uri
 import android.os.Bundle
-import android.os.Environment
-import android.provider.OpenableColumns
-import android.util.Log
+import android.provider.MediaStore
 import android.view.LayoutInflater
-import android.content.Context
 import android.view.View
+import android.view.MotionEvent
+import android.view.ViewGroup
 import android.widget.*
-import androidx.activity.result.PickVisualMediaRequest
+import android.graphics.drawable.GradientDrawable
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.core.view.ViewCompat
-import androidx.core.view.WindowInsetsCompat
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import android.view.animation.OvershootInterpolator
-import android.content.res.ColorStateList
-import android.text.Editable
-import android.text.TextWatcher
-// import com.arthenica.ffmpegkit.FFmpegKit
-// import com.arthenica.ffmpegkit.ReturnCode
+import com.airbnb.lottie.LottieAnimationView
+import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.button.MaterialButton
+import com.google.android.material.card.MaterialCardView
+import com.google.android.material.slider.Slider
 import com.google.android.material.textfield.TextInputEditText
 import com.google.mediapipe.framework.image.BitmapImageBuilder
-import com.google.mediapipe.framework.image.MPImage
 import com.google.mediapipe.framework.image.ByteBufferExtractor
 import com.google.mediapipe.tasks.core.BaseOptions
 import com.google.mediapipe.tasks.vision.core.RunningMode
 import com.google.mediapipe.tasks.vision.imagesegmenter.ImageSegmenter
-import com.google.mediapipe.tasks.vision.imagesegmenter.ImageSegmenter.ImageSegmenterOptions
-import java.nio.ByteBuffer
+import com.yalantis.ucrop.UCrop
+import ja.burhanrashid52.photoeditor.*
+import ja.burhanrashid52.photoeditor.shape.ShapeBuilder
+import ja.burhanrashid52.photoeditor.shape.ShapeType
 import java.io.File
 import java.io.FileOutputStream
-import java.util.concurrent.TimeUnit
-import com.yalantis.ucrop.UCrop
-import com.yalantis.ucrop.UCropActivity
-import android.view.MotionEvent
-import android.view.ScaleGestureDetector
-import android.graphics.drawable.BitmapDrawable
-import android.view.Gravity
-import android.view.ViewGroup
-import androidx.core.view.children
-import androidx.core.widget.addTextChangedListener
-import com.google.android.material.bottomsheet.BottomSheetDialog
-import com.google.android.material.slider.Slider
-import java.util.Locale
+import java.util.*
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.*
+import com.bumptech.glide.Glide
 
-class StickerMakerActivity : AppCompatActivity() {
+class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
+
     override fun attachBaseContext(newBase: android.content.Context) {
         super.attachBaseContext(LocaleHelper.onAttach(newBase))
     }
 
-    private lateinit var toolbarTitle: TextView
+    // Views
     private lateinit var typeSelectionContainer: View
     private lateinit var editorContainer: View
-    private lateinit var imagePreview: ImageView
-    private lateinit var placeholderContainer: View
-    private lateinit var placeholderIcon: ImageView
-    private lateinit var placeholderText: TextView
-    private lateinit var btnAddToPack: MaterialButton
-    private lateinit var tvMediaInfo: TextView
-    private lateinit var tvQueueProgress: TextView
-    
-    // Processing Overlay
-    private lateinit var processingOverlay: View
-    private lateinit var processingCircle: ProgressBar
-    private lateinit var tvProcessingTitle: TextView
-    private lateinit var tvProcessingSubtitle: TextView
-    private lateinit var tvProcessingPercent: TextView
-    private lateinit var processingIcon: ImageView
+    private lateinit var photoEditorView: PhotoEditorView
+    private lateinit var rvTools: RecyclerView
+    private lateinit var toolOptionsPanel: FrameLayout
+    private lateinit var loadingOverlay: View
+    private lateinit var lottieLoading: LottieAnimationView
+    private lateinit var btnSaveSticker: MaterialButton
+    private lateinit var btnUndo: ImageButton
+    private lateinit var btnRedo: ImageButton
+    private lateinit var btnClose: ImageButton
     private lateinit var adContainerMaker: FrameLayout
-    
-    // Modern Editor Tools
-    private lateinit var stickerEditorView: FrameLayout
-    private lateinit var toolsPanel: View
-    private lateinit var toolCrop: View
-    private lateinit var toolRemoveBg: View
-    private lateinit var toolText: View
-    private lateinit var toolEmoji: View
-    private lateinit var toolReset: View
-    private lateinit var toolChangeMedia: View
-    private lateinit var toolBorder: View
-    private lateinit var toolFlipH: View
-    private lateinit var toolFlipV: View
-    private lateinit var toolRotate: View
-    private lateinit var toolFilters: View
-    private lateinit var toolAdjustments: View
-    private lateinit var toolBrush: View
-    private lateinit var toolEraser: View
+    private lateinit var eraserOverlay: View
+    private lateinit var emptyStatePlaceholder: View
+    private lateinit var btnSelectImagePlaceholder: View
+    private lateinit var undoRedoContainer: View
 
-    private var drawingView: DrawingView? = null
-    private var isDrawingActive = false
+    // PhotoEditor
+    private lateinit var photoEditor: PhotoEditor
 
-    private var borderSize = 0f
-    private var currentBrightness = 0f
-    private var currentContrast = 1f
-    private var currentSaturation = 1f
-    private var currentShadows = 0f
-    private var currentHighlights = 0f
-    private var currentWarmth = 0f
-    private var currentFilterMatrix: ColorMatrix? = null
-    private var selectedFont = Typeface.DEFAULT_BOLD
-
+    // MediaPipe for background removal
     private var imageSegmenter: ImageSegmenter? = null
-    
-    private lateinit var scaleDetector: ScaleGestureDetector
-    private var scaleFactor = 1f
-    private var lastTouchX = 0f
-    private var lastTouchY = 0f
-    private var posX = 0f
-    private var posY = 0f
 
-    private var selectedBitmap: Bitmap? = null
+    // State
+    private var currentBitmap: Bitmap? = null
     private var originalBitmap: Bitmap? = null
-    private var contentBitmap: Bitmap? = null
-    private var photoUri: Uri? = null
-    private var photoFile: File? = null
     private var backgroundRemoved = false
-    private var borderColor = Color.WHITE
-    
-    private var selectedToolView: View? = null
-    
-    private var isAnimatedMode = false
-    private var isProcessing = false
     private var targetPackId: String? = null
-    
-    private val selectedUris = mutableListOf<Uri>()
-    private var currentUriIndex = -1
-    private var currentMimeType: String? = null
+    private var currentToolType: ToolType? = null
 
-    private var cachedMaskAlpha: Bitmap? = null
-    private var maskSourceBitmap: Bitmap? = null
-    
-    // Undo History
-    private val undoStack = mutableListOf<Bitmap>()
-    private lateinit var toolUndo: View
-    
-    // Medya seçici - PickMultipleVisualMedia for better multi-selection support
-    private val pickMultipleMedia = registerForActivityResult(
-        ActivityResultContracts.PickMultipleVisualMedia(30) // Max 30 images
-    ) { uris ->
-        if (uris.isNotEmpty()) {
-            selectedUris.clear()
-            selectedUris.addAll(uris)
-            currentUriIndex = 0
-            loadMediaFromUri(selectedUris[0])
-            updateQueueProgress()
+    // Bitmap History for Undo/Redo
+    private val bitmapHistory = mutableListOf<Bitmap>()
+    private var historyIndex = -1
+    private val maxHistorySize = 15
+
+    // Shape/Brush State
+    private lateinit var shapeBuilder: ShapeBuilder
+    private var currentBrushSize = 40f
+    private var currentBrushColor = Color.RED
+    private var currentBrushOpacity = 255
+    private var isEraserMode = false
+    private var isBrushModeActive = false
+    private var eraserPaint: Paint? = null
+
+    // Camera
+    private var cameraImageUri: Uri? = null
+
+    // Tools
+    enum class ToolType {
+        REMOVE_BG, CROP, BRUSH, ERASER, TEXT, EMOJI, BORDER
+    }
+
+    data class EditorTool(
+        val type: ToolType,
+        val name: String,
+        val iconRes: Int
+    )
+
+    private val tools by lazy {
+        listOf(
+            EditorTool(ToolType.REMOVE_BG, getString(R.string.remove_bg_short), R.drawable.ic_photo),
+            EditorTool(ToolType.CROP, getString(R.string.crop_short), R.drawable.ic_crop),
+            EditorTool(ToolType.BRUSH, getString(R.string.draw_short), R.drawable.ic_brush),
+            EditorTool(ToolType.ERASER, getString(R.string.eraser_short), R.drawable.ic_eraser),
+            EditorTool(ToolType.TEXT, getString(R.string.add_text_short), R.drawable.ic_text),
+            EditorTool(ToolType.EMOJI, getString(R.string.add_emoji_short), R.drawable.ic_emoji),
+            EditorTool(ToolType.BORDER, getString(R.string.border_short), R.drawable.ic_border),
+            EditorTool(ToolType.REMOVE_BG, getString(R.string.reset_short), R.drawable.ic_restore) // Reset tool
+        )
+    }
+
+
+
+    private val imagePickerLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        uri?.let { startCropFromUri(it) }
+    }
+
+    private val cameraLauncher = registerForActivityResult(ActivityResultContracts.TakePicture()) { success ->
+        if (success) {
+            cameraImageUri?.let { startCropFromUri(it) }
         }
     }
 
-    // Fallback for older devices
-    private val pickMediaLauncher = registerForActivityResult(
-        ActivityResultContracts.GetMultipleContents()
-    ) { uris ->
-        if (uris.isNotEmpty()) {
-            selectedUris.clear()
-            selectedUris.addAll(uris)
-            currentUriIndex = 0
-            loadMediaFromUri(selectedUris[0])
-            updateQueueProgress()
+    private val cropLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == RESULT_OK && result.data != null) {
+            val resultUri = UCrop.getOutput(result.data!!)
+            resultUri?.let { uri ->
+                loadImageAfterCrop(uri)
+            }
         }
     }
-
-    // Live text preview view reference
-    private var livePreviewTextView: TextView? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_sticker_maker)
 
-        // MediaPipe Image Segmenter
+        initMediaPipe()
+        initViews()
+        setupToolsRecyclerView()
+        setupClickListeners()
+        setupEraserTouchListener()
+        loadAds()
+
+        targetPackId = intent.getStringExtra("packId")
+    }
+
+    private fun initMediaPipe() {
         try {
-            val baseOptionsBuilder = BaseOptions.builder().setModelAssetPath("selfie_segmenter.tflite")
-            val optionsBuilder = ImageSegmenterOptions.builder()
-                .setBaseOptions(baseOptionsBuilder.build())
+            val baseOptions = BaseOptions.builder()
+                .setModelAssetPath("selfie_segmenter.tflite")
+                .build()
+            val options = ImageSegmenter.ImageSegmenterOptions.builder()
+                .setBaseOptions(baseOptions)
                 .setRunningMode(RunningMode.IMAGE)
                 .setOutputCategoryMask(true)
                 .setOutputConfidenceMasks(false)
-            imageSegmenter = ImageSegmenter.createFromOptions(this, optionsBuilder.build())
+                .build()
+            imageSegmenter = ImageSegmenter.createFromOptions(this, options)
         } catch (e: Exception) {
             e.printStackTrace()
         }
+    }
 
-
-        targetPackId = intent.getStringExtra("packId")
-
-        // UI Binding
-        toolbarTitle = findViewById(R.id.toolbarTitle)
+    private fun initViews() {
         typeSelectionContainer = findViewById(R.id.typeSelectionContainer)
         editorContainer = findViewById(R.id.editorContainer)
-        imagePreview = findViewById(R.id.imagePreview)
-        placeholderContainer = findViewById(R.id.placeholderContainer)
-        placeholderIcon = findViewById(R.id.placeholderIcon)
-        placeholderText = findViewById(R.id.placeholderText)
-        btnAddToPack = findViewById(R.id.btnAddToPack)
-        tvMediaInfo = findViewById(R.id.tvMediaInfo)
-        stickerEditorView = findViewById(R.id.stickerEditorView)
-        editorContainer = findViewById(R.id.editorContainer)
-        typeSelectionContainer = findViewById(R.id.typeSelectionContainer)
-        toolsPanel = editorContainer
+        photoEditorView = findViewById(R.id.photoEditorView)
+        rvTools = findViewById(R.id.rvTools)
+        toolOptionsPanel = findViewById(R.id.toolOptionsPanel)
+        loadingOverlay = findViewById(R.id.loadingOverlay)
+        lottieLoading = findViewById(R.id.lottieLoading)
+        btnSaveSticker = findViewById(R.id.btnSaveSticker)
+        btnUndo = findViewById(R.id.btnUndo)
+        btnRedo = findViewById(R.id.btnRedo)
+        btnClose = findViewById(R.id.btnClose)
+        adContainerMaker = findViewById(R.id.adContainerMaker)
+        eraserOverlay = findViewById(R.id.eraserOverlay)
+        emptyStatePlaceholder = findViewById(R.id.emptyStatePlaceholder)
+        btnSelectImagePlaceholder = findViewById(R.id.btnSelectImagePlaceholder)
+        undoRedoContainer = findViewById(R.id.undoRedoContainer)
 
-        // Initialize scale detector for Pinch-to-Zoom & Pan
-        scaleDetector = ScaleGestureDetector(this, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
-            override fun onScale(detector: ScaleGestureDetector): Boolean {
-                scaleFactor *= detector.scaleFactor
-                scaleFactor = scaleFactor.coerceIn(0.5f, 5.0f)
-                imagePreview.scaleX = scaleFactor
-                imagePreview.scaleY = scaleFactor
-                return true
+        // Setup Lottie
+        lottieLoading.setAnimation("sandy_loading.json")
+
+        // Initialize PhotoEditor
+        photoEditor = PhotoEditor.Builder(this, photoEditorView)
+            .setPinchTextScalable(true)
+            .build()
+        photoEditor.setOnPhotoEditorListener(this)
+
+        shapeBuilder = ShapeBuilder()
+    }
+
+    @SuppressLint("ClickableViewAccessibility")
+    private fun setupEraserTouchListener() {
+        var lastX = -1f
+        var lastY = -1f
+
+        eraserOverlay.setOnTouchListener { _, event ->
+            if (!isEraserMode) return@setOnTouchListener false
+
+            val bitmap = currentBitmap ?: return@setOnTouchListener false
+
+            if (eraserPaint == null) {
+                eraserPaint = Paint().apply {
+                    isAntiAlias = true
+                    xfermode = PorterDuffXfermode(PorterDuff.Mode.CLEAR)
+                    strokeCap = Paint.Cap.ROUND
+                    strokeJoin = Paint.Join.ROUND
+                }
             }
-        })
+            val paint = eraserPaint!!
 
-        imagePreview.setOnTouchListener { view, event ->
-            scaleDetector.onTouchEvent(event)
-            
-            // Handle panning when zoomed
-            when (event.actionMasked) {
+            // Get ImageView and bitmap dimensions
+            val imageView = photoEditorView.source
+            val bitmapWidth = bitmap.width.toFloat()
+            val bitmapHeight = bitmap.height.toFloat()
+
+            // Get actual positions on screen
+            val overlayLocation = IntArray(2)
+            val imageViewLocation = IntArray(2)
+            eraserOverlay.getLocationOnScreen(overlayLocation)
+            imageView.getLocationOnScreen(imageViewLocation)
+
+            // Calculate offset between eraserOverlay and imageView
+            val viewOffsetX = imageViewLocation[0] - overlayLocation[0]
+            val viewOffsetY = imageViewLocation[1] - overlayLocation[1]
+
+            // Get ImageView dimensions
+            val viewWidth = imageView.width.toFloat()
+            val viewHeight = imageView.height.toFloat()
+
+            if (viewWidth == 0f || viewHeight == 0f) return@setOnTouchListener false
+
+            // Transform touch coords from eraserOverlay to imageView coordinate system
+            val adjustedX = event.x - viewOffsetX
+            val adjustedY = event.y - viewOffsetY
+
+            // Calculate Scale (FitCenter)
+            val viewRatio = viewWidth / viewHeight
+            val bitmapRatio = bitmapWidth / bitmapHeight
+            val scale: Float
+            val offsetX: Float
+            val offsetY: Float
+
+            if (bitmapRatio > viewRatio) {
+                scale = viewWidth / bitmapWidth
+                offsetX = 0f
+                offsetY = (viewHeight - bitmapHeight * scale) / 2f
+            } else {
+                scale = viewHeight / bitmapHeight
+                offsetX = (viewWidth - bitmapWidth * scale) / 2f
+                offsetY = 0f
+            }
+
+            // Transform touch coords to bitmap coords
+            val touchX = (adjustedX - offsetX) / scale
+            val touchY = (adjustedY - offsetY) / scale
+
+            // Boundary check
+            if (touchX < 0 || touchX >= bitmapWidth || touchY < 0 || touchY >= bitmapHeight) {
+                if (event.action == MotionEvent.ACTION_MOVE) {
+                    lastX = touchX
+                    lastY = touchY
+                } else {
+                    lastX = -1f
+                    lastY = -1f
+                }
+                return@setOnTouchListener true
+            }
+
+            val canvas = Canvas(bitmap)
+            val scaledEraserSize = currentBrushSize / scale
+
+            when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
-                    lastTouchX = event.rawX
-                    lastTouchY = event.rawY
+                    saveBitmapToHistory()
+                    lastX = touchX
+                    lastY = touchY
+
+                    paint.style = Paint.Style.STROKE
+                    paint.strokeWidth = scaledEraserSize
+                    canvas.drawPoint(touchX, touchY, paint)
+
+                    photoEditorView.source.setImageBitmap(bitmap)
                 }
                 MotionEvent.ACTION_MOVE -> {
-                    if (!scaleDetector.isInProgress) {
-                        val dx = event.rawX - lastTouchX
-                        val dy = event.rawY - lastTouchY
-                        
-                        posX += dx
-                        posY += dy
-                        
-                        view.translationX = posX
-                        view.translationY = posY
-                        
-                        lastTouchX = event.rawX
-                        lastTouchY = event.rawY
+                    if (lastX >= 0 && lastY >= 0) {
+                        paint.style = Paint.Style.STROKE
+                        paint.strokeWidth = scaledEraserSize
+                        canvas.drawLine(lastX, lastY, touchX, touchY, paint)
                     }
+                    lastX = touchX
+                    lastY = touchY
+                    photoEditorView.source.setImageBitmap(bitmap)
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    lastX = -1f
+                    lastY = -1f
+                    updateUndoRedoState()
                 }
             }
             true
         }
-        
-        // Tool Views Binding
-        toolChangeMedia = findViewById(R.id.toolChangeMedia)
-        toolCrop = findViewById(R.id.toolCrop)
-        toolRemoveBg = findViewById(R.id.toolRemoveBg)
-        toolText = findViewById(R.id.toolText)
-        toolEmoji = findViewById(R.id.toolEmoji)
-        toolReset = findViewById(R.id.toolReset)
-        toolBorder = findViewById(R.id.toolBorder)
-        toolFlipH = findViewById(R.id.toolFlipH)
-        toolFlipV = findViewById(R.id.toolFlipV)
-        toolRotate = findViewById(R.id.toolRotate)
-        toolFilters = findViewById(R.id.toolFilters)
-        toolAdjustments = findViewById(R.id.toolAdjustments)
-        toolBrush = findViewById(R.id.toolBrush)
-        toolEraser = findViewById(R.id.toolEraser)
-        toolUndo = findViewById(R.id.toolUndo)
-        
-        setupToolsUI()
-        
-        processingOverlay = findViewById(R.id.processingOverlay)
-        processingCircle = findViewById(R.id.processingCircle)
-        tvProcessingTitle = findViewById(R.id.tvProcessingTitle)
-        tvProcessingSubtitle = findViewById(R.id.tvProcessingSubtitle)
-        tvProcessingPercent = findViewById(R.id.tvProcessingPercent)
-        adContainerMaker = findViewById(R.id.adContainerMaker)
-        
+    }
+
+    private fun setupToolsRecyclerView() {
+        rvTools.layoutManager = LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false)
+        rvTools.adapter = ToolsAdapter(tools) { tool ->
+            onToolSelected(tool)
+        }
+    }
+
+    private fun setupClickListeners() {
+        // Type Selection
+        findViewById<View>(R.id.cardStaticType).setOnClickListener {
+            showEditor()
+        }
+
+        // Editor buttons
+        btnClose.setOnClickListener {
+            showExitConfirmDialog()
+        }
+
+        btnUndo.setOnClickListener {
+            undoSticker()
+        }
+
+        btnRedo.setOnClickListener {
+            redoSticker()
+        }
+
+        btnSaveSticker.setOnClickListener {
+            saveSticker()
+        }
+
+        btnSelectImagePlaceholder.setOnClickListener {
+            imagePickerLauncher.launch("image/*")
+        }
+    }
+
+    private fun loadAds() {
         if (!PreferencesHelper.isPremium(this)) {
             AdManager.loadNativeAd(this, AdManager.NativeAdType.MAKER) { nativeAd ->
                 val adView = layoutInflater.inflate(R.layout.item_ad_native, null) as com.google.android.gms.ads.nativead.NativeAdView
@@ -285,2277 +361,1116 @@ class StickerMakerActivity : AppCompatActivity() {
                 adContainerMaker.visibility = View.VISIBLE
             }
         }
-        
-        toolUndo.setOnClickListener { undoSticker() }
-        toolUndo.visibility = View.GONE // Start hidden
-
-        // Explicitly bind the icon if needed, or check for typos
-        findViewById<ImageView>(R.id.processingIcon)?.let { 
-            processingIcon = it
-        } ?: run {
-            // Fallback or debug
-        }
-
-        val btnHome = findViewById<ImageButton>(R.id.btnHome)
-        val cardStatic = findViewById<View>(R.id.cardStaticType)
-        val cardAnimated = findViewById<View>(R.id.cardAnimatedType)
-
-        // Başlangıç durumu
-        if (targetPackId != null) {
-            val pack = CustomStickerManager.getPackInfo(this, targetPackId!!)
-            if (pack != null) {
-                isAnimatedMode = pack.isAnimated
-                enterEditorMode()
-            }
-        }
-
-        // Back button removed, using system back or Home button
-        
-        btnHome.setOnClickListener {
-            val intent = Intent(this, MainActivity::class.java)
-            intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
-            startActivity(intent)
-            finish()
-        }
-
-        cardStatic.setOnClickListener {
-            isAnimatedMode = false
-            enterEditorMode()
-        }
-
-        placeholderContainer.setOnClickListener {
-            openGallery()
-        }
-
-        cardAnimated.setOnClickListener {
-            Toast.makeText(this, R.string.animated_sticker_coming_soon, Toast.LENGTH_SHORT).show()
-        }
-
-        // setupToolsActions() will handle media selection and background removal now.
-        
-        btnAddToPack.setOnClickListener {
-            if (isProcessing) return@setOnClickListener
-            if (!checkMediaGuard()) return@setOnClickListener
-            
-            // Capture the canvas if we have any stickers/text
-            val viewWidth = stickerEditorView.width
-            val viewHeight = stickerEditorView.height
-            
-            if (viewWidth <= 0 || viewHeight <= 0) {
-                val fallback = selectedBitmap ?: originalBitmap
-                if (fallback != null) {
-                    showPackSelectionDialog(fallback)
-                } else {
-                    Toast.makeText(this, "Görsel yüklenemedi", Toast.LENGTH_SHORT).show()
-                }
-                return@setOnClickListener
-            }
-
-            try {
-                // First ensure all stickers are correctly placed
-                val captureBitmap = Bitmap.createBitmap(viewWidth, viewHeight, Bitmap.Config.ARGB_8888)
-                val canvas = Canvas(captureBitmap)
-                stickerEditorView.draw(canvas)
-                
-                showPackSelectionDialog(captureBitmap)
-            } catch (e: Exception) {
-                e.printStackTrace()
-                Toast.makeText(this, "Hata: Görsel yakalanamadı", Toast.LENGTH_SHORT).show()
-            }
-        }
-
-        setupToolsActions()
-        setupFlipRotateTools()
-        setupEdgeToEdge()
     }
 
-    private fun saveToHistory() {
-        selectedBitmap?.let { 
-            if (undoStack.size >= 15) undoStack.removeAt(0)
-            undoStack.add(it.copy(it.config ?: Bitmap.Config.ARGB_8888, false))
-            toolUndo.visibility = View.VISIBLE
+    // ==================== Image Loading ====================
+
+    private fun showImageSourceDialog() {
+        val dialog = BottomSheetDialog(this)
+        val view = layoutInflater.inflate(R.layout.dialog_image_source, null)
+        dialog.setContentView(view)
+
+        view.findViewById<View>(R.id.btnGallery).setOnClickListener {
+            dialog.dismiss()
+            imagePickerLauncher.launch("image/*")
+        }
+
+        view.findViewById<View>(R.id.btnCamera).setOnClickListener {
+            dialog.dismiss()
+            openCamera()
+        }
+
+        dialog.show()
+    }
+
+    private fun openCamera() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+            launchCamera()
+        } else {
+            requestPermissions(arrayOf(Manifest.permission.CAMERA), 100)
         }
     }
 
-    private fun undoSticker() {
-        if (undoStack.isNotEmpty()) {
-            val last = undoStack.removeAt(undoStack.size - 1)
-            selectedBitmap = last
-            contentBitmap = last.copy(last.config ?: Bitmap.Config.ARGB_8888, true)
-            imagePreview.setImageBitmap(selectedBitmap)
-            if (undoStack.isEmpty()) toolUndo.visibility = View.GONE
-            // Reset state to match the undoed bitmap
-            borderSize = 0f
-            currentBrightness = 0f
-            currentContrast = 1f
-            currentSaturation = 1f
-            currentFilterMatrix = null
-            applyAllEffects(isFull = true)
-        }
+    private fun launchCamera() {
+        val photoFile = File(cacheDir, "camera_${System.currentTimeMillis()}.jpg")
+        cameraImageUri = FileProvider.getUriForFile(this, "$packageName.provider", photoFile)
+        cameraLauncher.launch(cameraImageUri)
     }
 
-    private fun startCropIntent() {
-        if (selectedBitmap == null) return
-        
-        saveToHistory() // Save before crop
-        
+    private fun startCropFromUri(uri: Uri) {
         val cacheDir = File(cacheDir, "crop")
         if (!cacheDir.exists()) cacheDir.mkdirs()
-        val destinationFile = File(cacheDir, "cropped_image_${System.currentTimeMillis()}.png")
-        val sourceFile = File(cacheDir, "source_image.png")
-        
-        lifecycleScope.launch(Dispatchers.IO) {
-            val out = FileOutputStream(sourceFile)
-            // Use JPEG if background is NOT removed for much faster processing
-            val format = if (backgroundRemoved) Bitmap.CompressFormat.PNG else Bitmap.CompressFormat.JPEG
-            selectedBitmap?.compress(format, 90, out)
-            out.close()
-            
-            withContext(Dispatchers.Main) {
-                val options = UCrop.Options().apply {
-                    setCompressionFormat(Bitmap.CompressFormat.PNG)
-                    setFreeStyleCropEnabled(true)
-                    setToolbarColor(ContextCompat.getColor(this@StickerMakerActivity, R.color.toolbar_bg))
-                    setStatusBarColor(ContextCompat.getColor(this@StickerMakerActivity, R.color.toolbar_bg))
-                    setActiveControlsWidgetColor(ContextCompat.getColor(this@StickerMakerActivity, R.color.accent))
-                    setCircleDimmedLayer(false)
-                    setHideBottomControls(false)
-                    setToolbarTitle("Kırp")
-                }
+        val destFile = File(cacheDir, "cropped_${System.currentTimeMillis()}.png")
+        val destUri = Uri.fromFile(destFile)
 
-                UCrop.of(Uri.fromFile(sourceFile), Uri.fromFile(destinationFile))
-                    .withMaxResultSize(1024, 1024)
-                    .withOptions(options)
-                    .withAspectRatio(1f, 1f)
-                    .start(this@StickerMakerActivity)
-            }
+        val options = UCrop.Options().apply {
+            setCompressionFormat(Bitmap.CompressFormat.PNG)
+            setCompressionQuality(100)
+            setToolbarColor(ContextCompat.getColor(this@StickerMakerActivity, R.color.toolbar_bg))
+            setStatusBarColor(ContextCompat.getColor(this@StickerMakerActivity, R.color.toolbar_bg))
+            setActiveControlsWidgetColor(ContextCompat.getColor(this@StickerMakerActivity, R.color.accent))
+            setToolbarWidgetColor(ContextCompat.getColor(this@StickerMakerActivity, R.color.white))
+            setRootViewBackgroundColor(ContextCompat.getColor(this@StickerMakerActivity, R.color.background))
+            setFreeStyleCropEnabled(true)
         }
+
+        val intent = UCrop.of(uri, destUri)
+            .withOptions(options)
+            .getIntent(this)
+
+        cropLauncher.launch(intent)
     }
 
-
-    private fun flattenStickersToBitmap() {
-        val stickers = mutableListOf<View>()
-        for (i in 0 until stickerEditorView.childCount) {
-            val child = stickerEditorView.getChildAt(i)
-            // imagePreview is at 0, placeholder at 1, tvMediaInfo at 2, DrawingView at 3
-            if (i > 3) stickers.add(child)
-        }
-
-        if (stickers.isEmpty()) return
-
-        ensureMutableBitmap()
-        contentBitmap?.let { base ->
-            val canvas = Canvas(base)
-            val viewWidth = stickerEditorView.width.toFloat()
-            val viewHeight = stickerEditorView.height.toFloat()
-            val bmpWidth = base.width.toFloat()
-            val bmpHeight = base.height.toFloat()
-            val scaleX = bmpWidth / viewWidth
-            val scaleY = bmpHeight / viewHeight
-            
-            stickers.forEach { sticker ->
-                canvas.save()
-                canvas.scale(scaleX, scaleY)
-                sticker.draw(canvas)
-                canvas.restore()
-                stickerEditorView.removeView(sticker)
-            }
-            selectedBitmap = base
-            imagePreview.setImageBitmap(selectedBitmap)
-        }
-    }
-
-    private fun setupToolsUI() {
-        // Change Media
-        toolChangeMedia.findViewById<ImageView>(R.id.icon).setImageResource(R.drawable.ic_photo)
-        toolChangeMedia.findViewById<TextView>(R.id.title).text = getString(R.string.change_media_short)
-
-        // Crop
-        toolCrop.findViewById<ImageView>(R.id.icon).setImageResource(R.drawable.ic_crop)
-        toolCrop.findViewById<TextView>(R.id.title).text = getString(R.string.crop_short)
-
-        // Remove Bg - Premium Style (Yellow + Star)
-        toolRemoveBg.findViewById<com.google.android.material.card.MaterialCardView>(R.id.cardView).setCardBackgroundColor(Color.parseColor("#FFD700")) // Gold/Yellow
-        toolRemoveBg.findViewById<ImageView>(R.id.icon).apply {
-            setImageResource(R.drawable.ic_premium)
-            imageTintList = ColorStateList.valueOf(Color.BLACK)
-        }
-        toolRemoveBg.findViewById<TextView>(R.id.title).apply {
-            text = getString(R.string.remove_bg_short)
-            setTextColor(Color.parseColor("#8B4513")) // Brownish for contrast
-        }
-
-        // Text
-        toolText.findViewById<ImageView>(R.id.icon).setImageResource(R.drawable.ic_text)
-        toolText.findViewById<TextView>(R.id.title).text = getString(R.string.add_text_short)
-
-        // Emoji
-        toolEmoji.findViewById<ImageView>(R.id.icon).setImageResource(R.drawable.ic_emoji)
-        toolEmoji.findViewById<TextView>(R.id.title).text = getString(R.string.add_emoji_short)
-
-        // Reset
-        toolReset.findViewById<ImageView>(R.id.icon).setImageResource(R.drawable.ic_delete)
-        toolReset.findViewById<TextView>(R.id.title).text = getString(R.string.reset_short)
-
-        // Border
-        toolBorder.findViewById<ImageView>(R.id.icon).setImageResource(R.drawable.ic_border)
-        toolBorder.findViewById<TextView>(R.id.title).text = getString(R.string.border_short)
-
-        // Flip H
-        toolFlipH.findViewById<ImageView>(R.id.icon).setImageResource(R.drawable.ic_back)
-        toolFlipH.findViewById<ImageView>(R.id.icon).rotation = 180f
-        toolFlipH.findViewById<TextView>(R.id.title).text = getString(R.string.flip_h_short)
-
-        // Flip V
-        toolFlipV.findViewById<ImageView>(R.id.icon).setImageResource(R.drawable.ic_back)
-        toolFlipV.findViewById<ImageView>(R.id.icon).rotation = 270f
-        toolFlipV.findViewById<TextView>(R.id.title).text = getString(R.string.flip_v_short)
-
-        // Rotate
-        toolRotate.findViewById<ImageView>(R.id.icon).setImageResource(R.drawable.ic_restore)
-        toolRotate.findViewById<TextView>(R.id.title).text = getString(R.string.rotate_short)
-
-        // Undo
-        toolUndo.findViewById<ImageView>(R.id.icon).setImageResource(R.drawable.ic_back)
-        toolUndo.findViewById<TextView>(R.id.title).text = "GERİ AL"
-
-        // Filters
-        toolFilters.findViewById<ImageView>(R.id.icon).setImageResource(R.drawable.ic_theme)
-        toolFilters.findViewById<TextView>(R.id.title).text = getString(R.string.filter_short)
-
-        // Adjustments
-        toolAdjustments.findViewById<ImageView>(R.id.icon).setImageResource(R.drawable.ic_tune)
-        toolAdjustments.findViewById<TextView>(R.id.title).text = getString(R.string.adjustments)
-
-        // Brush
-        toolBrush.findViewById<ImageView>(R.id.icon).setImageResource(R.drawable.ic_brush)
-        toolBrush.findViewById<TextView>(R.id.title).text = getString(R.string.draw_short)
-
-        // Eraser
-        toolEraser.findViewById<ImageView>(R.id.icon).setImageResource(R.drawable.ic_eraser)
-        toolEraser.findViewById<TextView>(R.id.title).text = getString(R.string.eraser_short)
-
-        // All tools interaction
-        val tools = listOf(toolChangeMedia, toolCrop, toolUndo, toolRemoveBg, toolBrush, toolEraser, toolText, toolEmoji, toolBorder, toolFlipH, toolFlipV, toolRotate, toolFilters, toolAdjustments)
-        tools.forEach { tool ->
-            tool.setOnTouchListener { view, event ->
-                when (event.action) {
-                    MotionEvent.ACTION_DOWN -> view.animate().scaleX(0.9f).scaleY(0.9f).setDuration(100).start()
-                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> view.animate().scaleX(1.0f).scaleY(1.0f).setDuration(100).start()
-                }
-                false
-            }
-        }
-    }
-
-    private fun setupToolsActions() {
-        toolChangeMedia.setOnClickListener { openGallery() }
-
-        toolCrop.setOnClickListener {
-            if (!checkMediaGuard()) return@setOnClickListener
-            startCropIntent()
-        }
-
-        toolBrush.setOnClickListener {
-            if (!checkMediaGuard()) return@setOnClickListener
-            updateToolSelection(it)
-            toggleDrawingMode(false)
-        }
-
-        toolEraser.setOnClickListener {
-            if (!checkMediaGuard()) return@setOnClickListener
-            updateToolSelection(it)
-            saveToHistory() // Save before flattening
-            flattenStickersToBitmap()
-            toggleDrawingMode(true)
-        }
-
-        toolText.setOnClickListener {
-            if (!checkMediaGuard()) return@setOnClickListener
-            updateToolSelection(it)
-            showTextEditorDialog()
-        }
-
-        toolEmoji.setOnClickListener {
-            if (!checkMediaGuard()) return@setOnClickListener
-            updateToolSelection(it)
-            showEmojiPicker()
-        }
-        
-        toolRemoveBg.setOnClickListener {
-            if (!checkMediaGuard()) return@setOnClickListener
-            updateToolSelection(it)
-            if (backgroundRemoved) undoRemoveBackground() else selectedBitmap?.let { b -> processRemoveBackground(b) }
-        }
-        
-        toolBorder.setOnClickListener {
-            if (!checkMediaGuard()) return@setOnClickListener
-            updateToolSelection(it)
-            showBorderEditor()
-        }
-        
-        toolFilters.setOnClickListener {
-            if (!checkMediaGuard()) return@setOnClickListener
-            updateToolSelection(it)
-            showFiltersDialog()
-        }
-        
-        toolAdjustments.setOnClickListener {
-            if (!checkMediaGuard()) return@setOnClickListener
-            updateToolSelection(it)
-            showAdjustmentsDialog()
-        }
-
-        toolReset.setOnClickListener { resetEditorContent() }
-    }
-
-    private fun updateToolSelection(view: View?) {
-        val accentColor = ContextCompat.getColor(this, R.color.accent)
-        val defaultColor = ContextCompat.getColor(this, R.color.text_primary)
-        val tools = listOf(toolRemoveBg, toolText, toolEmoji, toolBorder, toolFlipH, toolFlipV, toolRotate, toolFilters, toolAdjustments, toolBrush, toolEraser)
-        tools.forEach { tool ->
-            if (tool != toolRemoveBg) {
-                tool.background = null
-                tool.findViewById<ImageView>(R.id.icon)?.imageTintList = ColorStateList.valueOf(defaultColor)
-            } else {
-                // Keep premium style but maybe add a border if selected
-                if (view == toolRemoveBg) {
-                    tool.findViewById<com.google.android.material.card.MaterialCardView>(R.id.cardView)?.apply {
-                        strokeColor = accentColor
-                        strokeWidth = 4
-                    }
-                } else {
-                    tool.findViewById<com.google.android.material.card.MaterialCardView>(R.id.cardView)?.apply {
-                        strokeWidth = 0
-                    }
-                }
-            }
-        }
-        if (view != toolRemoveBg) {
-            view?.findViewById<ImageView>(R.id.icon)?.imageTintList = ColorStateList.valueOf(accentColor)
-        }
-        selectedToolView = view
-
-        // Pause drawing if switching tools
-        if (view != toolBrush && view != toolEraser) {
-            isDrawingActive = false
-            drawingView?.setDrawingEnabled(false)
-        }
-    }
-
-    private fun setupFlipRotateTools() {
-        toolFlipH.setOnClickListener {
-            if (!checkMediaGuard()) return@setOnClickListener
-            contentBitmap?.let { bmp ->
-                val matrix = Matrix().apply { postScale(-1f, 1f, bmp.width / 2f, bmp.height / 2f) }
-                contentBitmap = Bitmap.createBitmap(bmp, 0, 0, bmp.width, bmp.height, matrix, true)
-                selectedBitmap = contentBitmap
-                imagePreview.setImageBitmap(selectedBitmap)
-            }
-        }
-
-        toolFlipV.setOnClickListener {
-            if (!checkMediaGuard()) return@setOnClickListener
-            contentBitmap?.let { bmp ->
-                val matrix = Matrix().apply { postScale(1f, -1f, bmp.width / 2f, bmp.height / 2f) }
-                contentBitmap = Bitmap.createBitmap(bmp, 0, 0, bmp.width, bmp.height, matrix, true)
-                selectedBitmap = contentBitmap
-                imagePreview.setImageBitmap(selectedBitmap)
-            }
-        }
-
-        toolRotate.setOnClickListener {
-            if (!checkMediaGuard()) return@setOnClickListener
-            contentBitmap?.let { bmp ->
-                val matrix = Matrix().apply { postRotate(90f) }
-                contentBitmap = Bitmap.createBitmap(bmp, 0, 0, bmp.width, bmp.height, matrix, true)
-                selectedBitmap = contentBitmap
-                imagePreview.setImageBitmap(selectedBitmap)
-            }
-        }
-    }
-
-    private fun toggleDrawingMode(isEraser: Boolean) {
-        if (drawingView == null) {
-            drawingView = DrawingView(this).apply {
-                layoutParams = FrameLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.MATCH_PARENT
-                )
-            }
-            // Add DrawingView at index 3 (after imagePreview, placeholder, tvMediaInfo)
-            // This ensures it is BEHIND any stickers added with addView()
-            stickerEditorView.addView(drawingView, 3)
-        }
-
-        isDrawingActive = true
-        drawingView?.apply {
-            visibility = View.VISIBLE
-            setEraserMode(isEraser)
-            showDrawingSettingsDialog(isEraser)
-        }
-    }
-
-    private fun showDrawingSettingsDialog(isEraser: Boolean) {
-        val dialog = BottomSheetDialog(this, R.style.TransparentBottomSheetDialog)
-        val container = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(64, 64, 64, 64)
-            setBackgroundResource(R.drawable.bg_editor_container)
-            backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(context, R.color.card_bg))
-        }
-        dialog.setContentView(container)
-
-        val title = TextView(this).apply {
-            text = if (isEraser) getString(R.string.eraser_short) else getString(R.string.draw_short)
-            textSize = 20f
-            setTextColor(ContextCompat.getColor(context, R.color.text_primary))
-            setTypeface(null, Typeface.BOLD)
-            setPadding(0, 0, 0, 32)
-        }
-        container.addView(title)
-
-        // Brush Size
-        val label = TextView(this).apply {
-            text = "Boyut"
-            textSize = 14f
-            setTextColor(ContextCompat.getColor(context, R.color.text_secondary))
-            setPadding(0, 16, 0, 8)
-        }
-        container.addView(label)
-
-        val slider = Slider(this).apply {
-            valueFrom = 5f
-            valueTo = 200f
-            value = drawingView?.getBrushSize() ?: 50f
-            thumbTintList = ColorStateList.valueOf(ContextCompat.getColor(context, R.color.accent))
-            trackActiveTintList = ColorStateList.valueOf(ContextCompat.getColor(context, R.color.accent))
-        }
-        container.addView(slider)
-        slider.addOnChangeListener { _, value, _ -> drawingView?.setBrushSize(value) }
-
-        // Blur/Softness for Eraser
-        if (isEraser) {
-            val blurLabel = TextView(this).apply {
-                text = "Yumuşaklık (Softness)"
-                textSize = 14f
-                setTextColor(ContextCompat.getColor(context, R.color.text_secondary))
-                setPadding(0, 24, 0, 8)
-            }
-            container.addView(blurLabel)
-
-            val blurSlider = Slider(this).apply {
-                valueFrom = 0f
-                valueTo = 100f
-                value = drawingView?.getBlurSize() ?: 25f
-                thumbTintList = ColorStateList.valueOf(ContextCompat.getColor(context, R.color.accent))
-                trackActiveTintList = ColorStateList.valueOf(ContextCompat.getColor(context, R.color.accent))
-            }
-            container.addView(blurSlider)
-            blurSlider.addOnChangeListener { _, value, _ -> drawingView?.setBlurSize(value) }
-        }
-
-        if (!isEraser) {
-            val colorLabel = TextView(this).apply {
-                text = "Renk"
-                textSize = 14f
-                setTextColor(ContextCompat.getColor(context, R.color.text_secondary))
-                setPadding(0, 32, 0, 8)
-            }
-            container.addView(colorLabel)
-
-            val colorScroll = HorizontalScrollView(this).apply {
-                isHorizontalScrollBarEnabled = false
-            }
-            val colorLayout = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-            colorScroll.addView(colorLayout)
-            container.addView(colorScroll)
-
-            val colors = listOf(Color.BLACK, Color.WHITE, Color.RED, Color.GREEN, Color.BLUE, Color.YELLOW, Color.CYAN, Color.MAGENTA, Color.parseColor("#FF6B6B"), Color.parseColor("#4ECDC4"))
-            var selectedColorView: View? = null
-            val currentBrushColor = drawingView?.drawColor ?: Color.BLACK
-            colors.forEach { color ->
-                val cv = FrameLayout(this).apply {
-                    layoutParams = LinearLayout.LayoutParams(100, 100).apply { setMargins(12, 12, 12, 12) }
-                }
-                val inner = View(this).apply {
-                    layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
-                    background = ContextCompat.getDrawable(context, R.drawable.bg_color_circle)
-                    backgroundTintList = ColorStateList.valueOf(color)
-                }
-                cv.addView(inner)
-                if (color == currentBrushColor) {
-                    cv.foreground = ContextCompat.getDrawable(this@StickerMakerActivity, R.drawable.ic_check)
-                    cv.foregroundGravity = Gravity.CENTER
-                    selectedColorView = cv
-                }
-                cv.setOnClickListener {
-                    selectedColorView?.foreground = null
-                    cv.foreground = ContextCompat.getDrawable(this@StickerMakerActivity, R.drawable.ic_check)
-                    cv.foregroundGravity = Gravity.CENTER
-                    selectedColorView = cv
-                    drawingView?.setBrushColor(color)
-                }
-                colorLayout.addView(cv)
-            }
-        }
-
-        val footer = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            setPadding(0, 48, 0, 0)
-            gravity = Gravity.END
-        }
-        container.addView(footer)
-
-        val btnUndo = MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
-            text = getString(R.string.undo)
-            setTextColor(ContextCompat.getColor(context, R.color.text_primary))
-            setOnClickListener { drawingView?.undo() }
-            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { rightMargin = 24 }
-        }
-        footer.addView(btnUndo)
-
-        val btnOk = MaterialButton(this).apply {
-            text = "Tamam"
-            setTextColor(Color.WHITE)
-            backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(context, R.color.accent))
-            setOnClickListener { dialog.dismiss() }
-        }
-        footer.addView(btnOk)
-
-        dialog.show()
-    }
-
-    class DrawingPath(val path: Path, val paint: Paint)
-
-    private fun ensureMutableBitmap() {
-        if (contentBitmap == null) {
-            contentBitmap = originalBitmap?.copy(originalBitmap!!.config ?: Bitmap.Config.ARGB_8888, true)
-        } else if (!contentBitmap!!.isMutable) {
-            contentBitmap = contentBitmap!!.copy(contentBitmap!!.config ?: Bitmap.Config.ARGB_8888, true)
-        }
-    }
-
-    inner class DrawingView(context: Context) : View(context) {
-        var drawColor = Color.BLACK
-        private var brushSize = 50f
-        private var blurSize = 25f
-        private var isEraser = false
-        private var isDrawingEnabled = true
-        private val paths = mutableListOf<DrawingPath>()
-        private var currentPath: Path? = null
-        private var currentPaint: Paint? = null
-        private var eraserCanvas: Canvas? = null
-
-        init {
-            setLayerType(LAYER_TYPE_SOFTWARE, null)
-        }
-
-        fun setDrawingEnabled(enabled: Boolean) {
-            isDrawingEnabled = enabled
-        }
-
-        fun commitDrawingsToContentBitmap() {
-            if (paths.isEmpty()) return
-            contentBitmap?.let { bmp ->
-                val mutableBmp = if (bmp.isMutable) bmp else bmp.copy(bmp.config ?: Bitmap.Config.ARGB_8888, true)
-                val canvas = Canvas(mutableBmp)
-                
-                // Draw all paths onto the actual content bitmap
-                for (dp in paths) {
-                    canvas.drawPath(dp.path, dp.paint)
-                }
-                
-                contentBitmap = mutableBmp
-                paths.clear()
-                invalidate()
-            }
-        }
-
-        fun setEraserMode(enabled: Boolean) {
-            if (enabled && paths.isNotEmpty()) {
-                // Commit all drawings before switching to eraser
-                commitDrawingsToContentBitmap()
-                applyAllEffects()
-            }
-            isEraser = enabled
-            isDrawingEnabled = true
-        }
-
-        fun setBrushSize(size: Float) {
-            brushSize = size
-            isDrawingEnabled = true
-        }
-
-        fun setBlurSize(size: Float) {
-            blurSize = size
-        }
-
-        fun setBrushColor(color: Int) {
-            drawColor = color
-            isEraser = false
-        }
-
-        fun getBrushSize() = brushSize
-        fun getBlurSize() = blurSize
-
-        fun undo() {
-            if (paths.isNotEmpty()) {
-                paths.removeAt(paths.size - 1)
-                invalidate()
-            }
-        }
-
-        fun clear() {
-            paths.clear()
-            invalidate()
-        }
-
-        private fun mapToBitmap(viewX: Float, viewY: Float): PointF {
-            val bitmap = contentBitmap ?: originalBitmap ?: return PointF(viewX, viewY)
-            val viewWidth = imagePreview.width.toFloat()
-            val viewHeight = imagePreview.height.toFloat()
-            val bitmapWidth = bitmap.width.toFloat()
-            val bitmapHeight = bitmap.height.toFloat()
-
-            // Correct coordinate mapping considering aspect ratio
-            val scale: Float
-            var dx = 0f
-            var dy = 0f
-
-            if (viewWidth / viewHeight > bitmapWidth / bitmapHeight) {
-                scale = viewHeight / bitmapHeight
-                dx = (viewWidth - bitmapWidth * scale) / 2f
-            } else {
-                scale = viewWidth / bitmapWidth
-                dy = (viewHeight - bitmapHeight * scale) / 2f
-            }
-
-            return PointF((viewX - dx) / scale, (viewY - dy) / scale)
-        }
-
-        override fun onDraw(canvas: Canvas) {
-            for (dp in paths) {
-                canvas.drawPath(dp.path, dp.paint)
-            }
-            currentPath?.let { path ->
-                currentPaint?.let { paint ->
-                    if (!isEraser) canvas.drawPath(path, paint)
-                }
-            }
-        }
-
-        override fun onTouchEvent(event: MotionEvent): Boolean {
-            if (!isDrawingEnabled) return false
-            
-            val viewX = event.x
-            val viewY = event.y
-            val bp = mapToBitmap(viewX, viewY)
-
-            when (event.action) {
-                MotionEvent.ACTION_DOWN -> {
-                    if (isEraser) {
-                        ensureMutableBitmap()
-                        contentBitmap?.let { eraserCanvas = Canvas(it) }
-                    }
-                    currentPath = Path().apply {
-                        if (isEraser) moveTo(bp.x, bp.y) else moveTo(viewX, viewY)
-                    }
-                    currentPaint = Paint().apply {
-                        color = if (isEraser) Color.TRANSPARENT else drawColor
-                        style = Paint.Style.STROKE
-                        strokeJoin = Paint.Join.ROUND
-                        strokeCap = Paint.Cap.ROUND
-                        strokeWidth = if (isEraser) brushSize else brushSize
-                        isAntiAlias = true
-                        if (isEraser) {
-                            xfermode = PorterDuffXfermode(PorterDuff.Mode.CLEAR)
-                            if (blurSize > 0) {
-                                maskFilter = BlurMaskFilter(blurSize, BlurMaskFilter.Blur.NORMAL)
-                            }
-                        }
-                    }
-                    if (isEraser) {
-                        eraserCanvas?.drawCircle(bp.x, bp.y, brushSize / 2f, currentPaint!!)
-                        applyAllEffects()
-                    }
-                }
-                MotionEvent.ACTION_MOVE -> {
-                    if (isEraser) currentPath?.lineTo(bp.x, bp.y) else currentPath?.lineTo(viewX, viewY)
-                    if (isEraser) {
-                        eraserCanvas?.drawPath(currentPath!!, currentPaint!!)
-                        applyAllEffects(isFull = false) // Use fast preview during move
-                    }
-                }
-                MotionEvent.ACTION_UP -> {
-                    if (!isEraser) {
-                        currentPath?.let { p ->
-                            currentPaint?.let { pt ->
-                                paths.add(DrawingPath(p, pt))
-                            }
-                        }
-                    }
-                    if (isEraser) applyAllEffects()
-                    currentPath = null
-                    currentPaint = null
-                }
-            }
-            invalidate()
-            return true
-        }
-    }
-
-    private fun showAdjustmentsDialog() {
-        val dialog = BottomSheetDialog(this, R.style.TransparentBottomSheetDialog)
-        
-        val mainContainer = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(48, 48, 48, 48)
-            setBackgroundResource(R.drawable.bg_editor_container)
-            backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(context, R.color.card_bg))
-        }
-        dialog.setContentView(mainContainer)
-
-        // Title and Reset
-        val header = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(0, 0, 0, 24)
-        }
-        val title = TextView(this).apply {
-            text = getString(R.string.adjustments)
-            textSize = 20f
-            layoutParams = LinearLayout.LayoutParams(0, -2, 1f)
-            setTextColor(ContextCompat.getColor(context, R.color.text_primary))
-            setTypeface(null, Typeface.BOLD)
-        }
-        header.addView(title)
-        
-        val btnResetAll = MaterialButton(this, null, com.google.android.material.R.attr.borderlessButtonStyle).apply {
-            text = "Sıfırla"
-            textSize = 12f
-            setTextColor(ContextCompat.getColor(context, R.color.accent))
-            setOnClickListener {
-                // Reset sliders to default values
-                // (Would need access to sliders, will implement logic below)
-            }
-        }
-        header.addView(btnResetAll)
-        mainContainer.addView(header)
-
-        val scroll = androidx.core.widget.NestedScrollView(this).apply {
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f)
-            clipToPadding = false
-        }
-        val adjustView = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-        }
-        scroll.addView(adjustView)
-        mainContainer.addView(scroll)
-
-        fun createSlider(labelStr: String, iconRes: Int, from: Float, to: Float, current: Float, step: Float): Slider {
-            val labelContainer = LinearLayout(this@StickerMakerActivity).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-                setPadding(0, 12, 0, 4)
-            }
-            val icon = ImageView(this@StickerMakerActivity).apply {
-                setImageResource(iconRes)
-                layoutParams = LinearLayout.LayoutParams(40, 40)
-                imageTintList = ColorStateList.valueOf(ContextCompat.getColor(context, R.color.text_secondary))
-            }
-            val label = TextView(this@StickerMakerActivity).apply {
-                text = labelStr
-                textSize = 13f
-                setPadding(16, 0, 0, 0)
-                setTextColor(ContextCompat.getColor(context, R.color.text_primary))
-                setTypeface(null, Typeface.BOLD)
-            }
-            labelContainer.addView(icon)
-            labelContainer.addView(label)
-            adjustView.addView(labelContainer)
-
-            val slider = Slider(this@StickerMakerActivity).apply {
-                valueFrom = from
-                valueTo = to
-                value = current
-                stepSize = step
-                thumbTintList = ColorStateList.valueOf(ContextCompat.getColor(context, R.color.accent))
-                trackActiveTintList = ColorStateList.valueOf(ContextCompat.getColor(context, R.color.accent))
-                trackInactiveTintList = ColorStateList.valueOf(ContextCompat.getColor(context, R.color.divider))
-            }
-            adjustView.addView(slider)
-            return slider
-        }
-
-        val brightnessSlider = createSlider(getString(R.string.brightness_short), R.drawable.ic_sun, -100f, 100f, currentBrightness, 1f)
-        val contrastSlider = createSlider(getString(R.string.contrast_short), R.drawable.ic_tune, 0.5f, 2f, currentContrast, 0.05f)
-        val saturationSlider = createSlider(getString(R.string.saturation_short), R.drawable.ic_photo, 0f, 2f, currentSaturation, 0.05f)
-        val warmthSlider = createSlider("Sıcaklık", R.drawable.ic_theme, -50f, 50f, currentWarmth, 1f)
-        val shadowsSlider = createSlider("Gölgeler", R.drawable.ic_moon, -50f, 50f, currentShadows, 1f)
-        val highlightsSlider = createSlider("Aydınlık Alanlar", R.drawable.ic_sun, -50f, 50f, currentHighlights, 1f)
-
-        fun updateAdjustments(b: Slider, c: Slider, s: Slider, w: Slider, sh: Slider, h: Slider, full: Boolean) {
-            currentBrightness = b.value
-            currentContrast = c.value
-            currentSaturation = s.value
-            currentWarmth = w.value
-            currentShadows = sh.value
-            currentHighlights = h.value
-            applyAllEffects(isFull = full)
-        }
-
-        btnResetAll.setOnClickListener {
-            brightnessSlider.value = 0f
-            contrastSlider.value = 1f
-            saturationSlider.value = 1f
-            warmthSlider.value = 0f
-            shadowsSlider.value = 0f
-            highlightsSlider.value = 0f
-            updateAdjustments(brightnessSlider, contrastSlider, saturationSlider, warmthSlider, shadowsSlider, highlightsSlider, false)
-        }
-
-        val sliders = listOf(brightnessSlider, contrastSlider, saturationSlider, warmthSlider, shadowsSlider, highlightsSlider)
-        sliders.forEach { slider ->
-            slider.addOnChangeListener { _, _, fromUser ->
-                if (fromUser) updateAdjustments(brightnessSlider, contrastSlider, saturationSlider, warmthSlider, shadowsSlider, highlightsSlider, false)
-            }
-        }
-
-        // Apply button
-        val applyBtn = MaterialButton(this).apply {
-            text = getString(R.string.ok)
-            setTextColor(Color.WHITE)
-            cornerRadius = 32
-            backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(context, R.color.accent))
-            layoutParams = LinearLayout.LayoutParams(-1, 140).apply { topMargin = 32 }
-            setOnClickListener {
-                updateAdjustments(brightnessSlider, contrastSlider, saturationSlider, warmthSlider, shadowsSlider, highlightsSlider, true)
-                dialog.dismiss()
-            }
-        }
-        mainContainer.addView(applyBtn)
-
-        dialog.behavior.peekHeight = 900
-        dialog.behavior.isHideable = true
-        dialog.show()
-    }
-
-    private fun applyAdjustments(brightness: Float, contrast: Float, saturation: Float) {
-        val base = originalBitmap ?: return
-
-        lifecycleScope.launch(Dispatchers.Default) {
-            try {
-                val output = Bitmap.createBitmap(base.width, base.height, base.config ?: Bitmap.Config.ARGB_8888)
-                val canvas = Canvas(output)
-                val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-
-                // Create combined color matrix
-                val cm = ColorMatrix()
-
-                // Brightness matrix
-                val brightnessMatrix = ColorMatrix(floatArrayOf(
-                    1f, 0f, 0f, 0f, brightness,
-                    0f, 1f, 0f, 0f, brightness,
-                    0f, 0f, 1f, 0f, brightness,
-                    0f, 0f, 0f, 1f, 0f
-                ))
-
-                // Contrast matrix
-                val scale = contrast
-                val translate = (-.5f * scale + .5f) * 255f
-                val contrastMatrix = ColorMatrix(floatArrayOf(
-                    scale, 0f, 0f, 0f, translate,
-                    0f, scale, 0f, 0f, translate,
-                    0f, 0f, scale, 0f, translate,
-                    0f, 0f, 0f, 1f, 0f
-                ))
-
-                // Saturation matrix
-                val saturationMatrix = ColorMatrix()
-                saturationMatrix.setSaturation(saturation)
-
-                // Combine matrices
-                cm.postConcat(brightnessMatrix)
-                cm.postConcat(contrastMatrix)
-                cm.postConcat(saturationMatrix)
-
-                paint.colorFilter = ColorMatrixColorFilter(cm)
-                canvas.drawBitmap(base, 0f, 0f, paint)
-
-                withContext(Dispatchers.Main) {
-                    selectedBitmap = output
-                    imagePreview.setImageBitmap(selectedBitmap)
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
-    }
-
-    private fun undoRemoveBackground() {
-        originalBitmap?.let {
-            contentBitmap = it.copy(it.config ?: Bitmap.Config.ARGB_8888, true)
-            applyAllEffects()
-            backgroundRemoved = false
-            toolRemoveBg.findViewById<TextView>(R.id.title).text = getString(R.string.remove_bg_short)
-            toolRemoveBg.findViewById<ImageView>(R.id.icon).setImageResource(R.drawable.ic_sticker)
-        }
-    }
-
-    private fun showFiltersDialog() {
-        if (selectedBitmap == null) return
-
-        val filters = listOf(
-            getString(R.string.original) to null,
-            getString(R.string.grayscale) to ColorMatrix(floatArrayOf(
-                0.33f, 0.33f, 0.33f, 0f, 0f,
-                0.33f, 0.33f, 0.33f, 0f, 0f,
-                0.33f, 0.33f, 0.33f, 0f, 0f,
-                0f, 0f, 0f, 1f, 0f
-            )),
-            getString(R.string.sepia) to ColorMatrix(floatArrayOf(
-                .393f, .769f, .189f, 0f, 0f,
-                .349f, .686f, .168f, 0f, 0f,
-                .272f, .534f, .131f, 0f, 0f,
-                0f, 0f, 0f, 1f, 0f
-            )),
-            getString(R.string.vivid) to ColorMatrix().apply { setSaturation(1.6f) },
-            getString(R.string.vintage) to ColorMatrix().apply { setSaturation(0.5f) },
-            "Noir" to ColorMatrix(floatArrayOf(
-                -1f, 0f, 0f, 0f, 255f,
-                0f, -1f, 0f, 0f, 255f,
-                0f, 0f, -1f, 0f, 255f,
-                0f, 0f, 0f, 1f, 0f
-            )),
-            "Cool" to ColorMatrix(floatArrayOf(
-                1f, 0f, 0f, 0f, -60f,
-                0f, 1f, 0f, 0f, 0f,
-                0f, 0f, 1.2f, 0f, 60f,
-                0f, 0f, 0f, 1f, 0f
-            )),
-            "Warm" to ColorMatrix(floatArrayOf(
-                1.2f, 0f, 0f, 0f, 40f,
-                0f, 1f, 0f, 0f, 20f,
-                0f, 0f, 0.8f, 0f, -20f,
-                0f, 0f, 0f, 1f, 0f
-            )),
-            "Pinky" to ColorMatrix(floatArrayOf(
-                1.2f, 0f, 0f, 0f, 50f,
-                0f, 0.9f, 0f, 0f, 0f,
-                0f, 0f, 1.2f, 0f, 50f,
-                0f, 0f, 0f, 1f, 0f
-            )),
-            "Cyan" to ColorMatrix(floatArrayOf(
-                0.8f, 0f, 0f, 0f, 0f,
-                0f, 1.2f, 0f, 0f, 40f,
-                0f, 0f, 1.2f, 0f, 40f,
-                0f, 0f, 0f, 1f, 0f
-            )),
-            "B&W" to ColorMatrix(floatArrayOf(
-                1.5f, 1.5f, 1.5f, 0f, -200f,
-                1.5f, 1.5f, 1.5f, 0f, -200f,
-                1.5f, 1.5f, 1.5f, 0f, -200f,
-                0f, 0f, 0f, 1f, 0f
-            ))
-        )
-
-        val dialog = BottomSheetDialog(this, R.style.TransparentBottomSheetDialog)
-        val container = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(48, 48, 48, 48)
-            setBackgroundResource(R.drawable.bg_editor_container)
-            backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(context, R.color.card_bg))
-        }
-        dialog.setContentView(container)
-
-        val title = TextView(this).apply {
-            text = getString(R.string.select_filter)
-            textSize = 20f
-            setTextColor(ContextCompat.getColor(context, R.color.text_primary))
-            setTypeface(null, Typeface.BOLD)
-            setPadding(0, 0, 0, 32)
-        }
-        container.addView(title)
-
-        val scroll = HorizontalScrollView(this).apply {
-            isHorizontalScrollBarEnabled = false
-            overScrollMode = View.OVER_SCROLL_NEVER
-        }
-        val horizontalLayout = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            setPadding(0, 16, 0, 16)
-        }
-        scroll.addView(horizontalLayout)
-        container.addView(scroll)
-
-        filters.forEach { (name, matrix) ->
-            val filterItem = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                gravity = Gravity.CENTER
-                setPadding(24, 0, 24, 0)
-                setOnClickListener {
-                    currentFilterMatrix = matrix
-                    applyAllEffects(isFull = true)
-                    dialog.dismiss()
-                }
-            }
-
-            val preview = ImageView(this).apply {
-                layoutParams = LinearLayout.LayoutParams(160, 160)
-                scaleType = ImageView.ScaleType.CENTER_CROP
-                setImageBitmap(contentBitmap ?: originalBitmap)
-                background = ContextCompat.getDrawable(context, R.drawable.bg_color_circle)
-                clipToOutline = true
-                if (matrix != null) colorFilter = ColorMatrixColorFilter(matrix)
-            }
-            filterItem.addView(preview)
-
-            val label = TextView(this).apply {
-                text = name
-                textSize = 12f
-                setTextColor(ContextCompat.getColor(context, R.color.text_primary))
-                setPadding(0, 8, 0, 0)
-                gravity = Gravity.CENTER
-            }
-            filterItem.addView(label)
-
-            horizontalLayout.addView(filterItem)
-        }
-
-        val btnCancel = MaterialButton(this).apply {
-            text = getString(R.string.cancel)
-            setTextColor(Color.WHITE)
-            backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(context, R.color.accent))
-            setOnClickListener { dialog.dismiss() }
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 120).apply { topMargin = 32 }
-        }
-        container.addView(btnCancel)
-
-        dialog.show()
-    }
-
-
-
-    private fun applyFilter(colorMatrix: ColorMatrix?) {
-        currentFilterMatrix = colorMatrix
-        applyAllEffects()
-    }
-
-    private fun checkMediaGuard(): Boolean {
-        if (selectedBitmap == null) {
-            Toast.makeText(this, "Önce bir medya seçin (Fotoğraf Seçin kısmına dokunun)", Toast.LENGTH_SHORT).show()
-            return false
-        }
-        return true
-    }
-
-    private fun openGallery() {
-        if (isAnimatedMode) {
-            // Video seçimi için fallback kullan
-            pickMediaLauncher.launch("video/*")
-        } else {
-            // Resim seçimi için PickMultipleVisualMedia kullan (daha iyi çoklu seçim desteği)
-            try {
-                pickMultipleMedia.launch(
-                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                )
-            } catch (e: Exception) {
-                // Fallback to GetMultipleContents if PickMultipleVisualMedia fails
-                pickMediaLauncher.launch("image/*")
-            }
-        }
-    }
-
-    private fun updateQueueProgress() {
-        if (selectedUris.size > 1) {
-            tvMediaInfo.visibility = View.VISIBLE
-            tvMediaInfo.text = "${currentUriIndex + 1}/${selectedUris.size}"
-        } else {
-            tvMediaInfo.visibility = View.GONE
-        }
-    }
-
-
-
-    private fun showBorderEditor() {
-        val dialog = BottomSheetDialog(this, R.style.TransparentBottomSheetDialog)
-        val container = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(48, 48, 48, 48)
-            setBackgroundResource(R.drawable.bg_editor_container)
-            backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(context, R.color.card_bg))
-        }
-        dialog.setContentView(container)
-
-        val title = TextView(this).apply {
-            text = getString(R.string.border_short)
-            textSize = 20f
-            setTextColor(ContextCompat.getColor(context, R.color.text_primary))
-            setTypeface(null, Typeface.BOLD)
-            setPadding(0, 0, 0, 32)
-        }
-        container.addView(title)
-
-        // Size
-        val sizeLabel = TextView(this).apply {
-            text = "Boyut"
-            textSize = 14f
-            setTextColor(ContextCompat.getColor(context, R.color.text_secondary))
-        }
-        container.addView(sizeLabel)
-
-        val sizeSlider = Slider(this).apply {
-            valueFrom = 0f
-            valueTo = 40f
-            value = borderSize
-            thumbTintList = ColorStateList.valueOf(ContextCompat.getColor(context, R.color.accent))
-            trackActiveTintList = ColorStateList.valueOf(ContextCompat.getColor(context, R.color.accent))
-        }
-        container.addView(sizeSlider)
-        sizeSlider.addOnChangeListener { _, value, _ ->
-            borderSize = value
-            applyAllEffects()
-        }
-
-        // Color
-        val colorLabel = TextView(this).apply {
-            text = "Renk"
-            textSize = 14f
-            setTextColor(ContextCompat.getColor(context, R.color.text_secondary))
-            setPadding(0, 24, 0, 8)
-        }
-        container.addView(colorLabel)
-
-        val colorScroll = HorizontalScrollView(this).apply {
-            isHorizontalScrollBarEnabled = false
-        }
-        val colorLayout = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        colorScroll.addView(colorLayout)
-        container.addView(colorScroll)
-
-        val colors = listOf(Color.WHITE, Color.BLACK, Color.RED, Color.GREEN, Color.BLUE, Color.YELLOW, Color.CYAN, Color.MAGENTA, Color.parseColor("#FF6B6B"), Color.parseColor("#4ECDC4"), Color.parseColor("#FFD700"))
-        var selectedColorView: View? = null
-        colors.forEach { color ->
-            val cv = FrameLayout(this).apply {
-                layoutParams = LinearLayout.LayoutParams(100, 100).apply { setMargins(12, 12, 12, 12) }
-            }
-            val inner = View(this).apply {
-                layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
-                background = ContextCompat.getDrawable(context, R.drawable.bg_color_circle)
-                backgroundTintList = ColorStateList.valueOf(color)
-            }
-            cv.addView(inner)
-            if (color == borderColor) {
-                cv.foreground = ContextCompat.getDrawable(this@StickerMakerActivity, R.drawable.ic_check)
-                cv.foregroundGravity = Gravity.CENTER
-                selectedColorView = cv
-            }
-            cv.setOnClickListener {
-                selectedColorView?.foreground = null
-                cv.foreground = ContextCompat.getDrawable(this@StickerMakerActivity, R.drawable.ic_check)
-                cv.foregroundGravity = Gravity.CENTER
-                selectedColorView = cv
-                borderColor = color
-                applyAllEffects()
-            }
-            colorLayout.addView(cv)
-        }
-
-        val btnOk = MaterialButton(this).apply {
-            text = "Tamam"
-            setTextColor(Color.WHITE)
-            backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(context, R.color.accent))
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 140).apply { topMargin = 32 }
-            setOnClickListener { dialog.dismiss() }
-        }
-        container.addView(btnOk)
-
-        dialog.show()
-    }
-
-    private fun applyAllEffects(isFull: Boolean = true) {
-        if (!checkMediaGuard()) return
-        val base = contentBitmap ?: originalBitmap ?: return
-        
-        lifecycleScope.launch(Dispatchers.Default) {
-            try {
-                // 1. Combined Matrix for Adjustments
-                val matrix = ColorMatrix()
-                
-                // Brightness
-                matrix.postConcat(ColorMatrix(floatArrayOf(
-                    1f, 0f, 0f, 0f, currentBrightness,
-                    0f, 1f, 0f, 0f, currentBrightness,
-                    0f, 0f, 1f, 0f, currentBrightness,
-                    0f, 0f, 0f, 1f, 0f
-                )))
-                
-                // Contrast
-                val cScale = currentContrast
-                val cTranslate = (-.5f * cScale + .5f) * 255f
-                matrix.postConcat(ColorMatrix(floatArrayOf(
-                    cScale, 0f, 0f, 0f, cTranslate,
-                    0f, cScale, 0f, 0f, cTranslate,
-                    0f, 0f, cScale, 0f, cTranslate,
-                    0f, 0f, 0f, 1f, 0f
-                )))
-                
-                // Saturation
-                val sMatrix = ColorMatrix()
-                sMatrix.setSaturation(currentSaturation)
-                matrix.postConcat(sMatrix)
-                
-                // Warmth
-                val w = currentWarmth * 0.5f
-                matrix.postConcat(ColorMatrix(floatArrayOf(
-                    1f + w/255f, 0f, 0f, 0f, w,
-                    0f, 1f, 0f, 0f, 0f,
-                    0f, 0f, 1f - w/255f, 0f, -w,
-                    0f, 0f, 0f, 1f, 0f
-                )))
-                
-                // Custom Filter
-                currentFilterMatrix?.let { matrix.postConcat(it) }
-                
-                if (!isFull) {
-                    withContext(Dispatchers.Main) {
-                        imagePreview.colorFilter = ColorMatrixColorFilter(matrix)
-                    }
-                    return@launch
-                }
-
-                // Bakery
-                val processed = Bitmap.createBitmap(base.width, base.height, base.config ?: Bitmap.Config.ARGB_8888)
-                val canvas = Canvas(processed)
-                val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-                paint.colorFilter = ColorMatrixColorFilter(matrix)
-                canvas.drawBitmap(base, 0f, 0f, paint)
-                
-                // 2. Border (Optimized path)
-                val final = if (borderSize > 0) {
-                    addOutlineInternal(processed, borderSize.toInt(), borderColor)
-                } else {
-                    processed
-                }
-                
-                withContext(Dispatchers.Main) {
-                    selectedBitmap = final
-                    imagePreview.setImageBitmap(selectedBitmap)
-                    imagePreview.colorFilter = null
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
-    }
-
-    private fun addOutlineInternal(src: Bitmap, width: Int, color: Int): Bitmap {
-        if (width <= 0) return src
-        
-        val radius = width.toFloat()
-        
-        // Optimize: Cache the mask if the source bitmap haven't changed in shape (alpha)
-        if (maskSourceBitmap != src || cachedMaskAlpha == null) {
-            maskSourceBitmap = src
-            cachedMaskAlpha?.recycle()
-            cachedMaskAlpha = src.extractAlpha()
-        }
-        
-        val maskAlpha = cachedMaskAlpha ?: return src
-        
-        // Output needs to be slightly larger to accommodate the border if it's thick
-        // But for sticker maker, we keep original size to avoid scale issues, and instead 
-        // rely on internal padding if needed. For now, matching src size.
-        val output = Bitmap.createBitmap(src.width, src.height, src.config ?: Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(output)
-        
-        val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
-        paint.colorFilter = PorterDuffColorFilter(color, PorterDuff.Mode.SRC_IN)
-        
-        // Draw the outline in multiple steps for a perfect solid border
-        val steps = 24 // High quality for "Edge Detection" style contour
-        for (i in 0 until steps) {
-            val angle = 2.0 * Math.PI * i / steps
-            val dx = (radius * Math.cos(angle)).toFloat()
-            val dy = (radius * Math.sin(angle)).toFloat()
-            canvas.drawBitmap(maskAlpha, dx, dy, paint)
-        }
-        
-        // Draw original on top
-        canvas.drawBitmap(src, 0f, 0f, null)
-        return output
-    }
-
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        if (resultCode == RESULT_OK && requestCode == UCrop.REQUEST_CROP) {
-            val resultUri = UCrop.getOutput(data!!)
-            resultUri?.let { uri ->
-                val bitmap = BitmapFactory.decodeStream(contentResolver.openInputStream(uri))
-                originalBitmap = bitmap
-                contentBitmap = bitmap.copy(bitmap.config ?: Bitmap.Config.ARGB_8888, true)
-                selectedBitmap = contentBitmap
-                imagePreview.setImageBitmap(selectedBitmap)
-                imagePreview.visibility = View.VISIBLE
-                placeholderContainer.visibility = View.GONE
-                applyAllEffects()
-            }
-        }
-    }
-
-    private fun addOutline(src: Bitmap, width: Int, color: Int): Bitmap {
-        if (width <= 0) return src
-        
-        val radius = width.toFloat()
-        
-        // Optimize: Cache the mask if the source bitmap haven't changed in shape (alpha)
-        if (maskSourceBitmap != src || cachedMaskAlpha == null) {
-            maskSourceBitmap = src
-            cachedMaskAlpha?.recycle()
-            cachedMaskAlpha = src.extractAlpha()
-        }
-        
-        val maskAlpha = cachedMaskAlpha ?: return src
-        
-        val config = src.config ?: Bitmap.Config.ARGB_8888
-        val output = try {
-            Bitmap.createBitmap((src.width + radius * 2).toInt(), (src.height + radius * 2).toInt(), config)
-        } catch (e: OutOfMemoryError) {
-            return src
-        }
-        
-        val canvas = Canvas(output)
-        val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-        paint.color = color
-        
+    private fun loadImageAfterCrop(uri: Uri) {
         try {
-            // Draw in a circular pattern
-            val steps = 12
-            for (i in 0 until steps) {
-                val angle = 2.0 * Math.PI * i / steps
-                val dx = (radius * Math.cos(angle)).toFloat()
-                val dy = (radius * Math.sin(angle)).toFloat()
-                canvas.drawBitmap(maskAlpha, radius + dx, radius + dy, paint)
-            }
-            
-            canvas.drawBitmap(src, radius, radius, null)
+            val bitmap = MediaStore.Images.Media.getBitmap(contentResolver, uri)
+            originalBitmap = bitmap
+            currentBitmap = bitmap.copy(Bitmap.Config.ARGB_8888, true)
+            backgroundRemoved = false
+            showEditor()
+            setEditorImage(bitmap)
+            saveBitmapToHistory()
         } catch (e: Exception) {
             e.printStackTrace()
-        }
-        
-        return output
-    }
-
-    private fun showTextEditorDialog() {
-        val dialog = BottomSheetDialog(this, R.style.TransparentBottomSheetDialog)
-        val view = layoutInflater.inflate(R.layout.dialog_add_text, null)
-        dialog.setContentView(view)
-
-        val editText = view.findViewById<TextInputEditText>(R.id.etStickerText)
-        val btnAdd = view.findViewById<MaterialButton>(R.id.btnAddText)
-        val sizeSlider = view.findViewById<Slider>(R.id.textSizeSlider)
-        val fontGrid = view.findViewById<GridLayout>(R.id.fontSelectionLayout)
-        val previewText = view.findViewById<TextView>(R.id.tvTextPreviewInDialog)
-
-        var selectedColor = Color.WHITE
-        val colors = listOf(
-            Color.WHITE, Color.BLACK, Color.RED, Color.GREEN,
-            Color.BLUE, Color.YELLOW, Color.CYAN, Color.MAGENTA,
-            Color.parseColor("#FF6B6B"), Color.parseColor("#4ECDC4"),
-            Color.parseColor("#FFE66D"), Color.parseColor("#95E1D3"),
-            Color.parseColor("#F38181"), Color.parseColor("#FCE38A"),
-            Color.parseColor("#EAFFD0"), Color.parseColor("#95E1D3"),
-            Color.parseColor("#E8E8E8"), Color.parseColor("#555555")
-        )
-        val colorLayout = view.findViewById<LinearLayout>(R.id.colorSelectionLayout)
-
-        // Update live preview function
-        fun updateLivePreview() {
-            val currentText = editText.text?.toString() ?: ""
-            previewText?.apply {
-                text = if (currentText.isEmpty()) getString(R.string.et_sticker_text_hint) else currentText
-                textSize = sizeSlider.value
-                setTextColor(selectedColor)
-                typeface = selectedFont
-                setShadowLayer(8f, 0f, 0f, if (selectedColor == Color.BLACK) Color.WHITE else Color.BLACK)
-                alpha = if (currentText.isEmpty()) 0.5f else 1f
-            }
-        }
-
-        // Color selection with visual feedback
-        colorLayout?.let { layout ->
-            layout.removeAllViews()
-            var selectedOverlay: View? = null
-            
-            colors.forEach { color ->
-                val container = FrameLayout(this).apply {
-                    layoutParams = LinearLayout.LayoutParams(100, 100).apply { setMargins(8, 8, 8, 8) }
-                }
-
-                val colorView = View(this).apply {
-                    layoutParams = FrameLayout.LayoutParams(80, 80).apply { gravity = Gravity.CENTER }
-                    background = ContextCompat.getDrawable(context, R.drawable.bg_color_circle)
-                    backgroundTintList = ColorStateList.valueOf(color)
-                    if (color == Color.WHITE) background = ContextCompat.getDrawable(context, R.drawable.bg_color_circle) // Ensure border for white
-                }
-
-                val borderView = View(this).apply {
-                    layoutParams = FrameLayout.LayoutParams(100, 100)
-                    background = ContextCompat.getDrawable(context, R.drawable.bg_color_circle)
-                    backgroundTintList = ColorStateList.valueOf(Color.TRANSPARENT)
-                    // Custom stroke for selection
-                    visibility = if (color == selectedColor) View.VISIBLE else View.INVISIBLE
-                }
-                
-                // Let's use alpha or a dedicated border drawable
-                if (color == selectedColor) {
-                    colorView.scaleX = 0.8f
-                    colorView.scaleY = 0.8f
-                    container.setBackgroundResource(R.drawable.bg_color_selected_border)
-                }
-
-                container.addView(colorView)
-                container.setOnClickListener {
-                    selectedColor = color
-                    // Simple refresh of the color layout
-                    colorLayout.children.forEach { charlie ->
-                        charlie.setBackgroundColor(Color.TRANSPARENT)
-                        (charlie as ViewGroup).getChildAt(0).scaleX = 1.0f
-                        (charlie as ViewGroup).getChildAt(0).scaleY = 1.0f
-                    }
-                    container.setBackgroundResource(R.drawable.bg_color_selected_border)
-                    colorView.scaleX = 0.8f
-                    colorView.scaleY = 0.8f
-                    updateLivePreview()
-                }
-                layout.addView(container)
-            }
-        }
-
-        editText.addTextChangedListener(object : TextWatcher {
-            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
-                updateLivePreview()
-            }
-            override fun afterTextChanged(s: Editable?) {}
-        })
-
-        sizeSlider.addOnChangeListener { _, _, _ ->
-            updateLivePreview()
-        }
-
-        val fonts = listOf(
-            "Default" to Typeface.DEFAULT,
-            "Bold" to Typeface.DEFAULT_BOLD,
-            "Serif" to Typeface.SERIF,
-            "Mono" to Typeface.MONOSPACE,
-            "Sans" to Typeface.SANS_SERIF,
-            "Medium" to Typeface.create("sans-serif-medium", Typeface.NORMAL),
-            "Black" to Typeface.create("sans-serif-black", Typeface.NORMAL),
-            "Light" to Typeface.create("sans-serif-light", Typeface.NORMAL),
-            "Condensed" to Typeface.create("sans-serif-condensed", Typeface.NORMAL),
-            "Italic" to Typeface.create(Typeface.DEFAULT, Typeface.ITALIC),
-            "Lobster" to Typeface.create("cursive", Typeface.BOLD),
-            "Casual" to Typeface.create("casual", Typeface.NORMAL),
-            "Small Caps" to Typeface.create("sans-serif-smallcaps", Typeface.NORMAL),
-            "Narrow" to Typeface.create("sans-serif-condensed-light", Typeface.NORMAL),
-            "Elegant" to Typeface.create("serif", Typeface.ITALIC),
-            "Retro" to Typeface.create("serif-monospace", Typeface.BOLD),
-            "Comic" to Typeface.create("casual", Typeface.BOLD),
-            "System" to Typeface.create("sans-serif-thin", Typeface.BOLD),
-            "Modern" to Typeface.create("sans-serif-black", Typeface.ITALIC),
-            "Classic" to Typeface.create("serif", Typeface.BOLD)
-        )
-
-        fontGrid.removeAllViews()
-        var selectedFontBtn: MaterialButton? = null
-        fonts.forEach { (name, tf) ->
-            val btn = MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
-                text = name
-                typeface = tf
-                setTextColor(ContextCompat.getColor(context, R.color.text_primary))
-                setOnClickListener {
-                    selectedFontBtn?.strokeWidth = 1
-                    selectedFontBtn = this
-                    this.strokeWidth = 4
-                    selectedFont = tf
-                    updateLivePreview()
-                }
-                layoutParams = GridLayout.LayoutParams().apply {
-                    width = 0
-                    height = ViewGroup.LayoutParams.WRAP_CONTENT
-                    columnSpec = GridLayout.spec(GridLayout.UNDEFINED, 1f)
-                    setMargins(4, 4, 4, 4)
-                }
-                if (tf == selectedFont) {
-                    selectedFontBtn = this
-                    strokeWidth = 4
-                }
-            }
-            fontGrid.addView(btn)
-        }
-
-        updateLivePreview()
-
-        btnAdd.setOnClickListener {
-            val text = editText.text.toString().trim()
-            if (text.isNotEmpty()) {
-                addTextToCanvas(text, sizeSlider.value, selectedColor)
-            }
-            dialog.dismiss()
-        }
-
-        dialog.show()
-    }
-
-    private fun createLivePreviewText() {
-        removeLivePreviewText() // Remove any existing preview
-        livePreviewTextView = TextView(this).apply {
-            text = getString(R.string.et_sticker_text_hint)
-            textSize = 28f
-            setTextColor(Color.WHITE)
-            typeface = selectedFont
-            gravity = Gravity.CENTER
-            setPadding(20, 20, 20, 20)
-            setShadowLayer(8f, 0f, 0f, Color.BLACK)
-            alpha = 0.3f
-            tag = "live_preview"
-        }
-        val params = FrameLayout.LayoutParams(
-            ViewGroup.LayoutParams.WRAP_CONTENT,
-            ViewGroup.LayoutParams.WRAP_CONTENT
-        ).apply {
-            gravity = Gravity.CENTER
-        }
-        stickerEditorView.addView(livePreviewTextView, params)
-    }
-
-    private fun removeLivePreviewText() {
-        livePreviewTextView?.let { stickerEditorView.removeView(it) }
-        livePreviewTextView = null
-    }
-
-    private fun addTextToCanvas(text: String, size: Float, color: Int) {
-        val textView = TextView(this).apply {
-            this.text = text
-            this.setTextColor(color)
-            this.textSize = size
-            // Better shadow for visibility on any background
-            this.setShadowLayer(12f, 0f, 0f, if (color == Color.BLACK) Color.WHITE else Color.BLACK)
-            this.typeface = selectedFont
-            this.gravity = Gravity.CENTER
-            this.setPadding(30, 30, 30, 30)
-            this.textAlignment = View.TEXT_ALIGNMENT_CENTER
-        }
-        
-        addDraggableToCanvas(textView)
-    }
-
-    private fun showEmojiPicker() {
-        val emojis = arrayOf(
-            "😊", "😂", "❤️", "🔥", "✨", "🚀", "🎉", "🌟", "💫", "🎁", 
-            "💎", "📱", "🌈", "🎭", "🐱", "🧿", "👑", "⚡", "🔔", "💯",
-            "😎", "😍", "😉", "🤔", "😜", "😇", "🥳", "😭", "🤷‍♂️", "👍",
-            "👏", "🙌", "💪", "👊", "🤝", "🎈", "🎊", "🎆", "🎇", "🧨",
-            "🧧", "🧸", "🎉", "🌹", "🌸", "🌻", "🌼", "🍀", "🍓", "🍒",
-            "🍴", "🍕", "🍔", "🍟", "🍗", "🥪", "🍣", "🍱", "🥟", "🍩",
-            "🍦", "🍰", "🍭", "🍬", "🍫", "🍿", "🥤", "🧋", "☕", "🍺",
-            "🎮", "🎬", "🎸", "🎧", "📷", "📸", "📺", "💻", "⌚", "📱",
-            "✈️", "🚗", "🚲", "🏠", "🏢", "🌍", "🗺️", "✅", "❌", "❓",
-            "‼️", "⚠️", "🛑", "🆗", "🆒", "🆕", "🆙", "🧿", "🧿", "🧿"
-        )
-        
-        val dialog = BottomSheetDialog(this, R.style.TransparentBottomSheetDialog)
-        val view = layoutInflater.inflate(R.layout.dialog_emoji_picker, null)
-        dialog.setContentView(view)
-
-        val grid = view.findViewById<GridLayout>(R.id.emojiGrid)
-        grid.removeAllViews()
-        grid.columnCount = 5
-        
-        emojis.forEach { emoji ->
-            val textView = TextView(this).apply {
-                this.text = emoji
-                this.textSize = 34f
-                this.setPadding(12, 12, 12, 12)
-                this.gravity = Gravity.CENTER
-                this.background = ContextCompat.getDrawable(context, R.drawable.bg_emoji_circle)
-                this.setOnClickListener {
-                    addEmojiToCanvas(emoji)
-                    dialog.dismiss()
-                }
-                this.alpha = 1.0f
-            }
-            val params = GridLayout.LayoutParams().apply {
-                width = 0
-                height = ViewGroup.LayoutParams.WRAP_CONTENT
-                columnSpec = GridLayout.spec(GridLayout.UNDEFINED, 1f)
-                setMargins(8, 8, 8, 8)
-            }
-            grid.addView(textView, params)
-        }
-        dialog.show()
-    }
-
-    private fun addEmojiToCanvas(emoji: String) {
-        val textView = TextView(this).apply {
-            this.text = emoji
-            this.textSize = 48f
-            this.gravity = Gravity.CENTER
-        }
-        addDraggableToCanvas(textView)
-    }
-
-    private fun addDraggableToCanvas(view: View) {
-        val params = FrameLayout.LayoutParams(
-            ViewGroup.LayoutParams.WRAP_CONTENT,
-            ViewGroup.LayoutParams.WRAP_CONTENT
-        ).apply {
-            gravity = Gravity.CENTER
-        }
-        
-        view.setOnTouchListener(DraggableTouchListener())
-        stickerEditorView.addView(view, params)
-    }
-
-    private inner class DraggableTouchListener : View.OnTouchListener {
-        private var lastTouchX = 0f
-        private var lastTouchY = 0f
-        private var initialDistance = 0f
-        private var initialRotation = 0f
-        private var initialScale = 1f
-        private var initialViewRotation = 0f
-        private var isScaling = false
-
-        override fun onTouch(v: View, event: MotionEvent): Boolean {
-            if (isDrawingActive) return false
-
-            when (event.actionMasked) {
-                MotionEvent.ACTION_DOWN -> {
-                    lastTouchX = event.rawX
-                    lastTouchY = event.rawY
-                    v.bringToFront()
-                    v.animate().scaleXBy(0.05f).scaleYBy(0.05f).setDuration(100).start()
-                }
-                MotionEvent.ACTION_POINTER_DOWN -> {
-                    if (event.pointerCount == 2) {
-                        isScaling = true
-                        initialDistance = getRawDistance(event)
-                        initialRotation = getRawRotation(event)
-                        initialScale = v.scaleX
-                        initialViewRotation = v.rotation
-                    }
-                }
-                MotionEvent.ACTION_MOVE -> {
-                    if (event.pointerCount == 1 && !isScaling) {
-                        val deltaX = event.rawX - lastTouchX
-                        val deltaY = event.rawY - lastTouchY
-                        v.x += deltaX
-                        v.y += deltaY
-                        lastTouchX = event.rawX
-                        lastTouchY = event.rawY
-                    } else if (event.pointerCount == 2) {
-                        // Handle Scaling
-                        val currentDistance = getRawDistance(event)
-                        if (currentDistance > 10f && initialDistance > 0f) {
-                            val scale = (currentDistance / initialDistance) * initialScale
-                            v.scaleX = scale
-                            v.scaleY = scale
-                        }
-
-                        // Handle Rotation
-                        val currentRotation = getRawRotation(event)
-                        val rotationDelta = currentRotation - initialRotation
-                        v.rotation = initialViewRotation + rotationDelta
-                    }
-                }
-                MotionEvent.ACTION_POINTER_UP -> {
-                    if (event.pointerCount < 2) {
-                        isScaling = false
-                        lastTouchX = event.rawX
-                        lastTouchY = event.rawY
-                    }
-                }
-                MotionEvent.ACTION_UP -> {
-                    isScaling = false
-                    v.animate().scaleXBy(-0.05f).scaleYBy(-0.05f).setDuration(100).start()
-                }
-            }
-            return true
-        }
-
-        private fun getRawDistance(event: MotionEvent): Float {
-            if (event.pointerCount < 2) return 0f
-            val x = event.getRawX(0) - event.getRawX(1)
-            val y = event.getRawY(0) - event.getRawY(1)
-            return Math.sqrt((x * x + y * y).toDouble()).toFloat()
-        }
-
-        private fun getRawRotation(event: MotionEvent): Float {
-            if (event.pointerCount < 2) return 0f
-            val x = event.getRawX(0) - event.getRawX(1)
-            val y = event.getRawY(0) - event.getRawY(1)
-            val radians = Math.atan2(y.toDouble(), x.toDouble())
-            return Math.toDegrees(radians).toFloat()
-        }
-
-        private fun MotionEvent.getRawX(index: Int): Float {
-            return if (index == 0) rawX else {
-                val offset = rawX - x
-                getX(index) + offset
-            }
-        }
-        private fun MotionEvent.getRawY(index: Int): Float {
-            return if (index == 0) rawY else {
-                val offset = rawY - y
-                getY(index) + offset
-            }
+            Toast.makeText(this, getString(R.string.error_loading_image), Toast.LENGTH_SHORT).show()
         }
     }
 
-    private fun resetEditorContent() {
-        // Remove all views except imagePreview and placeholderContainer
-        val toRemove = mutableListOf<View>()
-        for (i in 0 until stickerEditorView.childCount) {
-            val child = stickerEditorView.getChildAt(i)
-            if (child.id != R.id.imagePreview &&
-                child.id != R.id.placeholderContainer &&
-                child.id != R.id.tvMediaInfo) {
-                toRemove.add(child)
-            }
-        }
-        toRemove.forEach { stickerEditorView.removeView(it) }
-        
-        drawingView?.clear()
-        drawingView = null
-        isDrawingActive = false
-
-        // Reset border
-        borderSize = 0f
-
-        // Reset adjustments
-        currentBrightness = 0f
-        currentContrast = 1f
-        currentSaturation = 1f
-
-        // Reset BG removal
-        if (backgroundRemoved) {
-            originalBitmap?.let {
-                selectedBitmap = it.copy(it.config ?: Bitmap.Config.ARGB_8888, true)
-                imagePreview.setImageBitmap(selectedBitmap)
-                backgroundRemoved = false
-
-                // Reset Remove BG Tool UI
-                toolRemoveBg.findViewById<TextView>(R.id.title).text = getString(R.string.remove_bg_short)
-                toolRemoveBg.findViewById<ImageView>(R.id.icon).setImageResource(R.drawable.ic_premium)
-            }
-        } else {
-            // If no background removal, reset to original
-            originalBitmap?.let {
-                selectedBitmap = it.copy(it.config ?: Bitmap.Config.ARGB_8888, true)
-                imagePreview.setImageBitmap(selectedBitmap)
-            }
-        }
+    private fun setEditorImage(bitmap: Bitmap) {
+        currentBitmap = bitmap.copy(Bitmap.Config.ARGB_8888, true)
+        photoEditorView.source.setImageBitmap(currentBitmap)
     }
 
-    private fun setupEdgeToEdge() {
-        val toolbarLayout = findViewById<View>(R.id.toolbarLayout)
-        val makerRoot = findViewById<View>(R.id.maker_root)
-        
-        ViewCompat.setOnApplyWindowInsetsListener(makerRoot) { _, insets ->
-            val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            
-            toolbarLayout?.setPadding(toolbarLayout.paddingLeft, systemBars.top, toolbarLayout.paddingRight, toolbarLayout.paddingBottom)
-            makerRoot?.setPadding(makerRoot.paddingLeft, makerRoot.paddingTop, makerRoot.paddingRight, systemBars.bottom)
-            
-            insets
-        }
-    }
-
-    private fun enterEditorMode() {
+    private fun showEditor() {
         typeSelectionContainer.visibility = View.GONE
         editorContainer.visibility = View.VISIBLE
-        toolbarTitle.text = if (isAnimatedMode) getString(R.string.animated_sticker) else getString(R.string.static_sticker)
-        
-        // UI Adaptations
-        placeholderIcon.setImageResource(if (isAnimatedMode) R.drawable.ic_video else R.drawable.ic_photo)
-        placeholderText.text = if (isAnimatedMode) getString(R.string.select_video_gif) else getString(R.string.select_photo_maker)
-        
-        // Update Change Media Tool UI
-        toolChangeMedia.findViewById<ImageView>(R.id.icon).setImageResource(if (isAnimatedMode) R.drawable.ic_video else R.drawable.ic_photo)
-        toolChangeMedia.findViewById<TextView>(R.id.title).text = if (isAnimatedMode) "Sıfırla" else getString(R.string.change_media_short)
-
-        // Background removal only for static
-        toolRemoveBg.visibility = if (isAnimatedMode) View.GONE else View.VISIBLE
-        
-        toolsPanel.visibility = View.VISIBLE
-    }
-
-    private fun exitEditorMode() {
-        typeSelectionContainer.visibility = View.VISIBLE
-        editorContainer.visibility = View.GONE
-        toolbarTitle.text = "Sticly"
-        resetEditorUI()
-    }
-
-    private fun resetEditorUI() {
-        resetEditorContent()
-        selectedUris.clear()
-        currentUriIndex = -1
-        selectedBitmap = null
-        originalBitmap = null
-        backgroundRemoved = false
-        imagePreview.visibility = View.GONE
-        
-        // Reset zoom/pan
-        scaleFactor = 1f
-        posX = 0f
-        posY = 0f
-        imagePreview.scaleX = 1f
-        imagePreview.scaleY = 1f
-        imagePreview.translationX = 0f
-        imagePreview.translationY = 0f
-        
-        placeholderContainer.visibility = View.VISIBLE
-        btnAddToPack.visibility = View.GONE
-        tvMediaInfo.visibility = View.GONE
-    }
-
-    private fun loadMediaFromUri(uri: Uri) {
-        try {
-            currentMimeType = contentResolver.getType(uri) ?: ""
-            Log.d("StickerMaker", "Loading media: $uri, Type: $currentMimeType")
-
-            if (isAnimatedMode) {
-                // Video/GIF Önizleme
-                tvMediaInfo.visibility = View.VISIBLE
-                tvMediaInfo.text = getMediaDuration(uri)
-                
-                // İlk kareyi önizleme olarak al
-                val mimeType = currentMimeType ?: ""
-                val bitmap = if (mimeType.contains("video")) {
-                    getVideoFrame(uri)
-                } else {
-                    BitmapFactory.decodeStream(contentResolver.openInputStream(uri))
-                }
-                
-                if (bitmap != null) {
-                    selectedBitmap = cropToSquare(bitmap)
-                    imagePreview.setImageBitmap(selectedBitmap)
-                    imagePreview.visibility = View.VISIBLE
-                    placeholderContainer.visibility = View.GONE
-                    btnAddToPack.visibility = View.VISIBLE
-                    btnAddToPack.text = getString(R.string.convert_and_add)
-                }
-            } else {
-                // Statik Resim
-                contentResolver.openInputStream(uri)?.use { stream ->
-                    val bitmap = BitmapFactory.decodeStream(stream)
-                    if (bitmap != null) {
-                        selectedBitmap = cropToSquare(bitmap)
-                        originalBitmap = selectedBitmap?.copy(selectedBitmap!!.config ?: Bitmap.Config.ARGB_8888, true)
-                        contentBitmap = selectedBitmap?.copy(selectedBitmap!!.config ?: Bitmap.Config.ARGB_8888, true)
-                        backgroundRemoved = false
-                        
-                        // Reset Remove BG Tool UI
-                        toolRemoveBg.findViewById<TextView>(R.id.title).text = getString(R.string.remove_bg_short)
-                        toolRemoveBg.findViewById<ImageView>(R.id.icon).setImageResource(R.drawable.ic_premium)
-                        
-                        imagePreview.setImageBitmap(selectedBitmap)
-                        imagePreview.visibility = View.VISIBLE
-                        placeholderContainer.visibility = View.GONE
-                        btnAddToPack.visibility = View.VISIBLE
-                        btnAddToPack.text = getString(R.string.add_to_pack)
-                    }
-                }
-            }
-
-        } catch (e: Exception) {
-            e.printStackTrace()
-            Toast.makeText(this, getString(R.string.media_load_error), Toast.LENGTH_SHORT).show()
+        // If image is loaded, hide placeholder and show editor view
+        if (currentBitmap != null) {
+            emptyStatePlaceholder.visibility = View.GONE
+            photoEditorView.visibility = View.VISIBLE
+            undoRedoContainer.visibility = View.VISIBLE
+        } else {
+            emptyStatePlaceholder.visibility = View.VISIBLE
+            photoEditorView.visibility = View.GONE
+            undoRedoContainer.visibility = View.GONE
+            toolOptionsPanel.removeAllViews()
+            toolOptionsPanel.visibility = View.GONE
         }
     }
 
-    private fun getMediaDuration(uri: Uri): String {
-        return try {
-            val mmr = android.media.MediaMetadataRetriever()
-            mmr.setDataSource(this, uri)
-            val durationStr = mmr.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)
-            val durationMs = durationStr?.toLong() ?: 0
-            val seconds = durationMs / 1000
-            mmr.release()
-            String.format("%02d:%02d", seconds / 60, seconds % 60)
-        } catch (e: Exception) {
-            "00:00"
-        }
-    }
+    // ==================== Tool Actions ====================
 
-    private fun getVideoFrame(uri: Uri): Bitmap? {
-        return try {
-            val mmr = android.media.MediaMetadataRetriever()
-            mmr.setDataSource(this, uri)
-            val bitmap = mmr.getFrameAtTime(0)
-            mmr.release()
-            bitmap
-        } catch (e: Exception) {
-            null
-        }
-    }
-
-    private fun cropToSquare(bitmap: Bitmap): Bitmap {
-        val size = minOf(bitmap.width, bitmap.height)
-        val x = (bitmap.width - size) / 2
-        val y = (bitmap.height - size) / 2
-        return Bitmap.createBitmap(bitmap, x, y, size, size)
-    }
-
-    private fun processRemoveBackground(bitmap: Bitmap) {
-        val segmenter = imageSegmenter
-        if (segmenter == null) {
-            Toast.makeText(this, "MediaPipe segmenter initialized değil. selfie_segmenter.tflite dosyası eksik olabilir.", Toast.LENGTH_LONG).show()
+    private fun onToolSelected(tool: EditorTool) {
+        if (currentBitmap == null) {
+            Toast.makeText(this, getString(R.string.error_select_image_first), Toast.LENGTH_SHORT).show()
             return
         }
 
-        showProcessingOverlay(getString(R.string.processing_background), getString(R.string.ai_analyzing), R.drawable.ic_premium)
+        currentToolType = tool.type
+        
+        // Reset brush related states when switching to non-brush tools
+        if (tool.type != ToolType.BRUSH && tool.type != ToolType.ERASER) {
+            photoEditor.setBrushDrawingMode(false)
+            isEraserMode = false
+            toolOptionsPanel.removeAllViews()
+            toolOptionsPanel.visibility = View.GONE
+        }
+
+        when (tool.type) {
+            ToolType.REMOVE_BG -> {
+                if (tool.name == getString(R.string.reset_short)) restoreOriginalImage()
+                else removeBackground()
+            }
+            ToolType.CROP -> startCrop()
+            ToolType.BRUSH -> {
+                if (isBrushModeActive && !isEraserMode) {
+                    photoEditor.setBrushDrawingMode(false)
+                    isBrushModeActive = false
+                    toolOptionsPanel.visibility = View.GONE
+                } else {
+                    enableBrush()
+                }
+            }
+            ToolType.ERASER -> {
+                if (isEraserMode) {
+                    isEraserMode = false
+                    isBrushModeActive = false
+                    eraserOverlay.visibility = View.GONE
+                    toolOptionsPanel.visibility = View.GONE
+                } else {
+                    enableEraser()
+                }
+            }
+            ToolType.TEXT -> showTextDialog()
+            ToolType.EMOJI -> showEmojiPicker()
+            ToolType.BORDER -> showBorderOptions()
+        }
+    }
+
+    // ==================== Remove Background (MediaPipe) ====================
+
+    private fun removeBackground() {
+        if (backgroundRemoved) {
+            // Restore original
+            originalBitmap?.let {
+                setEditorImage(it)
+                backgroundRemoved = false
+            }
+            return
+        }
+
+        val segmenter = imageSegmenter
+        if (segmenter == null) {
+            Toast.makeText(this, getString(R.string.error_bg_removal_unavailable), Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        showLoading()
 
         lifecycleScope.launch(Dispatchers.Default) {
             try {
-                // Convert bitmap to MediaPipe Image
+                val bitmap = currentBitmap ?: return@launch
+
                 val mpImage = BitmapImageBuilder(bitmap).build()
-                
-                // Run segmentation
                 val result = segmenter.segment(mpImage)
-                val categoryMask = result.categoryMask().get()
-                
+                val categoryMask = result.categoryMask().orElse(null) ?: throw Exception("Mask not found")
+
                 val width = bitmap.width
                 val height = bitmap.height
-                
                 val byteBuffer = ByteBufferExtractor.extract(categoryMask)
                 byteBuffer.rewind()
-                
+
+                // Create mask array for edge smoothing
+                val maskArray = ByteArray(width * height)
+                byteBuffer.get(maskArray)
+                byteBuffer.rewind()
+
                 val resultBitmap = bitmap.copy(Bitmap.Config.ARGB_8888, true)
                 val pixels = IntArray(width * height)
                 bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
-                
-                // MediaPipe category mask: In Selfie Segmenter, foreground is typically 0, background is others.
-                // Let's ensure we are removing the background correctly.
-                for (i in pixels.indices) {
-                    val category = byteBuffer.get().toInt() and 0xFF
-                    if (category != 0) {
-                        pixels[i] = Color.TRANSPARENT
+
+                // Apply mask with edge feathering for smoother edges
+                for (y in 0 until height) {
+                    for (x in 0 until width) {
+                        val i = y * width + x
+                        val category = maskArray[i].toInt() and 0xFF
+
+                        if (category != 0) {
+                            // Check if this pixel is near the edge (for anti-aliasing)
+                            var isEdge = false
+                            var foregroundCount = 0
+
+                            // Check 3x3 neighborhood for edge detection
+                            for (dy in -1..1) {
+                                for (dx in -1..1) {
+                                    val nx = x + dx
+                                    val ny = y + dy
+                                    if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+                                        val ni = ny * width + nx
+                                        val neighborCategory = maskArray[ni].toInt() and 0xFF
+                                        if (neighborCategory == 0) {
+                                            isEdge = true
+                                            foregroundCount++
+                                        }
+                                    }
+                                }
+                            }
+
+                            if (isEdge && foregroundCount > 0) {
+                                // Apply partial transparency for edge pixels (anti-aliasing)
+                                val alpha = ((9 - foregroundCount) * 255 / 9)
+                                val originalPixel = pixels[i]
+                                val r = Color.red(originalPixel)
+                                val g = Color.green(originalPixel)
+                                val b = Color.blue(originalPixel)
+                                pixels[i] = Color.argb(alpha.coerceIn(0, 255), r, g, b)
+                            } else {
+                                pixels[i] = Color.TRANSPARENT
+                            }
+                        }
                     }
                 }
-                
                 resultBitmap.setPixels(pixels, 0, width, 0, 0, width, height)
-                
-                // Apply edge smoothing
-                val smoothedBitmap = applyEdgeSmoothing(resultBitmap)
-                
+
+                // Add thin white contour around the subject
+                val finalBitmap = addContour(resultBitmap, 4, Color.WHITE)
+
                 withContext(Dispatchers.Main) {
-                    contentBitmap = smoothedBitmap
-                    
-                    // Auto-apply a white border (contour) for better sticker look
-                    borderSize = 15f
-                    borderColor = Color.WHITE
-                    
-                    applyAllEffects()
+                    saveBitmapToHistory()
+                    setEditorImage(finalBitmap)
                     backgroundRemoved = true
-                    
-                    toolRemoveBg.findViewById<TextView>(R.id.title).text = getString(R.string.undo)
-                    toolRemoveBg.findViewById<ImageView>(R.id.icon).setImageResource(R.drawable.ic_restore)
-                    
-                    hideProcessingOverlay()
+                    hideLoading()
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
                 withContext(Dispatchers.Main) {
-                    hideProcessingOverlay()
+                    hideLoading()
                     Toast.makeText(this@StickerMakerActivity, getString(R.string.bg_removal_error), Toast.LENGTH_SHORT).show()
                 }
             }
         }
     }
 
-    private fun applyEdgeSmoothing(bitmap: Bitmap): Bitmap {
-        // Apply a slight blur to smooth edges
-        try {
-            val output = Bitmap.createBitmap(bitmap.width, bitmap.height, Bitmap.Config.ARGB_8888)
-            val canvas = Canvas(output)
-            val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
-            canvas.drawBitmap(bitmap, 0f, 0f, paint)
-            return output
-        } catch (e: Exception) {
-            return bitmap
+    private fun addContour(src: Bitmap, strokeWidth: Int, color: Int): Bitmap {
+        if (strokeWidth <= 0) return src
+
+        val width = src.width
+        val height = src.height
+        val output = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(output)
+
+        // Create alpha mask from source
+        val maskAlpha = src.extractAlpha() ?: return src
+
+        // Draw contour by drawing the alpha mask multiple times with offset
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+        paint.colorFilter = PorterDuffColorFilter(color, PorterDuff.Mode.SRC_IN)
+
+        // Draw contour with higher step count for smoother edges
+        val steps = 16
+        val radius = strokeWidth.toFloat()
+        for (i in 0 until steps) {
+            val angle = 2.0 * Math.PI * i / steps
+            val dx = (radius * Math.cos(angle)).toFloat()
+            val dy = (radius * Math.sin(angle)).toFloat()
+            canvas.drawBitmap(maskAlpha, dx, dy, paint)
+        }
+
+        // Draw original image on top
+        canvas.drawBitmap(src, 0f, 0f, null)
+        maskAlpha.recycle()
+
+        return output
+    }
+
+    private fun addBorder(src: Bitmap, width: Int, color: Int): Bitmap {
+        if (width <= 0) return src
+
+        val maskAlpha = src.extractAlpha() ?: return src
+        val output = Bitmap.createBitmap(src.width, src.height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(output)
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+        paint.colorFilter = PorterDuffColorFilter(color, PorterDuff.Mode.SRC_IN)
+
+        val radius = width.toFloat()
+        val steps = 8
+        for (i in 0 until steps) {
+            val angle = 2.0 * Math.PI * i / steps
+            val dx = (radius * Math.cos(angle)).toFloat()
+            val dy = (radius * Math.sin(angle)).toFloat()
+            canvas.drawBitmap(maskAlpha, dx, dy, paint)
+        }
+
+        canvas.drawBitmap(src, 0f, 0f, null)
+        maskAlpha.recycle()
+        return output
+    }
+
+    // ==================== Crop (uCrop) ====================
+
+    private fun startCrop() {
+        val bitmap = currentBitmap ?: return
+
+        val cacheDir = File(cacheDir, "crop")
+        if (!cacheDir.exists()) cacheDir.mkdirs()
+
+        val sourceFile = File(cacheDir, "source_${System.currentTimeMillis()}.png")
+        val destFile = File(cacheDir, "cropped_${System.currentTimeMillis()}.png")
+
+        FileOutputStream(sourceFile).use { out ->
+            bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+        }
+
+        val sourceUri = Uri.fromFile(sourceFile)
+        val destUri = Uri.fromFile(destFile)
+
+        val options = UCrop.Options().apply {
+            setCompressionFormat(Bitmap.CompressFormat.PNG)
+            setCompressionQuality(100)
+            setToolbarColor(ContextCompat.getColor(this@StickerMakerActivity, R.color.toolbar_bg))
+            setStatusBarColor(ContextCompat.getColor(this@StickerMakerActivity, R.color.toolbar_bg))
+            setActiveControlsWidgetColor(ContextCompat.getColor(this@StickerMakerActivity, R.color.accent))
+            setToolbarWidgetColor(ContextCompat.getColor(this@StickerMakerActivity, R.color.white))
+            setRootViewBackgroundColor(ContextCompat.getColor(this@StickerMakerActivity, R.color.background))
+            setFreeStyleCropEnabled(true)
+        }
+
+        val intent = UCrop.of(sourceUri, destUri)
+            .withOptions(options)
+            .getIntent(this)
+
+        cropLauncher.launch(intent)
+    }
+
+    // ==================== Brush ====================
+
+    private fun enableBrush() {
+        isEraserMode = false
+        isBrushModeActive = true
+        eraserOverlay.visibility = View.GONE
+        photoEditor.setBrushDrawingMode(true)
+        shapeBuilder = ShapeBuilder()
+            .withShapeColor(currentBrushColor)
+            .withShapeSize(currentBrushSize)
+            .withShapeOpacity(currentBrushOpacity)
+        photoEditor.setShape(shapeBuilder)
+        
+        showBrushOptions()
+    }
+
+    private fun showBrushOptions() {
+        toolOptionsPanel.removeAllViews()
+        val view = layoutInflater.inflate(R.layout.panel_brush_options, toolOptionsPanel, false)
+
+        val sizeSlider = view.findViewById<Slider>(R.id.sliderBrushSize)
+        sizeSlider.value = currentBrushSize
+        sizeSlider.addOnChangeListener { _, value, _ ->
+            currentBrushSize = value
+            photoEditor.setShape(shapeBuilder.withShapeSize(value))
+        }
+
+        val colorAction = { color: Int ->
+            currentBrushColor = color
+            photoEditor.setShape(shapeBuilder.withShapeColor(color))
+        }
+
+        setupColorPicker(view, colorAction)
+
+        toolOptionsPanel.addView(view)
+        toolOptionsPanel.visibility = View.VISIBLE
+    }
+
+    private fun enableEraser() {
+        isEraserMode = true
+        isBrushModeActive = false
+        photoEditor.setBrushDrawingMode(false)
+        
+        eraserOverlay.visibility = View.VISIBLE
+        showEraserOptions()
+    }
+
+    private fun disableCustomEraser() {
+        isEraserMode = false
+        photoEditor.setBrushDrawingMode(false)
+    }
+
+    private fun showEraserOptions() {
+        toolOptionsPanel.removeAllViews()
+        val view = layoutInflater.inflate(R.layout.panel_eraser_options, toolOptionsPanel, false)
+
+        val sizeSlider = view.findViewById<Slider>(R.id.sliderEraserSize)
+        sizeSlider.valueFrom = 5f
+        sizeSlider.valueTo = 200f
+        sizeSlider.value = currentBrushSize.coerceIn(5f, 200f)
+        sizeSlider.addOnChangeListener { _, value, _ ->
+            currentBrushSize = value
+        }
+
+        toolOptionsPanel.addView(view)
+        toolOptionsPanel.visibility = View.VISIBLE
+    }
+
+    private fun setupColorPicker(view: View, onColorSelected: (Int) -> Unit, initialColor: Int = currentBrushColor) {
+        val colors = listOf(
+            Color.RED, Color.parseColor("#FF5722"), Color.YELLOW,
+            Color.GREEN, Color.parseColor("#009688"), Color.BLUE,
+            Color.parseColor("#3F51B5"), Color.parseColor("#9C27B0"),
+            Color.BLACK, Color.WHITE, Color.GRAY
+        )
+        val colorContainer = view.findViewById<LinearLayout>(R.id.colorContainer)
+        colorContainer.removeAllViews()
+
+        var selectedView: View? = null
+
+        fun updateSelection(newSelected: View, color: Int) {
+            // Remove border from previous selection
+            selectedView?.let { prev ->
+                val prevBg = prev.background as? GradientDrawable
+                prevBg?.setStroke(2.dpToPx(), Color.WHITE)
+            }
+            // Add thick border to new selection
+            val newBg = newSelected.background as? GradientDrawable
+            newBg?.setStroke(4.dpToPx(), ContextCompat.getColor(this, R.color.accent))
+            selectedView = newSelected
+        }
+
+        colors.forEach { color ->
+            val colorView = View(this).apply {
+                layoutParams = LinearLayout.LayoutParams(44.dpToPx(), 44.dpToPx()).apply {
+                    setMargins(0, 0, 10.dpToPx(), 0)
+                }
+                val bg = GradientDrawable()
+                bg.shape = GradientDrawable.OVAL
+                bg.setColor(color)
+                // Check if this is the initially selected color
+                if (color == initialColor) {
+                    bg.setStroke(4.dpToPx(), ContextCompat.getColor(this@StickerMakerActivity, R.color.accent))
+                } else {
+                    bg.setStroke(2.dpToPx(), Color.WHITE)
+                }
+                background = bg
+                elevation = 4f
+                setOnClickListener {
+                    updateSelection(this, color)
+                    onColorSelected(color)
+                }
+            }
+            if (color == initialColor) {
+                selectedView = colorView
+            }
+            colorContainer.addView(colorView)
         }
     }
 
-    private fun showPackSelectionDialog(bitmapToSave: Bitmap? = null) {
-        val view = LayoutInflater.from(this).inflate(R.layout.dialog_select_pack, null)
-        val rvPacks = view.findViewById<RecyclerView>(R.id.rvPacks)
-        val inputPackName = view.findViewById<TextInputEditText>(R.id.inputPackName)
-        val btnCreatePack = view.findViewById<Button>(R.id.btnCreatePack)
 
-        val allPacks = CustomStickerManager.getCustomPacks(this)
-        val filteredPacks = allPacks.filter { it.isAnimated == isAnimatedMode }
+    // ==================== Text ====================
 
-        val dialog = AlertDialog.Builder(this, R.style.MaterialAlertDialogTheme).setView(view).create()
-        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+    private fun showTextDialog() {
+        val dialog = BottomSheetDialog(this)
+        val view = layoutInflater.inflate(R.layout.dialog_add_text, null)
+        dialog.setContentView(view)
 
-        if (filteredPacks.isNotEmpty()) {
-            rvPacks.visibility = View.VISIBLE
-            rvPacks.layoutManager = LinearLayoutManager(this)
-            rvPacks.adapter = PackSelectionAdapter(filteredPacks) { pack ->
-                dialog.dismiss()
-                targetPackId = pack.id
-                bitmapToSave?.let { processStickerResult(it) } ?: run {
-                   val b = selectedBitmap ?: originalBitmap
-                   if (b != null) processStickerResult(b)
+        val inputText = view.findViewById<TextInputEditText>(R.id.etStickerText)
+        val btnAdd = view.findViewById<MaterialButton>(R.id.btnAddText)
+        val tvPreview = view.findViewById<TextView>(R.id.tvTextPreviewInDialog)
+        val sizeSlider = view.findViewById<Slider>(R.id.textSizeSlider)
+        val fontGrid = view.findViewById<GridLayout>(R.id.fontSelectionLayout)
+
+        var selectedColor = Color.WHITE
+        var textSize = 28f
+        var selectedColorView: View? = null
+        var selectedFontView: View? = null
+        var selectedTypeface: Typeface? = null
+
+        // Font list with display names
+        val fonts = listOf(
+            "Default" to Typeface.DEFAULT,
+            "Bold" to Typeface.DEFAULT_BOLD,
+            "Serif" to Typeface.SERIF,
+            "Sans Serif" to Typeface.SANS_SERIF,
+            "Monospace" to Typeface.MONOSPACE,
+            "Serif Bold" to Typeface.create(Typeface.SERIF, Typeface.BOLD),
+            "Sans Bold" to Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD),
+            "Mono Bold" to Typeface.create(Typeface.MONOSPACE, Typeface.BOLD),
+            "Serif Italic" to Typeface.create(Typeface.SERIF, Typeface.ITALIC),
+            "Sans Italic" to Typeface.create(Typeface.SANS_SERIF, Typeface.ITALIC),
+            "Bold Italic" to Typeface.create(Typeface.DEFAULT, Typeface.BOLD_ITALIC),
+            "Serif B.Italic" to Typeface.create(Typeface.SERIF, Typeface.BOLD_ITALIC),
+            "Condensed" to Typeface.create("sans-serif-condensed", Typeface.NORMAL),
+            "Condensed Bold" to Typeface.create("sans-serif-condensed", Typeface.BOLD),
+            "Light" to Typeface.create("sans-serif-light", Typeface.NORMAL),
+            "Thin" to Typeface.create("sans-serif-thin", Typeface.NORMAL),
+            "Medium" to Typeface.create("sans-serif-medium", Typeface.NORMAL),
+            "Black" to Typeface.create("sans-serif-black", Typeface.NORMAL),
+            "Casual" to Typeface.create("casual", Typeface.NORMAL),
+            "Cursive" to Typeface.create("cursive", Typeface.NORMAL),
+            "Serif Medium" to Typeface.create("serif", Typeface.NORMAL),
+            "Small Caps" to Typeface.create("sans-serif-smallcaps", Typeface.NORMAL)
+        )
+
+        // Setup font grid
+        fontGrid.columnCount = 2
+        fonts.forEachIndexed { index, (name, typeface) ->
+            val fontCard = MaterialCardView(this).apply {
+                layoutParams = GridLayout.LayoutParams().apply {
+                    width = 0
+                    height = GridLayout.LayoutParams.WRAP_CONTENT
+                    columnSpec = GridLayout.spec(GridLayout.UNDEFINED, 1f)
+                    setMargins(4.dpToPx(), 4.dpToPx(), 4.dpToPx(), 4.dpToPx())
+                }
+                radius = 12.dpToPx().toFloat()
+                cardElevation = 2.dpToPx().toFloat()
+                setCardBackgroundColor(ContextCompat.getColor(this@StickerMakerActivity, R.color.card_bg))
+                strokeWidth = if (index == 0) 2.dpToPx() else 0
+                strokeColor = ContextCompat.getColor(this@StickerMakerActivity, R.color.accent)
+
+                val textView = TextView(this@StickerMakerActivity).apply {
+                    text = name
+                    typeface?.let { setTypeface(it) }
+                    textSize = 14f
+                    setTextColor(ContextCompat.getColor(this@StickerMakerActivity, R.color.text_primary))
+                    setPadding(16.dpToPx(), 12.dpToPx(), 16.dpToPx(), 12.dpToPx())
+                    gravity = android.view.Gravity.CENTER
+                }
+                addView(textView)
+
+                setOnClickListener {
+                    selectedFontView?.let { prev ->
+                        (prev as MaterialCardView).strokeWidth = 0
+                    }
+                    strokeWidth = 2.dpToPx()
+                    selectedFontView = this
+                    selectedTypeface = typeface
+                    tvPreview.typeface = typeface
+                }
+
+                if (index == 0) {
+                    selectedFontView = this
+                    selectedTypeface = typeface
                 }
             }
-        } else {
-            rvPacks.visibility = View.GONE
+            fontGrid.addView(fontCard)
         }
 
-        btnCreatePack.setOnClickListener {
-            val name = inputPackName.text?.toString()?.trim() ?: ""
-            if (name.isEmpty()) {
-                inputPackName.error = getString(R.string.enter_pack_name)
-                return@setOnClickListener
+        // Color picker
+        val colors = listOf(Color.WHITE, Color.BLACK, Color.RED, Color.BLUE, Color.GREEN, Color.YELLOW,
+            Color.MAGENTA, Color.CYAN, 0xFFFF5722.toInt(), 0xFF9C27B0.toInt())
+        val colorContainer = view.findViewById<LinearLayout>(R.id.colorSelectionLayout)
+
+        fun updateColorSelection(newSelected: View, color: Int) {
+            selectedColorView?.let { prev ->
+                val prevBg = prev.background as? GradientDrawable
+                prevBg?.setStroke(2.dpToPx(), Color.DKGRAY)
             }
-            val packId = CustomStickerManager.createPack(this, name, isAnimatedMode)
-            dialog.dismiss()
-            targetPackId = packId
-            
-            bitmapToSave?.let { processStickerResult(it) } ?: run {
-                val b = selectedBitmap ?: originalBitmap
-                if (b != null) processStickerResult(b)
+            val newBg = newSelected.background as? GradientDrawable
+            newBg?.setStroke(4.dpToPx(), ContextCompat.getColor(this, R.color.accent))
+            selectedColorView = newSelected
+        }
+
+        colors.forEachIndexed { index, color ->
+            val colorView = View(this).apply {
+                layoutParams = LinearLayout.LayoutParams(48.dpToPx(), 48.dpToPx()).apply {
+                    marginEnd = 10.dpToPx()
+                }
+                val bg = GradientDrawable()
+                bg.shape = GradientDrawable.OVAL
+                bg.setColor(color)
+                if (index == 0) {
+                    bg.setStroke(4.dpToPx(), ContextCompat.getColor(this@StickerMakerActivity, R.color.accent))
+                } else {
+                    bg.setStroke(2.dpToPx(), Color.DKGRAY)
+                }
+                background = bg
+                elevation = 4f
+                setOnClickListener {
+                    updateColorSelection(this, color)
+                    selectedColor = color
+                    tvPreview.setTextColor(color)
+                }
+            }
+            if (index == 0) {
+                selectedColorView = colorView
+            }
+            colorContainer.addView(colorView)
+        }
+
+        // Size slider
+        sizeSlider.addOnChangeListener { _, value, _ ->
+            textSize = value
+            tvPreview.textSize = value
+        }
+
+        // Live preview
+        inputText.addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                tvPreview.text = s?.toString() ?: "Preview"
+            }
+            override fun afterTextChanged(s: android.text.Editable?) {}
+        })
+
+        btnAdd.setOnClickListener {
+            val text = inputText.text?.toString() ?: ""
+            if (text.isNotEmpty()) {
+                val textStyleBuilder = TextStyleBuilder()
+                textStyleBuilder.withTextColor(selectedColor)
+                textStyleBuilder.withTextSize(textSize)
+                selectedTypeface?.let { textStyleBuilder.withTextFont(it) }
+                photoEditor.addText(text, textStyleBuilder)
+                dialog.dismiss()
             }
         }
+
         dialog.show()
     }
 
-    private fun processStickerResult(bitmap: Bitmap) {
-        if (isProcessing) return
-        
-        isProcessing = true
-        showProcessingOverlay(getString(R.string.preparing_sticker), getString(R.string.please_wait), R.drawable.ic_sticker)
-        
-        // We will process everything in a background thread
-        lifecycleScope.launch(Dispatchers.Default) {
+    // ==================== Emoji ====================
+
+    private fun showEmojiPicker() {
+        val dialog = BottomSheetDialog(this, R.style.TransparentBottomSheetDialog)
+        val view = layoutInflater.inflate(R.layout.dialog_emoji_picker, null)
+        dialog.setContentView(view)
+
+        // Emoji categories
+        val emojiCategories = mapOf(
+            getString(R.string.emoji_faces) to listOf(
+                "😀", "😃", "😄", "😁", "😆", "😅", "🤣", "😂", "🙂", "🙃",
+                "😉", "😊", "😇", "🥰", "😍", "🤩", "😘", "😗", "😚", "😙",
+                "🥲", "😋", "😛", "😜", "🤪", "😝", "🤑", "🤗", "🤭", "🤫",
+                "🤔", "🤐", "🤨", "😐", "😑", "😶", "😏", "😒", "🙄", "😬",
+                "😮‍💨", "🤥", "😌", "😔", "😪", "🤤", "😴", "😷", "🤒", "🤕",
+                "🤢", "🤮", "🤧", "🥵", "🥶", "🥴", "😵", "🤯", "🤠", "🥳",
+                "🥸", "😎", "🤓", "🧐", "😕", "😟", "🙁", "😮", "😯", "😲",
+                "😳", "🥺", "😦", "😧", "😨", "😰", "😥", "😢", "😭", "😱",
+                "😖", "😣", "😞", "😓", "😩", "😫", "🥱", "😤", "😡", "😠",
+                "🤬", "😈", "👿", "💀", "☠️", "💩", "🤡", "👹", "👺", "👻"
+            ),
+            getString(R.string.emoji_hearts) to listOf(
+                "❤️", "🧡", "💛", "💚", "💙", "💜", "🖤", "🤍", "🤎", "💔",
+                "❤️‍🔥", "❤️‍🩹", "❣️", "💕", "💞", "💓", "💗", "💖", "💘", "💝",
+                "💟", "♥️", "💋", "💌", "💑", "👩‍❤️‍👨", "👨‍❤️‍👨", "👩‍❤️‍👩", "🫶", "🤟"
+            ),
+            getString(R.string.emoji_hands) to listOf(
+                "👍", "👎", "👊", "✊", "🤛", "🤜", "👏", "🙌", "👐", "🤲",
+                "🤝", "🙏", "✌️", "🤞", "🤟", "🤘", "🤙", "👈", "👉", "👆",
+                "👇", "☝️", "✋", "🤚", "🖐️", "🖖", "👋", "🤙", "💪", "🦾",
+                "🖕", "✍️", "🤳", "💅", "🦵", "🦶", "👂", "🦻", "👃", "👀"
+            ),
+            getString(R.string.emoji_symbols) to listOf(
+                "⭐", "🌟", "✨", "💫", "⚡", "🔥", "💥", "💢", "💦", "💨",
+                "🎉", "🎊", "🎈", "🎁", "🏆", "🥇", "🥈", "🥉", "🎯", "🎮",
+                "💯", "✅", "❌", "❓", "❗", "💬", "💭", "🗯️", "💤", "🔔",
+                "🎵", "🎶", "🎤", "🎧", "📢", "📣", "💡", "🔮", "🧿", "💎"
+            ),
+            getString(R.string.emoji_animals) to listOf(
+                "🐶", "🐱", "🐭", "🐹", "🐰", "🦊", "🐻", "🐼", "🐨", "🐯",
+                "🦁", "🐮", "🐷", "🐸", "🐵", "🙈", "🙉", "🙊", "🐔", "🐧",
+                "🐦", "🐤", "🦆", "🦅", "🦉", "🦇", "🐺", "🐗", "🐴", "🦄",
+                "🐝", "🐛", "🦋", "🐌", "🐞", "🐜", "🦟", "🐢", "🐍", "🦎"
+            ),
+            getString(R.string.emoji_food) to listOf(
+                "🍎", "🍐", "🍊", "🍋", "🍌", "🍉", "🍇", "🍓", "🫐", "🍈",
+                "🍒", "🍑", "🥭", "🍍", "🥥", "🥝", "🍅", "🍆", "🥑", "🥦",
+                "🌽", "🥕", "🧄", "🧅", "🥔", "🍠", "🥐", "🍞", "🥖", "🥨",
+                "🧀", "🥚", "🍳", "🥞", "🧇", "🥓", "🍔", "🍟", "🍕", "🌭",
+                "🍿", "🧂", "🥤", "🧃", "🧋", "☕", "🍵", "🍺", "🍻", "🥂"
+            ),
+            getString(R.string.emoji_nature) to listOf(
+                "🌸", "💮", "🏵️", "🌹", "🥀", "🌺", "🌻", "🌼", "🌷", "🌱",
+                "🪴", "🌲", "🌳", "🌴", "🌵", "🌾", "🌿", "☘️", "🍀", "🍁",
+                "🍂", "🍃", "🍄", "🌰", "🦀", "🦞", "🦐", "🦑", "🌍", "🌎",
+                "🌏", "🌐", "🌙", "⭐", "🌟", "💫", "✨", "🌈", "☀️", "🌤️"
+            ),
+            getString(R.string.emoji_sport) to listOf(
+                "⚽", "🏀", "🏈", "⚾", "🥎", "🎾", "🏐", "🏉", "🥏", "🎱",
+                "🏓", "🏸", "🏒", "🏑", "🥍", "🏏", "🪃", "🥅", "⛳", "🪁",
+                "🏹", "🎣", "🤿", "🥊", "🥋", "🎽", "🛹", "🛼", "🛷", "⛸️",
+                "🥌", "🎿", "⛷️", "🏂", "🪂", "🏋️", "🤸", "🏊", "🚴", "🧘"
+            )
+        )
+
+        var currentEmojis = emojiCategories.values.first()
+        val gridLayout = view.findViewById<GridLayout>(R.id.emojiGrid)
+        val categoryTabs = view.findViewById<LinearLayout>(R.id.emojiCategoryTabs)
+
+        // Close button
+        view.findViewById<View>(R.id.btnCloseEmoji)?.setOnClickListener {
+            dialog.dismiss()
+        }
+
+        fun updateEmojiGrid(emojis: List<String>) {
+            gridLayout.removeAllViews()
+            gridLayout.columnCount = 6
+            emojis.forEach { emoji ->
+                val emojiView = TextView(this).apply {
+                    text = emoji
+                    textSize = 28f
+                    setPadding(12.dpToPx(), 12.dpToPx(), 12.dpToPx(), 12.dpToPx())
+                    gravity = android.view.Gravity.CENTER
+                    background = ContextCompat.getDrawable(this@StickerMakerActivity, R.drawable.bg_emoji_item)
+                    setOnClickListener {
+                        photoEditor.addEmoji(emoji)
+                        dialog.dismiss()
+                    }
+                }
+                val params = GridLayout.LayoutParams().apply {
+                    width = 0
+                    height = GridLayout.LayoutParams.WRAP_CONTENT
+                    columnSpec = GridLayout.spec(GridLayout.UNDEFINED, 1f)
+                    setMargins(4.dpToPx(), 4.dpToPx(), 4.dpToPx(), 4.dpToPx())
+                }
+                gridLayout.addView(emojiView, params)
+            }
+        }
+
+        // Create category tabs
+        var selectedTab: TextView? = null
+        emojiCategories.keys.forEachIndexed { index, category ->
+            val tabView = TextView(this).apply {
+                text = category
+                textSize = 14f
+                setPadding(16.dpToPx(), 8.dpToPx(), 16.dpToPx(), 8.dpToPx())
+                setTextColor(if (index == 0) ContextCompat.getColor(this@StickerMakerActivity, R.color.white)
+                             else ContextCompat.getColor(this@StickerMakerActivity, R.color.text_secondary))
+                background = if (index == 0) ContextCompat.getDrawable(this@StickerMakerActivity, R.drawable.bg_category_selected)
+                             else ContextCompat.getDrawable(this@StickerMakerActivity, R.drawable.bg_category_unselected)
+                setOnClickListener {
+                    selectedTab?.let { prev ->
+                        prev.setTextColor(ContextCompat.getColor(this@StickerMakerActivity, R.color.text_secondary))
+                        prev.background = ContextCompat.getDrawable(this@StickerMakerActivity, R.drawable.bg_category_unselected)
+                    }
+                    setTextColor(ContextCompat.getColor(this@StickerMakerActivity, R.color.white))
+                    background = ContextCompat.getDrawable(this@StickerMakerActivity, R.drawable.bg_category_selected)
+                    selectedTab = this
+                    updateEmojiGrid(emojiCategories[category] ?: emptyList())
+                }
+                if (index == 0) selectedTab = this
+            }
+            val params = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                marginEnd = 8.dpToPx()
+            }
+            categoryTabs.addView(tabView, params)
+        }
+
+        // Initialize with first category
+        updateEmojiGrid(currentEmojis)
+
+        dialog.show()
+    }
+
+    private fun restoreOriginalImage() {
+        val original = originalBitmap ?: return
+        saveBitmapToHistory()
+        setEditorImage(original)
+        photoEditor.clearAllViews()
+        backgroundRemoved = false
+    }
+
+    // ==================== Border ====================
+
+    private fun showBorderOptions() {
+        // Apply border to current image
+        val bitmap = currentBitmap ?: return
+
+        val dialog = BottomSheetDialog(this)
+        val view = layoutInflater.inflate(R.layout.dialog_border_options, null)
+        dialog.setContentView(view)
+
+        var borderColor = Color.WHITE
+        var borderSize = 12
+        var selectedColorView: View? = null
+
+        val sizeSlider = view.findViewById<Slider>(R.id.sliderBorderSize)
+        val colorContainer = view.findViewById<LinearLayout>(R.id.colorContainer)
+        val btnApply = view.findViewById<MaterialButton>(R.id.btnApplyBorder)
+
+        fun updateColorSelection(newSelected: View, color: Int) {
+            // Remove border from previous selection
+            selectedColorView?.let { prev ->
+                val prevBg = prev.background as? GradientDrawable
+                prevBg?.setStroke(2.dpToPx(), Color.DKGRAY)
+            }
+            // Add thick accent border to new selection
+            val newBg = newSelected.background as? GradientDrawable
+            newBg?.setStroke(4.dpToPx(), ContextCompat.getColor(this, R.color.accent))
+            selectedColorView = newSelected
+        }
+
+        val colors = listOf(
+            Color.WHITE, Color.BLACK, Color.RED, Color.BLUE, Color.GREEN,
+            Color.YELLOW, Color.MAGENTA, Color.CYAN, 0xFFFF5722.toInt(), 0xFF9C27B0.toInt()
+        )
+        colors.forEachIndexed { index, color ->
+            val colorView = View(this).apply {
+                layoutParams = LinearLayout.LayoutParams(48.dpToPx(), 48.dpToPx()).apply {
+                    marginEnd = 10.dpToPx()
+                }
+                val bg = GradientDrawable()
+                bg.shape = GradientDrawable.OVAL
+                bg.setColor(color)
+                // First color (white) is selected by default
+                if (index == 0) {
+                    bg.setStroke(4.dpToPx(), ContextCompat.getColor(this@StickerMakerActivity, R.color.accent))
+                } else {
+                    bg.setStroke(2.dpToPx(), Color.DKGRAY)
+                }
+                background = bg
+                elevation = 4f
+                setOnClickListener {
+                    updateColorSelection(this, color)
+                    borderColor = color
+                }
+            }
+            if (index == 0) {
+                selectedColorView = colorView
+            }
+            colorContainer.addView(colorView)
+        }
+
+        sizeSlider.addOnChangeListener { _, value, _ ->
+            borderSize = value.toInt()
+        }
+
+        btnApply.setOnClickListener {
+            saveBitmapToHistory()
+            val borderedBitmap = addBorder(bitmap, borderSize, borderColor)
+            setEditorImage(borderedBitmap)
+            dialog.dismiss()
+        }
+
+        dialog.show()
+    }
+
+    // ==================== Save Sticker ====================
+
+    private fun saveSticker() {
+        showLoading()
+
+        val file = File(cacheDir, "sticker_${System.currentTimeMillis()}.png")
+
+        val saveSettings = SaveSettings.Builder()
+            .setClearViewsEnabled(false)
+            .setTransparencyEnabled(true)
+            .build()
+
+        photoEditor.saveAsFile(file.absolutePath, saveSettings, object : PhotoEditor.OnSaveListener {
+            override fun onSuccess(imagePath: String) {
+                val bitmap = BitmapFactory.decodeFile(imagePath)
+                runOnUiThread {
+                    hideLoading()
+                    showPackSelectionDialog(bitmap)
+                }
+            }
+
+            override fun onFailure(exception: Exception) {
+                runOnUiThread {
+                    hideLoading()
+                    Toast.makeText(this@StickerMakerActivity, getString(R.string.error_save_failed, exception.message), Toast.LENGTH_SHORT).show()
+                }
+            }
+        })
+    }
+
+    private fun showPackSelectionDialog(bitmap: Bitmap) {
+        val view = layoutInflater.inflate(R.layout.dialog_select_pack, null)
+        val rvPacks = view.findViewById<RecyclerView>(R.id.rvPacks)
+        val inputPackName = view.findViewById<TextInputEditText>(R.id.inputPackName)
+        val btnCreatePack = view.findViewById<MaterialButton>(R.id.btnCreatePack)
+
+        val packs = CustomStickerManager.getCustomPacks(this).filter { !it.isAnimated }
+
+        val dialog = AlertDialog.Builder(this, R.style.MaterialAlertDialogTheme)
+            .setView(view)
+            .create()
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+
+        if (packs.isNotEmpty()) {
+            rvPacks.visibility = View.VISIBLE
+            rvPacks.layoutManager = LinearLayoutManager(this)
+            rvPacks.adapter = PackSelectionAdapter(packs) { pack ->
+                dialog.dismiss()
+                saveStickerToPack(bitmap, pack.id)
+            }
+        }
+
+        btnCreatePack.setOnClickListener {
+            val packName = inputPackName.text?.toString()?.trim() ?: ""
+            if (packName.isEmpty()) {
+                inputPackName.error = getString(R.string.enter_pack_name)
+                return@setOnClickListener
+            }
+            dialog.dismiss()
+            val newPackId = CustomStickerManager.createPack(this, packName, false)
+            saveStickerToPack(bitmap, newPackId)
+        }
+
+        dialog.show()
+    }
+
+    private fun saveStickerToPack(bitmap: Bitmap, packId: String) {
+        showLoading()
+
+        lifecycleScope.launch(Dispatchers.IO) {
             try {
-                // Determine the base bitmap to save
-                // If we already have a captured bitmap (with text/emojis), use it
-                // Otherwise process selectedBitmap/originalBitmap with border
-                
-                val sourceForProcessing = if (stickerEditorView.childCount > 3) {
-                    // More than just imagePreview + placeholder + tvMediaInfo? 
-                    // Then it's likely a captured bitmap from UI.
-                    bitmap
-                } else {
-                    // Try to apply border to the source if not already baked in
-                    if (borderSize > 0) {
-                        val current = if (backgroundRemoved) selectedBitmap ?: originalBitmap ?: bitmap else originalBitmap ?: bitmap
-                        addOutline(current, borderSize.toInt(), Color.WHITE)
-                    } else {
-                        selectedBitmap ?: originalBitmap ?: bitmap
-                    }
-                }
+                // Resize if needed (max 512x512 for WhatsApp)
+                val resized = resizeBitmap(bitmap, 512)
 
-                // Create the final 512x512 sticker
-                val finalBitmap = Bitmap.createBitmap(512, 512, Bitmap.Config.ARGB_8888)
-                val canvas = Canvas(finalBitmap)
-                
-                // Scale source to fit 512x512
-                val scale = 512f / Math.max(sourceForProcessing.width.toFloat(), sourceForProcessing.height.toFloat())
-                val matrix = Matrix()
-                matrix.postScale(scale, scale)
-                val dx = (512 - sourceForProcessing.width * scale) / 2f
-                val dy = (512 - sourceForProcessing.height * scale) / 2f
-                matrix.postTranslate(dx, dy)
-                
-                canvas.drawBitmap(sourceForProcessing, matrix, Paint(Paint.ANTI_ALIAS_FLAG))
-                
-                // Add to pack on IO thread
-                val success = if (targetPackId != null) {
-                    val added = CustomStickerManager.addStickerToPack(this@StickerMakerActivity, targetPackId!!, finalBitmap)
-                    if (added) {
-                        StickerRepository.loadPacks(this@StickerMakerActivity, true)
-                    }
-                    added
-                } else {
-                    false
-                }
+                val result = CustomStickerManager.addStickerToPack(
+                    this@StickerMakerActivity,
+                    packId,
+                    resized
+                )
 
-                // Update UI on Main thread
                 withContext(Dispatchers.Main) {
-                    isProcessing = false
-                    hideProcessingOverlay()
-
-                    if (targetPackId != null) {
-                        if (success) {
-                            showSuccessDialog(targetPackId!!)
-                            checkQueueAndProceed(suppressToast = true)
-                        } else {
-                            Toast.makeText(this@StickerMakerActivity, getString(R.string.error_pack_full), Toast.LENGTH_SHORT).show()
-                        }
+                    hideLoading()
+                    if (result) {
+                        Toast.makeText(this@StickerMakerActivity, getString(R.string.sticker_added), Toast.LENGTH_SHORT).show()
+                        setResult(RESULT_OK)
+                        finish()
                     } else {
-                        // We shouldn't really be here as btnAddToPack handles this, but just in case
-                        selectedBitmap = finalBitmap
-                        showPackSelectionDialog(finalBitmap)
+                        Toast.makeText(this@StickerMakerActivity, getString(R.string.error_save_failed_generic), Toast.LENGTH_SHORT).show()
                     }
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
                 withContext(Dispatchers.Main) {
-                    isProcessing = false
-                    hideProcessingOverlay()
-                    Toast.makeText(this@StickerMakerActivity, getString(R.string.error_saving_sticker), Toast.LENGTH_SHORT).show()
+                    hideLoading()
+                    Toast.makeText(this@StickerMakerActivity, getString(R.string.error_generic, e.message), Toast.LENGTH_SHORT).show()
                 }
             }
         }
     }
-    private fun processAndAddSticker(packId: String) {
-        targetPackId = packId
-        
-        if (isAnimatedMode) {
-            if (currentUriIndex < 0 || currentUriIndex >= selectedUris.size) {
-                Toast.makeText(this, getString(R.string.error_media_not_found), Toast.LENGTH_SHORT).show()
-                return
-            }
-            val uri = selectedUris[currentUriIndex]
-            
-            // Video-to-WebP Dönüşümü
-            val outputFile = File(cacheDir, "temp_sticker_${System.currentTimeMillis()}.webp")
-            
-            // FFmpeg Komutu: 512x512, max 3s, an (sesiz), webp
-            val cmd = "-y -i \"${getFilePathFromUri(uri)}\" -t 3 -vf \"scale=512:512:force_original_aspect_ratio=decrease,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=#00000000\" -vcodec libwebp -lossless 0 -compression_level 6 -q:v 60 -loop 0 -an \"${outputFile.absolutePath}\""
-            
-            showProcessingOverlay(getString(R.string.converting), getString(R.string.preparing_webp), R.drawable.ic_video)
-            tvProcessingPercent.visibility = View.VISIBLE
-            tvProcessingPercent.text = "0%"
 
-            // FFmpeg Kit usage is currently commented out, so we show 'soon'
-            Toast.makeText(this, R.string.animated_sticker_coming_soon, Toast.LENGTH_LONG).show()
-            hideProcessingOverlay()
+    private fun resizeBitmap(bitmap: Bitmap, maxSize: Int): Bitmap {
+        val width = bitmap.width
+        val height = bitmap.height
+
+        if (width <= maxSize && height <= maxSize) return bitmap
+
+        val ratio = width.toFloat() / height.toFloat()
+        val newWidth: Int
+        val newHeight: Int
+
+        if (width > height) {
+            newWidth = maxSize
+            newHeight = (maxSize / ratio).toInt()
         } else {
-            // Statik Ekleme
-            val bitmap = selectedBitmap ?: originalBitmap
-            if (bitmap != null) {
-                processStickerResult(bitmap)
-            } else {
-                Toast.makeText(this, getString(R.string.error_image_not_ready), Toast.LENGTH_SHORT).show()
+            newHeight = maxSize
+            newWidth = (maxSize * ratio).toInt()
+        }
+
+        return Bitmap.createScaledBitmap(bitmap, newWidth, newHeight, true)
+    }
+
+    // ==================== UI Helpers ====================
+
+    private fun showLoading() {
+        loadingOverlay.visibility = View.VISIBLE
+        lottieLoading.playAnimation()
+    }
+
+    private fun hideLoading() {
+        lottieLoading.cancelAnimation()
+        loadingOverlay.visibility = View.GONE
+    }
+
+    private fun showExitConfirmDialog() {
+        AlertDialog.Builder(this, R.style.MaterialAlertDialogTheme)
+            .setTitle(getString(R.string.discard_changes))
+            .setMessage(getString(R.string.discard_changes_message))
+            .setPositiveButton(getString(R.string.discard)) { _, _ ->
+                resetEditor()
+                finish()
             }
+            .setNegativeButton(getString(R.string.cancel), null)
+            .show()
+    }
+
+    private fun resetEditor() {
+        currentBitmap = null
+        originalBitmap = null
+        backgroundRemoved = false
+        photoEditor.clearAllViews()
+        toolOptionsPanel.removeAllViews()
+        toolOptionsPanel.visibility = View.GONE
+        showEditor()
+    }
+
+
+
+    // ==================== PhotoEditor Listener ====================
+
+    /*
+    override fun onEditTextChangeListener(rootView: View, text: String, colorCode: Int) {}
+    override fun onAddViewListener(viewType: ViewType, numberOfAddedViews: Int) {
+        updateUndoRedoState()
+    }
+    override fun onRemoveViewListener(viewType: ViewType, numberOfAddedViews: Int) {
+        updateUndoRedoState()
+    }
+    override fun onStartViewChangeListener(viewType: ViewType) {}
+    override fun onStopViewChangeListener(viewType: ViewType) {}
+    override fun onTouchSourceImage(event: MotionEvent) {}
+    */
+    
+    // Empty implementations for the interface if required
+    override fun onEditTextChangeListener(rootView: View?, text: String?, colorCode: Int) {}
+    override fun onAddViewListener(viewType: ViewType?, numberOfAddedViews: Int) {
+        updateUndoRedoState()
+    }
+    override fun onRemoveViewListener(viewType: ViewType?, numberOfAddedViews: Int) {
+        updateUndoRedoState()
+    }
+    override fun onStartViewChangeListener(viewType: ViewType?) {}
+    override fun onStopViewChangeListener(viewType: ViewType?) {}
+    override fun onTouchSourceImage(event: MotionEvent?) {}
+
+    // ==================== Bitmap History (Undo/Redo) ====================
+
+    private fun saveBitmapToHistory() {
+        currentBitmap?.let { bitmap ->
+            // Eğer historyIndex son değilse, sonraki history'yi temizle
+            while (bitmapHistory.size > historyIndex + 1) {
+                bitmapHistory.removeAt(bitmapHistory.size - 1)
+            }
+
+            // Yeni bitmap'i history'ye ekle
+            bitmapHistory.add(bitmap.copy(Bitmap.Config.ARGB_8888, true))
+            historyIndex = bitmapHistory.size - 1
+
+            // Max boyutu aşarsa eski olanları sil
+            while (bitmapHistory.size > maxHistorySize) {
+                bitmapHistory.removeAt(0)
+                historyIndex--
+            }
+
+            updateUndoRedoState()
         }
     }
 
-    private fun getFilePathFromUri(uri: Uri): String {
-        // FFmpeg için geçici bir dosyaya kopyalamak en güvenlisidir
-        val tempFile = File(cacheDir, "input_media_${System.currentTimeMillis()}")
-        contentResolver.openInputStream(uri)?.use { input ->
-            FileOutputStream(tempFile).use { output ->
-                input.copyTo(output)
-            }
+    private fun undoBitmap() {
+        if (historyIndex > 0) {
+            historyIndex--
+            currentBitmap = bitmapHistory[historyIndex].copy(Bitmap.Config.ARGB_8888, true)
+            photoEditorView.source.setImageBitmap(currentBitmap)
+            photoEditor.clearAllViews()
         }
-        return tempFile.absolutePath
     }
 
-    private fun checkQueueAndProceed(suppressToast: Boolean = false) {
-        if (currentUriIndex < selectedUris.size - 1) {
-            // Kuyrukta daha fazla görsel var, sonrakine geç
-            currentUriIndex++
-            loadMediaFromUri(selectedUris[currentUriIndex])
-            backgroundRemoved = false
-            resetEditorContent()
-            updateQueueProgress()
-            if (!suppressToast) Toast.makeText(this, R.string.sticker_added, Toast.LENGTH_SHORT).show()
+    private fun redoBitmap() {
+        if (historyIndex < bitmapHistory.size - 1) {
+            historyIndex++
+            currentBitmap = bitmapHistory[historyIndex].copy(Bitmap.Config.ARGB_8888, true)
+            photoEditorView.source.setImageBitmap(currentBitmap)
+            photoEditor.clearAllViews()
+        }
+    }
+
+    private fun undoSticker() {
+        if (!photoEditor.undo()) {
+            undoBitmap()
+        }
+        updateUndoRedoState()
+    }
+
+    private fun redoSticker() {
+        if (!photoEditor.redo()) {
+            redoBitmap()
+        }
+        updateUndoRedoState()
+    }
+
+    private fun updateUndoRedoState() {
+        // Keep active to allow PhotoEditor's internal undo to catch events
+        btnUndo.alpha = 1f
+        btnUndo.isEnabled = true
+        
+        btnRedo.alpha = 1f
+        btnRedo.isEnabled = true
+    }
+
+    private fun clearHistory() {
+        bitmapHistory.clear()
+        historyIndex = -1
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 100 && grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+            launchCamera()
+        }
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onBackPressed() {
+        if (editorContainer.visibility == View.VISIBLE) {
+            showExitConfirmDialog()
         } else {
-            // Kuyruk bitti - editörde kal, kullanıcı isterse yeni görsel seçebilir
-            if (!suppressToast) Toast.makeText(this, R.string.sticker_added, Toast.LENGTH_SHORT).show()
-
-            // Editörü sıfırla ama packId'yi koru
-            val savedPackId = targetPackId
-            resetEditorUI()
-            targetPackId = savedPackId
+            super.onBackPressed()
         }
-    }
-
-    private fun showSuccessDialog(packId: String) {
-        val dialog = AlertDialog.Builder(this, R.style.MaterialAlertDialogTheme).create()
-        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
-        
-        val view = layoutInflater.inflate(R.layout.dialog_select_pack, null)
-        (view as LinearLayout).apply {
-            removeAllViews()
-            setPadding(64, 64, 64, 64)
-            background = ContextCompat.getDrawable(context, R.drawable.bg_editor_container)
-            
-            val title = TextView(context).apply {
-                text = getString(R.string.congratulations)
-                textSize = 22f
-                setTextColor(ContextCompat.getColor(context, R.color.text_primary))
-                setTypeface(null, Typeface.BOLD)
-                gravity = Gravity.CENTER
-                setPadding(0, 0, 0, 16)
-            }
-            addView(title)
-            
-            val desc = TextView(context).apply {
-                text = getString(R.string.sticker_added_success)
-                textSize = 16f
-                setTextColor(ContextCompat.getColor(context, R.color.text_secondary))
-                gravity = Gravity.CENTER
-                setPadding(0, 0, 0, 48)
-            }
-            addView(desc)
-            
-            val btnContainer = LinearLayout(context).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER
-            }
-            
-            val btnViewPack = MaterialButton(context, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
-                text = getString(R.string.view_pack)
-                setTextColor(ContextCompat.getColor(context, R.color.text_primary))
-                setOnClickListener {
-                    dialog.dismiss()
-                    val intent = Intent(this@StickerMakerActivity, DetailsActivity::class.java)
-                    intent.putExtra("id", packId)
-                    startActivity(intent)
-                }
-                layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
-                    rightMargin = 16
-                }
-            }
-            
-            val btnOk = MaterialButton(context).apply {
-                text = getString(R.string.ok)
-                setTextColor(Color.WHITE)
-                backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(context, R.color.accent))
-                setOnClickListener { dialog.dismiss() }
-                layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
-            }
-            
-            btnContainer.addView(btnViewPack)
-            btnContainer.addView(btnOk)
-            addView(btnContainer)
-        }
-        
-        dialog.setView(view)
-        dialog.show()
-    }
-
-    private fun showProcessingOverlay(title: String, subtitle: String, iconRes: Int) {
-        processingOverlay.visibility = View.VISIBLE
-        tvProcessingTitle.text = title
-        tvProcessingSubtitle.text = subtitle
-        processingIcon.setImageResource(iconRes)
-        processingCircle.progress = 0
-        tvProcessingPercent.visibility = View.GONE
-    }
-
-    private fun hideProcessingOverlay() {
-        processingOverlay.visibility = View.GONE
     }
 
     override fun onDestroy() {
@@ -2563,32 +1478,110 @@ class StickerMakerActivity : AppCompatActivity() {
         imageSegmenter?.close()
     }
 
+    // ==================== Tools Adapter ====================
+
+    inner class ToolsAdapter(
+        private val tools: List<EditorTool>,
+        private val onToolClick: (EditorTool) -> Unit
+    ) : RecyclerView.Adapter<ToolsAdapter.ToolViewHolder>() {
+
+        private var selectedPosition = -1
+
+        inner class ToolViewHolder(view: View) : RecyclerView.ViewHolder(view) {
+            val card: MaterialCardView = view.findViewById(R.id.cardView)
+            val icon: ImageView = view.findViewById(R.id.icon)
+            val title: TextView = view.findViewById(R.id.title)
+        }
+
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ToolViewHolder {
+            val view = LayoutInflater.from(parent.context)
+                .inflate(R.layout.item_editor_tool, parent, false)
+            return ToolViewHolder(view)
+        }
+
+        override fun onBindViewHolder(holder: ToolViewHolder, position: Int) {
+            val tool = tools[position]
+            holder.icon.setImageResource(tool.iconRes)
+            holder.title.text = tool.name
+
+            val isSelected = position == selectedPosition
+            holder.card.strokeWidth = if (isSelected) 2.dpToPx() else 0
+            holder.card.strokeColor = if (isSelected)
+                ContextCompat.getColor(this@StickerMakerActivity, R.color.accent)
+            else
+                Color.TRANSPARENT
+
+            holder.itemView.setOnClickListener {
+                val oldPos = selectedPosition
+                selectedPosition = holder.adapterPosition
+                notifyItemChanged(oldPos)
+                notifyItemChanged(selectedPosition)
+                onToolClick(tool)
+            }
+        }
+
+        override fun getItemCount() = tools.size
+    }
+
+    // ==================== Pack Selection Adapter ====================
+
     inner class PackSelectionAdapter(
         private val packs: List<CustomStickerManager.CustomPack>,
-        private val onPackSelected: (CustomStickerManager.CustomPack) -> Unit
-    ) : RecyclerView.Adapter<PackSelectionAdapter.ViewHolder>() {
-        inner class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
-            val tvName: TextView = view.findViewById(android.R.id.text1)
-            val tvCount: TextView = view.findViewById(android.R.id.text2)
-            init { view.setOnClickListener { onPackSelected(packs[bindingAdapterPosition]) } }
+        private val onPackClick: (CustomStickerManager.CustomPack) -> Unit
+    ) : RecyclerView.Adapter<PackSelectionAdapter.PackViewHolder>() {
+
+        inner class PackViewHolder(view: View) : RecyclerView.ViewHolder(view) {
+            val tvPackName: TextView = view.findViewById(R.id.name)
+            val tvStickerCount: TextView = view.findViewById(R.id.count)
+            val ivTray: ImageView = view.findViewById(R.id.tray)
+            val btnFavorite: View = view.findViewById(R.id.btnFavorite)
+            val btnDelete: View = view.findViewById(R.id.btnDelete)
+            val tvPub: View = view.findViewById(R.id.pub)
+            val tvDownloadCount: View = view.findViewById(R.id.downloadCount)
         }
-        override fun onCreateViewHolder(parent: android.view.ViewGroup, viewType: Int): ViewHolder {
-            val view = LayoutInflater.from(parent.context).inflate(android.R.layout.simple_list_item_2, parent, false)
-            // Use ripple effect properly
-            val attrs = intArrayOf(android.R.attr.selectableItemBackground)
-            val ta = obtainStyledAttributes(attrs)
-            val drawable = ta.getDrawable(0)
-            ta.recycle()
-            view.background = drawable
-            return ViewHolder(view)
+
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): PackViewHolder {
+            val view = LayoutInflater.from(parent.context)
+                .inflate(R.layout.item_pack, parent, false)
+            return PackViewHolder(view)
         }
-        override fun onBindViewHolder(holder: ViewHolder, position: Int) {
+
+        override fun onBindViewHolder(holder: PackViewHolder, position: Int) {
             val pack = packs[position]
-            holder.tvName.text = pack.name
-            holder.tvName.setTextColor(ContextCompat.getColor(this@StickerMakerActivity, R.color.text_primary))
-            holder.tvCount.text = getString(R.string.sticker_count, pack.stickerCount)
-            holder.tvCount.setTextColor(ContextCompat.getColor(this@StickerMakerActivity, R.color.text_secondary))
+            holder.tvPackName.text = pack.name
+            holder.tvStickerCount.text = "${pack.stickerCount}${getString(R.string.sticker_count_suffix)}"
+            
+            // Hide unwanted views for selection dialog
+            holder.btnFavorite.visibility = View.GONE
+            holder.btnDelete.visibility = View.GONE
+            holder.tvPub.visibility = View.GONE
+            holder.tvDownloadCount.visibility = View.GONE
+
+            // Load a random sticker as the cover image
+            if (pack.stickerCount > 0) {
+                // Pick a random sticker index from the pack
+                val randomIndex = (1..pack.stickerCount).random()
+                val stickerFile = CustomStickerManager.getCustomStickerPath(
+                    holder.itemView.context, 
+                    pack.id, 
+                    "sticker_$randomIndex.webp"
+                )
+                
+                Glide.with(holder.itemView.context)
+                    .load(stickerFile)
+                    .placeholder(R.drawable.ic_sticker_placeholder)
+                    .error(R.drawable.ic_sticker_placeholder)
+                    .into(holder.ivTray)
+            } else {
+                holder.ivTray.setImageResource(R.drawable.ic_sticker_placeholder)
+            }
+
+            holder.itemView.setOnClickListener { onPackClick(pack) }
         }
+
         override fun getItemCount() = packs.size
+    }
+    private fun Int.dpToPx(): Int {
+        return (this * resources.displayMetrics.density).toInt()
     }
 }

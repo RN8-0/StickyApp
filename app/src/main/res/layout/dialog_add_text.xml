@@ -68,8 +68,8 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="@string/text_size_label"
-        android:textColor="@color/text_secondary"
-        android:textSize="12sp"
+        android:textColor="@color/text_primary"
+        android:textSize="13sp"
         android:textStyle="bold"
         android:layout_marginTop="24dp"
         android:layout_marginBottom="8dp" />
@@ -83,14 +83,14 @@
         android:value="28"
         app:thumbColor="@color/accent"
         app:trackColorActive="@color/accent"
-        app:trackColorInactive="@color/card_bg" />
+        app:trackColorInactive="@color/divider" />
 
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="@string/select_color"
-        android:textColor="@color/text_secondary"
-        android:textSize="12sp"
+        android:textColor="@color/text_primary"
+        android:textSize="13sp"
         android:textStyle="bold"
         android:layout_marginTop="24dp"
         android:layout_marginBottom="8dp" />
@@ -111,8 +111,8 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="@string/select_font"
-        android:textColor="@color/text_secondary"
-        android:textSize="12sp"
+        android:textColor="@color/text_primary"
+        android:textSize="13sp"
         android:textStyle="bold"
         android:layout_marginTop="24dp"
         android:layout_marginBottom="8dp" />

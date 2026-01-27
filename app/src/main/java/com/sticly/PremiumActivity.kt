@@ -123,7 +123,7 @@ class PremiumActivity : AppCompatActivity() {
                 } catch (e: Exception) {
                     Log.e("PremiumActivity", "Price sync failed: ${e.message}")
                     findViewById<TextView>(R.id.txtPremiumPrice).text = "₺--"
-                    btnBuyPremium.text = "Premium Al"
+                    btnBuyPremium.text = getString(R.string.buy_premium)
                 }
             }
         }

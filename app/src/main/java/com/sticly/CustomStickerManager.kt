@@ -336,18 +336,28 @@ object CustomStickerManager {
      */
     private fun saveStickerAsWebP(bitmap: Bitmap, file: File, size: Int): Boolean {
         return try {
-            val scaledBitmap = if (bitmap.width != size || bitmap.height != size) {
-                Bitmap.createScaledBitmap(bitmap, size, size, true)
-            } else bitmap
+            // WhatsApp için KRITIK: Görsel kare (size x size) olmalıdır.
+            // Bozulmayı (stretching) önlemek için aspect ratio korunmalı ve şeffaflıkla doldurulmalıdır.
+            val finalBitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+            val canvas = android.graphics.Canvas(finalBitmap)
+            
+            val scale = size.toFloat() / Math.max(bitmap.width, bitmap.height)
+            val newWidth = (bitmap.width * scale).toInt()
+            val newHeight = (bitmap.height * scale).toInt()
+            
+            val left = (size - newWidth) / 2
+            val top = (size - newHeight) / 2
+            
+            val destRect = android.graphics.Rect(left, top, left + newWidth, top + newHeight)
+            canvas.drawBitmap(bitmap, null, destRect, android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG))
 
             FileOutputStream(file).use { out ->
-                // WhatsApp için KRITIK: Lossless yerine Lossy WebP daha uyumludur.
+                // WhatsApp için KRITIK: Lossy WebP daha uyumludur.
                 // Kalite 80, 100KB sınırının çok altında kalmasını sağlar.
-                // Tray için 50KB, Sticker için 100KB sınırı vardır.
-                scaledBitmap.compress(Bitmap.CompressFormat.WEBP, 80, out)
+                finalBitmap.compress(Bitmap.CompressFormat.WEBP, 80, out)
             }
 
-            if (scaledBitmap != bitmap) scaledBitmap.recycle()
+            finalBitmap.recycle()
             
             // Dosya boyutu kontrolü
             val fileSizeKB = file.length() / 1024

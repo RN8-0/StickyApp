@@ -96,8 +96,8 @@ class ContactActivity : AppCompatActivity() {
 
         val db = FirebaseFirestore.getInstance()
         val now = Date()
-        val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale("tr", "TR"))
-        val timeFormat = SimpleDateFormat("HH:mm:ss", Locale("tr", "TR"))
+        val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
+        val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
 
         val data = hashMapOf(
             "name" to name,
@@ -131,7 +131,7 @@ class ContactActivity : AppCompatActivity() {
                 btnSend.text = getString(R.string.send)
                 // Hatayı logla ve göster
                 android.util.Log.e("ContactActivity", "Mesaj gönderilemedi: ${e.message}", e)
-                Toast.makeText(this, "Hata: ${e.message}", Toast.LENGTH_LONG).show()
+                Toast.makeText(this, getString(R.string.error_generic, e.message), Toast.LENGTH_LONG).show()
             }
     }
 }

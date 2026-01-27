@@ -106,8 +106,8 @@ class SuggestActivity : AppCompatActivity() {
 
         val db = FirebaseFirestore.getInstance()
         val now = Date()
-        val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale("tr", "TR"))
-        val timeFormat = SimpleDateFormat("HH:mm:ss", Locale("tr", "TR"))
+        val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
+        val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
 
         val data = hashMapOf(
             "suggestion" to suggestion,

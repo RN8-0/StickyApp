@@ -362,4 +362,49 @@
     <string name="support_free">Standard</string>
     <string name="premium_cta">Get Premium Now</string>
     <string name="free_cta">Continue with Free</string>
+
+    <!-- Photo Editor -->
+    <string name="select_image_source">Select Image Source</string>
+    <string name="gallery">Gallery</string>
+    <string name="camera">Camera</string>
+    <string name="edit_sticker">Edit Sticker</string>
+    <string name="brush_color">Brush Color</string>
+    <string name="brush_size">Brush Size</string>
+    <string name="eraser_size">Eraser Size</string>
+    <string name="border_options">Border Options</string>
+    <string name="border_color">Border Color</string>
+    <string name="border_size">Border Size</string>
+    <string name="apply">Apply</string>
+    <string name="discard_changes">Discard Changes?</string>
+    <string name="discard_changes_message">Your changes will be lost. Are you sure you want to exit?</string>
+    <string name="discard">Discard</string>
+    <string name="error_loading_image">Error loading image</string>
+    <string name="redo">Redo</string>
+    <string name="close">Close</string>
+
+    <!-- Sticker Maker Localization -->
+    <string name="placeholder_select_image">Select an image to start</string>
+    <string name="btn_select_image">Select Image</string>
+    <string name="error_select_image_first">Please select an image first</string>
+    <string name="error_bg_removal_unavailable">Background removal is not available</string>
+    <string name="error_save_failed">Save failed: %s</string>
+    <string name="error_save_failed_generic">Save failed</string>
+    <string name="error_generic">Error: %s</string>
+    <string name="sticker_count_suffix"> stickers</string>
+    <string name="error_set_cover_first">Please set a cover image first</string>
+    <string name="sticker_deleted">Sticker deleted</string>
+    <string name="error_delete_failed">Delete failed</string>
+    <string name="pack_deleted_success">Pack deleted successfully</string>
+    <string name="delete_sticker">Delete Sticker</string>
+    <string name="delete_sticker_confirm">Are you sure you want to delete this sticker?\n\n(This will also remove it from WhatsApp)</string>
+    <string name="emoji_faces">Faces</string>
+    <string name="emoji_hearts">Hearts</string>
+    <string name="emoji_hands">Hand Gestures</string>
+    <string name="emoji_symbols">Symbols</string>
+    <string name="emoji_animals">Animals</string>
+    <string name="emoji_food">Food</string>
+    <string name="emoji_nature">Nature</string>
+    <string name="emoji_sport">Sports</string>
+    <string name="sync_whatsapp_msg">New sticker added, syncing with WhatsApp...</string>
+    <string name="selection_count">Selected: %d</string>
 </resources>

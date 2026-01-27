@@ -87,6 +87,12 @@ dependencies {
     // uCrop for image cropping
     implementation 'com.github.yalantis:ucrop:2.2.8'
 
+    // Lottie Animation
+    implementation 'com.airbnb.android:lottie:6.3.0'
+
+    // PhotoEditor - Professional image editing (Updated to 3.0.1)
+    implementation 'com.burhanrashid52:photoeditor:3.0.1'
+
     // FFmpeg Kit for video/GIF to WebP conversion (Temporarily disabled due to dependency issues)
     // implementation 'com.arthenica:ffmpeg-kit-full:4.5'
 }
