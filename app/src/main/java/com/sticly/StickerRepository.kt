@@ -162,9 +162,8 @@ object StickerRepository {
         }
 
         val allPacks = mutableListOf<Pack>()
-        // Force server if requested to bypass Firestore's persistent cache
-        // KRITIK: Kullanıcı anlık yansıma istediği için HER ZAMAN sunucudan çek
-        val source = com.google.firebase.firestore.Source.SERVER
+        // İlk açılışta hızlı yüklenme için cache kullan, forceRefresh varsa sunucudan çek
+        val source = if (forceRefresh) com.google.firebase.firestore.Source.SERVER else com.google.firebase.firestore.Source.DEFAULT
 
         try {
             Log.d(TAG, "Loading packs from Firestore using source: ${source.name}...")
@@ -254,6 +253,7 @@ object StickerRepository {
                 trayUrl = data["tray_url"] as? String ?: "",
                 stickers = stickers,
                 isPremium = isPremium,
+                productId = data["product_id"] as? String ?: "",
                 storagePath = data["storagePath"] as? String ?: if (isPremium) "premium_stickers" else "stickers",
                 createdAt = when (val time = data["created_at"]) {
                     is com.google.firebase.Timestamp -> {
@@ -265,6 +265,7 @@ object StickerRepository {
                 },
                 category = data["category"] as? String ?: "",
                 downloadCount = (data["download_count"] as? Long)?.toInt() ?: 0,
+                fakeDownloadBase = (data["fake_download_base"] as? Long)?.toInt() ?: 0,
                 viewCount = (data["view_count"] as? Long)?.toInt() ?: 0,
                 favoriteCount = (data["favorite_count"] as? Long)?.toInt() ?: 0,
                 isAnimated = (data["is_animated"] as? Boolean) ?: (data["animated_sticker_pack"] as? Boolean) ?: false,
@@ -328,7 +329,7 @@ object StickerRepository {
     }
 
     /**
-     * Firebase Storage URL'ini alır
+     * Firebase Storage URL'ini alır (yavaş - API çağrısı yapar)
      */
     suspend fun getDownloadUrl(path: String): String {
         return try {
@@ -337,6 +338,24 @@ object StickerRepository {
             Log.e(TAG, "Error getting download URL for $path: ${e.message}")
             ""
         }
+    }
+
+    /**
+     * Firebase Storage URL'ini HIZLI hesaplar (API çağrısı yapmaz)
+     * Public read izni olan dosyalar için çalışır
+     */
+    fun getDirectStorageUrl(storagePath: String, packId: String, fileName: String): String {
+        val bucket = storage.reference.bucket
+        val fullPath = "$storagePath/$packId/$fileName"
+        val encodedPath = java.net.URLEncoder.encode(fullPath, "UTF-8")
+        return "https://firebasestorage.googleapis.com/v0/b/$bucket/o/$encodedPath?alt=media"
+    }
+
+    /**
+     * Sticker için direkt URL döner
+     */
+    fun getStickerDirectUrl(packId: String, fileName: String, storagePath: String = STORAGE_PATH): String {
+        return getDirectStorageUrl(storagePath, packId, fileName)
     }
 
     /**
@@ -671,10 +690,9 @@ object StickerRepository {
      */
     suspend fun getGlobalBillingSettings(): BillingSettings = withContext(Dispatchers.IO) {
         try {
-            // KRITIK: Fiyatların anlık yansıması için her zaman sunucudan (SERVER) çek
             val doc = firestore.collection("settings").document("billing")
                 .get(com.google.firebase.firestore.Source.SERVER).await()
-            
+
             if (doc.exists()) {
                 BillingSettings(
                     priceTRY = doc.getString("price_try") ?: "69,99 TL",
@@ -688,6 +706,50 @@ object StickerRepository {
         } catch (e: Exception) {
             Log.e(TAG, "Error loading billing settings: ${e.message}")
             BillingSettings()
+        }
+    }
+
+    /**
+     * Firestore'dan genisletilmis fiyatlandirma konfigurasyonunu yukler
+     * settings/billing dokumanindaki plans arrayini ve kampanya bilgisini okur
+     */
+    @Suppress("UNCHECKED_CAST")
+    suspend fun getBillingConfig(): BillingConfig = withContext(Dispatchers.IO) {
+        try {
+            val doc = firestore.collection("settings").document("billing")
+                .get(com.google.firebase.firestore.Source.SERVER).await()
+
+            if (doc.exists()) {
+                val data = doc.data ?: return@withContext BillingConfig()
+
+                val plansRaw = data["plans"] as? List<Map<String, Any>> ?: emptyList()
+                val plans = plansRaw.map { planMap ->
+                    BillingPlan(
+                        id = planMap["id"] as? String ?: "",
+                        name = planMap["name"] as? String ?: "",
+                        type = planMap["type"] as? String ?: "subscription",
+                        priceTry = planMap["price_try"] as? String ?: "",
+                        priceUsd = planMap["price_usd"] as? String ?: "",
+                        priceEur = planMap["price_eur"] as? String ?: "",
+                        isActive = planMap["is_active"] as? Boolean ?: true,
+                        trialDays = (planMap["trial_days"] as? Long)?.toInt() ?: 0,
+                        discountPercentage = (planMap["discount_percentage"] as? Long)?.toInt() ?: 0
+                    )
+                }
+
+                BillingConfig(
+                    plans = plans,
+                    campaignActive = data["campaign_active"] as? Boolean ?: false,
+                    campaignName = data["campaign_name"] as? String ?: "",
+                    campaignEndDate = data["campaign_end_date"] as? String ?: "",
+                    updatedAt = doc.getTimestamp("updated_at")?.toDate()?.toString() ?: ""
+                )
+            } else {
+                BillingConfig()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error loading billing config: ${e.message}")
+            BillingConfig()
         }
     }
 }

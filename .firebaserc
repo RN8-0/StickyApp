@@ -1,5 +1,18 @@
 {
   "projects": {
     "default": "sticky-dcd20"
-  }
+  },
+  "targets": {
+    "sticky-dcd20": {
+      "hosting": {
+        "admin": [
+          "sticky-dcd20"
+        ],
+        "privacy": [
+          "sticky-privacy-legal"
+        ]
+      }
+    }
+  },
+  "etags": {}
 }

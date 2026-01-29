@@ -19,6 +19,7 @@
     <string name="contact_us">हमसे संपर्क करें</string>
     <string name="rate_us">हमें रेट करें</string>
     <string name="premium">प्रीमियम</string>
+    <string name="get_premium_access">प्रीमियम एक्सेस प्राप्त करें</string>
     <string name="suggest_sticker">स्टिकर सुझाएं</string>
     <string name="share_app">ऐप शेयर करें</string>
     <string name="privacy_policy">गोपनीयता नीति</string>
@@ -322,4 +323,42 @@
     <string name="btn_add_text_label">टेक्स्ट जोड़ें</string>
     <string name="text_size_label">टेक्स्ट साइज़</string>
     <string name="emoji_picker_title">इमोजी चुनें</string>
+
+    <!-- Premium Redesign -->
+    <string name="premium_remove_limits">सीमाएं हटाएं</string>
+    <string name="premium_remove_limits_desc">विज्ञापन-मुक्त अनुभव और सभी स्टिकर तक पहुंच।</string>
+    <string name="plan_monthly">मासिक</string>
+    <string name="plan_yearly">वार्षिक</string>
+    <string name="plan_lifetime">लाइफटाइम</string>
+    <string name="plan_monthly_price">मासिक</string>
+    <string name="plan_yearly_price">वार्षिक</string>
+    <string name="plan_lifetime_price">लाइफटाइम</string>
+    <string name="save_percentage">सबसे अच्छा मूल्य</string>
+    <string name="one_time_billing">एक बार भुगतान</string>
+    <string name="restore_purchases_short">पुनर्स्थापित करें</string>
+    <string name="privacy_short">गोपनीयता नीति</string>
+    <string name="var_label">हाँ</string>
+    <string name="yok_label">विज्ञापन-मुक्त</string>
+    <string name="kilitli_label">लॉक किया गया</string>
+    <string name="acik_label">अनलॉक किया गया</string>
+    <string name="plan_monthly_trial">3 दिनों के लिए निःशुल्क प्रयास करें</string>
+    <string name="plan_monthly_subtitle">कभी भी रद्द करें ✨</string>
+    <string name="plan_monthly_note">🚀 अभी शुरू करें</string>
+    <string name="plan_yearly_subtitle">12 महीने का प्रीमियम 🎉</string>
+    <string name="plan_yearly_note">⭐ सबसे लोकप्रिय</string>
+    <string name="plan_lifetime_subtitle">एक बार भुगतान करें, हमेशा उपयोग करें 💫</string>
+    <string name="plan_lifetime_note">👑 सर्वश्रेष्ठ ऑफर</string>
+    <string name="premium_ai_removal">AI बैकग्राउंड हटाना</string>
+    <string name="premium_plan">प्रीमियम</string>
+    <string name="free_plan">निःशुल्क</string>
+    <string name="premium_cta">अभी प्रीमियम प्राप्त करें</string>
+    <string name="free_cta">निःशुल्क जारी रखें</string>
+
+    <!-- Billing Errors -->
+    <string name="purchase_pending">आपकी खरीद संसाधित हो रही है। पूरा होने पर आपको सूचित किया जाएगा।</string>
+    <string name="purchase_cancelled">खरीद रद्द कर दी गई।</string>
+    <string name="purchase_already_owned">आप पहले से इस आइटम के मालिक हैं।</string>
+    <string name="purchase_error">खरीद के दौरान एक त्रुटि हुई। कृपया पुनः प्रयास करें।</string>
+    <string name="billing_unavailable">बिलिंग सेवा उपलब्ध नहीं है। कृपया अपना Google Play Store जांचें।</string>
+    <string name="price_loading">लोड हो रहा है…</string>
 </resources>

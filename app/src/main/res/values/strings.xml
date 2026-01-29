@@ -19,6 +19,7 @@
     <string name="contact_us">Contact Us</string>
     <string name="rate_us">Rate Us</string>
     <string name="premium">Premium</string>
+    <string name="get_premium_access">Get Premium Access</string>
     <string name="suggest_sticker">Suggest Sticker</string>
     <string name="share_app">Share App</string>
     <string name="privacy_policy">Privacy Policy</string>
@@ -127,6 +128,12 @@
     <string name="restore_error">Restore failed. Please try again.</string>
     <string name="restoring">Restoring…</string>
 
+    <!-- Product -->
+    <string name="coming_soon">Coming Soon</string>
+    <string name="price_loading">Loading…</string>
+    <string name="product_not_available">Product not available</string>
+    <string name="buy_now">Buy Now</string>
+
     <!-- Badges -->
     <string name="new_badge">NEW</string>
     <string name="add_to_favorites">Add to favorites</string>
@@ -224,6 +231,12 @@
     <string name="stickers_loading">Loading stickers…</string>
     <string name="stickers_load_failed">Stickers could not be loaded</string>
 
+    <!-- Pack Validation Errors -->
+    <string name="pack_empty_error">📦 This pack has no stickers! Add at least 3 stickers first.</string>
+    <string name="pack_min_stickers_error">⚠️ WhatsApp requires at least 3 stickers. Please add more stickers.</string>
+    <string name="pack_cover_error">🖼️ Please set a cover image first.</string>
+    <string name="sticker_size_error">⚠️ %1$d sticker(s) exceed WhatsApp limit (%2$dKB). Largest: %3$dKB. Re-upload from admin panel.</string>
+
     <!-- Remove Instructions -->
     <string name="remove_instructions_title">How to Remove?</string>
     <string name="remove_instructions_message">We are opening the WhatsApp sticker pack removal screen.\n\nYou can remove the pack by clicking the \"Delete\" option on the opened screen.</string>
@@ -264,27 +277,34 @@
     <string name="premium_experience_detail">Upgrade your Sticky experience</string>
     <string name="premium_experience_detail_long">Take your Sticky experience to the next level</string>
     <string name="forever">forever</string>
-    <string name="basic_packs">Basic packs</string>
+    <string name="basic_packs">Standard Packs</string>
     <string name="create_stickers">Create stickers</string>
     <string name="ai_background">AI background</string>
-    <string name="premium_packs">Premium packs</string>
-    <string name="ad_free">Ad-free</string>
-    <string name="ad_free_experience">Ad-free experience</string>
+    <string name="premium_packs">Premium Packs</string>
+    <string name="ad_free">No Ads</string>
+    <string name="ad_free_experience">Reklamsız Deneyim</string>
     <string name="current_plan">Current Plan</string>
     <string name="recommended">⭐ RECOMMENDED</string>
     <string name="one_time_payment">one-time payment</string>
     <string name="one_time">one-time</string>
-    <string name="all_packs">All packs</string>
-    <string name="all_premium_packs">All Premium Packs</string>
-    <string name="unlimited_access_detail">Unlimited access to hundreds of specially designed premium sticker packs</string>
-    <string name="ad_free_detail">Uninterrupted usage without any ads</string>
+    <string name="all_packs">Free Access</string>
+    <string name="all_premium_packs">Free with Premium</string>
+    <string name="unlimited_access_detail">Unlimited access to hundreds of specially designed premium sticker packs for free</string>
+    <string name="ad_free_detail">Completely ad-free usage.</string>
     <string name="lifetime_access">Lifetime Access</string>
     <string name="lifetime_access_detail">Become a premium member forever with a one-time payment</string>
-    <string name="no_subscription_note">💡 One-time payment, no subscription!\nYou can restore your purchases anytime.</string>
+    <string name="no_subscription_note">💡 One-time payment, no subscription!\nPremium stickers are free with membership.</string>
     <string name="premium_advantages">Premium Advantages</string>
     <string name="how_to_create_sticker">How would you like to create a sticker?</string>
-    <string name="create_static_desc">Create quickly from photos</string>
+    <string name="sticker_maker_subtitle">✨ Turn your photos into stickers! ✨</string>
+    <string name="static_sticker_title">📷 Static Sticker</string>
+    <string name="create_static_desc">Create quickly from photos 🚀</string>
+    <string name="animated_sticker_title">🎥 Animated Sticker</string>
     <string name="create_animated_desc">Make WebP from videos or GIFs</string>
+    <string name="coming_soon_badge">🔜 Coming Soon</string>
+    <string name="tips_title">💡 Tips</string>
+    <string name="tips_content">• 🖼️ Use clear, high-quality photos\n• ✂️ Remove background automatically with AI\n• 🎯 At least 3 stickers required for WhatsApp</string>
+    <string name="custom_pack_publisher">Sticky User</string>
     <string name="tap_to_select_file">Tap to select a file</string>
     <string name="change_media">Change Media</string>
     <string name="ai_remove_bg">AI Remove Background</string>
@@ -334,31 +354,31 @@
     <string name="onboarding_next">Next</string>
     <string name="onboarding_start">Get Started</string>
     
-    <string name="onboarding_1_title">Welcome to Sticky</string>
-    <string name="onboarding_1_desc">Discover hundreds of professional sticker packs and add them to your WhatsApp with one click.</string>
-    
-    <string name="onboarding_2_title">Create Your Own</string>
-    <string name="onboarding_2_desc">Turn your photos, videos, and GIFs into custom stickers with our advanced AI background removal.</string>
-    
-    <string name="onboarding_3_title">Stay Updated</string>
-    <string name="onboarding_3_desc">Enable notifications to be the first to know about new trending sticker packs added every week.</string>
+    <string name="onboarding_1_title">✨ Welcome to Sticky</string>
+    <string name="onboarding_1_desc">Discover hundreds of professional sticker packs and add them to your WhatsApp with one click! 🎉</string>
 
-    <string name="onboarding_premium_title">Unlock Everything</string>
-    <string name="onboarding_premium_desc">Unleash the full power of Sticky and enjoy the ultimate experience.</string>
+    <string name="onboarding_2_title">🎨 Create Your Own</string>
+    <string name="onboarding_2_desc">Turn your photos, videos, and GIFs into custom stickers with our advanced AI background removal! ✂️</string>
+
+    <string name="onboarding_3_title">🔔 Stay Updated</string>
+    <string name="onboarding_3_desc">Enable notifications to be the first to know about new trending sticker packs added every week! 🚀</string>
+
+    <string name="onboarding_premium_title">👑 Unlock Everything</string>
+    <string name="onboarding_premium_desc">Unleash the full power of Sticky and enjoy the ultimate experience! 💎</string>
     <string name="feature">Feature</string>
     <string name="premium_plan">Premium</string>
     <string name="free_plan">Free</string>
-    <string name="premium_ads">Ad Experience</string>
+    <string name="premium_ads">📺 Ads</string>
     <string name="ads_free_value">No Ads</string>
-    <string name="ads_limited_value">With Ads</string>
-    <string name="premium_sticker_packs">Sticker Packs</string>
-    <string name="all_access">Unlimited</string>
-    <string name="basic_access">Basic</string>
-    <string name="premium_ai_removal">AI Background Removal</string>
+    <string name="ads_limited_value">Limited Ads</string>
+    <string name="premium_sticker_packs">💎 Premium Stickers</string>
+    <string name="all_access">Free Access</string>
+    <string name="basic_access">Locked</string>
+    <string name="premium_ai_removal">✂️ AI Background</string>
     <string name="unlimited">Unlimited</string>
     <string name="limited">3 per day</string>
-    <string name="priority_support">Customer Support</string>
-    <string name="support_premium">Priority</string>
+    <string name="priority_support">🖼️ Create Sticker Pack</string>
+    <string name="support_premium">Unlimited</string>
     <string name="support_free">Standard</string>
     <string name="premium_cta">Get Premium Now</string>
     <string name="free_cta">Continue with Free</string>
@@ -407,4 +427,69 @@
     <string name="emoji_sport">Sports</string>
     <string name="sync_whatsapp_msg">New sticker added, syncing with WhatsApp...</string>
     <string name="selection_count">Selected: %d</string>
+    
+    <!-- Premium Redesign -->
+    <string name="premium_remove_limits">🔓 Remove Limits</string>
+    <string name="premium_remove_limits_desc">Ad-free experience and access to all stickers! 🎉</string>
+    <string name="premium_subscriber_title">👑 Premium Subscriber</string>
+    <string name="premium_subscriber_desc">You have full access to all features!</string>
+    <string name="plan_weekly">Weekly</string>
+    <string name="plan_monthly">📅 Monthly</string>
+    <string name="plan_yearly">⭐ Yearly</string>
+    <string name="plan_lifetime">👑 Lifetime</string>
+    <string name="plan_weekly_price">Weekly</string>
+    <string name="plan_monthly_price">Monthly</string>
+    <string name="plan_yearly_price">Yearly</string>
+    <string name="plan_lifetime_price">Lifetime</string>
+    <string name="save_percentage">Best Value</string>
+    <string name="one_time_billing">One-time payment</string>
+    <string name="restore_purchases_short">Restore</string>
+    <string name="privacy_short">Privacy Policy</string>
+    <string name="var_label">Yes</string>
+    <string name="yok_label">Ad-Free</string>
+    <string name="kilitli_label">Locked</string>
+    <string name="acik_label">Unlocked</string>
+    <string name="plan_monthly_trial">Try free for 3 days</string>
+    <string name="plan_monthly_subtitle">Cancel anytime ✨</string>
+    <string name="plan_monthly_note">🚀 Start now</string>
+    <string name="plan_yearly_subtitle">12 months of premium 🎉</string>
+    <string name="plan_yearly_note">⭐ Most popular</string>
+    <string name="plan_lifetime_subtitle">Pay once, use forever 💫</string>
+    <string name="plan_lifetime_note">👑 Best deal</string>
+    <string name="features_label">Features</string>
+
+    <!-- Premium Active State -->
+    <string name="premium_active_title">Premium Active</string>
+    <string name="premium_lifetime_member">Lifetime Member</string>
+    <string name="premium_yearly_member">Yearly Subscriber</string>
+    <string name="premium_monthly_member">Monthly Subscriber</string>
+    <string name="premium_benefit_no_ads">Ad-free experience</string>
+    <string name="premium_benefit_all_stickers">All premium stickers unlocked</string>
+    <string name="premium_benefit_priority">Priority support</string>
+    <string name="premium_thank_you">Thank you for supporting us!</string>
+    <string name="upgrade_to_yearly">Upgrade to Yearly</string>
+    <string name="upgrade_to_lifetime">Upgrade to Lifetime</string>
+    <string name="premium_features_title">PREMIUM BENEFITS</string>
+    <string name="feature_no_ads">🚫 No More Ads</string>
+    <string name="feature_premium_packs">🌟 Unlimited Stickers</string>
+    <string name="feature_ai_cutting">🪄 Smart AI Cut</string>
+    <string name="feature_unlimited">🎯 Create Everything</string>
+    <string name="feature_ads_desc">Clean and fast experience ⚡</string>
+    <string name="feature_packs_desc">Access to all exclusive content 🌟</string>
+    <string name="feature_ai_desc">Professional background removal 🔥</string>
+    <string name="feature_create_desc">Unlimited packs and stickers 🎨</string>
+
+    <!-- Billing / Campaign -->
+    <string name="purchase_pending">Your purchase is being processed. You will be notified when it is complete.</string>
+    <string name="purchase_cancelled">Purchase cancelled.</string>
+    <string name="purchase_already_owned">You already own this item.</string>
+    <string name="purchase_error">An error occurred during purchase. Please try again.</string>
+    <string name="billing_unavailable">Billing service is unavailable. Please check your Google Play Store.</string>
+    <string name="trial_days_format">Try free for %d days</string>
+    <string name="campaign_active">Campaign Active</string>
+
+    <!-- Price Period Labels -->
+    <string name="period_month">mo</string>
+    <string name="period_year">yr</string>
+    <string name="yearly_old_price">₺839</string>
 </resources>

@@ -14,6 +14,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.viewpager2.widget.ViewPager2
+import android.widget.Toast
 
 class OnboardingActivity : AppCompatActivity() {
 
@@ -21,6 +22,8 @@ class OnboardingActivity : AppCompatActivity() {
     private lateinit var indicatorContainer: LinearLayout
     private lateinit var btnNext: Button
     private lateinit var btnSkip: Button
+    private var billingManager: BillingManager? = null
+    private var adapter: OnboardingAdapter? = null
 
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -42,16 +45,68 @@ class OnboardingActivity : AppCompatActivity() {
         btnNext = findViewById(R.id.btnNext)
         btnSkip = findViewById(R.id.btnSkip)
 
+        setupBilling()
         setupViewPager()
         setupButtons()
     }
 
-    private fun setupViewPager() {
-        val adapter = OnboardingAdapter {
-            onFinish()
+    private fun setupBilling() {
+        billingManager = BillingManager(
+            context = this,
+            onPurchaseComplete = { isPremium ->
+                if (isPremium) {
+                    Toast.makeText(this, R.string.premium_purchased, Toast.LENGTH_SHORT).show()
+                    onFinish()
+                }
+            },
+            onBillingReady = {
+                // Google Play fiyatları yüklendi - adapter'ı güncelle
+                runOnUiThread {
+                    adapter?.updatePrices()
+                }
+                // Otomatik olarak satın alımları geri yükle (arka planda sessizce)
+                restorePurchasesSilently()
+            }
+        )
+    }
+
+    private fun restorePurchasesSilently() {
+        billingManager?.restorePurchases { result ->
+            if (result == BillingManager.RestoreResult.SUCCESS) {
+                // Premium kullanıcı bulundu - doğrudan ana sayfaya yönlendir
+                runOnUiThread {
+                    if (PreferencesHelper.isPremium(this)) {
+                        onFinish()
+                    }
+                }
+            }
         }
+    }
+
+    private fun getPriceForPlan(planIndex: Int): String? {
+        return when (planIndex) {
+            0 -> billingManager?.getFormattedPrice(BillingManager.PREMIUM_MONTHLY)
+            1 -> billingManager?.getFormattedPrice(BillingManager.PREMIUM_YEARLY)
+            2 -> billingManager?.getFormattedPrice(BillingManager.PREMIUM_LIFETIME)
+            else -> null
+        }
+    }
+
+    private fun setupViewPager() {
+        adapter = OnboardingAdapter(
+            onFinish = { onFinish() },
+            onPurchase = { planIndex ->
+                val sku = when(planIndex) {
+                    0 -> BillingManager.PREMIUM_MONTHLY
+                    1 -> BillingManager.PREMIUM_YEARLY
+                    else -> BillingManager.PREMIUM_LIFETIME
+                }
+                billingManager?.launchPurchase(this, sku)
+            },
+            getPriceForPlan = { planIndex -> getPriceForPlan(planIndex) }
+        )
         viewPager.adapter = adapter
-        
+
         // Simple Parallax Transformer
         viewPager.setPageTransformer { page, position ->
             val absPos = Math.abs(position)
@@ -59,26 +114,27 @@ class OnboardingActivity : AppCompatActivity() {
                 val visual = findViewById<View>(R.id.visualContainer)
                 val title = findViewById<View>(R.id.tvTitle)
                 val desc = findViewById<View>(R.id.tvDesc)
-                
+
                 if (visual != null) {
                     visual.translationX = position * (width / 2.5f)
                     visual.alpha = 1 - absPos
                 }
-                
+
                 if (title != null) {
                     title.translationX = position * (width / 1.5f)
                     title.alpha = 1 - absPos
                 }
-                
+
                 if (desc != null) {
                     desc.translationX = position * (width / 1.2f)
                     desc.alpha = 1 - absPos
                 }
             }
         }
-        
+
         // Setup Indicators
-        val indicators = arrayOfNulls<ImageView>(adapter.itemCount)
+        val adapterItemCount = adapter?.itemCount ?: return
+        val indicators = arrayOfNulls<ImageView>(adapterItemCount)
         val layoutParams = LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.WRAP_CONTENT,
             ViewGroup.LayoutParams.WRAP_CONTENT
@@ -112,17 +168,23 @@ class OnboardingActivity : AppCompatActivity() {
         viewPager.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
             override fun onPageSelected(position: Int) {
                 updateIndicators(position)
-                
+
                 if (position == 2) {
                     checkNotificationPermission()
                 }
 
-                if (position == adapter.itemCount - 1) {
+                val lastPosition = (adapter?.itemCount ?: 1) - 1
+                if (position == lastPosition) {
+                    // Premium page: hide Next, keep Skip visible, hide Indicators
                     btnNext.visibility = View.GONE
-                    btnSkip.visibility = View.GONE
+                    btnSkip.visibility = View.VISIBLE
+                    btnSkip.setTextColor(ContextCompat.getColor(this@OnboardingActivity, R.color.accent))
+                    indicatorContainer.visibility = View.GONE
                 } else {
                     btnNext.visibility = View.VISIBLE
                     btnSkip.visibility = View.VISIBLE
+                    btnSkip.setTextColor(android.graphics.Color.WHITE)
+                    indicatorContainer.visibility = View.VISIBLE
                     btnNext.setText(R.string.onboarding_next)
                 }
             }
@@ -154,5 +216,10 @@ class OnboardingActivity : AppCompatActivity() {
                 requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
             }
         }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        billingManager?.destroy()
     }
 }

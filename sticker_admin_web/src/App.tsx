@@ -5,13 +5,13 @@ import {
   getDocs,
   deleteDoc,
   doc,
-  getDoc,
   updateDoc,
   arrayRemove,
   setDoc,
-  serverTimestamp
+  serverTimestamp,
+  onSnapshot
 } from 'firebase/firestore';
-import { ref, deleteObject, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { ref, deleteObject, uploadBytes, getDownloadURL, listAll } from 'firebase/storage';
 import {
   signInWithEmailAndPassword,
   onAuthStateChanged,
@@ -38,7 +38,7 @@ import {
   BarChart3,
   DollarSign,
   Globe,
-  CreditCard,
+
   Mail,
   MessageSquare,
   Lightbulb,
@@ -103,7 +103,7 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [selectedPack, setSelectedPack] = useState<StickerPack | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'stats' | 'settings' | 'messages' | 'notifications'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'stats' | 'messages' | 'notifications'>('dashboard');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'passive' | 'premium' | 'normal' | 'new'>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [statsFilter, setStatsFilter] = useState<'all' | 'active' | 'passive' | 'premium' | 'normal'>('all');
@@ -136,26 +136,23 @@ function App() {
     category: 'humor',
     is_premium: false,
     is_active: true,
-    is_animated: true,
-    price_try: '4,99',
-    price_usd: '1',
-    price_eur: '1'
+    is_animated: true
   });
   const [editFormData, setEditFormData] = useState<Partial<StickerPack>>({});
   const [uploadProgress, setUploadProgress] = useState<{ current: number, total: number, message?: string } | null>(null);
-  const [lastUpdated, setLastUpdated] = useState<string>('Yükleniyor...');
-  const [updateStatus, setUpdateStatus] = useState<'idle' | 'success' | 'error'>('idle');
-  const [globalPrices, setGlobalPrices] = useState({
-    try: '69,99',
-    usd: '7,99',
-    eur: '6,99'
-  });
+
+  // Fake Download Base Range
+  const [fakeBaseMin, setFakeBaseMin] = useState(3000);
+  const [fakeBaseMax, setFakeBaseMax] = useState(10000);
 
   // Notification States
   const [notifTitle, setNotifTitle] = useState('Sticky');
   const [notifBody, setNotifBody] = useState('');
   const [notifImageUrl, setNotifImageUrl] = useState('');
   const [isSendingNotif, setIsSendingNotif] = useState(false);
+
+  // Silme progress state
+  const [deleteProgress, setDeleteProgress] = useState<{ deleting: boolean, message: string, current: number, total: number } | null>(null);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (u) => {
@@ -167,40 +164,31 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (activeTab === 'settings') {
-      fetchGlobalSettings();
-    }
-    if (activeTab === 'messages') {
-      fetchMessages();
-      fetchSuggestions();
-    }
-  }, [activeTab]);
+    if (activeTab !== 'messages') return;
 
-  const fetchMessages = async () => {
-    try {
-      const snapshot = await getDocs(collection(db, 'messages'));
+    // Realtime listener for messages
+    const unsubMessages = onSnapshot(collection(db, 'messages'), (snapshot) => {
       const msgs: ContactMessage[] = snapshot.docs.map(d => ({
         id: d.id,
         ...d.data()
       } as ContactMessage));
       setMessages(msgs.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)));
-    } catch (e) {
-      console.error("Mesajlar yüklenirken hata:", e);
-    }
-  };
+    }, (e) => console.error("Mesajlar yüklenirken hata:", e));
 
-  const fetchSuggestions = async () => {
-    try {
-      const snapshot = await getDocs(collection(db, 'suggestions'));
+    // Realtime listener for suggestions
+    const unsubSuggestions = onSnapshot(collection(db, 'suggestions'), (snapshot) => {
       const suggs: StickerSuggestion[] = snapshot.docs.map(d => ({
         id: d.id,
         ...d.data()
       } as StickerSuggestion));
       setSuggestions(suggs.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)));
-    } catch (e) {
-      console.error("Öneriler yüklenirken hata:", e);
-    }
-  };
+    }, (e) => console.error("Öneriler yüklenirken hata:", e));
+
+    return () => {
+      unsubMessages();
+      unsubSuggestions();
+    };
+  }, [activeTab]);
 
   const markMessageAsRead = async (messageId: string) => {
     try {
@@ -231,63 +219,35 @@ function App() {
     }
   };
 
-  const fetchGlobalSettings = async () => {
+  const clearAllMessages = async () => {
+    if (!window.confirm("TÜM mesajları silmek istediğinize emin misiniz?")) return;
     try {
-      const docRef = doc(db, 'settings', 'billing');
-      const docSnap = await getDoc(docRef);
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        setGlobalPrices({
-          try: cleanPrice(data.price_try || '69,99'),
-          usd: cleanPrice(data.price_usd || '7,99'),
-          eur: cleanPrice(data.price_eur || '6,99')
-        });
-        if (data.updated_at) {
-          const date = data.updated_at.toDate();
-          const time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-          setLastUpdated(`Bugün, ${time}`);
-        }
+      setDeleteProgress({ deleting: true, message: 'Mesajlar siliniyor...', current: 0, total: messages.length });
+      const snapshot = await getDocs(collection(db, 'messages'));
+      for (let i = 0; i < snapshot.docs.length; i++) {
+        await deleteDoc(snapshot.docs[i].ref);
+        setDeleteProgress({ deleting: true, message: 'Mesajlar siliniyor...', current: i + 1, total: snapshot.docs.length });
       }
+      setDeleteProgress(null);
     } catch (e) {
-      console.error("Fiyatlar yüklenirken hata:", e);
+      setDeleteProgress(null);
+      console.error("Mesajlar silinemedi:", e);
     }
   };
 
-  const cleanPrice = (price: string) => {
-    if (!price) return '';
-    // Sadece sayıları, virgül ve noktayı tut (TL, $, € sembollerini temizle)
-    return price.replace(/[^0-9,.]/g, '').trim();
-  };
-
-  const handleUpdateGlobalPrices = async () => {
-    console.log("UPDATE BUTTON CLICKED");
-    if (!window.confirm("Tüm uygulama fiyatlarını güncelliyorsunuz. Emin misiniz?")) return;
-
-    setIsProcessing(true);
-    setUpdateStatus('idle');
-
+  const clearAllSuggestions = async () => {
+    if (!window.confirm("TÜM önerileri silmek istediğinize emin misiniz?")) return;
     try {
-      const billingRef = doc(db, 'settings', 'billing');
-      const payload = {
-        price_try: cleanPrice(globalPrices.try),
-        price_usd: cleanPrice(globalPrices.usd),
-        price_eur: cleanPrice(globalPrices.eur),
-        updated_at: serverTimestamp()
-      };
-
-      console.log("Saving payload:", payload);
-      await setDoc(billingRef, payload, { merge: true });
-
-      setUpdateStatus('success');
-      alert("✅ BAŞARI: Fiyatlar başarıyla buluta kaydedildi! Uygulamada anında görebilirsiniz.");
-      await fetchGlobalSettings();
-    } catch (e: any) {
-      console.error("KRITIK HATA:", e);
-      setUpdateStatus('error');
-      alert("❌ HATA: Kaydetme sırasında bir sorun oluştu: " + (e.message || "Bilinmeyen hata"));
-    } finally {
-      setIsProcessing(false);
-      setTimeout(() => setUpdateStatus('idle'), 5000);
+      setDeleteProgress({ deleting: true, message: 'Öneriler siliniyor...', current: 0, total: suggestions.length });
+      const snapshot = await getDocs(collection(db, 'suggestions'));
+      for (let i = 0; i < snapshot.docs.length; i++) {
+        await deleteDoc(snapshot.docs[i].ref);
+        setDeleteProgress({ deleting: true, message: 'Öneriler siliniyor...', current: i + 1, total: snapshot.docs.length });
+      }
+      setDeleteProgress(null);
+    } catch (e) {
+      setDeleteProgress(null);
+      console.error("Öneriler silinemedi:", e);
     }
   };
 
@@ -316,6 +276,7 @@ function App() {
     }
   };
 
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -343,12 +304,11 @@ function App() {
             is_premium: false,
             is_animated: data.is_animated ?? data.animated ?? false,
             download_count: Number(data.download_count || data.downloadCount || data.downloads || 0),
+            fake_download_base: Number(data.fake_download_base || 0),
             view_count: Number(data.view_count || data.viewCount || data.views || 0),
             favorite_count: Number(data.favorite_count || data.favoriteCount || data.favorites || 0),
             sticker_count: Number(data.sticker_count || data.stickers?.length || 0),
-            price_try: data.price_try ?? data.priceTRY ?? '',
-            price_usd: data.price_usd ?? data.priceUSD ?? '',
-            price_eur: data.price_eur ?? data.priceEUR ?? ''
+
           } as StickerPack;
           return p;
         }),
@@ -360,12 +320,11 @@ function App() {
             is_premium: true,
             is_animated: data.is_animated ?? data.animated ?? false,
             download_count: Number(data.download_count || data.downloadCount || data.downloads || 0),
+            fake_download_base: Number(data.fake_download_base || 0),
             view_count: Number(data.view_count || data.viewCount || data.views || 0),
             favorite_count: Number(data.favorite_count || data.favoriteCount || data.favorites || 0),
             sticker_count: Number(data.sticker_count || data.stickers?.length || 0),
-            price_try: data.price_try ?? data.priceTRY ?? '',
-            price_usd: data.price_usd ?? data.priceUSD ?? '',
-            price_eur: data.price_eur ?? data.priceEUR ?? ''
+
           } as StickerPack;
           return p;
         })
@@ -402,14 +361,14 @@ function App() {
         is_premium: newPackData.is_premium,
         is_animated: true, // Always animated
         download_count: 0,
+        fake_download_base: Math.floor(Math.random() * 7001) + 3000,
         view_count: 0,
         favorite_count: 0,
         sticker_count: 0,
         image_data_version: "1",
         is_active: newPackData.is_active,
-        price_try: newPackData.is_premium ? cleanPrice(newPackData.price_try) : '',
-        price_usd: newPackData.is_premium ? cleanPrice(newPackData.price_usd) : '',
-        price_eur: newPackData.is_premium ? cleanPrice(newPackData.price_eur) : '',
+        ...(newPackData.is_premium ? { price_try: "4,99 TL", price_usd: "$0.99", price_eur: "€0.99" } : {}),
+
         stickers: [],
         tray_url: "",
         created_at: serverTimestamp()
@@ -437,9 +396,7 @@ function App() {
         is_premium: false,
         is_active: true,
         is_animated: true,
-        price_try: '4,99 TL',
-        price_usd: '$0.99',
-        price_eur: '€0.99'
+
       });
       alert("Yeni hareketli paket oluşturuldu. Şimdi video/gif ekleyebilirsiniz.");
     } catch (e) {
@@ -453,17 +410,16 @@ function App() {
     if (!selectedPack || !editFormData) return;
     setIsProcessing(true);
     try {
-      const updatedData = { ...editFormData };
-      if (updatedData.is_premium) {
-        updatedData.price_try = cleanPrice(updatedData.price_try || '');
-        updatedData.price_usd = cleanPrice(updatedData.price_usd || '');
-        updatedData.price_eur = cleanPrice(updatedData.price_eur || '');
-      } else {
-        updatedData.price_try = '';
-        updatedData.price_usd = '';
-        updatedData.price_eur = '';
-      }
+      const updatedData: any = { ...editFormData };
+
       updatedData.image_data_version = Date.now().toString();
+
+      // Premium'a çevriliyorsa ve fiyat yoksa default fiyat ata
+      if (updatedData.is_premium && !selectedPack.is_premium) {
+        if (!updatedData.price_try) updatedData.price_try = "69,99 TL";
+        if (!updatedData.price_usd) updatedData.price_usd = "$4.99";
+        if (!updatedData.price_eur) updatedData.price_eur = "€4.49";
+      }
 
       const oldCollection = selectedPack.is_premium ? 'premium_stickers' : 'stickers';
       const newCollection = updatedData.is_premium ? 'premium_stickers' : 'stickers';
@@ -644,16 +600,36 @@ function App() {
   };
 
   const deletePack = async (pack: StickerPack) => {
-    if (!window.confirm(`"${pack.name}" paketini TAMAMEN silmek istediğinize emin misiniz?`)) return;
+    if (!window.confirm(`"${pack.name}" paketini TAMAMEN silmek istediğinize emin misiniz?\n\nBu işlem geri alınamaz ve tüm dosyalar silinecek!`)) return;
 
     try {
+      setDeleteProgress({ deleting: true, message: 'Dosyalar listeleniyor...', current: 0, total: 0 });
+
+      const storagePath = pack.is_premium ? 'premium_stickers' : 'stickers';
+      const folderRef = ref(storage, `${storagePath}/${pack.id}`);
+
+      // 1. Storage klasöründeki TÜM dosyaları listele ve sil
+      try {
+        const fileList = await listAll(folderRef);
+        const total = fileList.items.length;
+        setDeleteProgress({ deleting: true, message: `Storage'dan siliniyor...`, current: 0, total });
+
+        for (let i = 0; i < fileList.items.length; i++) {
+          await deleteObject(fileList.items[i]);
+          setDeleteProgress({ deleting: true, message: `Storage'dan siliniyor...`, current: i + 1, total });
+        }
+      } catch (e) { console.log('Storage silme hatası:', e); }
+
+      // 2. Firestore dokümanını sil
+      setDeleteProgress({ deleting: true, message: 'Veritabanından siliniyor...', current: 0, total: 1 });
       const collectionName = pack.is_premium ? 'premium_stickers' : 'stickers';
       await deleteDoc(doc(db, collectionName, pack.id));
 
       setPacks(packs.filter(p => p.id !== pack.id));
       if (selectedPack?.id === pack.id) setSelectedPack(null);
-      alert("Paket silindi.");
+      setDeleteProgress(null);
     } catch (error) {
+      setDeleteProgress(null);
       alert("Silme hatası: " + error);
     }
   };
@@ -701,6 +677,53 @@ function App() {
       setSelectedPack(updated);
       alert("İstatistikler sıfırlandı.");
     } catch (e) { alert("Hata: " + e); }
+  };
+
+  // Tüm paketleri fake_download_base ve premium fiyatlarıyla güncelle
+  const updateAllPacksWithFakeBase = async (forceUpdate: boolean = false) => {
+    const range = fakeBaseMax - fakeBaseMin;
+    if (range <= 0) {
+      alert("Geçersiz aralık! Max değer Min'den büyük olmalı.");
+      return;
+    }
+    if (!window.confirm(`Tüm paketlere fake download base (${fakeBaseMin.toLocaleString()} - ${fakeBaseMax.toLocaleString()}) ${forceUpdate ? 'ZORLA ' : ''}eklenecek ve premium paket fiyatları güncellenecek. Devam?`)) return;
+    setIsProcessing(true);
+    try {
+      const collections = ['stickers', 'premium_stickers'];
+      let updated = 0;
+
+      for (const collectionName of collections) {
+        const snapshot = await getDocs(collection(db, collectionName));
+        for (const docSnap of snapshot.docs) {
+          const data = docSnap.data();
+          const updates: any = {};
+
+          // fake_download_base yoksa, 0 ise veya forceUpdate ise ekle
+          if (forceUpdate || !data.fake_download_base || data.fake_download_base === 0) {
+            updates.fake_download_base = Math.floor(Math.random() * (range + 1)) + fakeBaseMin;
+          }
+
+          // Premium paketlere doğru fiyatları yaz
+          if (collectionName === 'premium_stickers') {
+            updates.price_try = '4,99 TL';
+            updates.price_usd = '$0.99';
+            updates.price_eur = '€0.99';
+          }
+
+          if (Object.keys(updates).length > 0) {
+            await updateDoc(doc(db, collectionName, docSnap.id), updates);
+            updated++;
+          }
+        }
+      }
+
+      alert(`${updated} paket güncellendi! Listeyi yenilemek için bekleyin...`);
+      await fetchPacks();
+    } catch (e) {
+      alert("Hata: " + e);
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   if (loading && !user) {
@@ -798,6 +821,32 @@ function App() {
 
   return (
     <div className="min-h-screen bg-background text-textMain flex flex-col font-sans">
+      {/* Delete Progress Overlay */}
+      {deleteProgress && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center">
+          <div className="bg-card rounded-3xl p-8 w-96 shadow-2xl">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 bg-danger/20 rounded-xl flex items-center justify-center">
+                <Trash2 className="text-danger animate-pulse" size={20} />
+              </div>
+              <h3 className="text-xl font-bold text-white">Siliniyor...</h3>
+            </div>
+            <p className="text-textSec mb-4">{deleteProgress.message}</p>
+            {deleteProgress.total > 0 && (
+              <>
+                <div className="w-full bg-hover rounded-full h-3 mb-2 overflow-hidden">
+                  <div
+                    className="bg-gradient-to-r from-danger to-orange-500 h-full rounded-full transition-all duration-300"
+                    style={{ width: `${(deleteProgress.current / deleteProgress.total) * 100}%` }}
+                  />
+                </div>
+                <p className="text-sm text-textSec text-center">{deleteProgress.current} / {deleteProgress.total}</p>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <header className="glass sticky top-0 z-20 px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-5">
@@ -872,13 +921,7 @@ function App() {
               </span>
             )}
           </button>
-          <button
-            onClick={() => setActiveTab('settings')}
-            className={cn("p-3 rounded-2xl transition-all", activeTab === 'settings' ? "bg-primary text-white shadow-lg" : "text-textSec hover:bg-hover")}
-            title="Fiyat Ayarları"
-          >
-            <CreditCard size={24} />
-          </button>
+
           <button
             onClick={() => setActiveTab('notifications')}
             className={cn("p-3 rounded-2xl transition-all shadow-inner", activeTab === 'notifications' ? "bg-primary text-white shadow-lg" : "text-textSec hover:bg-hover")}
@@ -886,6 +929,7 @@ function App() {
           >
             <Bell size={24} />
           </button>
+
         </div>
 
         {activeTab === 'dashboard' ? (
@@ -1146,10 +1190,7 @@ function App() {
                       <button
                         onClick={() => {
                           setEditFormData({
-                            ...selectedPack,
-                            price_try: cleanPrice(selectedPack.price_try || ''),
-                            price_usd: cleanPrice(selectedPack.price_usd || ''),
-                            price_eur: cleanPrice(selectedPack.price_eur || '')
+                            ...selectedPack
                           });
                           setShowEditPackModal(true);
                         }}
@@ -1285,6 +1326,44 @@ function App() {
                     title="Verileri Güncelle"
                   >
                     <RefreshCcw size={20} className={loading ? 'animate-spin text-primary' : ''} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Fake Base Controls */}
+              <div className="glass rounded-3xl p-4 mb-6 border border-white/10">
+                <div className="flex flex-wrap items-center gap-4">
+                  <span className="text-xs font-bold text-textSec uppercase">Fake İndirme Aralığı:</span>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      value={fakeBaseMin}
+                      onChange={(e) => setFakeBaseMin(Number(e.target.value))}
+                      className="w-28 px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white text-sm"
+                      placeholder="Min"
+                    />
+                    <span className="text-textSec">-</span>
+                    <input
+                      type="number"
+                      value={fakeBaseMax}
+                      onChange={(e) => setFakeBaseMax(Number(e.target.value))}
+                      className="w-28 px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white text-sm"
+                      placeholder="Max"
+                    />
+                  </div>
+                  <button
+                    onClick={() => updateAllPacksWithFakeBase(false)}
+                    disabled={isProcessing}
+                    className="px-4 py-2 bg-primary/20 hover:bg-primary/30 border border-primary/30 rounded-xl text-primary text-xs font-bold transition-all active:scale-90 disabled:opacity-50"
+                  >
+                    {isProcessing ? 'İşleniyor...' : 'Eksiklere Ekle'}
+                  </button>
+                  <button
+                    onClick={() => updateAllPacksWithFakeBase(true)}
+                    disabled={isProcessing}
+                    className="px-4 py-2 bg-warning/20 hover:bg-warning/30 border border-warning/30 rounded-xl text-warning text-xs font-bold transition-all active:scale-90 disabled:opacity-50"
+                  >
+                    {isProcessing ? 'İşleniyor...' : 'Tümünü Güncelle'}
                   </button>
                 </div>
               </div>
@@ -1571,110 +1650,7 @@ function App() {
               </div>
             </div>
           </div>
-        ) : activeTab === 'settings' ? (
-          <div className="flex-1 overflow-y-auto p-12 custom-scrollbar bg-background">
-            <div className="max-w-4xl mx-auto space-y-12 animate-in fade-in duration-500">
-              <div>
-                <h2 className="text-4xl font-black text-white">SİSTEM AYARLARI (GÜNCEL)</h2>
-                <p className="text-textSec">Uygulama genelindeki sistem ve ödeme ayarları</p>
-              </div>
 
-              <div className="grid grid-cols-1 gap-8">
-                {/* Billing Settings Card */}
-                <div className="glass p-10 rounded-[2.5rem] bg-gradient-to-br from-primary/5 to-transparent border border-white/5 shadow-2xl">
-                  <div className="flex items-center gap-5 mb-10">
-                    <div className="bg-primary/20 w-14 h-14 rounded-2xl flex items-center justify-center text-primary shadow-lg shadow-primary/10">
-                      <CreditCard size={28} />
-                    </div>
-                    <div>
-                      <h3 className="text-2xl font-black text-white">Ödeme Ayarları</h3>
-                      <p className="text-sm text-textSec font-semibold">Tüm uygulama için tek seferlik satın alım fiyatları</p>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                    <div className="space-y-3">
-                      <label className="text-xs font-bold text-textSec uppercase tracking-widest flex items-center gap-2">
-                        <Globe size={14} className="text-primary" /> TÜRKİYE (TL)
-                      </label>
-                      <input
-                        type="text"
-                        value={globalPrices.try}
-                        onChange={(e) => setGlobalPrices({ ...globalPrices, try: e.target.value })}
-                        placeholder="Örn: 69,99"
-                        className="w-full bg-card/60 border border-white/10 rounded-2xl px-5 py-4 text-white font-bold outline-none focus:ring-2 focus:ring-primary focus:bg-background transition-all"
-                      />
-                      <p className="text-[10px] text-textSec font-medium pl-1">Yerel fiyatlandırma (TRY)</p>
-                    </div>
-                    <div className="space-y-3">
-                      <label className="text-xs font-bold text-textSec uppercase tracking-widest flex items-center gap-2">
-                        <DollarSign size={14} className="text-accent" /> GLOBAL (USD)
-                      </label>
-                      <input
-                        type="text"
-                        value={globalPrices.usd}
-                        onChange={(e) => setGlobalPrices({ ...globalPrices, usd: e.target.value })}
-                        placeholder="Örn: 4.99"
-                        className="w-full bg-card/60 border border-white/10 rounded-2xl px-5 py-4 text-white font-bold outline-none focus:ring-2 focus:ring-accent focus:bg-background transition-all"
-                      />
-                      <p className="text-[10px] text-textSec font-medium pl-1">Global pazar fiyatı (USD)</p>
-                    </div>
-                    <div className="space-y-3">
-                      <label className="text-xs font-bold text-textSec uppercase tracking-widest flex items-center gap-2">
-                        <Globe size={14} className="text-warning" /> AVRUPA (EUR)
-                      </label>
-                      <input
-                        type="text"
-                        value={globalPrices.eur}
-                        onChange={(e) => setGlobalPrices({ ...globalPrices, eur: e.target.value })}
-                        placeholder="Örn: 4.49"
-                        className="w-full bg-card/60 border border-white/10 rounded-2xl px-5 py-4 text-white font-bold outline-none focus:ring-2 focus:ring-warning focus:bg-background transition-all"
-                      />
-                      <p className="text-[10px] text-textSec font-medium pl-1">Avrupa bölgesi fiyatı (EUR)</p>
-                    </div>
-                  </div>
-
-                  <div className="mt-12 flex gap-4">
-                    <button
-                      onClick={handleUpdateGlobalPrices}
-                      disabled={isProcessing}
-                      className={cn(
-                        "flex-1 py-5 rounded-2xl font-black shadow-xl transition-all flex items-center justify-center gap-3 disabled:opacity-50",
-                        updateStatus === 'success' ? "bg-warning text-background shadow-warning/20 scale-[1.05]" :
-                          updateStatus === 'error' ? "bg-danger text-white" :
-                            "bg-primary text-white shadow-primary/20 hover:scale-[1.02]"
-                      )}
-                    >
-                      <Save size={22} /> {
-                        isProcessing ? 'GÜNCELLENİYOR...' :
-                          updateStatus === 'success' ? 'KAYDEDİLDİ ✅' :
-                            updateStatus === 'error' ? 'HATA ❌' :
-                              'TÜM FİYATLARI GÜNCELLE'
-                      }
-                    </button>
-                    <div className="w-1/4 bg-white/5 rounded-2xl border border-white/10 flex flex-col items-center justify-center p-4">
-                      <span className="text-[10px] font-black text-textSec uppercase">SON GÜNCELLEME</span>
-                      <span className="text-xs font-bold text-white mt-1">{lastUpdated || 'Bilinmiyor'}</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* System Settings Notification */}
-                <div className="bg-primary/5 border border-primary/20 p-6 rounded-[2rem] flex items-center gap-5">
-                  <div className="bg-primary/20 p-4 rounded-xl">
-                    <Info className="text-primary" size={24} />
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-black text-white uppercase tracking-tight">Senkronizasyon Bilgisi</h4>
-                    <p className="text-xs text-textSec leading-relaxed mt-1">
-                      Burada yaptığınız değişiklikler Firebase üzerinden anlık olarak tüm kullanıcılara yansır.
-                      Anlık bildirim gönderimi bu ayarlar güncellendiğinde tetiklenebilir.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
         ) : activeTab === 'notifications' ? (
           <div className="flex-1 overflow-y-auto p-12 custom-scrollbar bg-background">
             <div className="max-w-3xl mx-auto space-y-12 animate-in fade-in duration-500">
@@ -1790,13 +1766,24 @@ function App() {
                   <h2 className="text-4xl font-black text-white">MESAJLAR VE ÖNERİLER</h2>
                   <p className="text-textSec">Uygulama kullanıcılarından gelen iletişim talepleri</p>
                 </div>
-                <button
-                  onClick={() => { fetchMessages(); fetchSuggestions(); }}
-                  className="p-3 hover:bg-hover rounded-xl transition-all active:scale-95 text-textSec hover:text-primary"
-                  title="Yenile"
-                >
-                  <RefreshCcw size={24} />
-                </button>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-green-500 flex items-center gap-1">
+                    <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                    Canlı
+                  </span>
+                  <button
+                    onClick={clearAllMessages}
+                    className="px-3 py-1.5 bg-danger/20 hover:bg-danger/30 text-danger text-xs font-bold rounded-lg transition-all"
+                  >
+                    Mesajları Temizle
+                  </button>
+                  <button
+                    onClick={clearAllSuggestions}
+                    className="px-3 py-1.5 bg-warning/20 hover:bg-warning/30 text-warning text-xs font-bold rounded-lg transition-all"
+                  >
+                    Önerileri Temizle
+                  </button>
+                </div>
               </div>
 
               {/* Sub Tabs */}
@@ -2091,25 +2078,7 @@ function App() {
             >PREMIUM PAKET</button>
           </div>
 
-          {newPackData.is_premium === true && (
-            <div className="grid grid-cols-3 gap-4 animate-in fade-in slide-in-from-top-2 duration-200">
-              <Input
-                label="Fiyat (TL)"
-                value={newPackData.price_try}
-                onChange={(e: any) => setNewPackData({ ...newPackData, price_try: e.target.value })}
-              />
-              <Input
-                label="Fiyat (USD)"
-                value={newPackData.price_usd}
-                onChange={(e: any) => setNewPackData({ ...newPackData, price_usd: e.target.value })}
-              />
-              <Input
-                label="Fiyat (EUR)"
-                value={newPackData.price_eur}
-                onChange={(e: any) => setNewPackData({ ...newPackData, price_eur: e.target.value })}
-              />
-            </div>
-          )}
+
 
           <div className="bg-primary/5 border border-primary/20 p-4 rounded-xl flex items-center gap-3">
             <RefreshCcw className="text-primary animate-spin" size={20} />
@@ -2284,25 +2253,23 @@ function App() {
                 </div>
               </div>
             </div>
-            {editFormData.is_premium === true && (
-              <div className="grid grid-cols-3 gap-4 animate-in fade-in slide-in-from-top-2 duration-200">
-                <Input
-                  label="Fiyat (TL)"
-                  value={editFormData.price_try}
-                  onChange={(e: any) => setEditFormData({ ...editFormData, price_try: e.target.value })}
+
+            {/* Product ID - Sadece Premium paketler için */}
+            {editFormData.is_premium && (
+              <div>
+                <label className="text-xs font-bold text-textSec uppercase mb-2 block">
+                  Play Console Ürün Etiketi (Product ID)
+                </label>
+                <input
+                  value={editFormData.product_id || ''}
+                  onChange={e => setEditFormData({ ...editFormData, product_id: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '') })}
+                  placeholder="ornek: recep_ivedik"
+                  className="w-full bg-hover border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-textSec/50 focus:border-warning focus:ring-1 focus:ring-warning transition-all"
                 />
-                <Input
-                  label="Fiyat (USD)"
-                  value={editFormData.price_usd}
-                  onChange={(e: any) => setEditFormData({ ...editFormData, price_usd: e.target.value })}
-                />
-                <Input
-                  label="Fiyat (EUR)"
-                  value={editFormData.price_eur}
-                  onChange={(e: any) => setEditFormData({ ...editFormData, price_eur: e.target.value })}
-                />
+                <p className="text-[10px] text-textSec mt-1">Play Console'da oluşturduğun ürün ID'si. Boş bırakırsan paket satışa çıkmaz.</p>
               </div>
             )}
+
             <div className="flex items-center gap-4">
               <div className="flex-1">
                 <label className="text-xs font-bold text-textSec uppercase mb-2 block">Paket Türü</label>

@@ -46,7 +46,6 @@ class PackAdapter(
         val btnFavorite: ImageButton = v.findViewById(R.id.btnFavorite)
         val btnDelete: ImageButton = v.findViewById(R.id.btnDelete)
         val downloadCount: TextView = v.findViewById(R.id.downloadCount)
-        val premiumPrice: TextView = v.findViewById(R.id.premiumPrice)
     }
 
     class AdVH(v: View) : RecyclerView.ViewHolder(v) {
@@ -122,18 +121,6 @@ class PackAdapter(
 
         h.crownIcon.visibility = if (isPremiumPack) View.VISIBLE else View.GONE
         h.premiumContainer.visibility = if (isPremiumPack && !hasAccess && !isInstalled) View.VISIBLE else View.GONE
-        
-        if (h.premiumContainer.visibility == View.VISIBLE) {
-            val locale = context.resources.configuration.locales[0]
-            val rawPrice = pack.priceTRY.trim().replace(Regex("[^0-9,.]"), "")
-            
-            val formatted = when {
-                locale.country == "TR" -> "₺$rawPrice"
-                listOf("DE", "FR", "IT", "ES", "NL", "BE", "AT", "PT", "FI", "GR", "IE", "SK", "SI", "EE", "LV", "LT", "MT", "CY", "LU").contains(locale.country) -> "€${pack.priceEUR.trim().replace(Regex("[^0-9,.]"), "")}"
-                else -> "$${pack.priceUSD.trim().replace(Regex("[^0-9,.]"), "")}"
-            }
-            h.premiumPrice.text = formatted
-        }
 
         // Yeni badge
         val isNew = isPackNew(pack.createdAt)
@@ -163,10 +150,11 @@ class PackAdapter(
             }
         }
 
-        // İndirme sayısı
-        if (pack.downloadCount > 0) {
+        // İndirme sayısı (fake base + gerçek)
+        val displayDownloadCount = pack.fakeDownloadBase + pack.downloadCount
+        if (displayDownloadCount > 0) {
             h.downloadCount.visibility = View.VISIBLE
-            h.downloadCount.text = formatDownloadCount(pack.downloadCount)
+            h.downloadCount.text = formatDownloadCount(displayDownloadCount)
         } else {
             h.downloadCount.visibility = View.GONE
         }

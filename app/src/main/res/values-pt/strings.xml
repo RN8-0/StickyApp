@@ -19,6 +19,7 @@
     <string name="contact_us">Contate-nos</string>
     <string name="rate_us">Avalie-nos</string>
     <string name="premium">Premium</string>
+    <string name="get_premium_access">Obter Acesso Premium</string>
     <string name="suggest_sticker">Sugerir Sticker</string>
     <string name="share_app">Compartilhar App</string>
     <string name="privacy_policy">Política de Privacidade</string>
@@ -322,4 +323,42 @@
     <string name="btn_add_text_label">Adicionar Texto</string>
     <string name="text_size_label">Tamanho do Texto</string>
     <string name="emoji_picker_title">Escolha Emoji</string>
+
+    <!-- Premium Redesign -->
+    <string name="premium_remove_limits">Remover limites</string>
+    <string name="premium_remove_limits_desc">Experiência sem anúncios e acesso a todos os figurinhas.</string>
+    <string name="plan_monthly">Mensal</string>
+    <string name="plan_yearly">Anual</string>
+    <string name="plan_lifetime">Vitalício</string>
+    <string name="plan_monthly_price">Mensal</string>
+    <string name="plan_yearly_price">Anual</string>
+    <string name="plan_lifetime_price">Vitalício</string>
+    <string name="save_percentage">Melhor Valor</string>
+    <string name="one_time_billing">Pagamento único</string>
+    <string name="restore_purchases_short">Restaurar</string>
+    <string name="privacy_short">Política de privacidade</string>
+    <string name="var_label">Sim</string>
+    <string name="yok_label">Sem anúncios</string>
+    <string name="kilitli_label">Bloqueado</string>
+    <string name="acik_label">Desbloqueado</string>
+    <string name="plan_monthly_trial">Teste grátis por 3 dias</string>
+    <string name="plan_monthly_subtitle">Cancele quando quiser ✨</string>
+    <string name="plan_monthly_note">🚀 Comece agora</string>
+    <string name="plan_yearly_subtitle">12 meses de premium 🎉</string>
+    <string name="plan_yearly_note">⭐ Mais popular</string>
+    <string name="plan_lifetime_subtitle">Pague uma vez, use para sempre 💫</string>
+    <string name="plan_lifetime_note">👑 Melhor oferta</string>
+    <string name="premium_ai_removal">Remover fundo com IA</string>
+    <string name="premium_plan">Premium</string>
+    <string name="free_plan">Grátis</string>
+    <string name="premium_cta">Obter Premium Agora</string>
+    <string name="free_cta">Continuar Grátis</string>
+
+    <!-- Billing Errors -->
+    <string name="purchase_pending">Sua compra está sendo processada. Você será notificado quando estiver concluída.</string>
+    <string name="purchase_cancelled">Compra cancelada.</string>
+    <string name="purchase_already_owned">Você já possui este item.</string>
+    <string name="purchase_error">Ocorreu um erro durante a compra. Por favor, tente novamente.</string>
+    <string name="billing_unavailable">O serviço de cobrança não está disponível. Verifique sua Google Play Store.</string>
+    <string name="price_loading">Carregando…</string>
 </resources>

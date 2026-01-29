@@ -134,10 +134,11 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
     }
 
     private val cropLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        if (result.resultCode == RESULT_OK && result.data != null) {
-            val resultUri = UCrop.getOutput(result.data!!)
-            resultUri?.let { uri ->
-                loadImageAfterCrop(uri)
+        if (result.resultCode == RESULT_OK) {
+            result.data?.let { data ->
+                UCrop.getOutput(data)?.let { uri ->
+                    loadImageAfterCrop(uri)
+                }
             }
         }
     }
@@ -221,7 +222,7 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
                     strokeJoin = Paint.Join.ROUND
                 }
             }
-            val paint = eraserPaint!!
+            val paint = eraserPaint ?: return@setOnTouchListener false
 
             // Get ImageView and bitmap dimensions
             val imageView = photoEditorView.source

@@ -62,19 +62,41 @@ class StickerProcessor {
         onProgress?.({ message: 'FFmpeg yükleniyor...', percentage: 10 });
         await ffmpeg.writeFile(inputName, await fetchFile(file));
 
-        // İlk deneme - yüksek kalite
+        // Kalite ve FPS kombinasyonları dene
         let quality = 75;
-        let blob: Blob;
+        let fps = 10;
+        let blob: Blob | null = null;
 
-        do {
-            onProgress?.({ message: `Dönüştürülüyor (kalite: ${quality})...`, percentage: 30 + (75 - quality) });
+        // Önce kaliteyi düşür, sonra FPS'i düşür
+        const attempts = [
+            { q: 75, fps: 10 },
+            { q: 60, fps: 10 },
+            { q: 50, fps: 10 },
+            { q: 40, fps: 10 },
+            { q: 30, fps: 10 },
+            { q: 20, fps: 10 },
+            { q: 15, fps: 8 },
+            { q: 10, fps: 8 },
+            { q: 10, fps: 6 },
+            { q: 5, fps: 6 },
+        ];
+
+        for (const attempt of attempts) {
+            quality = attempt.q;
+            fps = attempt.fps;
+
+            onProgress?.({ message: `Dönüştürülüyor (kalite: ${quality}, fps: ${fps})...`, percentage: 30 + (75 - quality) / 2 });
+
+            try {
+                await ffmpeg.deleteFile(outputName);
+            } catch { }
 
             // WhatsApp uyumlu animasyonlu WebP parametreleri
             await ffmpeg.exec([
                 '-i', inputName,
                 '-t', MAX_DURATION.toString(),
-                // Video filtresi: 512x512 boyutlandır, şeffaf padding, 10 fps
-                '-vf', `scale=512:512:force_original_aspect_ratio=decrease,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=0x00000000,fps=10`,
+                // Video filtresi: 512x512 boyutlandır, şeffaf padding
+                '-vf', `scale=512:512:force_original_aspect_ratio=decrease,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=0x00000000,fps=${fps}`,
                 // WebP codec ayarları
                 '-c:v', 'libwebp',
                 '-lossless', '0',
@@ -91,22 +113,23 @@ class StickerProcessor {
             const buffer = (data as Uint8Array).buffer as ArrayBuffer;
             blob = new Blob([buffer], { type: 'image/webp' });
 
-            // Boyut kontrolü - 500KB'dan büyükse kaliteyi düşür
-            if (blob.size > MAX_SIZE && quality > 10) {
-                quality -= 10;
-                await ffmpeg.deleteFile(outputName);
-            } else {
+            // Boyut kontrolü - 500KB altındaysa başarılı
+            if (blob.size <= MAX_SIZE) {
+                onProgress?.({ message: `Tamamlandı! (${Math.round(blob.size / 1024)}KB)`, percentage: 100 });
                 break;
             }
-        } while (quality >= 10);
-
-        onProgress?.({ message: `Tamamlandı! (${Math.round(blob.size / 1024)}KB)`, percentage: 100 });
+        }
 
         // Temizlik
         await ffmpeg.deleteFile(inputName);
         try { await ffmpeg.deleteFile(outputName); } catch { }
 
-        return blob;
+        // Hala çok büyükse uyar ama yine de döndür (kullanıcı görsün)
+        if (blob && blob.size > MAX_SIZE) {
+            onProgress?.({ message: `Uyarı: Dosya hala ${Math.round(blob.size / 1024)}KB (limit: 500KB). Daha kısa veya basit bir animasyon deneyin.`, percentage: 100 });
+        }
+
+        return blob!;
     }
 
     /**

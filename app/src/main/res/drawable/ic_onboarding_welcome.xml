@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="280dp"
+    android:height="280dp"
+    android:viewportWidth="280"
+    android:viewportHeight="280">
+
+    <!-- Subtle circle glow background -->
+    <path
+        android:pathData="M140,140m-120,0a120,120 0,1 1,240 0a120,120 0,1 1,-240 0"
+        android:fillColor="#10FFFFFF" />
+
+    <!-- Back sticker (tilted left) with heart -->
+    <group
+        android:pivotX="100"
+        android:pivotY="145"
+        android:rotation="-15">
+        <path
+            android:pathData="M65,100 L135,100 C143,100 150,107 150,115 L150,185 C150,193 143,200 135,200 L65,200 C57,200 50,193 50,185 L50,115 C50,107 57,100 65,100 Z"
+            android:fillColor="#BBFFFFFF" />
+        <!-- Heart -->
+        <path
+            android:pathData="M100,135 C96,127 84,127 84,135 C84,145 100,155 100,155 C100,155 116,145 116,135 C116,127 104,127 100,135 Z"
+            android:fillColor="#FF6B6B" />
+    </group>
+
+    <!-- Front sticker (tilted right) with winking smiley -->
+    <group
+        android:pivotX="170"
+        android:pivotY="150"
+        android:rotation="8">
+        <path
+            android:pathData="M130,100 L210,100 C218,100 225,107 225,115 L225,195 C225,203 218,210 210,210 L130,210 C122,210 115,203 115,195 L115,115 C115,107 122,100 130,100 Z"
+            android:fillColor="#FFFFFF" />
+        <!-- Left eye -->
+        <path
+            android:pathData="M155,143 m-5,0 a5,5 0,1 1,10 0 a5,5 0,1 1,-10 0"
+            android:fillColor="#2C3E50" />
+        <!-- Right eye (wink line) -->
+        <path
+            android:pathData="M185,140 C182,143 178,143 175,140"
+            android:strokeColor="#2C3E50"
+            android:strokeWidth="3"
+            android:fillColor="#00000000"
+            android:strokeLineCap="round" />
+        <!-- Smile -->
+        <path
+            android:pathData="M155,163 Q170,178 185,163"
+            android:strokeColor="#2C3E50"
+            android:strokeWidth="3"
+            android:fillColor="#00000000"
+            android:strokeLineCap="round" />
+    </group>
+
+    <!-- Sparkle top-right -->
+    <path
+        android:pathData="M232,55 L235,65 L245,68 L235,71 L232,81 L229,71 L219,68 L229,65 Z"
+        android:fillColor="#FFFFFF" />
+
+    <!-- Sparkle top-left -->
+    <path
+        android:pathData="M50,50 L52,57 L59,59 L52,61 L50,68 L48,61 L41,59 L48,57 Z"
+        android:fillColor="#99FFFFFF" />
+
+    <!-- Small sparkle bottom-right -->
+    <path
+        android:pathData="M240,190 L242,196 L248,198 L242,200 L240,206 L238,200 L232,198 L238,196 Z"
+        android:fillColor="#77FFFFFF" />
+
+    <!-- Small sparkle bottom-left -->
+    <path
+        android:pathData="M45,210 L47,215 L52,217 L47,219 L45,224 L43,219 L38,217 L43,215 Z"
+        android:fillColor="#55FFFFFF" />
+
+    <!-- Dot decorations -->
+    <path
+        android:pathData="M245,140 m-4,0 a4,4 0,1 1,8 0 a4,4 0,1 1,-8 0"
+        android:fillColor="#55FFFFFF" />
+    <path
+        android:pathData="M30,155 m-3,0 a3,3 0,1 1,6 0 a3,3 0,1 1,-6 0"
+        android:fillColor="#44FFFFFF" />
+    <path
+        android:pathData="M220,230 m-3,0 a3,3 0,1 1,6 0 a3,3 0,1 1,-6 0"
+        android:fillColor="#33FFFFFF" />
+
+</vector>

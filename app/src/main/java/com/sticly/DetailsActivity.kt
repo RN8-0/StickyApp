@@ -47,8 +47,6 @@ class DetailsActivity : AppCompatActivity() {
     private lateinit var packId: String
     private lateinit var btnAction: MaterialButton
     private lateinit var premiumButtonsContainer: LinearLayout
-    private lateinit var btnPremiumBadge: MaterialButton
-    private lateinit var btnPrice: MaterialButton
     private lateinit var customButtonsContainer: LinearLayout
     private lateinit var btnGridAdd: MaterialButton
     private lateinit var btnGridUpdate: MaterialButton
@@ -82,7 +80,8 @@ class DetailsActivity : AppCompatActivity() {
     }
 
     private fun handleWAActivityResult(req: Int, res: Int, data: Intent?) {
-        // Eski onActivityResult mantığını buraya taşıyoruz
+        // Activity yeniden yaratılmış olabilir, btnAction initialize kontrolü
+        if (!::btnAction.isInitialized) return
         onActivityResultInternal(req, res, data)
     }
 
@@ -160,8 +159,7 @@ class DetailsActivity : AppCompatActivity() {
                 }
 
                 // 4. Arka planda veriyi tazele veya tam listeyi çek (Değişiklik varsa yansısın)
-                // KRITIK: forceRefresh=true yaparak yeni oluşturulan veya değişen paketleri alıyoruz
-                val packs = withContext(Dispatchers.IO) { StickerRepository.loadPacks(this@DetailsActivity, forceRefresh = true) }
+                val packs = withContext(Dispatchers.IO) { StickerRepository.loadPacks(this@DetailsActivity, forceRefresh = false) }
                 val updatedPack = packs.find { it.id == packId }
                 
                 if (updatedPack != null) {
@@ -216,10 +214,17 @@ class DetailsActivity : AppCompatActivity() {
         rv.layoutManager = GridLayoutManager(this, 3)
 
         val hasAccess = PreferencesHelper.hasAccessToPremiumPack(this, pack.id)
+        val storagePath = pack.storagePath
+
+        // ÖNCELİKLE: Tüm URL'leri hesapla (adapter oluşturmadan ÖNCE!)
+        pack.stickers.forEach { sticker ->
+            if (sticker.url.isEmpty()) {
+                sticker.url = StickerRepository.getStickerDirectUrl(pack.id, sticker.file, storagePath)
+            }
+        }
 
         // Premium pakette ve erişim yoksa rastgele 3 çıkartmayı başa al
         val displayStickers = if (pack.isPremium && !hasAccess && pack.stickers.size > 3) {
-            // Rastgele 3 çıkartma seç ve başa koy
             val shuffled = pack.stickers.shuffled()
             val first3 = shuffled.take(3)
             val rest = shuffled.drop(3)
@@ -228,54 +233,41 @@ class DetailsActivity : AppCompatActivity() {
             pack.stickers
         }
 
+        // KRITIK: Tüm çıkartmaları Glide ile preload et (anında görünmeleri için)
+        // Bu sayede RecyclerView bind olduğunda görseller zaten memory cache'de olacak
+        preloadAllStickers(pack, displayStickers)
+
+        // Şimdi adapter oluştur - URL'ler HAZIR
         adapter = StickerAdapter(
             packId = pack.id,
             items = displayStickers,
             isPackPremium = pack.isPremium,
             hasAccess = hasAccess,
             storagePath = pack.storagePath,
-            selectedPositions = selectedIndices, // Activity'deki set ile bağla
+            selectedPositions = selectedIndices,
             onStickerClick = { sticker, _ ->
-                // Tüm çıkartmalar önizlenebilir (kilit yok)
                 showStickerPreview(sticker, false)
             },
-            onStickerLongClick = { _, pos ->
-                // Sadece custom paketlerde silmeye izin ver
+            onStickerLongClick = { _, _ ->
                 if (pack.id.startsWith("custom_")) {
                     toggleDeleteMode()
                 }
             },
             onSelectionChanged = { count ->
                 if (isDeleteMode) {
-                    // Seçim sayısını başlıkta göster
                     findViewById<android.widget.TextView>(R.id.name).text = if (count > 0) "${getString(R.string.selection_count, count)}" else getString(R.string.selection_mode_title)
                 }
             }
         )
         rv.adapter = adapter
+        isPackReady = true
 
-        // PERFORMANS: Arka planda sticker'ları sessizce indir ve URL'leri kontrol et
-        lifecycleScope.launch {
-            // 1. Eğer URL'ler eksikse (Firestore'dan direkt geldiyse), URL'leri tek tek al ve anında göster
-            if (pack.stickers.any { it.url.isEmpty() }) {
-                val storagePath = pack.storagePath
-                pack.stickers.forEachIndexed { index, sticker ->
-                    launch(Dispatchers.IO) {
-                        if (sticker.url.isEmpty()) {
-                            sticker.url = StickerRepository.getDownloadUrl("$storagePath/${pack.id}/${sticker.file}")
-                            withContext(Dispatchers.Main) {
-                                // Sadece bu sticker'ın olduğu satırı güncelle (Verim için)
-                                adapter?.notifyItemChanged(index)
-                            }
-                        }
-                    }
-                }
-            }
-            
-            // 2. Cache indirme işlemini başlat (WhatsApp'a ekleme hızı için)
-            downloadStickersToCache(pack, adapter!!) { success ->
-                isPackReady = success
-                adapter?.notifyDataSetChanged()
+        // Arka planda cache'e indir (WhatsApp için gerekli)
+        lifecycleScope.launch(Dispatchers.IO) {
+            pack.stickers.forEach { sticker ->
+                try {
+                    StickerRepository.downloadStickerToCache(this@DetailsActivity, pack.id, sticker.file, storagePath)
+                } catch (_: Exception) {}
             }
         }
 
@@ -302,6 +294,48 @@ class DetailsActivity : AppCompatActivity() {
             selectedIndices.clear()
             findViewById<android.widget.TextView>(R.id.name).text = currentPack?.localizedName
             btnConfirmDelete.visibility = View.GONE
+        }
+    }
+
+    /**
+     * Tüm çıkartmaları Glide ile memory cache'e preload et
+     * Bu sayede RecyclerView bind olduğunda görseller anında görünür
+     */
+    private fun preloadAllStickers(pack: Pack, stickers: List<Sticker>) {
+        val glide = Glide.with(this)
+        val storagePath = pack.storagePath
+
+        stickers.forEach { sticker ->
+            // Custom paket ise dosyadan yükle
+            if (pack.id.startsWith("custom_")) {
+                val customFile = CustomStickerManager.getCustomStickerPath(this, pack.id, sticker.file)
+                if (customFile.exists()) {
+                    glide.load(customFile)
+                        .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.NONE)
+                        .preload(512, 512)
+                }
+            } else {
+                // Cache'de varsa oradan, yoksa URL'den preload et
+                val cachedFile = StickerRepository.getCachedStickerPath(this, pack.id, sticker.file)
+                when {
+                    cachedFile.exists() && cachedFile.length() > 0 -> {
+                        glide.load(cachedFile)
+                            .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.NONE)
+                            .preload(512, 512)
+                    }
+                    sticker.url.isNotEmpty() -> {
+                        glide.load(sticker.url)
+                            .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.DATA)
+                            .preload(512, 512)
+                    }
+                    storagePath.isNotEmpty() -> {
+                        val directUrl = StickerRepository.getStickerDirectUrl(pack.id, sticker.file, storagePath)
+                        glide.load(directUrl)
+                            .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.DATA)
+                            .preload(512, 512)
+                    }
+                }
+            }
         }
     }
 
@@ -467,23 +501,32 @@ class DetailsActivity : AppCompatActivity() {
             return
         }
 
-        // URL'ler varsa arka planda tümünü paralel indir
+        // Her sticker indiğinde anında güncelle
         lifecycleScope.launch {
-            try {
-                withContext(Dispatchers.IO) {
-                    // Tüm çıkartmaları paralel olarak tek seferde indir
-                    val jobs = pack.stickers.map { sticker ->
-                        async {
-                            StickerRepository.downloadStickerToCache(this@DetailsActivity, pack.id, sticker.file, pack.storagePath)
+            var successCount = 0
+            val total = pack.stickers.size
+
+            // Paralel indir ama her biri tamamlandığında anında güncelle
+            pack.stickers.forEachIndexed { index, sticker ->
+                launch(Dispatchers.IO) {
+                    try {
+                        StickerRepository.downloadStickerToCache(this@DetailsActivity, pack.id, sticker.file, pack.storagePath)
+                        successCount++
+                        // İndirme tamamlandığında hemen bu sticker'ı güncelle
+                        withContext(Dispatchers.Main) {
+                            adapter.notifyItemChanged(index)
+                        }
+                    } catch (e: Exception) {
+                        // Hata olsa bile devam et
+                    }
+                    // Tümü tamamlandıysa callback çağır
+                    if (successCount == total) {
+                        withContext(Dispatchers.Main) {
+                            isPackReady = true
+                            onComplete?.invoke(true)
                         }
                     }
-                    jobs.awaitAll()
                 }
-                isPackReady = true
-                onComplete?.invoke(true)
-            } catch (e: Exception) {
-                isPackReady = false
-                onComplete?.invoke(false)
             }
         }
     }
@@ -528,48 +571,24 @@ class DetailsActivity : AppCompatActivity() {
                 true
             }
         } else if (pack.isPremium && !hasAccess) {
-            // Premium paket ve erişim yoksa
+            // Premium paket ve erişim yoksa - sadece Premium abonelik butonu göster
             btnAction.visibility = View.GONE
             customButtonsContainer.visibility = View.GONE
             premiumButtonsContainer.visibility = View.VISIBLE
             installedIcon.visibility = View.GONE
 
-            // BillingManager'ı başlat
-            billingManager = BillingManager(this) { isPurchased ->
-                if (isPurchased) {
-                    // Paketi satın alınmış olarak işaretle
-                    PreferencesHelper.addPurchasedPack(this, pack.id)
-                    Toast.makeText(this, R.string.premium_purchased, Toast.LENGTH_SHORT).show()
-                    // Butonları güncelle
-                    premiumButtonsContainer.visibility = View.GONE
-                    btnAction.visibility = View.VISIBLE
-                    updateButton()
-                    // Adapter'ı yenile (blur kaldır)
-                    recreate()
-                }
-            }
+            // Fiyat butonunu gizle - artık tek tek satış yok
+            findViewById<MaterialButton>(R.id.btnPrice).visibility = View.GONE
 
-            // Fiyat butonu rengini tema rengine çek (Primary) - Kullanıcı Talebi
-            findViewById<MaterialButton>(R.id.btnPrice).backgroundTintList = 
-                ColorStateList.valueOf(ContextCompat.getColor(this, R.color.primary))
-            
-            // Fiyat metnini dinamik fiyattan çek (Eğer varsa)
-            if (pack.priceTRY.isNotEmpty()) {
-                val price = pack.priceTRY.trim()
-                val formatted = if (price.contains("TL") || price.contains("₺") || price.contains("$") || price.contains("€")) {
-                    price.replace("TL", "₺")
-                } else {
-                    "₺$price"
-                }
-                findViewById<MaterialButton>(R.id.btnPrice).text = formatted
+            // Premium Badge -> PremiumActivity (abonelik seçenekleri)
+            val btnPremiumBadge = findViewById<MaterialButton>(R.id.btnPremiumBadge)
+            // Tam genişlik yap (fiyat butonu gizli olduğu için)
+            (btnPremiumBadge.layoutParams as? android.widget.LinearLayout.LayoutParams)?.let {
+                it.weight = 2f
+                it.marginEnd = 0
+                btnPremiumBadge.layoutParams = it
             }
-            
-            // Premium Badge ve Price butonlarını PremiumActivity'ye bağla - Kullanıcı Talebi
-            findViewById<MaterialButton>(R.id.btnPremiumBadge).setOnClickListener { 
-                val intent = Intent(this, PremiumActivity::class.java)
-                startActivity(intent)
-            }
-            findViewById<MaterialButton>(R.id.btnPrice).setOnClickListener { 
+            btnPremiumBadge.setOnClickListener {
                 val intent = Intent(this, PremiumActivity::class.java)
                 startActivity(intent)
             }
@@ -658,18 +677,22 @@ class DetailsActivity : AppCompatActivity() {
 
     private fun launchPremiumPurchase() {
         if (billingManager == null) {
-            billingManager = BillingManager(this) { isPurchased ->
-                if (isPurchased) {
-                    currentPack?.let { pack ->
-                        PreferencesHelper.addPurchasedPack(this, pack.id)
+            billingManager = BillingManager(
+                context = this,
+                onPurchaseComplete = { isPurchased ->
+                    if (isPurchased) {
+                        currentPack?.let { pack ->
+                            PreferencesHelper.addPurchasedPack(this, pack.id)
+                        }
+                        Toast.makeText(this, R.string.premium_purchased, Toast.LENGTH_SHORT).show()
+                        recreate()
                     }
-                    Toast.makeText(this, R.string.premium_purchased, Toast.LENGTH_SHORT).show()
-                    recreate()
                 }
-            }
+            )
         }
-        billingManager?.launchPurchase(this)
+        billingManager?.launchPurchase(this, BillingManager.PREMIUM_LIFETIME)
     }
+
 
     /**
      * Veriyi repository üzerinden tazeler ve WhatsApp senkronizasyonunu tetikler (UX odaklı)
@@ -718,16 +741,21 @@ class DetailsActivity : AppCompatActivity() {
             }
 
             if (isCurrentlyWhitelisted) {
-                // WhatsApp'ta (veya bizim öyle sandığımız durumda) "Kaldır"a basıldı.
-                // WhatsApp otomatik silmeyi desteklemediği için inten'le gönderince hata verebiliyor.
-                // Bunun yerine yerel durumumuzu güncelleyip kullanıcıya bilgi veriyoruz.
-                PreferencesHelper.removeInstalledPack(this@DetailsActivity, packId)
-                showThemedSnackbar(getString(R.string.pack_removed_from_whatsapp))
-                updateButton()
-                
-                // Opsiyonel: Eğer kullanıcı gerçekten WhatsApp'taki silme ekranına gitmek istiyorsa 
-                // bilgilendirici diyaloğu gösteriyoruz (intent hatasından kaçınmak için).
-                showRemoveInstructionsDialog()
+                // WhatsApp'a paketin detay sayfasını aç - kullanıcı oradan kaldırabilir
+                currentPack?.let { pack ->
+                    val intent = Intent().apply {
+                        action = "com.whatsapp.intent.action.ENABLE_STICKER_PACK"
+                        putExtra("sticker_pack_id", pack.id)
+                        putExtra("sticker_pack_authority", "${packageName}.stickers")
+                        putExtra("sticker_pack_name", pack.localizedName)
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    try {
+                        removePackLauncher.launch(intent)
+                    } catch (e: Exception) {
+                        showRemoveInstructionsDialog()
+                    }
+                }
             } else {
                 addToWhatsApp(pack)
             }
@@ -854,7 +882,7 @@ class DetailsActivity : AppCompatActivity() {
                     .placeholder(R.drawable.transparent_placeholder) // Add placeholder while loading
                     .error(R.drawable.transparent_placeholder) // Add error placeholder
                     //.skipMemoryCache(true)
-                    .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.ALL)
+                    .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.DATA)
                     .apply(blurTransform)
                     .into(imageView)
             }
@@ -929,15 +957,34 @@ class DetailsActivity : AppCompatActivity() {
             return
         }
 
+        // Çıkartma sayısı kontrolü - boş paket
+        if (pack.stickers.isEmpty()) {
+            Toast.makeText(this, R.string.pack_empty_error, Toast.LENGTH_LONG).show()
+            return
+        }
+
+        // WhatsApp için minimum 3 çıkartma gerekli
+        if (pack.stickers.size < 3) {
+            Toast.makeText(this, R.string.pack_min_stickers_error, Toast.LENGTH_LONG).show()
+            return
+        }
+
         // WhatsApp kontrolü
         if (!isWhatsAppInstalled()) {
             Toast.makeText(this, R.string.whatsapp_not_installed, Toast.LENGTH_SHORT).show()
             showWhatsAppNotAvailableDialog()
             return
         }
-        
+
         if (pack.id.startsWith("custom_") && !CustomStickerManager.hasCover(this, pack.id)) {
-            Toast.makeText(this, "Lütfen önce bir kapak resmi ayarlayın", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, R.string.pack_cover_error, Toast.LENGTH_LONG).show()
+            return
+        }
+
+        // Dosya boyutu kontrolü - WhatsApp limitleri
+        val sizeCheckResult = checkStickerFileSizes(pack)
+        if (sizeCheckResult != null) {
+            Toast.makeText(this, sizeCheckResult, Toast.LENGTH_LONG).show()
             return
         }
 
@@ -951,6 +998,50 @@ class DetailsActivity : AppCompatActivity() {
         } else {
             sendToWhatsApp(pack)
         }
+    }
+
+    /**
+     * Sticker dosya boyutlarını kontrol et - WhatsApp limitlerine uygun mu?
+     * @return Hata mesajı veya null (sorun yoksa)
+     */
+    private fun checkStickerFileSizes(pack: Pack): String? {
+        val maxStaticSize = 100 * 1024L // 100KB
+        val maxAnimatedSize = 500 * 1024L // 500KB
+        val maxTraySize = 50 * 1024L // 50KB
+        val maxSize = if (pack.isAnimated) maxAnimatedSize else maxStaticSize
+
+        val cacheDir = java.io.File(cacheDir, "sticker_cache/${pack.id}")
+        if (!cacheDir.exists()) return null // Cache yoksa kontrol etme
+
+        var oversizedCount = 0
+        var largestFile = ""
+        var largestSize = 0L
+
+        // Sticker dosyalarını kontrol et
+        for (sticker in pack.stickers) {
+            val file = java.io.File(cacheDir, sticker.file)
+            if (file.exists() && file.length() > maxSize) {
+                oversizedCount++
+                if (file.length() > largestSize) {
+                    largestSize = file.length()
+                    largestFile = sticker.file
+                }
+            }
+        }
+
+        // Tray dosyasını kontrol et
+        val trayFile = cacheDir.listFiles()?.find { it.name.startsWith("tray") && it.name.endsWith(".png") }
+        if (trayFile != null && trayFile.length() > maxTraySize) {
+            // Tray çok büyük ama bu genellikle sorun değil çünkü StickerProvider 96x96'ya dönüştürüyor
+        }
+
+        if (oversizedCount > 0) {
+            val limitKB = maxSize / 1024
+            val largestKB = largestSize / 1024
+            return getString(R.string.sticker_size_error, oversizedCount, limitKB, largestKB)
+        }
+
+        return null
     }
 
     private fun removeFromWhatsApp() {
@@ -1085,6 +1176,7 @@ class DetailsActivity : AppCompatActivity() {
 
     private fun onActivityResultInternal(req: Int, res: Int, data: Intent?) {
         // super.onActivityResult() çağrısına gerek yok, manuel yönetiyoruz
+        if (!::btnAction.isInitialized) return
 
         btnAction.isEnabled = true
 

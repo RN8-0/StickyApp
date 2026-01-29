@@ -6,7 +6,6 @@
     android:layout_height="match_parent"
     android:background="@color/background">
 
-    <!-- Toolbar -->
     <com.google.android.material.appbar.AppBarLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -20,12 +19,11 @@
             android:minHeight="56dp"
             android:background="@color/background"
             app:navigationIcon="@drawable/ic_back"
-            app:title=""
-            app:titleTextColor="@color/text_primary" />
+            app:title="" />
 
     </com.google.android.material.appbar.AppBarLayout>
 
-    <ScrollView
+    <androidx.core.widget.NestedScrollView
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:fillViewport="true"
@@ -35,633 +33,267 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:padding="20dp">
+            android:paddingHorizontal="24dp"
+            android:paddingBottom="40dp">
 
-            <!-- Header -->
+            <!-- 1. Header -->
             <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:layout_marginTop="10dp"
+                android:orientation="vertical">
+
+                <FrameLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content">
+                    
+                    <!-- Glow Shadow -->
+                    <ImageView
+                        android:layout_width="120dp"
+                        android:layout_height="120dp"
+                        android:src="@drawable/ic_premium"
+                        android:alpha="0.2"
+                        app:tint="@color/premium_gold"
+                        android:scaleType="centerInside"
+                        android:padding="5dp" />
+                        
+                    <ImageView
+                        android:id="@+id/imgCrown"
+                        android:layout_width="100dp"
+                        android:layout_height="100dp"
+                        android:layout_gravity="center"
+                        android:src="@drawable/ic_premium"
+                        app:tint="@color/premium_gold" />
+                </FrameLayout>
+
+                <TextView
+                    android:id="@+id/tvHeaderTitle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="20dp"
+                    android:text="@string/premium_remove_limits"
+                    android:textColor="@color/text_primary"
+                    android:textSize="28sp"
+                    android:textStyle="bold"
+                    android:fontFamily="sans-serif-black" />
+
+                <TextView
+                    android:id="@+id/tvHeaderDesc"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:text="@string/premium_remove_limits_desc"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="15sp"
+                    android:gravity="center" />
+
+            </LinearLayout>
+
+            <!-- 2. Feature Comparison List -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="40dp"
+                android:background="@drawable/bg_comparison_card"
+                android:padding="20dp"
+                android:orientation="vertical">
+
+                <!-- Comparison Header -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:paddingHorizontal="16dp"
+                    android:layout_marginBottom="12dp">
+                    <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1.5" android:text="@string/features_label" android:textColor="@color/text_secondary" android:textSize="12sp" android:textStyle="bold" />
+                    <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="@string/free_plan" android:textColor="@color/text_secondary" android:textSize="12sp" android:textStyle="bold" android:gravity="center" />
+                    <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="@string/premium_plan" android:textColor="@color/accent" android:textSize="12sp" android:textStyle="bold" android:gravity="center" />
+                </LinearLayout>
+
+                <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/divider" android:layout_marginBottom="8dp" />
+
+                <!-- Row: Reklamlar -->
+                <include layout="@layout/item_premium_comparison_row" android:id="@+id/rowAds" />
+                <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/divider" />
+
+                <!-- Row: Premium Paketler -->
+                <include layout="@layout/item_premium_comparison_row" android:id="@+id/rowPacks" />
+                <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/divider" />
+
+                <!-- Row: AI Arka Plan Silme -->
+                <include layout="@layout/item_premium_comparison_row" android:id="@+id/rowAI" />
+                <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/divider" />
+
+                <!-- Row: Çıkartma Yapma -->
+                <include layout="@layout/item_premium_comparison_row" android:id="@+id/rowCreate" />
+
+            </LinearLayout>
+
+
+
+            <!-- 3. Pricing Options (Non-Premium Users) -->
+            <LinearLayout
+                android:id="@+id/plansContainer"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/tvSelectPlan"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="32dp"
+                    android:layout_marginBottom="16dp"
+                    android:text="@string/select_plan"
+                    android:textColor="@color/text_primary"
+                    android:textSize="18sp"
+                    android:textStyle="bold" />
+
+                <!-- Plan Cards Container -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical">
+
+                    <include layout="@layout/item_premium_plan_card" android:id="@+id/cardMonthly" />
+                    <include layout="@layout/item_premium_plan_card" android:id="@+id/cardYearly" />
+                    <include layout="@layout/item_premium_plan_card" android:id="@+id/cardLifetime" />
+
+                </LinearLayout>
+
+            </LinearLayout>
+
+            <!-- 4. Premium Active View (Premium Users) -->
+            <LinearLayout
+                android:id="@+id/premiumActiveContainer"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
                 android:gravity="center"
-                android:layout_marginBottom="24dp">
+                android:layout_marginTop="32dp"
+                android:visibility="gone">
 
-                <ImageView
-                    android:layout_width="80dp"
-                    android:layout_height="80dp"
-                    android:src="@drawable/ic_premium" />
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="16dp"
-                    android:text="@string/select_plan"
-                    android:textSize="28sp"
-                    android:textStyle="bold"
-                    android:textColor="@color/text_primary" />
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:text="@string/premium_experience_detail_long"
-                    android:textSize="15sp"
-                    android:textColor="@color/text_secondary" />
-
-            </LinearLayout>
-
-            <!-- Comparison Cards Container -->
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:baselineAligned="false">
-
-                <!-- FREE Card -->
+                <!-- Premium Aktif Kartı -->
                 <androidx.cardview.widget.CardView
-                    android:layout_width="0dp"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:layout_marginEnd="8dp"
+                    app:cardBackgroundColor="@color/premium_gold"
                     app:cardCornerRadius="20dp"
-                    app:cardElevation="2dp"
-                    app:cardBackgroundColor="@color/surface">
+                    app:cardElevation="8dp">
 
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:orientation="vertical"
-                        android:padding="16dp">
+                        android:gravity="center"
+                        android:padding="32dp">
 
-                        <!-- Free Header -->
+                        <!-- Animasyonlu Taç -->
+                        <ImageView
+                            android:id="@+id/imgPremiumCrown"
+                            android:layout_width="80dp"
+                            android:layout_height="80dp"
+                            android:src="@drawable/ic_premium"
+                            app:tint="@color/premium_text_on_gold" />
+
                         <TextView
-                            android:layout_width="match_parent"
+                            android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="@string/free"
-                            android:textSize="18sp"
-                            android:textStyle="bold"
-                            android:textColor="@color/text_primary"
-                            android:gravity="center" />
+                            android:layout_marginTop="16dp"
+                            android:text="@string/premium_active_title"
+                            android:textColor="@color/premium_text_on_gold"
+                            android:textSize="24sp"
+                            android:textStyle="bold" />
 
                         <TextView
-                            android:layout_width="match_parent"
+                            android:id="@+id/tvPremiumType"
+                            android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:layout_marginTop="8dp"
-                            android:text="₺0"
-                            android:textSize="32sp"
-                            android:textStyle="bold"
-                            android:textColor="@color/text_secondary"
-                            android:gravity="center" />
+                            android:text="@string/premium_lifetime_member"
+                            android:textColor="@color/premium_text_on_gold"
+                            android:textSize="16sp"
+                            android:alpha="0.8" />
 
-                        <TextView
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:text="@string/forever"
-                            android:textSize="12sp"
-                            android:textColor="@color/text_hint"
-                            android:gravity="center" />
-
-                        <View
-                            android:layout_width="match_parent"
-                            android:layout_height="1dp"
-                            android:layout_marginVertical="16dp"
-                            android:background="@color/divider" />
-
-                        <!-- Free Features -->
+                        <!-- Özellikler Listesi -->
                         <LinearLayout
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:orientation="vertical">
-
-                            <!-- Feature 1 -->
-                            <LinearLayout
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:orientation="horizontal"
-                                android:gravity="center_vertical"
-                                android:layout_marginBottom="12dp">
-                                <ImageView
-                                    android:layout_width="20dp"
-                                    android:layout_height="20dp"
-                                    android:src="@drawable/ic_check_circle"
-                                    app:tint="@color/accent" />
-                                <TextView
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:layout_marginStart="10dp"
-                                    android:text="@string/basic_packs"
-                                    android:textSize="13sp"
-                                    android:textColor="@color/text_primary" />
-                            </LinearLayout>
-
-                            <!-- Feature 2 -->
-                            <LinearLayout
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:orientation="horizontal"
-                                android:gravity="center_vertical"
-                                android:layout_marginBottom="12dp">
-                                <ImageView
-                                    android:layout_width="20dp"
-                                    android:layout_height="20dp"
-                                    android:src="@drawable/ic_check_circle"
-                                    app:tint="@color/accent" />
-                                <TextView
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:layout_marginStart="10dp"
-                                    android:text="@string/create_stickers"
-                                    android:textSize="13sp"
-                                    android:textColor="@color/text_primary" />
-                            </LinearLayout>
-
-                            <!-- Feature 3 -->
-                            <LinearLayout
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:orientation="horizontal"
-                                android:gravity="center_vertical"
-                                android:layout_marginBottom="12dp">
-                                <ImageView
-                                    android:layout_width="20dp"
-                                    android:layout_height="20dp"
-                                    android:src="@drawable/ic_check_circle"
-                                    app:tint="@color/accent" />
-                                <TextView
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:layout_marginStart="10dp"
-                                    android:text="@string/ai_background"
-                                    android:textSize="13sp"
-                                    android:textColor="@color/text_primary" />
-                            </LinearLayout>
-
-                            <!-- Feature 4 - Limited -->
-                            <LinearLayout
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:orientation="horizontal"
-                                android:gravity="center_vertical"
-                                android:layout_marginBottom="12dp">
-                                <ImageView
-                                    android:layout_width="20dp"
-                                    android:layout_height="20dp"
-                                    android:src="@drawable/ic_close"
-                                    app:tint="@color/text_hint" />
-                                <TextView
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:layout_marginStart="10dp"
-                                    android:text="@string/premium_packs"
-                                    android:textSize="13sp"
-                                    android:textColor="@color/text_hint" />
-                            </LinearLayout>
-
-                            <!-- Feature 5 - Limited -->
-                            <LinearLayout
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:orientation="horizontal"
-                                android:gravity="center_vertical"
-                                android:layout_marginBottom="12dp">
-                                <ImageView
-                                    android:layout_width="20dp"
-                                    android:layout_height="20dp"
-                                    android:src="@drawable/ic_close"
-                                    app:tint="@color/text_hint" />
-                                <TextView
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:layout_marginStart="10dp"
-                                    android:text="@string/ad_free"
-                                    android:textSize="13sp"
-                                    android:textColor="@color/text_hint" />
-                            </LinearLayout>
-
-                        </LinearLayout>
-
-                        <!-- Current Plan Badge -->
-                        <TextView
-                            android:id="@+id/badgeCurrentPlan"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="12dp"
-                            android:padding="12dp"
-                            android:text="@string/current_plan"
-                            android:textSize="13sp"
-                            android:textStyle="bold"
-                            android:textColor="@color/text_secondary"
-                            android:background="@drawable/bg_badge_outline"
-                            android:gravity="center" />
-
-                    </LinearLayout>
-
-                </androidx.cardview.widget.CardView>
-
-                <!-- PREMIUM Card -->
-                <androidx.cardview.widget.CardView
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:layout_marginStart="8dp"
-                    app:cardCornerRadius="20dp"
-                    app:cardElevation="8dp"
-                    app:cardBackgroundColor="@color/surface">
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="vertical">
-
-                        <!-- Premium Badge -->
-                        <TextView
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:padding="8dp"
-                            android:text="@string/recommended"
-                            android:textSize="11sp"
-                            android:textStyle="bold"
-                            android:textColor="@android:color/white"
-                            android:background="@drawable/bg_premium_header"
-                            android:gravity="center" />
-
-                        <LinearLayout
-                            android:layout_width="match_parent"
+                            android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:orientation="vertical"
-                            android:padding="16dp">
+                            android:layout_marginTop="24dp"
+                            android:gravity="start">
 
-                            <!-- Premium Header -->
                             <TextView
-                                android:layout_width="match_parent"
+                                android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:text="Premium"
-                                android:textSize="18sp"
-                                android:textStyle="bold"
-                                android:textColor="@color/premium_gold"
-                                android:gravity="center" />
+                                android:text="@string/premium_benefit_no_ads"
+                                android:textColor="@color/premium_text_on_gold"
+                                android:textSize="14sp"
+                                android:drawableStart="@drawable/ic_check_small"
+                                android:drawablePadding="8dp"
+                                android:drawableTint="@color/premium_text_on_gold" />
 
                             <TextView
-                                android:id="@+id/txtPremiumPrice"
-                                android:layout_width="match_parent"
+                                android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:layout_marginTop="8dp"
-                                android:text="₺--,--"
-                                android:textSize="32sp"
-                                android:textStyle="bold"
-                                android:textColor="@color/accent"
-                                android:gravity="center" />
+                                android:text="@string/premium_benefit_all_stickers"
+                                android:textColor="@color/premium_text_on_gold"
+                                android:textSize="14sp"
+                                android:drawableStart="@drawable/ic_check_small"
+                                android:drawablePadding="8dp"
+                                android:drawableTint="@color/premium_text_on_gold" />
 
                             <TextView
-                                android:layout_width="match_parent"
+                                android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:text="@string/one_time_payment"
-                                android:textSize="12sp"
-                                android:textColor="@color/text_hint"
-                                android:gravity="center" />
-
-                            <View
-                                android:layout_width="match_parent"
-                                android:layout_height="1dp"
-                                android:layout_marginVertical="16dp"
-                                android:background="@color/divider" />
-
-                            <!-- Premium Features -->
-                            <LinearLayout
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:orientation="vertical">
-
-                                <!-- Feature 1 -->
-                                <LinearLayout
-                                    android:layout_width="match_parent"
-                                    android:layout_height="wrap_content"
-                                    android:orientation="horizontal"
-                                    android:gravity="center_vertical"
-                                    android:layout_marginBottom="12dp">
-                                    <ImageView
-                                        android:layout_width="20dp"
-                                        android:layout_height="20dp"
-                                        android:src="@drawable/ic_check_circle"
-                                        app:tint="@color/accent" />
-                                    <TextView
-                                        android:layout_width="wrap_content"
-                                        android:layout_height="wrap_content"
-                                        android:layout_marginStart="10dp"
-                                        android:text="@string/all_packs"
-                                        android:textSize="13sp"
-                                        android:textStyle="bold"
-                                        android:textColor="@color/text_primary" />
-                                </LinearLayout>
-
-                                <!-- Feature 2 -->
-                                <LinearLayout
-                                    android:layout_width="match_parent"
-                                    android:layout_height="wrap_content"
-                                    android:orientation="horizontal"
-                                    android:gravity="center_vertical"
-                                    android:layout_marginBottom="12dp">
-                                    <ImageView
-                                        android:layout_width="20dp"
-                                        android:layout_height="20dp"
-                                        android:src="@drawable/ic_check_circle"
-                                        app:tint="@color/accent" />
-                                    <TextView
-                                        android:layout_width="wrap_content"
-                                        android:layout_height="wrap_content"
-                                        android:layout_marginStart="10dp"
-                                        android:text="@string/create_stickers"
-                                        android:textSize="13sp"
-                                        android:textColor="@color/text_primary" />
-                                </LinearLayout>
-
-                                <!-- Feature 3 -->
-                                <LinearLayout
-                                    android:layout_width="match_parent"
-                                    android:layout_height="wrap_content"
-                                    android:orientation="horizontal"
-                                    android:gravity="center_vertical"
-                                    android:layout_marginBottom="12dp">
-                                    <ImageView
-                                        android:layout_width="20dp"
-                                        android:layout_height="20dp"
-                                        android:src="@drawable/ic_check_circle"
-                                        app:tint="@color/success" />
-                                    <TextView
-                                        android:layout_width="wrap_content"
-                                        android:layout_height="wrap_content"
-                                        android:layout_marginStart="10dp"
-                                        android:text="@string/ai_background"
-                                        android:textSize="13sp"
-                                        android:textColor="@color/text_primary" />
-                                </LinearLayout>
-
-                                <!-- Feature 4 - Premium -->
-                                <LinearLayout
-                                    android:layout_width="match_parent"
-                                    android:layout_height="wrap_content"
-                                    android:orientation="horizontal"
-                                    android:gravity="center_vertical"
-                                    android:layout_marginBottom="12dp">
-                                    <ImageView
-                                        android:layout_width="20dp"
-                                        android:layout_height="20dp"
-                                        android:src="@drawable/ic_check_circle"
-                                        app:tint="@color/premium_gold" />
-                                    <TextView
-                                        android:layout_width="wrap_content"
-                                        android:layout_height="wrap_content"
-                                        android:layout_marginStart="10dp"
-                                        android:text="@string/premium_packs"
-                                        android:textSize="13sp"
-                                        android:textStyle="bold"
-                                        android:textColor="@color/premium_gold" />
-                                </LinearLayout>
-
-                                <!-- Feature 5 - Premium -->
-                                <LinearLayout
-                                    android:layout_width="match_parent"
-                                    android:layout_height="wrap_content"
-                                    android:orientation="horizontal"
-                                    android:gravity="center_vertical"
-                                    android:layout_marginBottom="12dp">
-                                    <ImageView
-                                        android:layout_width="20dp"
-                                        android:layout_height="20dp"
-                                        android:src="@drawable/ic_check_circle"
-                                        app:tint="@color/premium_gold" />
-                                    <TextView
-                                        android:layout_width="wrap_content"
-                                        android:layout_height="wrap_content"
-                                        android:layout_marginStart="10dp"
-                                        android:text="@string/ad_free_experience"
-                                        android:textSize="13sp"
-                                        android:textStyle="bold"
-                                        android:textColor="@color/premium_gold" />
-                                </LinearLayout>
-
-                            </LinearLayout>
-
-                            <!-- Buy Button -->
-                            <com.google.android.material.button.MaterialButton
-                                android:id="@+id/btnBuyPremium"
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:minHeight="56dp"
-                                android:paddingVertical="12dp"
-                                android:layout_marginTop="12dp"
-                                android:text="Premium Al"
-                                android:textSize="15sp"
-                                android:textStyle="bold"
-                                android:textColor="@android:color/white"
-                                app:backgroundTint="@color/accent"
-                                app:cornerRadius="14dp"
-                                app:elevation="0dp" />
+                                android:layout_marginTop="8dp"
+                                android:text="@string/premium_benefit_priority"
+                                android:textColor="@color/premium_text_on_gold"
+                                android:textSize="14sp"
+                                android:drawableStart="@drawable/ic_check_small"
+                                android:drawablePadding="8dp"
+                                android:drawableTint="@color/premium_text_on_gold" />
 
                         </LinearLayout>
 
                     </LinearLayout>
 
                 </androidx.cardview.widget.CardView>
+
+                <!-- Teşekkür Mesajı -->
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="24dp"
+                    android:text="@string/premium_thank_you"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="14sp"
+                    android:gravity="center" />
 
             </LinearLayout>
 
-            <!-- Features Detail Section -->
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="32dp"
-                android:layout_marginBottom="16dp"
-                android:text="@string/premium_advantages"
-                android:textSize="18sp"
-                android:textStyle="bold"
-                android:textColor="@color/text_primary" />
-
-            <!-- Advantage 1 -->
-            <androidx.cardview.widget.CardView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="12dp"
-                app:cardCornerRadius="16dp"
-                app:cardElevation="1dp"
-                app:cardBackgroundColor="@color/surface">
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:padding="16dp"
-                    android:gravity="center_vertical">
-
-                    <TextView
-                        android:layout_width="48dp"
-                        android:layout_height="48dp"
-                        android:background="@drawable/bg_emoji_circle"
-                        android:gravity="center"
-                        android:text="📦"
-                        android:textSize="24sp" />
-
-                    <LinearLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:layout_marginStart="16dp"
-                        android:orientation="vertical">
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="@string/all_premium_packs"
-                            android:textSize="15sp"
-                            android:textStyle="bold"
-                            android:textColor="@color/text_primary" />
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="4dp"
-                            android:text="@string/unlimited_access_detail"
-                            android:textSize="13sp"
-                            android:textColor="@color/text_secondary" />
-
-                    </LinearLayout>
-
-                </LinearLayout>
-
-            </androidx.cardview.widget.CardView>
-
-            <!-- Advantage 2 -->
-            <androidx.cardview.widget.CardView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="12dp"
-                app:cardCornerRadius="16dp"
-                app:cardElevation="1dp"
-                app:cardBackgroundColor="@color/surface">
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:padding="16dp"
-                    android:gravity="center_vertical">
-
-                    <TextView
-                        android:layout_width="48dp"
-                        android:layout_height="48dp"
-                        android:background="@drawable/bg_emoji_circle"
-                        android:gravity="center"
-                        android:text="🚫"
-                        android:textSize="24sp" />
-
-                    <LinearLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:layout_marginStart="16dp"
-                        android:orientation="vertical">
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="@string/ad_free_experience"
-                            android:textSize="15sp"
-                            android:textStyle="bold"
-                            android:textColor="@color/text_primary" />
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="4dp"
-                            android:text="@string/ad_free_detail"
-                            android:textSize="13sp"
-                            android:textColor="@color/text_secondary" />
-
-                    </LinearLayout>
-
-                </LinearLayout>
-
-            </androidx.cardview.widget.CardView>
-
-            <!-- Advantage 3 -->
-            <androidx.cardview.widget.CardView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="12dp"
-                app:cardCornerRadius="16dp"
-                app:cardElevation="1dp"
-                app:cardBackgroundColor="@color/surface">
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:padding="16dp"
-                    android:gravity="center_vertical">
-
-                    <TextView
-                        android:layout_width="48dp"
-                        android:layout_height="48dp"
-                        android:background="@drawable/bg_emoji_circle"
-                        android:gravity="center"
-                        android:text="♾️"
-                        android:textSize="24sp" />
-
-                    <LinearLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:layout_marginStart="16dp"
-                        android:orientation="vertical">
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="@string/lifetime_access"
-                            android:textSize="15sp"
-                            android:textStyle="bold"
-                            android:textColor="@color/text_primary" />
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="4dp"
-                            android:text="@string/lifetime_access_detail"
-                            android:textSize="13sp"
-                            android:textColor="@color/text_secondary" />
-
-                    </LinearLayout>
-
-                </LinearLayout>
-
-            </androidx.cardview.widget.CardView>
-
-            <!-- Footer Note -->
-            <TextView
+            <!-- Footer Links -->
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="24dp"
-                android:layout_marginBottom="16dp"
-                android:text="@string/no_subscription_note"
-                android:textSize="13sp"
-                android:textColor="@color/text_hint"
                 android:gravity="center"
-                android:lineSpacingExtra="4dp" />
+                android:orientation="horizontal">
 
-            <!-- Restore Purchases Link -->
-            <TextView
-                android:id="@+id/btnRestorePurchases"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="center"
-                android:layout_marginBottom="24dp"
-                android:padding="12dp"
-                android:text="@string/restore_purchases"
-                android:textSize="14sp"
-                android:textColor="@color/accent"
-                android:textStyle="bold" />
+                <TextView
+                    android:id="@+id/btnPrivacyPolicy"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:padding="12dp"
+                    android:text="@string/privacy_short"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="14sp" />
+
+            </LinearLayout>
 
         </LinearLayout>
-
-    </ScrollView>
+    </androidx.core.widget.NestedScrollView>
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

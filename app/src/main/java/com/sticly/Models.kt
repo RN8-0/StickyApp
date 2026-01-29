@@ -22,10 +22,12 @@ data class Pack(
     // Firebase alanları
     var trayUrl: String = "",
     val isPremium: Boolean = false,
+    val productId: String = "",  // Google Play ürün etiketi (örn: "recep_ivedik")
     val storagePath: String = "stickers",  // Firebase Storage klasör yolu (stickers veya premium_stickers)
     val createdAt: String = "",  // Oluşturulma tarihi (ISO format)
     val category: String = "",   // Kategori (komik, romantik, spor, dizi_film, vb.)
     val downloadCount: Int = 0,  // İndirme/ekleme sayısı
+    val fakeDownloadBase: Int = 0, // Fake indirme tabanı (kullanıcıya gösterilir)
     val viewCount: Int = 0,      // Görüntülenme sayısı
     val favoriteCount: Int = 0,  // Favori sayısı
     val isAnimated: Boolean = false, // Animasyonlu paket mi?
@@ -36,9 +38,29 @@ data class Pack(
 )
 
 data class BillingSettings(
-    val priceTRY: String = "69,99 TL",
-    val priceUSD: String = "$4.99",
-    val priceEUR: String = "€4.49",
+    val priceTRY: String = "4,99 TL",
+    val priceUSD: String = "$0.99",
+    val priceEUR: String = "€0.99",
+    val updatedAt: String = ""
+)
+
+data class BillingPlan(
+    val id: String = "",
+    val name: String = "",
+    val type: String = "subscription", // "subscription" or "onetime"
+    val priceTry: String = "",
+    val priceUsd: String = "",
+    val priceEur: String = "",
+    val isActive: Boolean = true,
+    val trialDays: Int = 0,
+    val discountPercentage: Int = 0
+)
+
+data class BillingConfig(
+    val plans: List<BillingPlan> = emptyList(),
+    val campaignActive: Boolean = false,
+    val campaignName: String = "",
+    val campaignEndDate: String = "",
     val updatedAt: String = ""
 )
 

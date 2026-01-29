@@ -589,10 +589,13 @@ object CustomStickerManager {
             return null // Tray ve sticker yok - geçersiz paket
         }
         
+        // Publisher'ı string resource'dan al (çoklu dil desteği)
+        val publisher = context.getString(R.string.custom_pack_publisher)
+
         return Pack(
             id = customPack.id,
             name = customPack.name,
-            pub = customPack.publisher,
+            pub = publisher,
             email = "",
             privacy = "",
             license = "",

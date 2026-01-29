@@ -60,9 +60,9 @@
     <color name="background_removal_text_color">@color/accent</color>
 
     <!-- Onboarding Colors (Always Dark) -->
-    <color name="onboarding_background">#000000</color>
+    <color name="onboarding_background">@color/primary</color>
     <color name="onboarding_text_primary">#FFFFFF</color>
     <color name="onboarding_text_secondary">#CCFFFFFF</color>
-    <color name="onboarding_card_bg">#1AFFFFFF</color>
+    <color name="onboarding_card_bg">#33FFFFFF</color>
     <color name="onboarding_button_text">#FFFFFF</color>
 </resources>

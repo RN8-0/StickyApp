@@ -42,3 +42,9 @@
 
 # Billing
 -keep class com.android.vending.billing.** { *; }
+-keep class com.android.billingclient.** { *; }
+
+# Suppress warnings for missing JDK/AutoValue classes
+-dontwarn javax.lang.model.**
+-dontwarn com.google.auto.value.**
+-dontwarn autovalue.shaded.com.squareup.javapoet.**

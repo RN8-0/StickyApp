@@ -135,7 +135,7 @@
                 android:paddingVertical="2dp"
                 android:visibility="gone" />
 
-            <!-- Premium Container (dikey ortada) -->
+            <!-- Premium Container (dikey ortada) - Sadece Premium badge -->
             <LinearLayout
                 android:id="@+id/premiumContainer"
                 android:layout_width="wrap_content"
@@ -156,16 +156,6 @@
                     android:background="@drawable/badge_premium"
                     android:paddingHorizontal="8dp"
                     android:paddingVertical="2dp" />
-
-                <TextView
-                    android:id="@+id/premiumPrice"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/sticker_price"
-                    android:textSize="12sp"
-                    android:textColor="@color/success"
-                    android:textStyle="bold"
-                    android:layout_marginTop="4dp" />
 
             </LinearLayout>
 

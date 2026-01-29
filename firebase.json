@@ -1,18 +1,30 @@
 {
-    "hosting": {
-        "public": "sticker_admin_web/dist",
-        "ignore": [
-            "firebase.json",
-            "**/.*",
-            "**/node_modules/**"
-        ],
-        "rewrites": [
-            {
-                "source": "**",
-                "destination": "/index.html"
-            }
-        ]
-    },
+    "hosting": [
+        {
+            "target": "admin",
+            "public": "sticker_admin_web/dist",
+            "ignore": [
+                "firebase.json",
+                "**/.*",
+                "**/node_modules/**"
+            ],
+            "rewrites": [
+                {
+                    "source": "**",
+                    "destination": "/index.html"
+                }
+            ]
+        },
+        {
+            "target": "privacy",
+            "public": "sticky-privacy",
+            "ignore": [
+                "firebase.json",
+                "**/.*",
+                "**/node_modules/**"
+            ]
+        }
+    ],
     "functions": {
         "source": "functions",
         "runtime": "nodejs20"

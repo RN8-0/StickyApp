@@ -257,25 +257,45 @@ def firebase_deploy():
     clear_screen()
     print_banner()
     print_colored("--- FIREBASE DEPLOY ---", "yellow", bold=True)
-    
+
     if not check_command("firebase"):
         print_colored("[✗] Firebase CLI eksik!", "red")
         input()
         return
 
-    confirm = input("Web panelini Firebase'e yayınlamak istiyor musunuz? (e/h): ").lower()
-    if confirm != 'e': return
+    print_colored("\nDeploy seçenekleri:", "cyan")
+    print("  [1] Sadece Admin Panel")
+    print("  [2] Sadece Privacy/Legal Sayfası")
+    print("  [3] Her İkisi de (Admin + Privacy) (Önerilen)")
+    print("  [0] İptal")
 
-    print_colored("[*] Proje derleniyor...", "blue")
-    success, _, err = run_command("npm run build", cwd="sticker_admin_web", shell=True)
-    if not success:
-        print_colored(f"[✗] Derleme hatası: {err}", "red")
-        input()
+    choice = input("\nSeçiminiz [varsayılan: 3]: ").strip()
+
+    if choice == "0":
         return
 
-    print_colored("[*] Firebase'e gönderiliyor...", "blue")
-    subprocess.run("firebase deploy --only hosting", cwd="sticker_admin_web", shell=True)
-    
+    # Varsayılan olarak her ikisini de deploy et
+    if choice == "":
+        choice = "3"
+
+    # Admin panel deploy
+    if choice in ["1", "3"]:
+        print_colored("\n[*] Admin panel derleniyor...", "blue")
+        success, _, err = run_command("npm run build", cwd="sticker_admin_web", shell=True)
+        if not success:
+            print_colored(f"[✗] Derleme hatası: {err}", "red")
+            input()
+            return
+
+        print_colored("[*] Admin panel Firebase'e gönderiliyor...", "blue")
+        subprocess.run("firebase deploy --only hosting:admin", shell=True)
+
+    # Privacy page deploy
+    if choice in ["2", "3"]:
+        print_colored("\n[*] Privacy sayfası Firebase'e gönderiliyor...", "blue")
+        subprocess.run("firebase deploy --only hosting:privacy", shell=True)
+
+    print_colored("\n[✓] Deploy işlemi tamamlandı!", "green")
     input("\nDevam etmek için ENTER'a basın...")
 
 def clean_project():

@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="54dp"
     android:gravity="center_vertical"
@@ -12,7 +13,7 @@
         android:layout_height="wrap_content"
         android:layout_weight="1.5"
         android:text="Feature"
-        android:textColor="@color/onboarding_text_primary"
+        android:textColor="@color/text_primary"
         android:textSize="14sp" />
 
     <TextView
@@ -22,18 +23,33 @@
         android:layout_weight="1"
         android:gravity="center"
         android:text="Value"
-        android:textColor="@color/onboarding_text_secondary"
+        android:textColor="@color/text_secondary"
         android:textSize="13sp" />
 
-    <TextView
-        android:id="@+id/tvPremiumValue"
+    <FrameLayout
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_weight="1"
-        android:gravity="center"
-        android:text="Value"
-        android:textColor="@color/premium_gold"
-        android:textSize="14sp"
-        android:textStyle="bold" />
+        android:layout_weight="1">
+
+        <TextView
+            android:id="@+id/tvPremiumValue"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:text="Value"
+            android:textColor="@color/accent"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+
+        <ImageView
+            android:id="@+id/imgPremiumCheck"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:layout_gravity="center"
+            android:src="@drawable/ic_check"
+            android:visibility="gone"
+            app:tint="@color/accent" />
+
+    </FrameLayout>
 
 </LinearLayout>

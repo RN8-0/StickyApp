@@ -1,0 +1,170 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginBottom="12dp">
+
+    <androidx.cardview.widget.CardView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        app:cardBackgroundColor="@color/accent"
+        app:cardCornerRadius="20dp"
+        app:cardElevation="6dp">
+
+        <!-- Ana Container -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="80dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingVertical="16dp"
+            android:paddingStart="18dp"
+            android:paddingEnd="14dp">
+
+            <!-- Sol: Emoji -->
+            <TextView
+                android:id="@+id/tvPlanIcon"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:gravity="center"
+                android:text="📅"
+                android:textSize="28sp"
+                android:background="@drawable/bg_emoji_circle_light" />
+
+            <!-- Orta: Plan Adi + Alt Aciklama -->
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="14dp"
+                android:layout_marginEnd="8dp"
+                android:orientation="vertical">
+
+                <!-- Plan Adi -->
+                <TextView
+                    android:id="@+id/tvPlanName"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Aylık"
+                    android:textColor="@android:color/white"
+                    android:textSize="17sp"
+                    android:textStyle="bold" />
+
+                <!-- Alt Aciklama -->
+                <TextView
+                    android:id="@+id/tvPlanSubtitle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:text="İstediğin zaman iptal et"
+                    android:textColor="@android:color/white"
+                    android:textSize="12sp"
+                    android:alpha="0.85" />
+
+            </LinearLayout>
+
+            <!-- Sag: Fiyat Blogu -->
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:gravity="end|center_vertical"
+                android:orientation="vertical">
+
+                <!-- Fiyat Container -->
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:background="@drawable/bg_price_pill"
+                    android:paddingHorizontal="14dp"
+                    android:paddingVertical="8dp">
+
+                    <!-- Ustu Cizili Eski Fiyat (varsayilan gizli) -->
+                    <TextView
+                        android:id="@+id/tvOldPrice"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="₺839"
+                        android:textColor="@android:color/white"
+                        android:textSize="11sp"
+                        android:alpha="0.7"
+                        android:layout_marginEnd="6dp"
+                        android:visibility="gone" />
+
+                    <!-- Guncel Fiyat -->
+                    <TextView
+                        android:id="@+id/tvPlanPrice"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="₺69,99"
+                        android:textColor="@android:color/white"
+                        android:textSize="15sp"
+                        android:textStyle="bold" />
+
+                </LinearLayout>
+
+                <!-- Fiyat Alti Notu -->
+                <TextView
+                    android:id="@+id/tvPriceNote"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:layout_gravity="end"
+                    android:text="✨ Hemen başla"
+                    android:textColor="@android:color/white"
+                    android:textSize="10sp"
+                    android:alpha="0.9"
+                    android:visibility="gone" />
+
+            </LinearLayout>
+
+        </LinearLayout>
+
+    </androidx.cardview.widget.CardView>
+
+    <!-- Badge: Sol ustte floating -->
+    <TextView
+        android:id="@+id/tvBadge"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="14dp"
+        android:background="@drawable/bg_premium_badge"
+        android:paddingHorizontal="12dp"
+        android:paddingVertical="5dp"
+        android:text="🎁 3 gün ücretsiz"
+        android:textColor="@color/premium_text_on_gold"
+        android:textSize="11sp"
+        android:textStyle="bold"
+        android:elevation="8dp"
+        android:visibility="gone" />
+
+    <!-- Eski view'lar (uyumluluk icin gizli) -->
+    <TextView
+        android:id="@+id/tvPlanPeriod"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:visibility="gone" />
+
+    <TextView
+        android:id="@+id/tvPlanBilling"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:visibility="gone" />
+
+    <TextView
+        android:id="@+id/tvSaveBadge"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:visibility="gone" />
+
+    <TextView
+        android:id="@+id/tvTrialBadge"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:visibility="gone" />
+
+</FrameLayout>

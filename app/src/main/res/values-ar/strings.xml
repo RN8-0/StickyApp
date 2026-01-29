@@ -19,6 +19,7 @@
     <string name="contact_us">اتصل بنا</string>
     <string name="rate_us">قيمنا</string>
     <string name="premium">المميز</string>
+    <string name="get_premium_access">احصل على الوصول المميز</string>
     <string name="suggest_sticker">اقترح ملصقاً</string>
     <string name="share_app">شارِك التطبيق</string>
     <string name="privacy_policy">سياسة الخصوصية</string>
@@ -322,4 +323,42 @@
     <string name="btn_add_text_label">إضافة نص</string>
     <string name="text_size_label">حجم النص</string>
     <string name="emoji_picker_title">اختر إيموجي</string>
+
+    <!-- Premium Redesign -->
+    <string name="premium_remove_limits">إزالة الحدود</string>
+    <string name="premium_remove_limits_desc">تجربة خالية من الإعلانات والوصول إلى جميع الملصقات.</string>
+    <string name="plan_monthly">شهري</string>
+    <string name="plan_yearly">سنوي</string>
+    <string name="plan_lifetime">مدى الحياة</string>
+    <string name="plan_monthly_price">شهري</string>
+    <string name="plan_yearly_price">سنوي</string>
+    <string name="plan_lifetime_price">مدى الحياة</string>
+    <string name="save_percentage">الأفضل قيمة</string>
+    <string name="one_time_billing">دفع لمرة واحدة</string>
+    <string name="restore_purchases_short">استعادة</string>
+    <string name="privacy_short">سياسة الخصوصية</string>
+    <string name="var_label">نعم</string>
+    <string name="yok_label">بدون إعلانات</string>
+    <string name="kilitli_label">مقفل</string>
+    <string name="acik_label">تم إلغاء القفل</string>
+    <string name="plan_monthly_trial">تجربة مجانية لمدة 3 أيام</string>
+    <string name="plan_monthly_subtitle">إلغاء في أي وقت ✨</string>
+    <string name="plan_monthly_note">🚀 ابدأ الآن</string>
+    <string name="plan_yearly_subtitle">12 شهراً من البريميوم 🎉</string>
+    <string name="plan_yearly_note">⭐ الأكثر شعبية</string>
+    <string name="plan_lifetime_subtitle">ادفع مرة واحدة، استخدم للأبد 💫</string>
+    <string name="plan_lifetime_note">👑 أفضل صفقة</string>
+    <string name="premium_ai_removal">إزالة الخلفية بالذكاء الاصطناعي</string>
+    <string name="premium_plan">بريميوم</string>
+    <string name="free_plan">مجاني</string>
+    <string name="premium_cta">احصل على بريميوم الآن</string>
+    <string name="free_cta">استمر في النسخة المجانية</string>
+
+    <!-- Billing Errors -->
+    <string name="purchase_pending">جاري معالجة عملية الشراء. سيتم إعلامك عند الانتهاء.</string>
+    <string name="purchase_cancelled">تم إلغاء عملية الشراء.</string>
+    <string name="purchase_already_owned">أنت تمتلك هذا العنصر بالفعل.</string>
+    <string name="purchase_error">حدث خطأ أثناء الشراء. يرجى المحاولة مرة أخرى.</string>
+    <string name="billing_unavailable">خدمة الدفع غير متاحة. يرجى التحقق من متجر Google Play.</string>
+    <string name="price_loading">جاري التحميل…</string>
 </resources>

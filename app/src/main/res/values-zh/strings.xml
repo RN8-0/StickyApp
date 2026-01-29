@@ -19,6 +19,7 @@
     <string name="contact_us">联系我们</string>
     <string name="rate_us">给我们评分</string>
     <string name="premium">高级版</string>
+    <string name="get_premium_access">获取高级访问</string>
     <string name="suggest_sticker">建议贴纸</string>
     <string name="share_app">分享应用</string>
     <string name="privacy_policy">隐私政策</string>
@@ -322,4 +323,42 @@
     <string name="btn_add_text_label">添加文字</string>
     <string name="text_size_label">文字大小</string>
     <string name="emoji_picker_title">选择表情</string>
+
+    <!-- Premium Redesign -->
+    <string name="premium_remove_limits">移除限制</string>
+    <string name="premium_remove_limits_desc">无广告体验并访问所有贴纸。</string>
+    <string name="plan_monthly">每月</string>
+    <string name="plan_yearly">每年</string>
+    <string name="plan_lifetime">终身</string>
+    <string name="plan_monthly_price">每月</string>
+    <string name="plan_yearly_price">每年</string>
+    <string name="plan_lifetime_price">终身</string>
+    <string name="save_percentage">最超值</string>
+    <string name="one_time_billing">一次性付款</string>
+    <string name="restore_purchases_short">恢复</string>
+    <string name="privacy_short">隐私政策</string>
+    <string name="var_label">是</string>
+    <string name="yok_label">无广告</string>
+    <string name="kilitli_label">已锁定</string>
+    <string name="acik_label">已解锁</string>
+    <string name="plan_monthly_trial">免费试用 3 天</string>
+    <string name="plan_monthly_subtitle">随时取消 ✨</string>
+    <string name="plan_monthly_note">🚀 立即开始</string>
+    <string name="plan_yearly_subtitle">12个月高级会员 🎉</string>
+    <string name="plan_yearly_note">⭐ 最受欢迎</string>
+    <string name="plan_lifetime_subtitle">一次付款，永久使用 💫</string>
+    <string name="plan_lifetime_note">👑 超值优惠</string>
+    <string name="premium_ai_removal">AI 背景移除</string>
+    <string name="premium_plan">高级版</string>
+    <string name="free_plan">免费版</string>
+    <string name="premium_cta">立即获取高级版</string>
+    <string name="free_cta">继续使用免费版</string>
+
+    <!-- Billing Errors -->
+    <string name="purchase_pending">您的购买正在处理中。完成后将通知您。</string>
+    <string name="purchase_cancelled">购买已取消。</string>
+    <string name="purchase_already_owned">您已拥有此项目。</string>
+    <string name="purchase_error">购买过程中发生错误。请重试。</string>
+    <string name="billing_unavailable">计费服务不可用。请检查您的 Google Play 商店。</string>
+    <string name="price_loading">加载中…</string>
 </resources>

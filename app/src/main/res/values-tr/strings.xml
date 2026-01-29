@@ -19,6 +19,7 @@
     <string name="contact_us">Bize Ulaşın</string>
     <string name="rate_us">Bizi Puanlayın</string>
     <string name="premium">Premium</string>
+    <string name="get_premium_access">Premium Erişim Al</string>
     <string name="suggest_sticker">Sticker Öner</string>
     <string name="share_app">Paylaş</string>
     <string name="privacy_policy">Gizlilik Politikası</string>
@@ -127,6 +128,12 @@
     <string name="restore_error">Geri yükleme başarısız. Lütfen tekrar deneyin.</string>
     <string name="restoring">Geri yükleniyor…</string>
 
+    <!-- Product -->
+    <string name="coming_soon">Yakında</string>
+    <string name="price_loading">Yükleniyor…</string>
+    <string name="product_not_available">Ürün mevcut değil</string>
+    <string name="buy_now">Satın Al</string>
+
     <!-- Badges -->
     <string name="new_badge">YENİ</string>
     <string name="add_to_favorites">Favorilere ekle</string>
@@ -222,6 +229,11 @@
     <string name="stickers_loading">Çıkartmalar yükleniyor…</string>
     <string name="stickers_load_failed">Çıkartmalar yüklenemedi</string>
 
+    <!-- Pack Validation Errors -->
+    <string name="pack_empty_error">📦 Bu pakette çıkartma yok! Önce en az 3 çıkartma ekleyin.</string>
+    <string name="pack_min_stickers_error">⚠️ WhatsApp için en az 3 çıkartma gerekli. Lütfen daha fazla çıkartma ekleyin.</string>
+    <string name="pack_cover_error">🖼️ Lütfen önce bir kapak resmi ayarlayın.</string>
+
     <!-- Remove Instructions -->
     <string name="remove_instructions_title">Nasıl Kaldırılır?</string>
     <string name="remove_instructions_message">WhatsApp\'ın çıkartma paketlerini kaldırma ekranını açıyoruz.\n\nAçılan ekranda \"Sil\" seçeneğine tıklayarak paketi kaldırabilirsiniz.</string>
@@ -262,27 +274,34 @@
     <string name="premium_experience_detail">Sticky deneyimini yükselt</string>
     <string name="premium_experience_detail_long">Sticky deneyimini bir üst seviyeye taşı</string>
     <string name="forever">sonsuza dek</string>
-    <string name="basic_packs">Temel paketler</string>
-    <string name="create_stickers">Çıkartma oluştur</string>
-    <string name="ai_background">AI arka plan</string>
-    <string name="premium_packs">Premium paketler</string>
+    <string name="basic_packs">Standart Paketler</string>
+    <string name="create_stickers">Çıkartma Oluştur</string>
+    <string name="ai_background">AI Arka Plan</string>
+    <string name="premium_packs">Premium Paketler</string>
     <string name="ad_free">Reklamsız</string>
-    <string name="ad_free_experience">Reklamsız deneyim</string>
+    <string name="ad_free_experience">Reklamsız Deneyim</string>
     <string name="current_plan">Mevcut Plan</string>
     <string name="recommended">⭐ ÖNERİLEN</string>
     <string name="one_time_payment">tek seferlik ödeme</string>
     <string name="one_time">tek seferlik</string>
-    <string name="all_packs">Tüm paketler</string>
-    <string name="all_premium_packs">Tüm Premium Paketler</string>
-    <string name="unlimited_access_detail">Özel tasarlanmış yüzlerce premium çıkartma paketine sınırsız erişim</string>
-    <string name="ad_free_detail">Hiçbir reklam görmeden kesintisiz kullanım keyfi</string>
+    <string name="all_packs">Premium ile Ücretsiz</string>
+    <string name="all_premium_packs">Premium ile Ücretsiz</string>
+    <string name="unlimited_access_detail">Özel tasarlanmış yüzlerce premium çıkartma paketine ücretsiz ve sınırsız erişim</string>
+    <string name="ad_free_detail">Tamamen reklamsız kullanım keyfi.</string>
     <string name="lifetime_access">Ömür Boyu Erişim</string>
     <string name="lifetime_access_detail">Tek seferlik ödeme ile sonsuza dek premium üye kal</string>
-    <string name="no_subscription_note">💡 Tek seferlik ödeme, abonelik yok!\nİstediğin zaman satın alımları geri yükleyebilirsin.</string>
+    <string name="no_subscription_note">💡 Tek seferlik ödeme, abonelik yok!\nPremium çıkartmalar üyelik ile ücretsizdir.</string>
     <string name="premium_advantages">Premium Avantajları</string>
     <string name="how_to_create_sticker">Nasıl bir çıkartma yapmak istersin?</string>
-    <string name="create_static_desc">Fotoğraflardan hızlıca oluştur</string>
-    <string name="create_animated_desc">Video veya GIF\'leri WebP yap</string>
+    <string name="sticker_maker_subtitle">✨ Fotoğraflarını çıkartmaya dönüştür! ✨</string>
+    <string name="static_sticker_title">📷 Statik Çıkartma</string>
+    <string name="create_static_desc">Fotoğraflardan hızlıca oluştur 🚀</string>
+    <string name="animated_sticker_title">🎥 Hareketli Çıkartma</string>
+    <string name="create_animated_desc">Video veya GIF\'lerden WebP oluştur</string>
+    <string name="coming_soon_badge">🔜 Yakında</string>
+    <string name="tips_title">💡 İpuçları</string>
+    <string name="tips_content">• 🖼️ Net ve yüksek kaliteli fotoğraflar kullan\n• ✂️ AI ile arka planı otomatik kaldır\n• 🎯 WhatsApp için en az 3 çıkartma gerekli</string>
+    <string name="custom_pack_publisher">Sticky Kullanıcısı</string>
     <string name="tap_to_select_file">Dosya Seçmek İçin Dokun</string>
     <string name="change_media">Medya Değiştir</string>
     <string name="ai_remove_bg">Yapay Zeka Arka Planı Sil</string>
@@ -332,34 +351,24 @@
     <string name="onboarding_next">İleri</string>
     <string name="onboarding_start">Başla</string>
     
-    <string name="onboarding_1_title">Sticky\'e Hoş Geldin</string>
-    <string name="onboarding_1_desc">Yüzlerce profesyonel sticker paketini keşfet ve tek tıkla WhatsApp\'ına ekle.</string>
-    
-    <string name="onboarding_2_title">Kendin Tasarla</string>
-    <string name="onboarding_2_desc">Fotoğraf, video ve GIF\'lerini yapay zeka ile profesyonel stickerlara dönüştür.</string>
-    
-    <string name="onboarding_3_title">Haberdar Ol</string>
-    <string name="onboarding_3_desc">Yeni paketlerden ilk sen haberdar olmak için bildirimleri açmayı unutma.</string>
+    <string name="onboarding_1_title">✨ Sticky\'e Hoş Geldin</string>
+    <string name="onboarding_1_desc">Yüzlerce profesyonel sticker paketini keşfet ve tek tıkla WhatsApp\'ına ekle! 🎉</string>
 
-    <string name="onboarding_premium_title">Sınırları Kaldır</string>
-    <string name="onboarding_premium_desc">Uygulamanın tüm gücünü serbest bırak ve en iyi deneyimi yaşa.</string>
+    <string name="onboarding_2_title">🎨 Kendin Tasarla</string>
+    <string name="onboarding_2_desc">Fotoğraf, video ve GIF\'lerini yapay zeka ile profesyonel stickerlara dönüştür! ✂️</string>
+
+    <string name="onboarding_3_title">🔔 Haberdar Ol</string>
+    <string name="onboarding_3_desc">Yeni paketlerden ilk sen haberdar olmak için bildirimleri açmayı unutma! 🚀</string>
+
+    <string name="onboarding_premium_title">👑 Sınırları Kaldır</string>
+    <string name="onboarding_premium_desc">Sticky\'nin tüm gücünü serbest bırak ve en iyi deneyimi yaşa! 💎</string>
     <string name="feature">Özellik</string>
-    <string name="premium_plan">Premium</string>
-    <string name="free_plan">Ücretsiz</string>
-    <string name="premium_ads">Reklamlar</string>
-    <string name="ads_free_value">Yok</string>
-    <string name="ads_limited_value">Var</string>
-    <string name="premium_sticker_packs">Paketler</string>
-    <string name="all_access">Sınırsız</string>
-    <string name="basic_access">Temel</string>
-    <string name="premium_ai_removal">Yapay Zeka (AI)</string>
-    <string name="unlimited">Sınırsız</string>
     <string name="limited">Günlük 3</string>
-    <string name="priority_support">Müşteri Desteği</string>
-    <string name="support_premium">Öncelikli</string>
+    <string name="priority_support">🖼️ Çıkartma Paketi Yap</string>
+    <string name="support_premium">Sınırsız</string>
     <string name="support_free">Standart</string>
     <string name="premium_cta">Şimdi Premium\'a Geç</string>
-    <string name="free_cta">Kısıtlı Sürümle Devam Et</string>
+    <string name="free_cta">Ücretsiz Devam Et</string>
 
     <!-- Photo Editor -->
     <string name="select_image_source">Görsel Kaynağı Seç</string>
@@ -405,4 +414,69 @@
     <string name="emoji_sport">Spor</string>
     <string name="sync_whatsapp_msg">Yeni çıkartma eklendi, WhatsApp güncelleniyor...</string>
     <string name="selection_count">Seçilen: %d</string>
+
+    <!-- Premium Redesign -->
+    <string name="premium_remove_limits">🔓 Sınırları Kaldır</string>
+    <string name="premium_subscriber_title">👑 Premium Abonesiniz</string>
+    <string name="premium_subscriber_desc">Tüm özelliklere tam erişiminiz var!</string>
+    <string name="premium_ads">📺 Reklamlar</string>
+    <string name="premium_sticker_packs">💎 Premium Paketler</string>
+    <string name="premium_remove_limits_desc">Reklamsız deneyim ve tüm özel paketlere erişim! 🎉</string>
+    <string name="premium_features_title">PREMIUM AVANTAJLARI</string>
+    <string name="feature_no_ads">🚫 Reklamlara Elveda</string>
+    <string name="feature_premium_packs">🌟 Sınırsız Çıkartma</string>
+    <string name="feature_ai_cutting">🪄 Akıllı AI Kesim</string>
+    <string name="feature_unlimited">🎯 Sınırsız Oluşturma</string>
+    <string name="feature_ads_desc">Temiz ve hızlı uygulama deneyimi ⚡</string>
+    <string name="feature_packs_desc">Tüm özel içeriklere tam erişim 🌟</string>
+    <string name="feature_ai_desc">Profesyonel arka plan silme 🔥</string>
+    <string name="feature_create_desc">Dilediğin kadar paket ve çıkartma 🎨</string>
+    <string name="plan_weekly">Haftalık</string>
+    <string name="plan_monthly">📅 Aylık</string>
+    <string name="plan_yearly">⭐ Yıllık</string>
+    <string name="plan_lifetime">👑 Ömür Boyu</string>
+    <string name="plan_weekly_price">Haftalık</string>
+    <string name="plan_monthly_price">Aylık</string>
+    <string name="plan_yearly_price">Yıllık</string>
+    <string name="plan_lifetime_price">Ömür Boyu</string>
+    <string name="save_percentage">En Avantajlı</string>
+    <string name="one_time_billing">Tek Seferlik Ödeme</string>
+    <string name="restore_purchases_short">Geri Yükle</string>
+    <string name="privacy_short">Gizlilik Sözleşmesi</string>
+    <string name="var_label">Var</string>
+    <string name="yok_label">Reklamsız</string>
+    <string name="kilitli_label">Kilitli</string>
+    <string name="acik_label">Açık</string>
+    <string name="plan_monthly_trial">3 gün ücretsiz dene</string>
+    <string name="plan_monthly_subtitle">İstediğin zaman iptal et ✨</string>
+    <string name="plan_monthly_note">🚀 Hemen başla</string>
+    <string name="plan_yearly_subtitle">12 ay boyunca premium 🎉</string>
+    <string name="plan_yearly_note">⭐ En popüler</string>
+    <string name="plan_lifetime_subtitle">Bir kez öde, sonsuza kadar kullan 💫</string>
+    <string name="plan_lifetime_note">👑 En karlı</string>
+    <string name="premium_ai_removal">✂️ AI Arka Plan</string>
+    <string name="features_label">Özellikler</string>
+
+    <!-- Premium Active State -->
+    <string name="premium_active_title">Premium Aktif</string>
+    <string name="premium_lifetime_member">Ömür Boyu Üye</string>
+    <string name="premium_yearly_member">Yıllık Abone</string>
+    <string name="premium_monthly_member">Aylık Abone</string>
+    <string name="premium_benefit_no_ads">Reklamsız deneyim</string>
+    <string name="premium_benefit_all_stickers">Tüm premium çıkartmalar açık</string>
+    <string name="premium_benefit_priority">Öncelikli destek</string>
+    <string name="premium_thank_you">Bizi desteklediğiniz için teşekkürler!</string>
+    <string name="upgrade_to_yearly">Yıllığa Yükselt</string>
+    <string name="upgrade_to_lifetime">Ömür Boyuya Yükselt</string>
+
+    <!-- Billing Errors -->
+    <string name="purchase_pending">Satın alımınız işleniyor. Tamamlandığında bilgilendirileceksiniz.</string>
+    <string name="purchase_cancelled">Satın alma iptal edildi.</string>
+    <string name="purchase_already_owned">Bu ürüne zaten sahipsiniz.</string>
+    <string name="purchase_error">Satın alma sırasında bir hata oluştu. Lütfen tekrar deneyin.</string>
+    <string name="billing_unavailable">Ödeme hizmeti kullanılamıyor. Lütfen Google Play Store\'u kontrol edin.</string>
+
+    <!-- Price Period Labels -->
+    <string name="period_month">ay</string>
+    <string name="period_year">yıl</string>
 </resources>

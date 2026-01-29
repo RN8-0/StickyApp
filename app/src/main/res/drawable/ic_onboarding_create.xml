@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="280dp"
+    android:height="280dp"
+    android:viewportWidth="280"
+    android:viewportHeight="280">
+
+    <!-- Subtle circle glow background -->
+    <path
+        android:pathData="M140,140m-120,0a120,120 0,1 1,240 0a120,120 0,1 1,-240 0"
+        android:fillColor="#10FFFFFF" />
+
+    <!-- Paint palette base shape -->
+    <path
+        android:pathData="M140,60 C85,60 45,100 45,150 C45,200 85,240 140,240 C155,240 165,230 165,220 C165,215 163,210 160,207 C157,204 155,199 155,194 C155,180 166,170 180,170 L195,170 C225,170 250,148 250,120 C250,85 200,60 140,60 Z"
+        android:fillColor="#FFFFFF" />
+
+    <!-- Palette hole (thumb) -->
+    <path
+        android:pathData="M130,195 m-18,0 a18,18 0,1 1,36 0 a18,18 0,1 1,-36 0"
+        android:fillColor="#00C896" />
+
+    <!-- Color dot 1 - Red -->
+    <path
+        android:pathData="M100,100 m-16,0 a16,16 0,1 1,32 0 a16,16 0,1 1,-32 0"
+        android:fillColor="#FF6B6B" />
+
+    <!-- Color dot 2 - Yellow -->
+    <path
+        android:pathData="M155,90 m-14,0 a14,14 0,1 1,28 0 a14,14 0,1 1,-28 0"
+        android:fillColor="#FFD700" />
+
+    <!-- Color dot 3 - Blue -->
+    <path
+        android:pathData="M200,115 m-13,0 a13,13 0,1 1,26 0 a13,13 0,1 1,-26 0"
+        android:fillColor="#5B9BD5" />
+
+    <!-- Color dot 4 - Purple -->
+    <path
+        android:pathData="M80,150 m-13,0 a13,13 0,1 1,26 0 a13,13 0,1 1,-26 0"
+        android:fillColor="#9B59B6" />
+
+    <!-- Paint brush handle -->
+    <group
+        android:pivotX="220"
+        android:pivotY="80"
+        android:rotation="-35">
+        <path
+            android:pathData="M210,30 L230,30 C234,30 237,33 237,37 L237,100 C237,104 234,107 230,107 L210,107 C206,107 203,104 203,100 L203,37 C203,33 206,30 210,30 Z"
+            android:fillColor="#CCFFFFFF" />
+        <!-- Brush tip -->
+        <path
+            android:pathData="M208,107 L232,107 L225,130 C223,136 217,136 215,130 Z"
+            android:fillColor="#EEFFFFFF" />
+        <!-- Metal band -->
+        <path
+            android:pathData="M203,95 L237,95 L237,107 L203,107 Z"
+            android:fillColor="#AAFFFFFF" />
+    </group>
+
+    <!-- Sparkle top-left -->
+    <path
+        android:pathData="M40,55 L43,65 L53,68 L43,71 L40,81 L37,71 L27,68 L37,65 Z"
+        android:fillColor="#FFFFFF" />
+
+    <!-- Sparkle bottom-right -->
+    <path
+        android:pathData="M245,210 L247,216 L253,218 L247,220 L245,226 L243,220 L237,218 L243,216 Z"
+        android:fillColor="#99FFFFFF" />
+
+    <!-- Small sparkle -->
+    <path
+        android:pathData="M55,230 L57,235 L62,237 L57,239 L55,244 L53,239 L48,237 L53,235 Z"
+        android:fillColor="#66FFFFFF" />
+
+    <!-- Dot decorations -->
+    <path
+        android:pathData="M250,170 m-3,0 a3,3 0,1 1,6 0 a3,3 0,1 1,-6 0"
+        android:fillColor="#55FFFFFF" />
+    <path
+        android:pathData="M30,90 m-4,0 a4,4 0,1 1,8 0 a4,4 0,1 1,-8 0"
+        android:fillColor="#44FFFFFF" />
+
+</vector>

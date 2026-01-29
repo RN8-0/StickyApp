@@ -1,79 +1,77 @@
-# Sticky - Yeni Nesil WhatsApp Sticker Yönetim Sistemi 🚀
+# Sticly - WhatsApp Sticker App
 
-WhatsApp için özel sticker paketleri oluşturan, bulut tabanlı çalışan profesyonel Android uygulaması ve Web Yönetim Paneli.
-
----
-
-## 🌐 Canlı Yönetim Paneli
-Artık terminal veya Python ile uğraşmanıza gerek yok! Paketinizi tarayıcı üzerinden profesyonelce yönetin:
-👉 **[https://sticky-dcd20.web.app](https://sticky-dcd20.web.app)**
+A professional Android application for creating and managing WhatsApp sticker packs with cloud-based storage and an admin panel.
 
 ---
 
-## ✨ Özellikler
+## ✨ Features
 
-- **Web Admin v2.0 PRO+:** Tamamen yenilenmiş, görsel ve hızlı Firebase tabanlı yönetim paneli.
-- **Güvenli Erişim:** Firebase Authentication ile şifreli yönetici girişi.
-- **Favori Sistemi:** Paket favori sayıları takibi ve uygulama içi favori önceliği.
-- **Gelişmiş İstatistikler:** İndirme, görüntülenme ve favori analizleri (Recharts).
-- **Premium Sistem:** Ücretli/Ücretsiz paket ayrımı ve kategori yönetimi.
-- **Otomatik İşleme:** MP4, GIF, PNG -> WebP dönüşümü (Android tarafında optimize).
+- **Cloud-Based Storage:** Firebase-powered sticker management with real-time sync
+- **Premium System:** Free and premium sticker pack support with in-app purchases
+- **Custom Sticker Creator:** Create your own stickers from photos with background removal
+- **Favorites System:** Track and prioritize favorite sticker packs
+- **Category Management:** Organize stickers by categories
+- **Animated Stickers:** Full support for animated WebP stickers
+- **WhatsApp Integration:** Direct sticker pack addition to WhatsApp
 
 ---
 
-## 🛠️ Hızlı Kurulum ve Otomasyon
+## 🛠️ Setup
 
-Projenin bağımlılıklarını kontrol etmek, eksik dosyaları (Admin SDK vb.) tamamlamak ve sistemi başlatmak için yeni **stickers_setup.py** aracını kullanın:
+To check dependencies and configure the project, use the setup script:
 
 ```bash
 python3 stickers_setup.py
 ```
 
-**⚠️ ÖNEMLİ: Firebase Admin SDK Nasıl Alınır?**
-Web Admin panelinin çalışması için `firebase-admin-sdk.json` dosyası gereklidir:
-1. [Firebase Console](https://console.firebase.google.com) > Proje Ayarları > **Hizmet Hesapları** sekmesine gidin.
-2. Merkezdeki **"Yeni Özel Anahtar Oluştur"** butonuna basın.
-3. İnen dosyayı `firebase-admin-sdk.json` olarak adlandırıp ana dizine atın.
-
-**☁️ Google Drive Notu:**
-Eski sistemdeki Google Drive bağımlılığı tamamen kaldırılmıştır. Artık tüm işlemler doğrudan Firebase üzerinden daha güvenli ve hızlı yapılmaktadır.
+**Firebase Admin SDK Setup:**
+1. Go to [Firebase Console](https://console.firebase.google.com) > Project Settings > **Service Accounts**
+2. Click **"Generate New Private Key"**
+3. Save the file as `firebase-admin-sdk.json` in the project root
 
 ---
 
-## 📱 Android Uygulama Gereksinimleri
+## 📱 Requirements
 
-| Gereksinim | Açıklama |
-|------------|----------|
-| Android Studio | Uygulama geliştirme ve APK derleme |
-| Firebase Hesabı | Veritabanı ve dosya depolama |
-| google-services.json | `app/` klasörüne eklenmelidir |
+| Requirement | Description |
+|-------------|-------------|
+| Android Studio | For building and compiling the APK |
+| Firebase Account | Database and file storage |
+| google-services.json | Must be placed in the `app/` folder |
 
 ---
 
-## 📂 Proje Yapısı
+## 📂 Project Structure
 
 ```
 StickyApp/
-├── app/                      # Android Uygulama Kaynak Kodları (Kotlin)
-├── sticker_admin_web/        # React tabanlı Web Yönetim Paneli
-├── stickers_setup.py         # [GÜNCELLENDİ] Sistem Kontrol ve Otomasyon Aracı
-├── stickers_convert/         # Sticker Veri Deposu (Yedekler)
-└── README.md                 # Bu Dosya
+├── app/                      # Android app source code (Kotlin)
+├── sticker_admin_web/        # React-based admin panel
+├── sticky-privacy/           # Privacy policy page
+├── stickers_setup.py         # Setup and automation script
+└── README.md                 # This file
 ```
 
 ---
 
-## 🚀 Yayına Alma (Firebase Hosting)
+## 🚀 Deployment
 
-Web panelinizi Firebase üzerinde yayınlamak için:
-1. `cd sticker_admin_web`
-2. `npm run deploy-firebase` 
-
-Bu komut projeyi derler ve otomatik olarak Firebase Hosting üzerinde güvenli bir şekilde yayınlar.
+Deploy to Firebase Hosting using the setup script:
+```bash
+python3 stickers_setup.py
+# Select option 3 to deploy both admin panel and privacy policy
+```
 
 ---
 
-## 📄 Lisans ve Destek
-Bu proje WhatsApp Sticker API'ları ile uyumlu geliştirilmiştir. Sorun yaşarsanız `stickers_setup.py` üzerinden bağımlılıkları kontrol edin veya Firebase Console loglarına göz atın.
+## 📄 Privacy Policy
 
-**Son Güncelleme:** 22 Ocak 2026 - v2.1 PRO (Otomasyon Güncellemesi)
+View our privacy policy at: [Privacy Policy](https://sticky-dcd20.web.app/__/hosting/privacy)
+
+---
+
+## 📄 License
+
+This project is developed to be compatible with WhatsApp Sticker APIs.
+
+**Version:** 1.0.2 (January 2026)

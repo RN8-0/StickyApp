@@ -314,7 +314,7 @@
             app:iconGravity="textStart"
             app:iconTint="@color/white" />
 
-        <!-- Premium Buttons Container (yan yana) -->
+        <!-- Premium Button Container -->
         <LinearLayout
             android:id="@+id/premiumButtonsContainer"
             android:layout_width="match_parent"
@@ -322,14 +322,12 @@
             android:orientation="horizontal"
             android:visibility="gone">
 
-            <!-- Premium Badge Button -->
+            <!-- Premium Badge Button - Tam genişlik (artık tek buton) -->
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnPremiumBadge"
-                android:layout_width="0dp"
+                android:layout_width="match_parent"
                 android:layout_height="56dp"
-                android:layout_weight="1"
-                android:layout_marginEnd="8dp"
-                android:text="@string/premium"
+                android:text="@string/get_premium_access"
                 android:textColor="@color/premium_text_on_gold"
                 android:textSize="18sp"
                 android:textStyle="bold"
@@ -340,19 +338,12 @@
                 app:iconGravity="textStart"
                 app:iconTint="@color/premium_text_on_gold" />
 
-            <!-- Price Button -->
+            <!-- Gizli Price Button (kod uyumluluğu için) -->
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnPrice"
                 android:layout_width="0dp"
-                android:layout_height="56dp"
-                android:layout_weight="1"
-                android:text="@string/sticker_price"
-                android:textColor="@color/text_on_primary"
-                android:textSize="18sp"
-                android:textStyle="bold"
-                android:textAllCaps="false"
-                app:backgroundTint="@color/accent"
-                app:cornerRadius="28dp" />
+                android:layout_height="0dp"
+                android:visibility="gone" />
 
         </LinearLayout>
 

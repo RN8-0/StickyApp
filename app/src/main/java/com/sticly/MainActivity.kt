@@ -106,13 +106,13 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onCreate(s: Bundle?) {
+        super.onCreate(s)
         applyTheme()
         if (PreferencesHelper.isFirstLaunch(this)) {
             startActivity(Intent(this, OnboardingActivity::class.java))
             finish()
             return
         }
-        super.onCreate(s)
         setContentView(R.layout.activity_main)
 
         if (!NetworkUtils.isOnline(this)) {
@@ -120,11 +120,14 @@ class MainActivity : AppCompatActivity() {
         }
 
         try {
-            billingManager = BillingManager(this) { isPurchased ->
-                if (isPurchased) {
-                    Toast.makeText(this, R.string.premium_purchased, Toast.LENGTH_SHORT).show()
+            billingManager = BillingManager(
+                context = this,
+                onPurchaseComplete = { isPurchased ->
+                    if (isPurchased) {
+                        Toast.makeText(this, R.string.premium_purchased, Toast.LENGTH_SHORT).show()
+                    }
                 }
-            }
+            )
         } catch (e: Exception) {
             e.printStackTrace()
         }
@@ -217,6 +220,12 @@ class MainActivity : AppCompatActivity() {
         btnTheme.setOnClickListener { showThemeMenu(it, btnTheme) }
 
         btnFilter.setOnClickListener { showFilterMenu(it) }
+
+        val btnPremiumHeader = findViewById<ImageButton>(R.id.btnPremiumHeader)
+        btnPremiumHeader.setOnClickListener {
+            startActivity(Intent(this, PremiumActivity::class.java))
+            overridePendingTransition(R.anim.fade_in, R.anim.fade_out)
+        }
     }
 
     private fun setupBottomNav() {
@@ -371,7 +380,9 @@ class MainActivity : AppCompatActivity() {
                 carouselHandler?.postDelayed(this, 3500)
             }
         }
-        carouselHandler?.postDelayed(carouselRunnable!!, 3500)
+        carouselRunnable?.let { runnable ->
+            carouselHandler?.postDelayed(runnable, 3500)
+        }
     }
 
     private fun stopAutoScroll() {
@@ -901,11 +912,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showFaqDialog() {
-        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://arain-0.github.io/sticky-privacy/#faq")))
+        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://sticky-privacy-legal.web.app/#faq")))
     }
 
     private fun showAboutDialog() {
-        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://arain-0.github.io/sticky-privacy/#about")))
+        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://sticky-privacy-legal.web.app/#about")))
     }
 
     private fun openPlayStore() {
@@ -972,7 +983,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showPrivacyDialog() {
-        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://arain-0.github.io/sticky-privacy/#privacy")))
+        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://sticky-privacy-legal.web.app/#privacy")))
     }
 
     private fun showLanguageDialog() {
@@ -1121,8 +1132,8 @@ class MainActivity : AppCompatActivity() {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
 
-        if (requestCode == REQUEST_DELETE_PACK && pendingDeletePackId != null) {
-            val packId = pendingDeletePackId!!
+        if (requestCode == REQUEST_DELETE_PACK) {
+            val packId = pendingDeletePackId ?: return
             val wasInWhatsApp = wasPackInWhatsAppBeforeDelete
             pendingDeletePackId = null
             waitingForWhatsAppReturn = false

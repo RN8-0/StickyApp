@@ -77,6 +77,17 @@
                     android:contentDescription="Toggle theme" />
 
                 <ImageButton
+                    android:id="@+id/btnPremiumHeader"
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
+                    android:background="?selectableItemBackgroundBorderless"
+                    android:src="@drawable/ic_crown"
+                    app:tint="@color/premium_gold"
+                    android:scaleType="fitCenter"
+                    android:padding="8dp"
+                    android:contentDescription="Premium" />
+
+                <ImageButton
                     android:id="@+id/menuBtn"
                     android:layout_width="44dp"
                     android:layout_height="44dp"

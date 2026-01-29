@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="280dp"
+    android:height="280dp"
+    android:viewportWidth="280"
+    android:viewportHeight="280">
+
+    <!-- Subtle circle glow background -->
+    <path
+        android:pathData="M140,140m-120,0a120,120 0,1 1,240 0a120,120 0,1 1,-240 0"
+        android:fillColor="#10FFFFFF" />
+
+    <!-- Bell body -->
+    <path
+        android:pathData="M140,55 C140,55 140,50 140,50 C140,44 135,40 130,40 L150,40 C145,40 140,44 140,50 L140,55 Z"
+        android:fillColor="#EEFFFFFF" />
+    <path
+        android:pathData="M140,55 C105,55 75,80 75,120 L75,165 L60,185 C57,189 60,195 65,195 L215,195 C220,195 223,189 220,185 L205,165 L205,120 C205,80 175,55 140,55 Z"
+        android:fillColor="#FFFFFF" />
+
+    <!-- Bell clapper / bottom arc -->
+    <path
+        android:pathData="M120,195 C120,206 129,215 140,215 C151,215 160,206 160,195"
+        android:strokeColor="#EEFFFFFF"
+        android:strokeWidth="6"
+        android:fillColor="#00000000"
+        android:strokeLineCap="round" />
+
+    <!-- Bell inner shadow line -->
+    <path
+        android:pathData="M95,165 L185,165"
+        android:strokeColor="#15009B77"
+        android:strokeWidth="1.5"
+        android:fillColor="#00000000" />
+
+    <!-- Notification badge (red circle with number) -->
+    <path
+        android:pathData="M190,75 m-28,0 a28,28 0,1 1,56 0 a28,28 0,1 1,-56 0"
+        android:fillColor="#FF6B6B" />
+
+    <!-- Badge number "3" -->
+    <path
+        android:pathData="M183,65 L197,65 C199,65 200,66 200,68 L200,70 C200,72 199,73 197,73 L192,73 L197,73 C199,73 200,74 200,76 L200,82 C200,84 199,85 197,85 L183,85 C181,85 180,84 180,82 L180,82 C180,81 181,80 183,80 L195,80 L195,77 L188,77 C186,77 185,76 185,74 L185,74 C185,73 186,72 188,72 L195,72 L195,69 L183,69 C181,69 180,68 180,66 L180,66 C180,65 181,65 183,65 Z"
+        android:fillColor="#FFFFFF" />
+
+    <!-- Sound wave lines (left) -->
+    <path
+        android:pathData="M55,130 C45,115 45,100 55,85"
+        android:strokeColor="#66FFFFFF"
+        android:strokeWidth="3"
+        android:fillColor="#00000000"
+        android:strokeLineCap="round" />
+    <path
+        android:pathData="M40,140 C25,118 25,95 40,73"
+        android:strokeColor="#33FFFFFF"
+        android:strokeWidth="3"
+        android:fillColor="#00000000"
+        android:strokeLineCap="round" />
+
+    <!-- Sound wave lines (right) -->
+    <path
+        android:pathData="M225,130 C235,115 235,100 225,85"
+        android:strokeColor="#66FFFFFF"
+        android:strokeWidth="3"
+        android:fillColor="#00000000"
+        android:strokeLineCap="round" />
+    <path
+        android:pathData="M240,140 C255,118 255,95 240,73"
+        android:strokeColor="#33FFFFFF"
+        android:strokeWidth="3"
+        android:fillColor="#00000000"
+        android:strokeLineCap="round" />
+
+    <!-- Sparkle top-right -->
+    <path
+        android:pathData="M240,45 L243,55 L253,58 L243,61 L240,71 L237,61 L227,58 L237,55 Z"
+        android:fillColor="#FFFFFF" />
+
+    <!-- Sparkle bottom-left -->
+    <path
+        android:pathData="M45,220 L47,226 L53,228 L47,230 L45,236 L43,230 L37,228 L43,226 Z"
+        android:fillColor="#88FFFFFF" />
+
+    <!-- Small sparkle -->
+    <path
+        android:pathData="M240,220 L242,225 L247,227 L242,229 L240,234 L238,229 L233,227 L238,225 Z"
+        android:fillColor="#55FFFFFF" />
+
+    <!-- Dot decorations -->
+    <path
+        android:pathData="M30,180 m-3,0 a3,3 0,1 1,6 0 a3,3 0,1 1,-6 0"
+        android:fillColor="#44FFFFFF" />
+    <path
+        android:pathData="M250,180 m-4,0 a4,4 0,1 1,8 0 a4,4 0,1 1,-8 0"
+        android:fillColor="#44FFFFFF" />
+
+</vector>

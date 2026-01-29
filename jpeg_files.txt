@@ -1,0 +1,3 @@
+app/src/main/res/drawable/emoji_3d_laughing.png
+app/src/main/res/drawable/onboarding_notify.png
+app/src/main/res/drawable/onboarding_create.png

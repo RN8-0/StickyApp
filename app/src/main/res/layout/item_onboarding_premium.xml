@@ -3,133 +3,153 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:fillViewport="true">
+    android:fillViewport="true"
+    android:background="@color/background">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:gravity="center_horizontal"
         android:orientation="vertical"
-        android:padding="24dp">
+        android:paddingHorizontal="24dp"
+        android:paddingBottom="40dp">
 
-        <!-- Crown Icon Only -->
-        <ImageView
-            android:layout_width="120dp"
-            android:layout_height="120dp"
-            android:layout_marginTop="20dp"
-            android:src="@drawable/ic_crown"
-            app:tint="@color/premium_gold" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:text="Sticky Premium"
-            android:textColor="@color/premium_gold"
-            android:textSize="32sp"
-            android:textStyle="bold"
-            android:fontFamily="sans-serif-black" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:text="@string/one_time_payment"
-            android:textColor="@color/onboarding_text_secondary"
-            android:textSize="18sp"
-            android:textStyle="bold" />
-
-        <!-- Gold Accent Table -->
-        <com.google.android.material.card.MaterialCardView
+        <!-- 1. Header -->
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="32dp"
-            app:cardCornerRadius="24dp"
-            app:cardElevation="0dp"
-            app:cardBackgroundColor="@color/onboarding_card_bg"
-            app:strokeWidth="1dp"
-            app:strokeColor="#33FFD700">
+            android:gravity="center"
+            android:layout_marginTop="40dp"
+            android:orientation="vertical">
 
+            <FrameLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content">
+
+                <!-- Glow Shadow -->
+                <ImageView
+                    android:layout_width="120dp"
+                    android:layout_height="120dp"
+                    android:src="@drawable/ic_premium"
+                    android:alpha="0.2"
+                    app:tint="@color/premium_gold"
+                    android:scaleType="centerInside"
+                    android:padding="5dp" />
+
+                <ImageView
+                    android:layout_width="100dp"
+                    android:layout_height="100dp"
+                    android:layout_gravity="center"
+                    android:src="@drawable/ic_premium"
+                    app:tint="@color/premium_gold" />
+            </FrameLayout>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:text="@string/premium_remove_limits"
+                android:textColor="@color/text_primary"
+                android:textSize="28sp"
+                android:textStyle="bold"
+                android:fontFamily="sans-serif-black" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:text="@string/premium_remove_limits_desc"
+                android:textColor="@color/text_secondary"
+                android:textSize="15sp"
+                android:gravity="center" />
+
+        </LinearLayout>
+
+        <!-- 2. Feature Comparison List -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="40dp"
+            android:background="@drawable/bg_comparison_card"
+            android:padding="20dp"
+            android:orientation="vertical">
+
+            <!-- Comparison Header -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:padding="8dp">
-
-                <!-- Table Header -->
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="54dp"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal"
-                    android:paddingHorizontal="16dp">
-
-                    <TextView
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1.5"
-                        android:text="@string/feature"
-                        android:textColor="@color/onboarding_text_secondary"
-                        android:textSize="12sp"
-                        android:textStyle="bold" />
-
-                    <TextView
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:gravity="center"
-                        android:text="@string/free_plan"
-                        android:textColor="@color/onboarding_text_secondary"
-                        android:textSize="12sp"
-                        android:textStyle="bold" />
-
-                    <TextView
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:gravity="center"
-                        android:text="@string/premium_plan"
-                        android:textColor="@color/premium_gold"
-                        android:textSize="13sp"
-                        android:textStyle="bold" />
-                </LinearLayout>
-
-                <View android:layout_width="match_parent" android:layout_height="1dp" android:background="#1AFFFFFF" android:layout_marginHorizontal="16dp" />
-
-                <!-- Rows -->
-                <include layout="@layout/row_comparison_premium" android:id="@+id/rowAds" />
-                <include layout="@layout/row_comparison_premium" android:id="@+id/rowPacks" />
-                <include layout="@layout/row_comparison_premium" android:id="@+id/rowAI" />
-                <include layout="@layout/row_comparison_premium" android:id="@+id/rowSupport" />
-
+                android:orientation="horizontal"
+                android:paddingHorizontal="16dp"
+                android:layout_marginBottom="12dp">
+                <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1.5" android:text="@string/features_label" android:textColor="@color/text_secondary" android:textSize="12sp" android:textStyle="bold" />
+                <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="@string/free_plan" android:textColor="@color/text_secondary" android:textSize="12sp" android:textStyle="bold" android:gravity="center" />
+                <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="@string/premium_plan" android:textColor="@color/accent" android:textSize="12sp" android:textStyle="bold" android:gravity="center" />
             </LinearLayout>
-        </com.google.android.material.card.MaterialCardView>
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnPremiumCTA"
-            android:layout_width="match_parent"
-            android:layout_height="64dp"
-            android:layout_marginTop="32dp"
-            android:text="@string/premium_cta"
-            android:textAllCaps="false"
-            android:textSize="18sp"
-            android:textStyle="bold"
-            app:cornerRadius="16dp"
-            app:backgroundTint="#00A884"
-            android:textColor="@color/white"
-            app:elevation="8dp" />
+            <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/divider" android:layout_marginBottom="8dp" />
 
+            <include layout="@layout/item_premium_comparison_row" android:id="@+id/rowAds" />
+            <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/divider" />
+
+            <include layout="@layout/item_premium_comparison_row" android:id="@+id/rowPacks" />
+            <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/divider" />
+
+            <include layout="@layout/item_premium_comparison_row" android:id="@+id/rowAI" />
+            <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/divider" />
+
+            <include layout="@layout/item_premium_comparison_row" android:id="@+id/rowCreate" />
+
+        </LinearLayout>
+
+        <!-- 3. Pricing Options -->
         <TextView
-            android:id="@+id/btnFreeCTA"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="20dp"
-            android:layout_marginBottom="120dp"
-            android:padding="12dp"
-            android:text="@string/free_cta"
-            android:textColor="@color/onboarding_text_secondary"
-            android:textSize="15sp"
+            android:layout_marginTop="24dp"
+            android:layout_marginBottom="16dp"
+            android:text="@string/select_plan"
+            android:textColor="@color/text_primary"
+            android:textSize="18sp"
             android:textStyle="bold" />
+
+        <!-- Plan Cards Container -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <include layout="@layout/item_premium_plan_card" android:id="@+id/cardMonthly" />
+            <include layout="@layout/item_premium_plan_card" android:id="@+id/cardYearly" />
+            <include layout="@layout/item_premium_plan_card" android:id="@+id/cardLifetime" />
+
+        </LinearLayout>
+
+        <!-- Footer Links -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:gravity="center"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/btnPrivacyPolicy"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:padding="12dp"
+                android:text="@string/privacy_short"
+                android:textColor="@color/text_secondary"
+                android:textSize="14sp" />
+
+        </LinearLayout>
+
+        <!-- Spacer for bottom -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="100dp" />
+
+        <!-- Hidden CTAs for code compatibility -->
+        <View android:id="@+id/btnFreeCTA" android:layout_width="0dp" android:layout_height="0dp" android:visibility="gone" />
+        <View android:id="@+id/btnPremiumCTA" android:layout_width="0dp" android:layout_height="0dp" android:visibility="gone" />
 
     </LinearLayout>
 </androidx.core.widget.NestedScrollView>

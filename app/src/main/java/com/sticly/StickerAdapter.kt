@@ -99,67 +99,65 @@ class StickerAdapter(
         // Glide request manager
         val glide = Glide.with(context)
 
+        // Tüm durumlar için progressBar gizle (placeholder yeterli)
+        h.progressBar.visibility = View.GONE
+
         when {
             // 0. Özel paket kontrolü
             packId.startsWith("custom_") -> {
-                h.progressBar.visibility = View.GONE
                 val customFile = CustomStickerManager.getCustomStickerPath(context, packId, sticker.file)
                 if (customFile.exists()) {
                     glide.load(customFile)
                         .signature(ObjectKey(customFile.lastModified()))
                         .diskCacheStrategy(DiskCacheStrategy.NONE)
+                        .placeholder(R.drawable.sticker_placeholder)
                         .into(h.img)
                 } else {
-                    h.img.setImageResource(R.drawable.transparent_placeholder)
+                    h.img.setImageResource(R.drawable.sticker_placeholder)
                 }
             }
             // 1. Cache'de varsa oradan yükle
             cachedFile.exists() && cachedFile.length() > 0 -> {
-                h.progressBar.visibility = View.GONE
                 glide.load(cachedFile)
                     .signature(ObjectKey(cachedFile.lastModified()))
                     .diskCacheStrategy(DiskCacheStrategy.NONE)
-                    .placeholder(R.drawable.transparent_placeholder)
+                    .placeholder(R.drawable.sticker_placeholder)
                     .into(h.img)
             }
             // 2. Firebase URL varsa oradan yükle
             sticker.url.isNotEmpty() -> {
-                h.progressBar.visibility = View.VISIBLE
                 glide.load(sticker.url)
-                    .placeholder(getProgressDrawable(context))
-                    .error(R.drawable.transparent_placeholder)
-                    .signature(ObjectKey(sticker.url))
-                    .diskCacheStrategy(DiskCacheStrategy.ALL)
-                    .listener(object : RequestListener<Drawable> {
-                        override fun onLoadFailed(e: GlideException?, m: Any?, t: Target<Drawable>, isF: Boolean): Boolean {
-                            h.progressBar.visibility = View.GONE
-                            return false
-                        }
-                        override fun onResourceReady(r: Drawable, m: Any, t: Target<Drawable>?, d: DataSource, isF: Boolean): Boolean {
-                            h.progressBar.visibility = View.GONE
-                            return false
-                        }
-                    })
+                    .placeholder(R.drawable.sticker_placeholder)
+                    .error(R.drawable.sticker_placeholder)
+                    .diskCacheStrategy(DiskCacheStrategy.DATA)
+                    .override(512, 512)
                     .into(h.img)
             }
-            // 4. Lokal assets'ten yükle (Önceki "3. Lokal assets'ten yükle" bloğu bu sıraya kaydırılıyor)
+            // 3. URL yoksa direkt storage URL hesapla ve yükle
+            storagePath.isNotEmpty() -> {
+                val directUrl = StickerRepository.getStickerDirectUrl(packId, sticker.file, storagePath)
+                glide.load(directUrl)
+                    .placeholder(R.drawable.sticker_placeholder)
+                    .error(R.drawable.sticker_placeholder)
+                    .diskCacheStrategy(DiskCacheStrategy.DATA)
+                    .override(512, 512)
+                    .into(h.img)
+            }
+            // 4. Lokal assets'ten yükle
             else -> {
-                h.progressBar.visibility = View.GONE
                 try {
                     val path = "$packId/${sticker.file}"
                     val stream = context.assets.open(path)
                     val bitmap = BitmapFactory.decodeStream(stream)
                     stream.close()
 
-                    Glide.with(context)
-                        .load(bitmap)
-                        // .skipMemoryCache(true) // REMOVED
-                        .diskCacheStrategy(DiskCacheStrategy.NONE) // Bitmap from stream, no disk cache source
+                    glide.load(bitmap)
+                        .placeholder(R.drawable.sticker_placeholder)
+                        .diskCacheStrategy(DiskCacheStrategy.NONE)
                         .into(h.img)
                 } catch (e: Exception) {
                     // Assets'te yok - placeholder göster
-                    h.progressBar.visibility = View.GONE
-                    h.img.setImageResource(R.drawable.transparent_placeholder)
+                    h.img.setImageResource(R.drawable.sticker_placeholder)
                 }
             }
         }
