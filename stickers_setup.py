@@ -74,19 +74,18 @@ def print_colored(text, color="white", bold=False):
 
 def print_banner():
     logo = """
-          \033[92m.oooooo.\033[0m
-        \033[92m.oo'    'oo.\033[0m
-       \033[92m.oo        oo.\033[0m
-       \033[92m.oo   \033[97m●\033[92m    oo.\033[0m
-        \033[92m'oo.    .oo'\033[0m
-          \033[92m'oooooo'\033[0m
+\033[90m    .            .                   .            .            .\033[0m
+\033[90m            .            \033[93m★\033[90m                   .            .    \033[0m
+\033[97;1m       __ _ _ __ __ _ _ _ __  \033[0m \033[90m│\033[0m \033[92;1m █▀ ▀█▀ █ █▀▀ █▄▀ █▄█\033[0m
+\033[97;1m      / _` | '__/ _` | | '_ \\ \033[0m \033[90m│\033[0m \033[92;1m ▄█  █  █ █▄▄ █ █  █\033[0m
+\033[97;1m     | (_| | | | (_| | | | | |\033[0m \033[90m│\033[0m
+\033[97;1m      \\__,_|_|  \\__,_|_|_| |_|\033[0m \033[90m│\033[0m
+\033[90m    .            .                   .            .            .\033[0m
     """
     print(logo)
-    print_colored("    S T I C K Y  -  M A N A G E R", "white", bold=True)
-    print_colored("    " + "="*29, "green")
+    print_colored("    ══════════════════════════════════════════════════════════", "green")
     os_type, os_name = get_os_info()
-    print_colored(f"    Platform: {os_name}", "cyan")
-    print_colored(f"    Python: {sys.version.split()[0]}", "cyan")
+    print_colored(f"    Platform: {os_name}  │  Python: {sys.version.split()[0]}", "cyan")
     print()
 
 # --- UTILITY ---
