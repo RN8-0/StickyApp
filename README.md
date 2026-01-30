@@ -66,7 +66,7 @@ python3 stickers_setup.py
 
 ## 📄 Privacy Policy
 
-View our privacy policy at: [Privacy Policy](https://sticky-dcd20.web.app/__/hosting/privacy)
+View our privacy policy at: [Privacy Policy](https://sticky-privacy-legal.web.app)
 
 ---
 
@@ -74,4 +74,4 @@ View our privacy policy at: [Privacy Policy](https://sticky-dcd20.web.app/__/hos
 
 This project is developed to be compatible with WhatsApp Sticker APIs.
 
-**Version:** 1.0.2 (January 2026)
+**Version:** 1.0.3 (January 2026)
