@@ -783,18 +783,18 @@ class MainActivity : AppCompatActivity() {
                     itemsWithAds.addAll(sorted)
                 }
             } else {
-                // Ana sayfa ve diğer listeler için dinamik reklam mantığı (4-8 aralık)
-                var nextAdGap = (4..8).random()
+                // Ana sayfa ve diğer listeler için dinamik reklam mantığı (3-6 aralık)
+                var nextAdGap = (3..6).random()
                 var itemsSinceLastAd = 0
-                
+
                 sorted.forEachIndexed { index, pack ->
                     itemsWithAds.add(pack)
                     itemsSinceLastAd++
-                    
+
                     if (itemsSinceLastAd >= nextAdGap && index != sorted.size - 1) {
                         itemsWithAds.add("AD_PLACEHOLDER")
                         itemsSinceLastAd = 0
-                        nextAdGap = (4..8).random()
+                        nextAdGap = (3..6).random()
                     }
                 }
             }

@@ -21,7 +21,7 @@ export interface StickerPack {
     tray_url: string;
     is_animated: boolean;
     is_premium: boolean;
-    product_id?: string; // Google Play Console ürün etiketi (örn: "recep_ivedik")
+    product_id?: string; // Artık kullanılmıyor - eski veriler için tutuldu
     category: string;
     download_count: number;
     fake_download_base: number;

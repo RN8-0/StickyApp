@@ -80,7 +80,12 @@ object StickerRepository {
 
             // 3. HER ZAMAN lokal asset paketlerini ekle (Firebase ile çakışmayanları)
             val existingIds = allPacks.map { it.id }.toSet()
-            val localPacks = Loader.load(context).filter { it.id !in existingIds }
+            val localPacks = try {
+                Loader.load(context)?.filter { it.id !in existingIds } ?: emptyList()
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading local packs: ${e.message}")
+                emptyList()
+            }
             Log.d(TAG, "Loaded ${localPacks.size} local asset packs")
             allPacks.addAll(localPacks)
 
@@ -91,7 +96,11 @@ object StickerRepository {
         } catch (e: Exception) {
             Log.e(TAG, "Error loading packs: ${e.message}")
             // Hata durumunda lokal assets'ten yükle
-            val localPacks = Loader.load(context)
+            val localPacks = try {
+                Loader.load(context) ?: emptyList()
+            } catch (ex: Exception) {
+                emptyList()
+            }
             val result = shufflePacks(localPacks + allPacks)
             allPacksCache = result // Statik cache'i güncelle
             return@withContext result
@@ -224,7 +233,8 @@ object StickerRepository {
             val stickers = parseStickers(data["stickers"])
             val isPremium = isPremiumOverride ?: (data["isPremium"] as? Boolean ?: false)
 
-            Log.d(TAG, "Pack ${doc.id}: ${stickers.size} stickers, isPremium: $isPremium")
+            val isActive = data["is_active"] as? Boolean ?: true
+            Log.d(TAG, "Pack ${doc.id}: ${stickers.size} stickers, isPremium: $isPremium, isActive: $isActive")
             if (stickers.isNotEmpty()) {
                 Log.d(TAG, "First sticker URL: ${stickers.first().url.take(80)}...")
             }

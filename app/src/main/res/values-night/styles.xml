@@ -32,4 +32,14 @@
         <item name="cardCornerRadius">12dp</item>
         <item name="cardElevation">0dp</item>
     </style>
+
+    <!-- UCrop Theme with proper navigation bar handling -->
+    <style name="UCropTheme" parent="Theme.AppCompat.Light.NoActionBar">
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+        <item name="android:fitsSystemWindows">true</item>
+        <item name="android:navigationBarColor">@color/toolbar_bg</item>
+        <item name="android:statusBarColor">@color/toolbar_bg</item>
+        <item name="android:windowLightNavigationBar">false</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
 </resources>

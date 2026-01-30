@@ -2254,21 +2254,7 @@ function App() {
               </div>
             </div>
 
-            {/* Product ID - Sadece Premium paketler için */}
-            {editFormData.is_premium && (
-              <div>
-                <label className="text-xs font-bold text-textSec uppercase mb-2 block">
-                  Play Console Ürün Etiketi (Product ID)
-                </label>
-                <input
-                  value={editFormData.product_id || ''}
-                  onChange={e => setEditFormData({ ...editFormData, product_id: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '') })}
-                  placeholder="ornek: recep_ivedik"
-                  className="w-full bg-hover border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-textSec/50 focus:border-warning focus:ring-1 focus:ring-warning transition-all"
-                />
-                <p className="text-[10px] text-textSec mt-1">Play Console'da oluşturduğun ürün ID'si. Boş bırakırsan paket satışa çıkmaz.</p>
-              </div>
-            )}
+            {/* Product ID alanı kaldırıldı - Artık tekli satın alım yok, premium abonelik tüm premium paketleri açıyor */}
 
             <div className="flex items-center gap-4">
               <div className="flex-1">

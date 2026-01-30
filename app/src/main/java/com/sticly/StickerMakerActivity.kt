@@ -147,7 +147,7 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_sticker_maker)
 
-        initMediaPipe()
+        // MediaPipe lazy initialization - sadece gerektiğinde başlatılacak
         initViews()
         setupToolsRecyclerView()
         setupClickListeners()
@@ -157,20 +157,54 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
         targetPackId = intent.getStringExtra("packId")
     }
 
-    private fun initMediaPipe() {
-        try {
+    private fun initMediaPipeLazy(): Boolean {
+        if (imageSegmenter != null) return true
+
+        return try {
+            // CPU delegate kullanarak başlat (GPU sorunlarını önler)
             val baseOptions = BaseOptions.builder()
                 .setModelAssetPath("selfie_segmenter.tflite")
+                .setDelegate(com.google.mediapipe.tasks.core.Delegate.CPU) // CPU'yu zorla kullan
                 .build()
+
             val options = ImageSegmenter.ImageSegmenterOptions.builder()
                 .setBaseOptions(baseOptions)
                 .setRunningMode(RunningMode.IMAGE)
                 .setOutputCategoryMask(true)
                 .setOutputConfidenceMasks(false)
                 .build()
+
             imageSegmenter = ImageSegmenter.createFromOptions(this, options)
+            android.util.Log.d("StickerMaker", "MediaPipe ImageSegmenter initialized successfully with CPU delegate")
+            true
         } catch (e: Exception) {
+            android.util.Log.e("StickerMaker", "MediaPipe init error: ${e.message}", e)
             e.printStackTrace()
+            // Fallback: GPU ile dene
+            try {
+                val baseOptionsFallback = BaseOptions.builder()
+                    .setModelAssetPath("selfie_segmenter.tflite")
+                    .build()
+
+                val optionsFallback = ImageSegmenter.ImageSegmenterOptions.builder()
+                    .setBaseOptions(baseOptionsFallback)
+                    .setRunningMode(RunningMode.IMAGE)
+                    .setOutputCategoryMask(true)
+                    .setOutputConfidenceMasks(false)
+                    .build()
+
+                imageSegmenter = ImageSegmenter.createFromOptions(this, optionsFallback)
+                android.util.Log.d("StickerMaker", "MediaPipe ImageSegmenter initialized with default delegate")
+                true
+            } catch (e2: Exception) {
+                android.util.Log.e("StickerMaker", "MediaPipe fallback init error: ${e2.message}", e2)
+                false
+            }
+        } catch (e: Error) {
+            // ExceptionInInitializerError için
+            android.util.Log.e("StickerMaker", "MediaPipe init critical error: ${e.message}", e)
+            e.printStackTrace()
+            false
         }
     }
 
@@ -520,9 +554,21 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
             return
         }
 
+        // Lazy initialization - sadece ilk kullanımda başlat
+        if (!initMediaPipeLazy()) {
+            Toast.makeText(this, getString(R.string.error_bg_removal_unavailable), Toast.LENGTH_SHORT).show()
+            return
+        }
+
         val segmenter = imageSegmenter
         if (segmenter == null) {
             Toast.makeText(this, getString(R.string.error_bg_removal_unavailable), Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val bitmap = currentBitmap
+        if (bitmap == null) {
+            Toast.makeText(this, getString(R.string.error_select_image_first), Toast.LENGTH_SHORT).show()
             return
         }
 
@@ -530,11 +576,27 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
 
         lifecycleScope.launch(Dispatchers.Default) {
             try {
-                val bitmap = currentBitmap ?: return@launch
+                android.util.Log.d("StickerMaker", "Starting background removal, bitmap: ${bitmap.width}x${bitmap.height}")
 
-                val mpImage = BitmapImageBuilder(bitmap).build()
+                // Bitmap'i ARGB_8888 formatına çevir (MediaPipe gereksinimi)
+                val processedBitmap = if (bitmap.config != Bitmap.Config.ARGB_8888) {
+                    bitmap.copy(Bitmap.Config.ARGB_8888, false)
+                } else {
+                    bitmap
+                }
+
+                val mpImage = BitmapImageBuilder(processedBitmap).build()
+                android.util.Log.d("StickerMaker", "MPImage created, running segmentation...")
+
                 val result = segmenter.segment(mpImage)
-                val categoryMask = result.categoryMask().orElse(null) ?: throw Exception("Mask not found")
+                android.util.Log.d("StickerMaker", "Segmentation completed")
+
+                val categoryMask = result.categoryMask().orElse(null)
+                if (categoryMask == null) {
+                    android.util.Log.e("StickerMaker", "Category mask is null")
+                    throw Exception("Mask not found")
+                }
+                android.util.Log.d("StickerMaker", "Category mask obtained: ${categoryMask.width}x${categoryMask.height}")
 
                 val width = bitmap.width
                 val height = bitmap.height
@@ -603,6 +665,14 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
                     hideLoading()
                 }
             } catch (e: Exception) {
+                android.util.Log.e("StickerMaker", "Background removal error: ${e.message}", e)
+                e.printStackTrace()
+                withContext(Dispatchers.Main) {
+                    hideLoading()
+                    Toast.makeText(this@StickerMakerActivity, getString(R.string.bg_removal_error), Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Error) {
+                android.util.Log.e("StickerMaker", "Background removal critical error: ${e.message}", e)
                 e.printStackTrace()
                 withContext(Dispatchers.Main) {
                     hideLoading()

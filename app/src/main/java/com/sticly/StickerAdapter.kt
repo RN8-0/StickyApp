@@ -126,21 +126,33 @@ class StickerAdapter(
             }
             // 2. Firebase URL varsa oradan yükle
             sticker.url.isNotEmpty() -> {
+                // Önce küçük thumbnail yükle (hızlı), sonra tam kalite
                 glide.load(sticker.url)
+                    .thumbnail(
+                        glide.load(sticker.url)
+                            .override(64, 64)
+                            .diskCacheStrategy(DiskCacheStrategy.DATA)
+                    )
                     .placeholder(R.drawable.sticker_placeholder)
                     .error(R.drawable.sticker_placeholder)
                     .diskCacheStrategy(DiskCacheStrategy.DATA)
-                    .override(512, 512)
+                    .override(256, 256)
                     .into(h.img)
             }
             // 3. URL yoksa direkt storage URL hesapla ve yükle
             storagePath.isNotEmpty() -> {
                 val directUrl = StickerRepository.getStickerDirectUrl(packId, sticker.file, storagePath)
+                // Önce küçük thumbnail yükle (hızlı), sonra tam kalite
                 glide.load(directUrl)
+                    .thumbnail(
+                        glide.load(directUrl)
+                            .override(64, 64)
+                            .diskCacheStrategy(DiskCacheStrategy.DATA)
+                    )
                     .placeholder(R.drawable.sticker_placeholder)
                     .error(R.drawable.sticker_placeholder)
                     .diskCacheStrategy(DiskCacheStrategy.DATA)
-                    .override(512, 512)
+                    .override(256, 256)
                     .into(h.img)
             }
             // 4. Lokal assets'ten yükle

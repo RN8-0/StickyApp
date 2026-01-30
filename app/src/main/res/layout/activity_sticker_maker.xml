@@ -12,6 +12,7 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:padding="24dp"
+        android:fitsSystemWindows="true"
         android:visibility="visible"
         android:fillViewport="true">
 
@@ -26,7 +27,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="🎨"
-                android:textSize="48sp"
+                android:textSize="40dp"
                 android:layout_marginTop="16dp" />
 
             <TextView
@@ -34,7 +35,7 @@
                 android:layout_height="wrap_content"
                 android:text="@string/how_to_create_sticker"
                 android:textColor="@color/text_primary"
-                android:textSize="22sp"
+                android:textSize="18dp"
                 android:textStyle="bold"
                 android:gravity="center"
                 android:layout_marginTop="12dp" />
@@ -44,7 +45,7 @@
                 android:layout_height="wrap_content"
                 android:text="@string/sticker_maker_subtitle"
                 android:textColor="@color/text_secondary"
-                android:textSize="14sp"
+                android:textSize="13dp"
                 android:gravity="center"
                 android:layout_marginTop="8dp"
                 android:layout_marginBottom="32dp" />
@@ -70,7 +71,7 @@
                         android:layout_width="56dp"
                         android:layout_height="56dp"
                         android:text="📸"
-                        android:textSize="32sp"
+                        android:textSize="28dp"
                         android:gravity="center"
                         android:background="@drawable/bg_emoji_circle" />
 
@@ -86,7 +87,7 @@
                             android:layout_height="wrap_content"
                             android:text="@string/static_sticker_title"
                             android:textColor="@android:color/white"
-                            android:textSize="18sp"
+                            android:textSize="16dp"
                             android:textStyle="bold" />
 
                         <TextView
@@ -94,7 +95,7 @@
                             android:layout_height="wrap_content"
                             android:text="@string/create_static_desc"
                             android:textColor="#CCFFFFFF"
-                            android:textSize="13sp"
+                            android:textSize="12dp"
                             android:layout_marginTop="4dp" />
 
                     </LinearLayout>
@@ -129,7 +130,7 @@
                         android:layout_width="56dp"
                         android:layout_height="56dp"
                         android:text="🎬"
-                        android:textSize="32sp"
+                        android:textSize="28dp"
                         android:gravity="center"
                         android:background="@drawable/bg_emoji_circle_light" />
 
@@ -151,7 +152,7 @@
                                 android:layout_height="wrap_content"
                                 android:text="@string/animated_sticker_title"
                                 android:textColor="@color/text_primary"
-                                android:textSize="18sp"
+                                android:textSize="16dp"
                                 android:textStyle="bold" />
 
                             <TextView
@@ -160,7 +161,7 @@
                                 android:layout_marginStart="8dp"
                                 android:text="@string/coming_soon_badge"
                                 android:textColor="@android:color/white"
-                                android:textSize="10sp"
+                                android:textSize="9dp"
                                 android:background="@drawable/bg_coming_soon_badge"
                                 android:paddingHorizontal="8dp"
                                 android:paddingVertical="2dp" />
@@ -172,7 +173,7 @@
                             android:layout_height="wrap_content"
                             android:text="@string/create_animated_desc"
                             android:textColor="@color/text_secondary"
-                            android:textSize="13sp"
+                            android:textSize="12dp"
                             android:layout_marginTop="4dp" />
 
                     </LinearLayout>
@@ -194,7 +195,7 @@
                     android:layout_height="wrap_content"
                     android:text="@string/tips_title"
                     android:textColor="@color/text_primary"
-                    android:textSize="16sp"
+                    android:textSize="14dp"
                     android:textStyle="bold" />
 
                 <TextView
@@ -203,7 +204,7 @@
                     android:layout_marginTop="8dp"
                     android:text="@string/tips_content"
                     android:textColor="@color/text_secondary"
-                    android:textSize="13sp"
+                    android:textSize="12dp"
                     android:lineSpacingExtra="4dp" />
 
             </LinearLayout>
@@ -224,6 +225,7 @@
         android:id="@+id/editorContainer"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
+        android:fitsSystemWindows="true"
         android:visibility="gone">
 
         <!-- Top Toolbar -->

@@ -28,6 +28,29 @@
 -keep class com.google.mlkit.** { *; }
 -dontwarn com.google.mlkit.**
 
+# MediaPipe - R8 optimizer uyumluluğu için gerekli
+-keep class com.google.mediapipe.** { *; }
+-keep class com.google.mediapipe.framework.** { *; }
+-keep class com.google.mediapipe.tasks.** { *; }
+-keep class com.google.mediapipe.formats.** { *; }
+-keepclassmembers class com.google.mediapipe.** { *; }
+-keepclassmembers class com.google.mediapipe.framework.Graph {
+    native <methods>;
+    static <fields>;
+    void <clinit>();
+}
+-dontwarn com.google.mediapipe.**
+
+# MediaPipe için stack frame koruması (caller lookup için gerekli)
+-keepattributes SourceFile,LineNumberTable,EnclosingMethod,InnerClasses
+
+# Protobuf (MediaPipe dependency)
+-keep class com.google.protobuf.** { *; }
+-keepclassmembers class * extends com.google.protobuf.GeneratedMessageLite { *; }
+
+# Native library loader sınıfları
+-keep class com.google.mediapipe.framework.jni.** { *; }
+
 # Kotlin Coroutines
 -keepnames class kotlinx.coroutines.internal.MainDispatcherFactory {}
 -keepnames class kotlinx.coroutines.CoroutineExceptionHandler {}
