@@ -1,0 +1,27 @@
+# Sticker Automation Bot - Dependencies
+# Install: pip install -r requirements.txt
+
+# Google Trends
+pytrends==4.9.2
+
+# HTTP requests
+requests==2.31.0
+
+# Firebase Admin SDK
+firebase-admin==6.4.0
+
+# Image processing
+Pillow==10.2.0
+
+# GIF to WebP conversion (uses system FFmpeg)
+# FFmpeg must be installed: sudo apt install ffmpeg
+
+# Progress bars
+tqdm==4.66.1
+
+# Rich console output
+rich==13.7.0
+
+# Gemini AI
+google-generativeai==0.4.0
+deep-translator==1.11.4

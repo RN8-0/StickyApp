@@ -228,6 +228,7 @@
     <string name="stickers_preparing">WhatsApp için çıkartmalar hazırlanıyor…</string>
     <string name="stickers_loading">Çıkartmalar yükleniyor…</string>
     <string name="stickers_load_failed">Çıkartmalar yüklenemedi</string>
+    <string name="loading_percent">Yükleniyor %1$d%%</string>
 
     <!-- Pack Validation Errors -->
     <string name="pack_empty_error">📦 Bu pakette çıkartma yok! Önce en az 3 çıkartma ekleyin.</string>

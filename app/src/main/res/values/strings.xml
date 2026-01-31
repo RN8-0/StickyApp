@@ -230,6 +230,7 @@
     <string name="stickers_preparing">Preparing stickers for WhatsApp…</string>
     <string name="stickers_loading">Loading stickers…</string>
     <string name="stickers_load_failed">Stickers could not be loaded</string>
+    <string name="loading_percent">Loading %1$d%%</string>
 
     <!-- Pack Validation Errors -->
     <string name="pack_empty_error">📦 This pack has no stickers! Add at least 3 stickers first.</string>

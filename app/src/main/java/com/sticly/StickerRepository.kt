@@ -264,7 +264,7 @@ object StickerRepository {
                 stickers = stickers,
                 isPremium = isPremium,
                 productId = data["product_id"] as? String ?: "",
-                storagePath = data["storagePath"] as? String ?: if (isPremium) "premium_stickers" else "stickers",
+                storagePath = "stickers", // Tüm dosyalar tek klasörde
                 createdAt = when (val time = data["created_at"]) {
                     is com.google.firebase.Timestamp -> {
                         val sdf = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
@@ -413,12 +413,14 @@ object StickerRepository {
                 return@withContext localFile
             }
 
-            val storageRef = storage.reference.child("$storagePath/$packId/$fileName")
+            val fullPath = "$storagePath/$packId/$fileName"
+            Log.d(TAG, "Downloading: $fullPath")
+            val storageRef = storage.reference.child(fullPath)
             storageRef.getFile(localFile).await()
 
             localFile
         } catch (e: Exception) {
-            Log.e(TAG, "Error downloading sticker: ${e.message}")
+            Log.e(TAG, "Download FAILED: $storagePath/$packId/$fileName - ${e.message}")
             null
         }
     }

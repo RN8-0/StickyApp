@@ -1,0 +1,22 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Stickers klasörü - herkes okuyabilir, auth yazabilir
+    match /stickers/{packId}/{allPaths=**} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+    
+    // Premium stickers klasörü - herkes okuyabilir, auth yazabilir
+    match /premium_stickers/{packId}/{allPaths=**} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+    
+    // Diğer tüm yollar için varsayılan kural
+    match /{allPaths=**} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+  }
+}

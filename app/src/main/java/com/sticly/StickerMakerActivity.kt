@@ -27,11 +27,10 @@ import com.google.android.material.button.MaterialButton
 import com.google.android.material.card.MaterialCardView
 import com.google.android.material.slider.Slider
 import com.google.android.material.textfield.TextInputEditText
-import com.google.mediapipe.framework.image.BitmapImageBuilder
-import com.google.mediapipe.framework.image.ByteBufferExtractor
-import com.google.mediapipe.tasks.core.BaseOptions
-import com.google.mediapipe.tasks.vision.core.RunningMode
-import com.google.mediapipe.tasks.vision.imagesegmenter.ImageSegmenter
+import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.segmentation.subject.SubjectSegmentation
+import com.google.mlkit.vision.segmentation.subject.SubjectSegmenterOptions
+import com.google.android.gms.tasks.Tasks
 import com.yalantis.ucrop.UCrop
 import ja.burhanrashid52.photoeditor.*
 import ja.burhanrashid52.photoeditor.shape.ShapeBuilder
@@ -70,8 +69,13 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
     // PhotoEditor
     private lateinit var photoEditor: PhotoEditor
 
-    // MediaPipe for background removal
-    private var imageSegmenter: ImageSegmenter? = null
+    // ML Kit for background removal
+    private val subjectSegmenter by lazy {
+        val options = SubjectSegmenterOptions.Builder()
+            .enableForegroundBitmap()
+            .build()
+        SubjectSegmentation.getClient(options)
+    }
 
     // State
     private var currentBitmap: Bitmap? = null
@@ -157,56 +161,6 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
         targetPackId = intent.getStringExtra("packId")
     }
 
-    private fun initMediaPipeLazy(): Boolean {
-        if (imageSegmenter != null) return true
-
-        return try {
-            // CPU delegate kullanarak başlat (GPU sorunlarını önler)
-            val baseOptions = BaseOptions.builder()
-                .setModelAssetPath("selfie_segmenter.tflite")
-                .setDelegate(com.google.mediapipe.tasks.core.Delegate.CPU) // CPU'yu zorla kullan
-                .build()
-
-            val options = ImageSegmenter.ImageSegmenterOptions.builder()
-                .setBaseOptions(baseOptions)
-                .setRunningMode(RunningMode.IMAGE)
-                .setOutputCategoryMask(true)
-                .setOutputConfidenceMasks(false)
-                .build()
-
-            imageSegmenter = ImageSegmenter.createFromOptions(this, options)
-            android.util.Log.d("StickerMaker", "MediaPipe ImageSegmenter initialized successfully with CPU delegate")
-            true
-        } catch (e: Exception) {
-            android.util.Log.e("StickerMaker", "MediaPipe init error: ${e.message}", e)
-            e.printStackTrace()
-            // Fallback: GPU ile dene
-            try {
-                val baseOptionsFallback = BaseOptions.builder()
-                    .setModelAssetPath("selfie_segmenter.tflite")
-                    .build()
-
-                val optionsFallback = ImageSegmenter.ImageSegmenterOptions.builder()
-                    .setBaseOptions(baseOptionsFallback)
-                    .setRunningMode(RunningMode.IMAGE)
-                    .setOutputCategoryMask(true)
-                    .setOutputConfidenceMasks(false)
-                    .build()
-
-                imageSegmenter = ImageSegmenter.createFromOptions(this, optionsFallback)
-                android.util.Log.d("StickerMaker", "MediaPipe ImageSegmenter initialized with default delegate")
-                true
-            } catch (e2: Exception) {
-                android.util.Log.e("StickerMaker", "MediaPipe fallback init error: ${e2.message}", e2)
-                false
-            }
-        } catch (e: Error) {
-            // ExceptionInInitializerError için
-            android.util.Log.e("StickerMaker", "MediaPipe init critical error: ${e.message}", e)
-            e.printStackTrace()
-            false
-        }
-    }
 
     private fun initViews() {
         typeSelectionContainer = findViewById(R.id.typeSelectionContainer)
@@ -387,14 +341,20 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
     }
 
     private fun loadAds() {
+        android.util.Log.d("StickerMaker", "loadAds called, isPremium: ${PreferencesHelper.isPremium(this)}")
         if (!PreferencesHelper.isPremium(this)) {
+            adContainerMaker.visibility = View.VISIBLE // Başlangıçta görünür yap
             AdManager.loadNativeAd(this, AdManager.NativeAdType.MAKER) { nativeAd ->
+                android.util.Log.d("StickerMaker", "Native ad loaded, populating view")
                 val adView = layoutInflater.inflate(R.layout.item_ad_native, null) as com.google.android.gms.ads.nativead.NativeAdView
                 AdManager.populateNativeAdView(nativeAd, adView)
                 adContainerMaker.removeAllViews()
                 adContainerMaker.addView(adView)
                 adContainerMaker.visibility = View.VISIBLE
             }
+        } else {
+            android.util.Log.d("StickerMaker", "User is premium, hiding ads")
+            adContainerMaker.visibility = View.GONE
         }
     }
 
@@ -542,7 +502,7 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
         }
     }
 
-    // ==================== Remove Background (MediaPipe) ====================
+    // ==================== Remove Background (ML Kit) ====================
 
     private fun removeBackground() {
         if (backgroundRemoved) {
@@ -554,18 +514,6 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
             return
         }
 
-        // Lazy initialization - sadece ilk kullanımda başlat
-        if (!initMediaPipeLazy()) {
-            Toast.makeText(this, getString(R.string.error_bg_removal_unavailable), Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        val segmenter = imageSegmenter
-        if (segmenter == null) {
-            Toast.makeText(this, getString(R.string.error_bg_removal_unavailable), Toast.LENGTH_SHORT).show()
-            return
-        }
-
         val bitmap = currentBitmap
         if (bitmap == null) {
             Toast.makeText(this, getString(R.string.error_select_image_first), Toast.LENGTH_SHORT).show()
@@ -574,89 +522,32 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
 
         showLoading()
 
-        lifecycleScope.launch(Dispatchers.Default) {
+        lifecycleScope.launch(Dispatchers.IO) {
             try {
-                android.util.Log.d("StickerMaker", "Starting background removal, bitmap: ${bitmap.width}x${bitmap.height}")
+                android.util.Log.d("StickerMaker", "Starting ML Kit background removal, bitmap: ${bitmap.width}x${bitmap.height}")
 
-                // Bitmap'i ARGB_8888 formatına çevir (MediaPipe gereksinimi)
+                // Bitmap'i ARGB_8888 formatına çevir
                 val processedBitmap = if (bitmap.config != Bitmap.Config.ARGB_8888) {
                     bitmap.copy(Bitmap.Config.ARGB_8888, false)
                 } else {
                     bitmap
                 }
 
-                val mpImage = BitmapImageBuilder(processedBitmap).build()
-                android.util.Log.d("StickerMaker", "MPImage created, running segmentation...")
+                val inputImage = InputImage.fromBitmap(processedBitmap, 0)
+                android.util.Log.d("StickerMaker", "InputImage created, running ML Kit segmentation...")
 
-                val result = segmenter.segment(mpImage)
-                android.util.Log.d("StickerMaker", "Segmentation completed")
+                // ML Kit Subject Segmentation
+                val result = Tasks.await(subjectSegmenter.process(inputImage))
+                android.util.Log.d("StickerMaker", "ML Kit segmentation completed")
 
-                val categoryMask = result.categoryMask().orElse(null)
-                if (categoryMask == null) {
-                    android.util.Log.e("StickerMaker", "Category mask is null")
-                    throw Exception("Mask not found")
+                val foregroundBitmap = result.foregroundBitmap
+                if (foregroundBitmap == null) {
+                    android.util.Log.e("StickerMaker", "Foreground bitmap is null")
+                    throw Exception("Subject not found")
                 }
-                android.util.Log.d("StickerMaker", "Category mask obtained: ${categoryMask.width}x${categoryMask.height}")
-
-                val width = bitmap.width
-                val height = bitmap.height
-                val byteBuffer = ByteBufferExtractor.extract(categoryMask)
-                byteBuffer.rewind()
-
-                // Create mask array for edge smoothing
-                val maskArray = ByteArray(width * height)
-                byteBuffer.get(maskArray)
-                byteBuffer.rewind()
-
-                val resultBitmap = bitmap.copy(Bitmap.Config.ARGB_8888, true)
-                val pixels = IntArray(width * height)
-                bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
-
-                // Apply mask with edge feathering for smoother edges
-                for (y in 0 until height) {
-                    for (x in 0 until width) {
-                        val i = y * width + x
-                        val category = maskArray[i].toInt() and 0xFF
-
-                        if (category != 0) {
-                            // Check if this pixel is near the edge (for anti-aliasing)
-                            var isEdge = false
-                            var foregroundCount = 0
-
-                            // Check 3x3 neighborhood for edge detection
-                            for (dy in -1..1) {
-                                for (dx in -1..1) {
-                                    val nx = x + dx
-                                    val ny = y + dy
-                                    if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
-                                        val ni = ny * width + nx
-                                        val neighborCategory = maskArray[ni].toInt() and 0xFF
-                                        if (neighborCategory == 0) {
-                                            isEdge = true
-                                            foregroundCount++
-                                        }
-                                    }
-                                }
-                            }
-
-                            if (isEdge && foregroundCount > 0) {
-                                // Apply partial transparency for edge pixels (anti-aliasing)
-                                val alpha = ((9 - foregroundCount) * 255 / 9)
-                                val originalPixel = pixels[i]
-                                val r = Color.red(originalPixel)
-                                val g = Color.green(originalPixel)
-                                val b = Color.blue(originalPixel)
-                                pixels[i] = Color.argb(alpha.coerceIn(0, 255), r, g, b)
-                            } else {
-                                pixels[i] = Color.TRANSPARENT
-                            }
-                        }
-                    }
-                }
-                resultBitmap.setPixels(pixels, 0, width, 0, 0, width, height)
 
                 // Add thin white contour around the subject
-                val finalBitmap = addContour(resultBitmap, 4, Color.WHITE)
+                val finalBitmap = addContour(foregroundBitmap, 4, Color.WHITE)
 
                 withContext(Dispatchers.Main) {
                     saveBitmapToHistory()
@@ -665,14 +556,7 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
                     hideLoading()
                 }
             } catch (e: Exception) {
-                android.util.Log.e("StickerMaker", "Background removal error: ${e.message}", e)
-                e.printStackTrace()
-                withContext(Dispatchers.Main) {
-                    hideLoading()
-                    Toast.makeText(this@StickerMakerActivity, getString(R.string.bg_removal_error), Toast.LENGTH_SHORT).show()
-                }
-            } catch (e: Error) {
-                android.util.Log.e("StickerMaker", "Background removal critical error: ${e.message}", e)
+                android.util.Log.e("StickerMaker", "ML Kit background removal error: ${e.message}", e)
                 e.printStackTrace()
                 withContext(Dispatchers.Main) {
                     hideLoading()
@@ -1546,7 +1430,7 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
 
     override fun onDestroy() {
         super.onDestroy()
-        imageSegmenter?.close()
+        subjectSegmenter.close()
     }
 
     // ==================== Tools Adapter ====================

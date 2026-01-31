@@ -10,12 +10,13 @@ class StickyApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
-        // Reklam sistemini başlat (emulatörde çalışmayabilir)
+        // Reklam sistemini başlat
         try {
+            android.util.Log.d("StickyApp", "Starting AdManager initialization...")
             AdManager.initialize(this)
+            android.util.Log.d("StickyApp", "AdManager.initialize() called successfully")
         } catch (e: Exception) {
-            // AdMob kullanılamıyor (emulator vb.)
-            e.printStackTrace()
+            android.util.Log.e("StickyApp", "AdMob initialization failed: ${e.message}", e)
         }
     }
 }

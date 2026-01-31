@@ -60,6 +60,27 @@
 -keep class com.sticly.data.** { *; }
 -keep class com.sticly.model.** { *; }
 
+# KRITIK: Ana paket model sınıfları (Pack, Sticker, Response vb.)
+-keep class com.sticly.Pack { *; }
+-keep class com.sticly.Sticker { *; }
+-keep class com.sticly.Response { *; }
+-keep class com.sticly.CustomPack { *; }
+-keep class com.sticly.CustomSticker { *; }
+-keep class com.sticly.BillingSettings { *; }
+-keep class com.sticly.BillingConfig { *; }
+-keep class com.sticly.BillingPlan { *; }
+
+# KRITIK: StickerProvider - WhatsApp ile iletişim için şart
+-keep class com.sticly.StickerProvider { *; }
+-keep class * extends android.content.ContentProvider { *; }
+
+# KRITIK: Tüm Kotlin data class'larını koru
+-keepclassmembers class com.sticly.** {
+    public <init>(...);
+    public ** component*();
+    public ** copy(...);
+}
+
 # AdMob
 -keep class com.google.android.gms.ads.** { *; }
 

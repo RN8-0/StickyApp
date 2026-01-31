@@ -38,5 +38,10 @@ service cloud.firestore {
       allow read: if true;
       allow create, update, delete: if request.auth != null;
     }
+
+    // Otomasyon Taslakları - sadece auth (Admin) okuyabilir ve yönetebilir
+    match /automation_drafts/{document=**} {
+      allow read, write: if request.auth != null;
+    }
   }
 }

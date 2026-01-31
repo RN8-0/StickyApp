@@ -11,7 +11,14 @@ import {
   serverTimestamp,
   onSnapshot
 } from 'firebase/firestore';
-import { ref, deleteObject, uploadBytes, getDownloadURL, listAll } from 'firebase/storage';
+import {
+  ref,
+  deleteObject,
+  uploadBytes,
+  getDownloadURL,
+  listAll,
+  getBytes,
+} from 'firebase/storage';
 import {
   signInWithEmailAndPassword,
   onAuthStateChanged,
@@ -47,7 +54,9 @@ import {
   Bell,
   Send,
   Filter,
-  ChevronDown
+  ChevronDown,
+  Bot,
+  CloudLightning
 } from 'lucide-react';
 import {
   BarChart,
@@ -103,7 +112,7 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [selectedPack, setSelectedPack] = useState<StickerPack | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'stats' | 'messages' | 'notifications'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'stats' | 'messages' | 'notifications' | 'automation'>('dashboard');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'passive' | 'premium' | 'normal' | 'new'>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [statsFilter, setStatsFilter] = useState<'all' | 'active' | 'passive' | 'premium' | 'normal'>('all');
@@ -139,6 +148,7 @@ function App() {
     is_animated: true
   });
   const [editFormData, setEditFormData] = useState<Partial<StickerPack>>({});
+  const [previewSticker, setPreviewSticker] = useState<{ url: string, title?: string } | null>(null);
   const [uploadProgress, setUploadProgress] = useState<{ current: number, total: number, message?: string } | null>(null);
 
   // Fake Download Base Range
@@ -153,6 +163,11 @@ function App() {
 
   // Silme progress state
   const [deleteProgress, setDeleteProgress] = useState<{ deleting: boolean, message: string, current: number, total: number } | null>(null);
+
+  // Otomasyon State'leri
+  const [automationDrafts, setAutomationDrafts] = useState<StickerPack[]>([]);
+  const [loadingDrafts, setLoadingDrafts] = useState(false);
+  const [selectedDraft, setSelectedDraft] = useState<StickerPack | null>(null);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (u) => {
@@ -340,6 +355,228 @@ function App() {
     }
   };
 
+  // ========== OTOMASYON FONKSİYONLARI ==========
+
+  const fetchAutomationDrafts = async () => {
+    setLoadingDrafts(true);
+    try {
+      const draftsSnap = await getDocs(collection(db, 'automation_drafts'));
+      const drafts: StickerPack[] = draftsSnap.docs.map(d => {
+        const data = d.data();
+        return {
+          id: d.id,
+          ...data,
+          is_premium: false,
+          is_animated: data.is_animated ?? true,
+          download_count: 0,
+          view_count: 0,
+          favorite_count: 0,
+          sticker_count: Number(data.sticker_count || data.stickers?.length || 0),
+        } as StickerPack;
+      });
+      setAutomationDrafts(drafts.sort((a, b) => (b.created_at || '').localeCompare(a.created_at || '')));
+    } catch (error) {
+      console.error("Automation drafts fetch error:", error);
+    } finally {
+      setLoadingDrafts(false);
+    }
+  };
+
+  const approveAutomationDraft = async (draft: StickerPack) => {
+    if (!window.confirm(`"${draft.name}" paketini yayına almak istediğinize emin misiniz?`)) return;
+
+    setIsProcessing(true);
+    // Overlay'in görünmesi için başlangıç değerleri
+    setDeleteProgress({ deleting: true, message: 'Paket hazırlanıyor (Sistem Aktarımı)...', current: 0, total: 100 });
+
+    try {
+      // Bir tick bekleyelim ki React render yapabilsin
+      await new Promise(resolve => setTimeout(resolve, 300));
+
+      const oldPath = (draft as any).storage_path || `automation_drafts/${draft.id}`;
+      const newPath = `stickers/${draft.id}`;
+
+      // 1. Dosyaları listele
+      const oldFolderRef = ref(storage, oldPath);
+      const filesRes = await listAll(oldFolderRef);
+      const totalFiles = filesRes.items.length;
+
+      if (totalFiles === 0) {
+        throw new Error("Taşınacak çıkartma bulunamadı! Lütfen taslağın hazır olduğundan emin olun.");
+      }
+
+      setDeleteProgress({ deleting: true, message: `${totalFiles} çıkartma taşınmaya hazır...`, current: 0, total: totalFiles });
+
+      const updatedStickers = [];
+      let newTrayUrl = draft.tray_url;
+
+      // 2. Dosyaları tek tek taşı (Hata riskini azaltmak için seri işlem)
+      for (let i = 0; i < totalFiles; i++) {
+        const item = filesRes.items[i];
+        const fileName = item.name;
+
+        setDeleteProgress(prev => prev ? { ...prev, current: i + 1, message: `Taşınıyor: ${fileName}` } : null);
+
+        // Dosyayı çek (CORS bypass)
+        const fileBytes = await getBytes(item);
+        const blob = new Blob([fileBytes]);
+
+        // Yeni konuma yükle
+        const newFileRef = ref(storage, `${newPath}/${fileName}`);
+        await uploadBytes(newFileRef, blob);
+        const newUrl = await getDownloadURL(newFileRef);
+
+        // Eskiyi sil
+        await deleteObject(item);
+
+        if (fileName.startsWith('tray')) {
+          newTrayUrl = newUrl;
+        } else {
+          const existingSticker = draft.stickers?.find(s => s.image_file === fileName);
+          if (existingSticker) {
+            updatedStickers.push({
+              image_file: fileName,
+              url: newUrl,
+              emojis: existingSticker.emojis || ["😀"]
+            });
+          }
+        }
+
+        // Sunucuya nefes aldır (Küçük bir gecikme)
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+
+      setDeleteProgress(prev => prev ? { ...prev, message: 'Firestore güncelleniyor...' } : null);
+
+      // 3. Yeni pack verisini hazırla
+      const packData = {
+        ...draft,
+        stickers: updatedStickers,
+        sticker_count: updatedStickers.length,
+        tray_url: newTrayUrl,
+        is_active: true,
+        storage_path: "stickers", // Uygulamanın beklediği sabit yol
+        automation_created: false
+      };
+
+      delete (packData as any).source_query;
+
+      // 4. Ana koleksiyona yaz ve taslağı temizle
+      await setDoc(doc(db, 'stickers', draft.id), packData);
+      await deleteDoc(doc(db, 'automation_drafts', draft.id));
+
+      setAutomationDrafts(prev => prev.filter(d => d.id !== draft.id));
+      await fetchPacks();
+
+      setDeleteProgress(null);
+      alert(`✅ "${draft.name}" paketi başarıyla "stickers" klasörüne taşındı ve yayınlandı!`);
+    } catch (error: any) {
+      console.error("Approve error:", error);
+      let errorMsg = error.message || String(error);
+
+      if (errorMsg.includes('retry-limit-exceeded')) {
+        errorMsg = "Giriş/Çıkış Hatası (Ağ Sorunu). CORS ayarları uygulanmış olmalı. Lütfen sayfayı yenileyip tekrar deneyin.";
+      }
+
+      alert("⚠️ Onaylama sırasında bir sorun oluştu:\n\n" + errorMsg);
+      setDeleteProgress(null);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const removeStickerFromDraft = async (draft: StickerPack, stickerIdx: number) => {
+    if (!window.confirm("Bu çıkartmayı taslaktan kaldırmak istediğinize emin misiniz?")) return;
+
+    try {
+      const stickerToDelete = draft.stickers[stickerIdx];
+      const updatedStickers = [...draft.stickers];
+      updatedStickers.splice(stickerIdx, 1);
+
+      // 1. Firestore'u Güncelle
+      const draftRef = doc(db, 'automation_drafts', draft.id);
+      await updateDoc(draftRef, {
+        stickers: updatedStickers,
+        sticker_count: updatedStickers.length
+      });
+
+      // 2. Storage'dan Sil
+      const storagePath = (draft as any).storage_path || `automation_drafts/${draft.id}`;
+      const fileRef = ref(storage, `${storagePath}/${stickerToDelete.image_file}`);
+
+      try {
+        await deleteObject(fileRef);
+        console.log('[DRAFT DELETE] ✅ Storage dosyası silindi:', stickerToDelete.image_file);
+      } catch (storageErr: any) {
+        console.warn('[DRAFT DELETE] ⚠️ Storage dosyası zaten yok veya silinemedi:', storageErr.message);
+      }
+
+      // 3. State'i güncelle
+      const updatedDraft = { ...draft, stickers: updatedStickers, sticker_count: updatedStickers.length };
+      setAutomationDrafts(prev => prev.map(d => d.id === draft.id ? updatedDraft : d));
+      setSelectedDraft(updatedDraft);
+
+      // 4. Kullanıcıya Bildirim Ver
+      alert(`✅ "${stickerToDelete.image_file}" çıkartması taslaktan ve sunucudan başarıyla silindi.`);
+    } catch (error) {
+      console.error("Remove sticker error:", error);
+      alert("Çıkartma silinemedi: " + error);
+    }
+  };
+
+  const deleteAutomationDraft = async (draft: StickerPack) => {
+    if (!window.confirm(`"${draft.name}" taslağını silmek istediğinize emin misiniz? Bu işlem geri alınamaz.`)) return;
+
+    setIsProcessing(true);
+    setDeleteProgress({ deleting: true, message: 'Taslak siliniyor...', current: 0, total: 0 });
+
+    try {
+      const storagePath = (draft as any).storage_path || `automation_drafts/${draft.id}`;
+
+      // Storage'daki dosyaları sil
+      const folderRef = ref(storage, storagePath);
+      const files = await listAll(folderRef);
+
+      const totalFiles = files.items.length;
+      setDeleteProgress(prev => prev ? { ...prev, total: totalFiles, message: 'Dosyalar siliniyor...' } : null);
+
+      for (let i = 0; i < totalFiles; i++) {
+        const item = files.items[i];
+        setDeleteProgress(prev => prev ? { ...prev, current: i + 1, message: `Siliniyor: ${item.name}` } : null);
+        await deleteObject(item);
+      }
+
+      setDeleteProgress(prev => prev ? { ...prev, message: 'Veritabanı kaydı siliniyor...' } : null);
+
+      // Firestore'dan sil
+      await deleteDoc(doc(db, 'automation_drafts', draft.id));
+
+      // State'i güncelle
+      setAutomationDrafts(prev => prev.filter(d => d.id !== draft.id));
+
+      setTimeout(() => {
+        setDeleteProgress(null);
+        alert(`🗑️ "${draft.name}" taslağı silindi.`);
+      }, 500);
+
+    } catch (error) {
+      console.error("Delete draft error:", error);
+      setDeleteProgress(null);
+      alert("Silme sırasında hata oluştu: " + error);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // Otomasyon sekmesine geçince taslakları yükle
+  useEffect(() => {
+    if (activeTab === 'automation' && automationDrafts.length === 0) {
+      fetchAutomationDrafts();
+    }
+  }, [activeTab]);
+
+  // ========== OTOMASYON FONKSİYONLARI SON ==========
+
   const handleCreatePack = async () => {
     if (!newPackData.name || !newPackData.publisher) return alert("Lütfen isim ve yayıncı alanlarını doldurun.");
     setIsProcessing(true);
@@ -409,9 +646,9 @@ function App() {
   const handleUpdatePack = async () => {
     if (!selectedPack || !editFormData) return;
     setIsProcessing(true);
+
     try {
       const updatedData: any = { ...editFormData };
-
       updatedData.image_data_version = Date.now().toString();
 
       // Premium'a çevriliyorsa ve fiyat yoksa default fiyat ata
@@ -425,24 +662,41 @@ function App() {
       const newCollection = updatedData.is_premium ? 'premium_stickers' : 'stickers';
 
       if (oldCollection !== newCollection) {
-        // Move document between collections
-        const oldRef = doc(db, oldCollection, selectedPack.id);
-        const newRef = doc(db, newCollection, selectedPack.id);
+        // Koleksiyonlar arası geçiş - sadece database taşıma
+        console.log(`[UPDATE] ${oldCollection} -> ${newCollection} için ${selectedPack.id} paketi taşınıyor...`);
 
-        const fullData = { ...selectedPack, ...updatedData };
-        await setDoc(newRef, fullData);
-        await deleteDoc(oldRef);
+        const fullData = {
+          ...selectedPack,
+          ...updatedData
+        };
+
+        // Yeni koleksiyona ekle
+        await setDoc(doc(db, newCollection, selectedPack.id), fullData);
+        console.log(`[UPDATE] Yeni döküman oluşturuldu: ${newCollection}/${selectedPack.id}`);
+
+        // Eski koleksiyondan sil
+        await deleteDoc(doc(db, oldCollection, selectedPack.id));
+        console.log(`[UPDATE] Eski döküman silindi: ${oldCollection}/${selectedPack.id}`);
+
+        const updated = fullData as StickerPack;
+        setPacks(packs.map(p => p.id === selectedPack.id ? updated : p));
+        setSelectedPack(updated);
+        setShowEditPackModal(false);
+
+        alert(`Paket başarıyla ${updatedData.is_premium ? 'Premium' : 'Normal'} olarak güncellendi.`);
       } else {
+        // Sadece bilgi güncelleme (tip değişikliği yok)
         await updateDoc(doc(db, oldCollection, selectedPack.id), updatedData);
+        const updated = { ...selectedPack, ...updatedData } as StickerPack;
+        setPacks(packs.map(p => p.id === selectedPack.id ? updated : p));
+        setSelectedPack(updated);
+        setShowEditPackModal(false);
+        alert("Paket bilgileri başarıyla güncellendi.");
       }
 
-      const updated = { ...selectedPack, ...updatedData } as StickerPack;
-      setPacks(packs.map(p => p.id === selectedPack.id ? updated : p));
-      setSelectedPack(updated);
-      setShowEditPackModal(false);
-      alert("Paket bilgileri ve tipi başarıyla güncellendi. Uygulamada yansıması birkaç dakika sürebilir (Önbellek nedeniyle).");
-    } catch (e) {
-      alert("Hata: " + e);
+    } catch (e: any) {
+      console.error('[UPDATE] Hata:', e);
+      alert("Hata: " + e.message);
     } finally {
       setIsProcessing(false);
     }
@@ -510,7 +764,7 @@ function App() {
         }
 
         const fileName = `${Date.now()}_${i}.webp`;
-        const storagePath = `${collectionName}/${selectedPack.id}/${fileName}`;
+        const storagePath = `stickers/${selectedPack.id}/${fileName}`;
         const storageRef = ref(storage, storagePath);
 
         await uploadBytes(storageRef, processedBlob);
@@ -567,6 +821,18 @@ function App() {
     await new Promise(r => setTimeout(r, 100));
 
     try {
+      // Eski kapak resmini sil (eğer varsa)
+      if (selectedPack.tray_image_file) {
+        setUploadProgress(prev => prev ? { ...prev, message: 'Eski kapak resmi siliniyor...' } : null);
+        const oldTrayPath = `stickers/${selectedPack.id}/${selectedPack.tray_image_file}`;
+        try {
+          await deleteObject(ref(storage, oldTrayPath));
+          console.log('Eski kapak resmi silindi:', oldTrayPath);
+        } catch (deleteError) {
+          console.log('Eski kapak resmi silinemedi (muhtemelen mevcut değil):', deleteError);
+        }
+      }
+
       setUploadProgress(prev => prev ? { ...prev, message: 'Arka plan siliniyor...' } : null);
       const processedBlob = await stickerProcessor.processTray(file, (p) => {
         setUploadProgress(prev => prev ? { ...prev, message: p.message } : null);
@@ -574,7 +840,7 @@ function App() {
 
       const collectionName = selectedPack.is_premium ? 'premium_stickers' : 'stickers';
       const fileName = `tray_${Date.now()}.png`;
-      const storagePath = `${collectionName}/${selectedPack.id}/${fileName}`;
+      const storagePath = `stickers/${selectedPack.id}/${fileName}`;
       const storageRef = ref(storage, storagePath);
 
       await uploadBytes(storageRef, processedBlob);
@@ -590,7 +856,7 @@ function App() {
       const updated = { ...selectedPack, tray_url: url, tray_image_file: fileName, image_data_version: newVersion };
       setPacks(packs.map(p => p.id === selectedPack.id ? updated : p));
       setSelectedPack(updated);
-      alert("Kapak resmi başarıyla işlendi ve güncellendi.");
+      alert("Kapak resmi başarıyla işlendi ve güncellendi. Eski kapak resmi silindi.");
     } catch (e) {
       alert("Hata: " + e);
     } finally {
@@ -605,8 +871,7 @@ function App() {
     try {
       setDeleteProgress({ deleting: true, message: 'Dosyalar listeleniyor...', current: 0, total: 0 });
 
-      const storagePath = pack.is_premium ? 'premium_stickers' : 'stickers';
-      const folderRef = ref(storage, `${storagePath}/${pack.id}`);
+      const folderRef = ref(storage, `stickers/${pack.id}`);
 
       // 1. Storage klasöründeki TÜM dosyaları listele ve sil
       try {
@@ -647,8 +912,15 @@ function App() {
         image_data_version: newVersion
       });
 
-      const storagePath = `${pack.is_premium ? 'premium_stickers' : 'stickers'}/${pack.id}/${sticker.image_file}`;
-      try { await deleteObject(ref(storage, storagePath)); } catch (e) { }
+      // Storage'dan sil (tek klasör: stickers)
+      const storagePath = `stickers/${pack.id}/${sticker.image_file}`;
+      console.log('[DELETE] Storage path:', storagePath);
+      try {
+        await deleteObject(ref(storage, storagePath));
+        console.log('[DELETE] ✅ Storage dosyası silindi:', storagePath);
+      } catch (storageErr: any) {
+        console.error('[DELETE] ❌ Storage silme hatası:', storageErr.code, storageErr.message);
+      }
 
       const updatedPack = {
         ...pack,
@@ -928,6 +1200,19 @@ function App() {
             title="Bildirim Gönder"
           >
             <Bell size={24} />
+          </button>
+
+          <button
+            onClick={() => setActiveTab('automation')}
+            className={cn("p-3 rounded-2xl transition-all relative", activeTab === 'automation' ? "bg-primary text-white shadow-lg" : "text-textSec hover:bg-hover")}
+            title="Otomasyon"
+          >
+            <Bot size={24} />
+            {automationDrafts.length > 0 && (
+              <span className="absolute -top-1 -right-1 bg-warning text-black text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center">
+                {automationDrafts.length}
+              </span>
+            )}
           </button>
 
         </div>
@@ -1218,15 +1503,19 @@ function App() {
 
                     <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7 xl:grid-cols-8 gap-5">
                       {selectedPack.stickers?.map((sticker, idx) => (
-                        <div key={idx} className="group relative aspect-square bg-card/50 rounded-2xl glass p-4 hover:ring-2 hover:ring-primary/50 transition-all duration-300 shadow-lg hover:shadow-2xl hover:shadow-primary/5">
-                          <div className="w-full h-full flex items-center justify-center">
+                        <div
+                          key={idx}
+                          className="group relative aspect-square bg-card/50 rounded-2xl glass p-4 hover:ring-2 hover:ring-primary/50 transition-all duration-300 shadow-lg hover:shadow-2xl hover:shadow-primary/5 cursor-zoom-in"
+                          onClick={() => setPreviewSticker({ url: sticker.url, title: sticker.image_file })}
+                        >
+                          <div className="w-full h-full flex items-center justify-center pointer-events-none">
                             <img
                               src={sticker.url}
                               alt=""
                               className="w-full h-full object-contain group-hover:scale-110 transition-transform duration-500"
                             />
                           </div>
-                          <div className="absolute inset-0 bg-background/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 rounded-2xl backdrop-blur-[2px]">
+                          <div className="absolute inset-0 bg-background/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 rounded-2xl backdrop-blur-[2px]" onClick={(e) => e.stopPropagation()}>
                             <button
                               onClick={() => deleteSticker(selectedPack, sticker)}
                               className="p-2.5 bg-danger hover:bg-danger/80 text-white rounded-xl shadow-lg transition-all hover:scale-110"
@@ -1918,6 +2207,233 @@ function App() {
               )}
             </div>
           </div>
+        ) : activeTab === 'automation' ? (
+          <div className="flex-1 overflow-auto p-8">
+            <div className="max-w-6xl mx-auto">
+              {/* Header */}
+              <div className="flex items-center justify-between mb-8">
+                <div className="flex items-center gap-4">
+                  <div className="p-4 bg-gradient-to-br from-primary/20 to-accent/20 rounded-2xl">
+                    <Bot size={32} className="text-primary" />
+                  </div>
+                  <div>
+                    <h1 className="text-2xl font-bold text-white">Otomasyon Taslakları</h1>
+                    <p className="text-textSec text-sm">Python bot tarafından oluşturulan paketler</p>
+                  </div>
+                </div>
+                <button
+                  onClick={fetchAutomationDrafts}
+                  disabled={loadingDrafts}
+                  className="flex items-center gap-2 px-4 py-2.5 bg-card hover:bg-hover rounded-xl transition-all disabled:opacity-50"
+                >
+                  <RefreshCcw size={18} className={loadingDrafts ? "animate-spin" : ""} />
+                  <span className="font-medium">Yenile</span>
+                </button>
+              </div>
+
+              {/* Info Box */}
+              <div className="bg-gradient-to-r from-primary/10 to-accent/10 border border-primary/20 rounded-2xl p-6 mb-8">
+                <div className="flex items-start gap-4">
+                  <div className="p-2 bg-primary/20 rounded-xl">
+                    <Info size={24} className="text-primary" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-white mb-1">Nasıl Çalışır?</h3>
+                    <p className="text-textSec text-sm">
+                      Python botu (<code className="text-primary">sticker_bot.py</code>) trend konulardan GIF'ler indirir,
+                      WebP'ye dönüştürür ve buraya taslak olarak yükler. Sen beğendiğin paketleri "Yayınla" butonu ile
+                      uygulamaya ekleyebilir, beğenmediklerini silebilirsin.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Drafts Grid */}
+              {loadingDrafts ? (
+                <div className="flex items-center justify-center py-20">
+                  <div className="text-center">
+                    <RefreshCcw size={48} className="animate-spin text-primary mx-auto mb-4" />
+                    <p className="text-textSec">Taslaklar yükleniyor...</p>
+                  </div>
+                </div>
+              ) : automationDrafts.length === 0 ? (
+                <div className="text-center py-20">
+                  <div className="p-6 bg-card/50 rounded-full w-24 h-24 mx-auto mb-6 flex items-center justify-center">
+                    <Package size={48} className="text-textSec" />
+                  </div>
+                  <h3 className="text-xl font-bold text-white mb-2">Bekleyen Taslak Yok</h3>
+                  <p className="text-textSec max-w-md mx-auto">
+                    Python botu çalıştırarak yeni paketler oluşturabilirsin.
+                    <br />
+                    <code className="text-primary text-sm">python automation/sticker_bot.py</code>
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                  {automationDrafts.map(draft => (
+                    <div
+                      key={draft.id}
+                      className="bg-card rounded-2xl overflow-hidden border border-white/5 hover:border-primary/30 transition-all cursor-pointer group"
+                      onClick={() => setSelectedDraft(draft)}
+                    >
+                      {/* Tray Image */}
+                      <div className="h-40 bg-gradient-to-br from-bgSecondary to-card flex items-center justify-center relative overflow-hidden">
+                        <div className="absolute inset-0 bg-primary/0 group-hover:bg-primary/5 transition-all" />
+                        {draft.tray_url ? (
+                          <img
+                            src={draft.tray_url}
+                            alt={draft.name}
+                            className="w-24 h-24 object-contain group-hover:scale-110 transition-transform duration-500"
+                          />
+                        ) : (
+                          <Package size={48} className="text-textSec" />
+                        )}
+                        <div className="absolute top-3 right-3 px-2 py-1 bg-warning/20 text-warning text-[10px] font-bold rounded-lg uppercase tracking-wider">
+                          TASLAK
+                        </div>
+                      </div>
+
+                      {/* Info */}
+                      <div className="p-4">
+                        <h3 className="font-bold text-white text-lg mb-1">{draft.name}</h3>
+                        <div className="flex items-center gap-3 text-textSec text-xs mb-4">
+                          <span>{draft.sticker_count} çıkartma</span>
+                          <span>•</span>
+                          <span>{(draft as any).category || 'Diğer'}</span>
+                        </div>
+
+                        {/* Stickers Preview */}
+                        {draft.stickers && draft.stickers.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mb-4">
+                            {draft.stickers.slice(0, 6).map((sticker, i) => (
+                              <img
+                                key={i}
+                                src={sticker.url}
+                                alt=""
+                                className="w-10 h-10 object-contain rounded-lg bg-bgSecondary border border-white/5"
+                              />
+                            ))}
+                            {draft.stickers.length > 6 && (
+                              <div className="w-10 h-10 rounded-lg bg-bgSecondary flex items-center justify-center text-textSec text-[10px] font-bold border border-white/5">
+                                +{draft.stickers.length - 6}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Source Query */}
+                        {(draft as any).source_query && (
+                          <p className="text-textSec text-[10px] mb-4 opacity-50 italic">
+                            Kaynak: {(draft as any).source_query}
+                          </p>
+                        )}
+
+                        {/* Actions */}
+                        <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            onClick={() => approveAutomationDraft(draft)}
+                            disabled={isProcessing}
+                            className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-primary hover:bg-primary/80 text-white rounded-xl text-sm font-bold transition-all disabled:opacity-50"
+                          >
+                            <Check size={16} />
+                            Yayınla
+                          </button>
+                          <button
+                            onClick={() => deleteAutomationDraft(draft)}
+                            disabled={isProcessing}
+                            className="flex items-center justify-center gap-2 px-3 py-2 bg-danger/10 hover:bg-danger/20 text-danger rounded-xl transition-all disabled:opacity-50"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Draft Preview Modal */}
+              {selectedDraft && (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+                  <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setSelectedDraft(null)} />
+                  <div className="bg-card w-full max-w-4xl max-h-[90vh] rounded-[32px] overflow-hidden border border-white/10 shadow-2xl relative z-10 flex flex-col">
+                    {/* Modal Header */}
+                    <div className="p-6 border-b border-white/5 flex items-center justify-between bg-gradient-to-r from-card to-bgSecondary">
+                      <div className="flex items-center gap-4">
+                        <div className="w-16 h-16 bg-bgSecondary rounded-2xl flex items-center justify-center p-2 border border-white/5">
+                          <img src={selectedDraft.tray_url} alt="" className="w-full h-full object-contain" />
+                        </div>
+                        <div>
+                          <h2 className="text-2xl font-bold text-white">{selectedDraft.name}</h2>
+                          <p className="text-textSec text-sm">{(selectedDraft as any).category} • {selectedDraft.sticker_count} Çıkartma</p>
+                        </div>
+                      </div>
+                      <button onClick={() => setSelectedDraft(null)} className="p-2 hover:bg-white/5 rounded-full transition-all">
+                        <X size={24} />
+                      </button>
+                    </div>
+
+                    {/* Modal Content */}
+                    <div className="flex-1 overflow-auto p-8">
+                      <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-4">
+                        {selectedDraft.stickers?.map((sticker, idx) => (
+                          <div
+                            key={idx}
+                            className="aspect-square bg-bgSecondary rounded-2xl p-2 border border-white/5 flex items-center justify-center relative group cursor-zoom-in"
+                            onClick={() => setPreviewSticker({ url: sticker.url, title: sticker.image_file })}
+                          >
+                            <img
+                              src={sticker.url}
+                              alt=""
+                              className="w-full h-full object-contain hover:scale-110 transition-transform pointer-events-none"
+                            />
+                            <div className="absolute inset-0 bg-primary/20 opacity-0 group-hover:opacity-100 transition-all rounded-2xl flex items-end justify-center p-1 pointer-events-none">
+                              <span className="text-[10px] font-bold text-white bg-black/50 px-2 py-0.5 rounded-full">{sticker.emojis.join('')}</span>
+                            </div>
+                            {/* Single Sticker Delete Button */}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                removeStickerFromDraft(selectedDraft, idx);
+                              }}
+                              className="absolute top-1 right-1 w-6 h-6 bg-danger/80 text-white rounded-lg flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all hover:bg-danger"
+                            >
+                              <X size={14} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Modal Footer */}
+                    <div className="p-6 border-t border-white/5 flex gap-4">
+                      <button
+                        onClick={() => {
+                          approveAutomationDraft(selectedDraft);
+                          setSelectedDraft(null);
+                        }}
+                        disabled={isProcessing}
+                        className="flex-1 h-14 bg-primary hover:bg-primary/80 text-white rounded-2xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg shadow-primary/20"
+                      >
+                        <Check size={20} />
+                        Taslağı Onayla ve Yayınla
+                      </button>
+                      <button
+                        onClick={() => {
+                          deleteAutomationDraft(selectedDraft);
+                          setSelectedDraft(null);
+                        }}
+                        disabled={isProcessing}
+                        className="w-14 h-14 bg-danger/10 hover:bg-danger/20 text-danger rounded-2xl flex items-center justify-center transition-all"
+                      >
+                        <Trash2 size={24} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
         ) : null}
       </main>
 
@@ -2337,6 +2853,89 @@ function App() {
           </div>
         )
       }
+
+      {/* Automation/Delete Progress Overlay */}
+      {
+        isProcessing && deleteProgress && (
+          <div className="fixed inset-0 z-[100] bg-background/95 backdrop-blur-2xl flex flex-col items-center justify-center space-y-10 animate-in fade-in duration-500 p-8 text-center">
+            <div className="relative scale-110">
+              <div className="absolute inset-0 bg-primary/30 blur-[100px] rounded-full animate-pulse" />
+              <div className="relative bg-card p-10 rounded-[3.5rem] border border-white/10 shadow-3xl">
+                <CloudLightning className="text-primary animate-bounce" size={72} />
+              </div>
+            </div>
+
+            <div className="space-y-6 max-w-xl">
+              <div className="space-y-2">
+                <h3 className="text-4xl font-black text-white tracking-tighter uppercase italic underline decoration-primary/50 underline-offset-8">
+                  Sistem Aktarımı
+                </h3>
+                <p className="text-textSec font-bold text-sm tracking-wide">
+                  Taslak paket ana sunucuya taşınıyor...
+                </p>
+              </div>
+
+              <div className="bg-primary/10 border border-primary/20 px-8 py-3 rounded-full inline-flex items-center gap-3">
+                <span className="w-2 h-2 bg-primary rounded-full animate-ping" />
+                <p className="text-primary font-black uppercase tracking-widest text-xs">
+                  {deleteProgress.message}
+                </p>
+              </div>
+            </div>
+
+            <div className="w-full max-w-lg space-y-5 bg-card/40 p-8 rounded-[2.5rem] border border-white/5 shadow-inner">
+              <div className="flex items-center justify-between text-[11px] font-black text-white uppercase tracking-[0.2em] px-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 bg-primary rounded-full" />
+                  <span>TAŞINAN: {deleteProgress.current} Çıkartma</span>
+                </div>
+                <div className="bg-white/10 px-3 py-1 rounded-lg">
+                  <span className="text-primary">{deleteProgress.total > 0 ? Math.round((deleteProgress.current / deleteProgress.total) * 100) : 0}%</span>
+                </div>
+              </div>
+
+              <div className="w-full bg-white/5 h-4 rounded-full overflow-hidden border border-white/10 p-1.5">
+                <div
+                  className="h-full bg-gradient-to-r from-primary via-emerald-400 to-primary shadow-[0_0_30px_rgba(0,168,132,0.5)] transition-all duration-500 ease-out rounded-full"
+                  style={{ width: `${deleteProgress.total > 0 ? (deleteProgress.current / deleteProgress.total) * 100 : 0}%` }}
+                />
+              </div>
+
+              <div className="pt-2">
+                <p className="text-[10px] text-textSec font-bold uppercase italic opacity-40">
+                  Bu işlem tamamlandığında paket uygulama içerisinde yayınlanacaktır.
+                </p>
+              </div>
+            </div>
+          </div>
+        )
+      }
+
+      {/* Sticker Preview Modal */}
+      {previewSticker && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-xl animate-in fade-in duration-300"
+          onClick={() => setPreviewSticker(null)}
+        >
+          <div className="absolute top-6 right-6 flex items-center gap-4">
+            <span className="text-white/40 font-mono text-xs uppercase tracking-[0.3em] font-black">{previewSticker.title}</span>
+            <button className="p-3 bg-white/10 hover:bg-white/20 text-white rounded-full transition-all">
+              <X size={24} />
+            </button>
+          </div>
+          <div className="relative group max-w-[90vw] max-h-[90vh]">
+            <img
+              src={previewSticker.url}
+              alt=""
+              className="max-w-full max-h-[80vh] object-contain drop-shadow-[0_0_50px_rgba(0,168,132,0.3)] animate-in zoom-in-90 duration-300"
+              onClick={(e) => e.stopPropagation()}
+            />
+            <div className="absolute -bottom-12 left-1/2 -translate-x-1/2 text-primary font-black text-sm tracking-widest uppercase opacity-0 group-hover:opacity-100 transition-opacity">
+              STICKER ÖNİZLEME
+            </div>
+          </div>
+        </div>
+      )}
 
     </div >
   );

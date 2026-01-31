@@ -39,8 +39,11 @@ object AdManager {
 
     fun initialize(context: Context) {
         if (isInitialized) return
-        MobileAds.initialize(context) {
+        Log.d(TAG, "Initializing AdMob SDK...")
+        MobileAds.initialize(context) { initStatus ->
             isInitialized = true
+            Log.d(TAG, "AdMob SDK initialized. Status: ${initStatus.adapterStatusMap}")
+            Log.d(TAG, "User isPremium: ${PreferencesHelper.isPremium(context)}")
             loadInterstitial(context)
             // Initial preload
             preloadMakerNativeAd(context)
@@ -80,13 +83,19 @@ object AdManager {
     }
 
     fun loadInterstitial(context: Context) {
+        Log.d(TAG, "loadInterstitial called. isLoading: $isLoading, hasAd: ${interstitialAd != null}, isPremium: ${PreferencesHelper.isPremium(context)}")
         if (isLoading || interstitialAd != null) return
-        if (PreferencesHelper.isPremium(context)) return
+        if (PreferencesHelper.isPremium(context)) {
+            Log.d(TAG, "User is premium, skipping interstitial load")
+            return
+        }
 
         isLoading = true
+        Log.d(TAG, "Loading interstitial ad...")
         InterstitialAd.load(context, INTERSTITIAL_ID, AdRequest.Builder().build(),
             object : InterstitialAdLoadCallback() {
                 override fun onAdLoaded(ad: InterstitialAd) {
+                    Log.d(TAG, "Interstitial ad loaded successfully")
                     interstitialAd = ad
                     isLoading = false
                     ad.fullScreenContentCallback = object : FullScreenContentCallback() {
@@ -97,6 +106,7 @@ object AdManager {
                     }
                 }
                 override fun onAdFailedToLoad(error: LoadAdError) {
+                    Log.e(TAG, "Interstitial ad failed to load: ${error.message} Code: ${error.code}")
                     interstitialAd = null
                     isLoading = false
                 }
@@ -127,7 +137,11 @@ object AdManager {
     }
 
     fun loadNativeAd(context: Context, type: NativeAdType = NativeAdType.LIST, onLoaded: (NativeAd) -> Unit) {
-        if (PreferencesHelper.isPremium(context)) return
+        Log.d(TAG, "loadNativeAd called. Type: $type, isPremium: ${PreferencesHelper.isPremium(context)}, isInitialized: $isInitialized")
+        if (PreferencesHelper.isPremium(context)) {
+            Log.d(TAG, "User is premium, skipping ad load")
+            return
+        }
         
         // Eğer Maker ekranıysa ve önceden yüklenmiş reklam varsa onu kullan
         if (type == NativeAdType.MAKER) {
@@ -145,11 +159,18 @@ object AdManager {
             else -> LIST_NATIVE_AD_ID
         }
         
+        Log.d(TAG, "Loading Native Ad with ID: $adUnitId")
         val adLoader = AdLoader.Builder(context, adUnitId)
-            .forNativeAd { onLoaded(it) }
+            .forNativeAd { nativeAd ->
+                Log.d(TAG, "Native Ad loaded successfully for type: $type")
+                onLoaded(nativeAd)
+            }
             .withAdListener(object : AdListener() {
                 override fun onAdFailedToLoad(e: LoadAdError) {
-                    Log.e(TAG, "Native Ad Error: ${e.message} Code: ${e.code}")
+                    Log.e(TAG, "Native Ad Error for $type: ${e.message} Code: ${e.code} Domain: ${e.domain}")
+                }
+                override fun onAdLoaded() {
+                    Log.d(TAG, "Ad loaded event fired for type: $type")
                 }
             })
             .withNativeAdOptions(NativeAdOptions.Builder()
@@ -158,6 +179,7 @@ object AdManager {
                 .build())
             .build()
         adLoader.loadAd(AdRequest.Builder().build())
+        Log.d(TAG, "Ad request sent for type: $type")
     }
 
     fun populateNativeAdView(nativeAd: NativeAd, adView: NativeAdView) {

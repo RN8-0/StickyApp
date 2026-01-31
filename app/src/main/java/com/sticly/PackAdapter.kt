@@ -74,17 +74,28 @@ class PackAdapter(
             val pack = items[pos] as Pack
             bindPack(holder, pack)
         } else if (holder is AdVH) {
-            if (!PreferencesHelper.isPremium(holder.itemView.context)) {
+            val context = holder.itemView.context
+            if (!PreferencesHelper.isPremium(context)) {
+                // Başlangıçta görünür yap
+                holder.itemView.visibility = View.VISIBLE
+                holder.itemView.layoutParams = RecyclerView.LayoutParams(
+                    RecyclerView.LayoutParams.MATCH_PARENT,
+                    RecyclerView.LayoutParams.WRAP_CONTENT
+                )
+
                 val adType = when (items[pos]) {
                     "AD_FAVORITE_PLACEHOLDER" -> AdManager.NativeAdType.FAVORITE
                     "AD_MY_STICKERS_PLACEHOLDER" -> AdManager.NativeAdType.MY_STICKERS
                     else -> AdManager.NativeAdType.LIST
                 }
-                
-                AdManager.loadNativeAd(holder.itemView.context, adType) { nativeAd ->
+
+                android.util.Log.d("PackAdapter", "Loading ad at position $pos, type: $adType")
+                AdManager.loadNativeAd(context, adType) { nativeAd ->
+                    android.util.Log.d("PackAdapter", "Ad loaded, populating view at position $pos")
                     AdManager.populateNativeAdView(nativeAd, holder.adView)
                 }
             } else {
+                android.util.Log.d("PackAdapter", "User is premium, hiding ad at position $pos")
                 holder.itemView.visibility = View.GONE
                 holder.itemView.layoutParams = RecyclerView.LayoutParams(0, 0)
             }
