@@ -6,6 +6,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageButton
 import android.widget.ImageView
+import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.recyclerview.widget.RecyclerView
@@ -20,13 +21,26 @@ import com.google.android.gms.ads.nativead.NativeAd
 import com.google.android.gms.ads.nativead.NativeAdView
 import com.google.android.gms.ads.nativead.MediaView
 import android.widget.Button
+import com.google.android.material.button.MaterialButton
+
+import androidx.recyclerview.widget.DiffUtil
 
 class PackAdapter(
     private var items: List<Any>,
     private val click: (Pack) -> Unit,
     private val onFavoriteChanged: (() -> Unit)? = null,
-    private val onDeleteClick: ((Pack) -> Unit)? = null
+    private val onDeleteClick: ((Pack) -> Unit)? = null,
+    private val onAddClick: ((Pack) -> Unit)? = null
 ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
+
+    init {
+        setHasStableIds(true)
+    }
+
+    override fun getItemId(position: Int): Long {
+        val item = items.getOrNull(position) ?: return position.toLong()
+        return if (item is Pack) item.id.hashCode().toLong() else item.hashCode().toLong()
+    }
 
     companion object {
         private const val TYPE_PACK = 0
@@ -44,8 +58,12 @@ class PackAdapter(
         val premiumContainer: View = v.findViewById(R.id.premiumContainer)
         val newBadge: TextView = v.findViewById(R.id.newBadge)
         val btnFavorite: ImageButton = v.findViewById(R.id.btnFavorite)
+        val btnFavoriteNew: ImageButton = v.findViewById(R.id.btnFavoriteNew)
         val btnDelete: ImageButton = v.findViewById(R.id.btnDelete)
         val downloadCount: TextView = v.findViewById(R.id.downloadCount)
+        val timeAgo: TextView = v.findViewById(R.id.timeAgo)
+        val btnAdd: MaterialButton = v.findViewById(R.id.btnAdd)
+        val stickerPreviewContainer: LinearLayout = v.findViewById(R.id.stickerPreviewContainer)
     }
 
     class AdVH(v: View) : RecyclerView.ViewHolder(v) {
@@ -110,8 +128,10 @@ class PackAdapter(
         h.count.text = context.getString(R.string.sticker_count, pack.stickers.size)
         h.itemView.setOnClickListener { click(pack) }
 
-        // Check if pack is installed
-        val isInstalled = PreferencesHelper.isPackInstalled(context, pack.id)
+        // Check if pack is installed - Safely check with access for premium packs
+        val hasAccess = PreferencesHelper.hasAccessToPremiumPack(context, pack.id)
+        val isInstalled = PreferencesHelper.isPackInstalled(context, pack.id) && (!pack.isPremium || hasAccess)
+        
         h.checkIcon.visibility = if (isInstalled) View.VISIBLE else View.GONE
         h.installedBadge.visibility = if (isInstalled) View.VISIBLE else View.GONE
 
@@ -128,7 +148,7 @@ class PackAdapter(
 
         // Premium badge ve taç
         val isPremiumPack = pack.isPremium
-        val hasAccess = PreferencesHelper.hasAccessToPremiumPack(context, pack.id)
+        // hasAccess yukarıda tanımlandı
 
         h.crownIcon.visibility = if (isPremiumPack) View.VISIBLE else View.GONE
         h.premiumContainer.visibility = if (isPremiumPack && !hasAccess && !isInstalled) View.VISIBLE else View.GONE
@@ -137,15 +157,73 @@ class PackAdapter(
         val isNew = isPackNew(pack.createdAt)
         h.newBadge.visibility = if (isNew) View.VISIBLE else View.GONE
 
-        // Favori butonu
+        // Zaman bilgisi
+        h.timeAgo.text = getTimeAgo(pack.createdAt, context)
+
+        // Ekle / Paylaş butonu
+        if (isInstalled) {
+            h.btnAdd.text = ""
+            h.btnAdd.setIconResource(R.drawable.ic_share)
+            h.btnAdd.iconTint = androidx.core.content.ContextCompat.getColorStateList(context, R.color.white)
+            h.btnAdd.background = androidx.core.content.ContextCompat.getDrawable(context, R.drawable.bg_gradient_share)
+            h.btnAdd.backgroundTintList = null 
+            h.btnAdd.iconPadding = 0
+            h.btnAdd.iconGravity = com.google.android.material.button.MaterialButton.ICON_GRAVITY_TEXT_START // text boş olduğu için ortalanır
+            h.btnAdd.minWidth = 0
+            h.btnAdd.layoutParams.width = (40 * context.resources.displayMetrics.density).toInt()
+            h.btnAdd.layoutParams.height = (40 * context.resources.displayMetrics.density).toInt()
+        } else {
+            h.btnAdd.text = context.getString(R.string.btn_add_short)
+            h.btnAdd.setIconResource(R.drawable.ic_whatsapp_small)
+            h.btnAdd.iconTint = androidx.core.content.ContextCompat.getColorStateList(context, R.color.accent)
+            h.btnAdd.setTextColor(androidx.core.content.ContextCompat.getColor(context, R.color.accent))
+            h.btnAdd.background = null 
+            h.btnAdd.backgroundTintList = null
+            h.btnAdd.iconPadding = (6 * context.resources.displayMetrics.density).toInt()
+            h.btnAdd.iconGravity = com.google.android.material.button.MaterialButton.ICON_GRAVITY_TEXT_START
+            h.btnAdd.layoutParams.width = android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+            h.btnAdd.layoutParams.height = (32 * context.resources.displayMetrics.density).toInt()
+        }
+
+        h.btnAdd.setOnClickListener {
+            if (isInstalled) {
+                // Paylaşma işlemi
+                val shareText = "Check out this '${pack.localizedName}' sticker pack! \n\nDownload Sticky app: https://play.google.com/store/apps/details?id=${context.packageName}"
+                val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(android.content.Intent.EXTRA_SUBJECT, pack.localizedName)
+                    putExtra(android.content.Intent.EXTRA_TEXT, shareText)
+                }
+                context.startActivity(android.content.Intent.createChooser(intent, context.getString(R.string.share_pack)))
+            } else {
+                if (onAddClick != null) {
+                    onAddClick.invoke(pack)
+                } else {
+                    click(pack)
+                }
+            }
+        }
+
+        // İndirme sayısı
+        val displayDownloadCount = pack.fakeDownloadBase + pack.downloadCount
+        if (displayDownloadCount > 0) {
+            h.downloadCount.visibility = View.VISIBLE
+            h.downloadCount.text = formatDownloadCount(displayDownloadCount) + " " + context.getString(R.string.download_label)
+        } else {
+            h.downloadCount.visibility = View.VISIBLE
+            h.downloadCount.text = context.getString(R.string.sticker_count, pack.stickers.size)
+        }
+
+        // Favori butonu (yeni - üst satırda)
         if (!isCustomPack) {
             val isFavorite = PreferencesHelper.isPackFavorite(context, pack.id)
-            h.btnFavorite.setImageResource(
+            h.btnFavoriteNew.visibility = View.VISIBLE
+            h.btnFavoriteNew.setImageResource(
                 if (isFavorite) R.drawable.ic_favorite_filled else R.drawable.ic_favorite_border
             )
-            h.btnFavorite.setOnClickListener {
+            h.btnFavoriteNew.setOnClickListener {
                 val newFavState = PreferencesHelper.toggleFavorite(context, pack.id)
-                h.btnFavorite.setImageResource(
+                h.btnFavoriteNew.setImageResource(
                     if (newFavState) R.drawable.ic_favorite_filled else R.drawable.ic_favorite_border
                 )
 
@@ -159,43 +237,97 @@ class PackAdapter(
                 Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
                 onFavoriteChanged?.invoke()
             }
+        } else {
+            h.btnFavoriteNew.visibility = View.GONE
         }
 
-        // İndirme sayısı (fake base + gerçek)
-        val displayDownloadCount = pack.fakeDownloadBase + pack.downloadCount
-        if (displayDownloadCount > 0) {
-            h.downloadCount.visibility = View.VISIBLE
-            h.downloadCount.text = formatDownloadCount(displayDownloadCount)
-        } else {
-            h.downloadCount.visibility = View.GONE
-        }
+        // Eski favori butonu (gizli tutulacak - uyumluluk için)
+        h.btnFavorite.visibility = View.GONE
 
-        // Tray image
-        if (isCustomPack) {
-            val trayFile = CustomStickerManager.getTrayFile(context, pack.id)
-            if (trayFile != null && trayFile.exists()) {
-                Glide.with(context).load(trayFile).skipMemoryCache(true).diskCacheStrategy(DiskCacheStrategy.NONE).into(h.tray)
-            } else {
-                h.tray.setImageResource(R.drawable.ic_sticker_placeholder)
-            }
-        } else {
-            when {
-                pack.trayUrl.isNotEmpty() -> {
-                    Glide.with(context).load(pack.trayUrl).diskCacheStrategy(DiskCacheStrategy.ALL).into(h.tray)
+        // Çıkartma önizlemeleri yükle
+        loadStickerPreviews(h, pack, isCustomPack)
+    }
+
+    private fun loadStickerPreviews(h: VH, pack: Pack, isCustomPack: Boolean) {
+        val context = h.itemView.context
+        val container = h.stickerPreviewContainer
+        container.removeAllViews()
+
+        val displayMetrics = context.resources.displayMetrics
+        // Çıkartma boyutunu büyütüyoruz (100dp -> 120dp)
+        val stickerSize = (120 * displayMetrics.density).toInt()
+        val stickerMargin = (8 * displayMetrics.density).toInt()
+        
+        // Netlik için Glide override boyutunu artırıyoruz
+        val glideOverrideSize = (320 * displayMetrics.density).toInt() 
+        
+        // Sadece ilk 7 çıkartmayı göster
+        val stickersToShow = pack.stickers.take(7)
+
+        if (stickersToShow.isEmpty()) return
+
+        stickersToShow.forEachIndexed { index, sticker ->
+            val previewView = ImageView(context).apply {
+                val params = LinearLayout.LayoutParams(stickerSize, stickerSize)
+                if (index < stickersToShow.size - 1) {
+                    params.marginEnd = stickerMargin
                 }
-                else -> {
-                    val cachedTray = StickerRepository.getCachedStickerPath(context, pack.id, pack.tray)
-                    if (cachedTray.exists() && cachedTray.length() > 0) {
-                        Glide.with(context).load(cachedTray).signature(ObjectKey(cachedTray.lastModified())).diskCacheStrategy(DiskCacheStrategy.NONE).into(h.tray)
-                    } else {
-                        try {
-                            val path = "${pack.id}/${pack.tray}"
-                            val stream = context.assets.open(path)
-                            val bitmap = BitmapFactory.decodeStream(stream)
-                            stream.close()
-                            h.tray.setImageBitmap(bitmap)
-                        } catch (e: Exception) {
-                            h.tray.setImageResource(R.drawable.ic_sticker_placeholder)
+                layoutParams = params
+                scaleType = ImageView.ScaleType.FIT_CENTER
+                setBackgroundResource(R.drawable.sticker_preview_bg)
+                setOnClickListener { click(pack) }
+            }
+            container.addView(previewView)
+
+            if (isCustomPack) {
+                val stickerFile = CustomStickerManager.getStickerFile(context, pack.id, sticker.file)
+                if (stickerFile != null && stickerFile.exists()) {
+                    Glide.with(context)
+                        .load(stickerFile)
+                        .override(glideOverrideSize)
+                        .dontAnimate()
+                        .placeholder(R.drawable.ic_sticker_placeholder)
+                        .error(R.drawable.ic_sticker_placeholder)
+                        .diskCacheStrategy(DiskCacheStrategy.DATA)
+                        .into(previewView)
+                } else {
+                    previewView.setImageResource(R.drawable.ic_sticker_placeholder)
+                }
+            } else {
+                when {
+                    sticker.url.isNotEmpty() -> {
+                        Glide.with(context)
+                            .load(sticker.url)
+                            .override(glideOverrideSize)
+                            .dontAnimate()
+                            .thumbnail(Glide.with(context).load(sticker.url).override(stickerSize / 2).dontAnimate())
+                            .placeholder(R.drawable.ic_sticker_placeholder)
+                            .error(R.drawable.ic_sticker_placeholder)
+                            .diskCacheStrategy(DiskCacheStrategy.ALL)
+                            .into(previewView)
+                    }
+                    else -> {
+                        val cachedSticker = StickerRepository.getCachedStickerPath(context, pack.id, sticker.file)
+                        if (cachedSticker.exists() && cachedSticker.length() > 0) {
+                            Glide.with(context)
+                                .load(cachedSticker)
+                                .override(glideOverrideSize)
+                                .dontAnimate()
+                                .placeholder(R.drawable.ic_sticker_placeholder)
+                                .error(R.drawable.ic_sticker_placeholder)
+                                .signature(ObjectKey(cachedSticker.lastModified()))
+                                .diskCacheStrategy(DiskCacheStrategy.ALL)
+                                .into(previewView)
+                        } else {
+                            try {
+                                val path = "${pack.id}/${sticker.file}"
+                                val stream = context.assets.open(path)
+                                val bitmap = BitmapFactory.decodeStream(stream)
+                                stream.close()
+                                previewView.setImageBitmap(bitmap)
+                            } catch (e: Exception) {
+                                previewView.setImageResource(R.drawable.ic_sticker_placeholder)
+                            }
                         }
                     }
                 }
@@ -203,11 +335,52 @@ class PackAdapter(
         }
     }
 
+    private fun getTimeAgo(createdAt: String, context: android.content.Context): String {
+        if (createdAt.isEmpty()) return ""
+        return try {
+            val format = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+            val createdDate = format.parse(createdAt) ?: return ""
+            val now = Date()
+            val diffInMillis = now.time - createdDate.time
+
+            val minutes = TimeUnit.MILLISECONDS.toMinutes(diffInMillis)
+            val hours = TimeUnit.MILLISECONDS.toHours(diffInMillis)
+            val days = TimeUnit.MILLISECONDS.toDays(diffInMillis)
+            val weeks = days / 7
+            val months = days / 30
+            val years = days / 365
+
+            when {
+                minutes < 60 -> "${minutes}m"
+                hours < 24 -> "${hours}h"
+                days < 7 -> "${days}d"
+                weeks < 4 -> "${weeks}w"
+                months < 12 -> "${months}mo"
+                else -> "${years}y"
+            }
+        } catch (e: Exception) {
+            ""
+        }
+    }
+
     override fun getItemCount() = items.size
 
     fun updateList(newList: List<Any>) {
+        val diffResult = DiffUtil.calculateDiff(object : DiffUtil.Callback() {
+            override fun getOldListSize() = items.size
+            override fun getNewListSize() = newList.size
+            override fun areItemsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
+                val old = items[oldItemPosition]
+                val new = newList[newItemPosition]
+                if (old is Pack && new is Pack) return old.id == new.id
+                return old == new
+            }
+            override fun areContentsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
+                return items[oldItemPosition] == newList[newItemPosition]
+            }
+        })
         items = newList
-        notifyDataSetChanged()
+        diffResult.dispatchUpdatesTo(this)
     }
 
     private fun isPackNew(createdAt: String): Boolean {
@@ -226,8 +399,8 @@ class PackAdapter(
 
     private fun formatDownloadCount(count: Int): String {
         return when {
-            count >= 1000000 -> "${count / 1000000}M"
-            count >= 1000 -> "${count / 1000}K"
+            count >= 1000000 -> String.format("%.1fM", count / 1000000.0)
+            count >= 1000 -> String.format("%.1fK", count / 1000.0)
             else -> count.toString()
         }
     }

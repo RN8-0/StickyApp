@@ -518,13 +518,22 @@ object CustomStickerManager {
     fun getStickerFiles(context: Context, packId: String): List<File> {
         val packDir = getPackDir(context, packId)
         val pack = getPackInfo(context, packId) ?: return emptyList()
-        
+
         val files = mutableListOf<File>()
         for (i in 1..pack.stickerCount) {
             val file = File(packDir, "${STICKER_PREFIX}${i}.webp")
             if (file.exists()) files.add(file)
         }
         return files
+    }
+
+    /**
+     * Belirli bir sticker dosyasını döndürür
+     */
+    fun getStickerFile(context: Context, packId: String, fileName: String): File? {
+        val packDir = getPackDir(context, packId)
+        val file = File(packDir, fileName)
+        return if (file.exists()) file else null
     }
 
     /**

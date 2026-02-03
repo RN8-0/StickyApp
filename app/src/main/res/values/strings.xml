@@ -2,6 +2,7 @@
 <resources>
     <string name="app_name">Sticky</string>
     <string name="search_hint">Search packs…</string>
+    <string name="settings">Settings</string>
     <string name="theme">Theme</string>
     <string name="faq">FAQ</string>
     <string name="about">About</string>
@@ -25,6 +26,14 @@
     <string name="privacy_policy">Privacy Policy</string>
     <string name="notification_settings">Notification Settings</string>
     <string name="language">Language</string>
+    <string name="premium_banner_title">Get Premium</string>
+    <string name="premium_banner_desc">Enjoy ad-free stickers. Access all premium features.</string>
+    <string name="notification_menu_title">Notifications for stickers</string>
+    <string name="notification_menu_desc">Click to enable notifications</string>
+    <string name="login_banner_text">Log in and keep your data safe!</string>
+    <string name="invite_friend">Invite a friend</string>
+    <string name="support_and_share_title">Support &amp; Share</string>
+    <string name="connect_with">Connect with</string>
     <string name="select_language">Select Language</string>
 
     <!-- Contact Us -->
@@ -57,6 +66,7 @@
 
     <!-- Share -->
     <string name="share_text">Try the Sticky app! Great stickers for WhatsApp: https://play.google.com/store/apps/details?id=com.sticly</string>
+    <string name="share_pack">Share Stickers</string>
 
     <!-- Privacy -->
     <string name="privacy_title">Privacy Policy</string>
@@ -125,7 +135,12 @@
     <string name="restore_purchases">Restore Purchases</string>
     <string name="restore_success">Your purchases have been restored!</string>
     <string name="restore_not_found">No purchases found to restore</string>
-    <string name="restore_error">Restore failed. Please try again.</string>
+    <string name="btn_restore_subscription">Restore Purchases</string>
+    <string name="restore_error">Geri yükleme sırasında bir hata oluştu.</string>
+    <string name="subscription_activated">Abonelik aktif edildi.</string>
+    <string name="no_subscription_found">Daha önce mevcut aboneliğiniz bulunmamaktadır.</string>
+    <string name="remove_ads">Remove Ads</string>
+    <string name="remove_ads_desc">Enjoy an ad-free experience</string>
     <string name="restoring">Restoring…</string>
 
     <!-- Product -->
@@ -231,6 +246,7 @@
     <string name="stickers_loading">Loading stickers…</string>
     <string name="stickers_load_failed">Stickers could not be loaded</string>
     <string name="loading_percent">Loading %1$d%%</string>
+    <string name="ad_preparing">Preparing…</string>
 
     <!-- Pack Validation Errors -->
     <string name="pack_empty_error">📦 This pack has no stickers! Add at least 3 stickers first.</string>
@@ -252,6 +268,9 @@
     <string name="whatsapp_not_available_message">WhatsApp could not be opened. Please check:\n\n• WhatsApp is installed\n• You are logged into WhatsApp\n• WhatsApp is up to date.</string>
     <string name="whatsapp_error_detailed">WhatsApp error: %s\n\nPlease make sure WhatsApp is working correctly.</string>
     <string name="sticker_count">%d stickers</string>
+    <string name="btn_add_short">Add</string>
+    <string name="btn_share_short">Share</string>
+    <string name="download_label">downloads</string>
     <string name="no_custom_packs">You don\'t have any sticker packs yet. Create one now!</string>
     <string name="pack_deleted_whatsapp_sync">Pack deleted and WhatsApp sync triggered. It may take a few seconds.</string>
     <string name="pack_delete_failed">Pack could not be deleted</string>
@@ -493,4 +512,7 @@
     <string name="period_month">mo</string>
     <string name="period_year">yr</string>
     <string name="yearly_old_price">₺839</string>
+
+    <!-- Auth Config (Replace with your actual IDs) -->
+    <string name="default_web_client_id">643314832062-p7vgneda3aqrrk4pf7qngpcdb6bnasgc.apps.googleusercontent.com</string>
 </resources>

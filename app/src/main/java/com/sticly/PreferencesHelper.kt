@@ -40,6 +40,19 @@ object PreferencesHelper {
             setPremiumType(context, "none")
             setPremiumExpiry(context, 0L)
         }
+        
+        // Sync to Firebase
+        val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+        if (user != null) {
+            val data = hashMapOf(
+                "is_premium" to isPremium,
+                "premium_type" to if (isPremium) getPremiumType(context) else "none",
+                "premium_expiry" to if (isPremium) getPremiumExpiry(context) else 0L,
+                "last_sync" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+            )
+            FirebaseFirestore.getInstance().collection("users").document(user.uid)
+                .set(data, SetOptions.merge())
+        }
     }
 
     fun setPremiumWithType(context: Context, type: String, expiryTimestamp: Long = 0L) {
@@ -47,7 +60,21 @@ object PreferencesHelper {
             .putBoolean(KEY_PREMIUM, true)
             .putString(KEY_PREMIUM_TYPE, type)
             .putLong(KEY_PREMIUM_EXPIRY, expiryTimestamp)
+            .putLong(KEY_PREMIUM_EXPIRY, expiryTimestamp)
             .apply()
+
+        // Sync to Firebase
+        val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+        if (user != null) {
+            val data = hashMapOf(
+                "is_premium" to true,
+                "premium_type" to type,
+                "premium_expiry" to expiryTimestamp,
+                "last_sync" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+            )
+            FirebaseFirestore.getInstance().collection("users").document(user.uid)
+                .set(data, SetOptions.merge())
+        }
     }
 
     fun getPremiumType(context: Context): String {
@@ -101,19 +128,25 @@ object PreferencesHelper {
         val current = HashSet(getInstalledPacks(context))
         current.add(packId)
         getPrefs(context).edit().putStringSet(KEY_INSTALLED_PACKS, current).commit()
+        
+        // WhatsApp'a eklenen paket aynı zamanda favorilere eklenir ve Firebase'e senkronize edilir
+        addFavoritePack(context, packId)
     }
 
     fun removeInstalledPack(context: Context, packId: String) {
         val current = HashSet(getInstalledPacks(context))
         current.remove(packId)
         getPrefs(context).edit().putStringSet(KEY_INSTALLED_PACKS, current).commit()
+        
+        // WhatsApp'tan kaldırılan paket favorilerden silinir ve Firebase'den düşer
+        removeFavoritePack(context, packId)
     }
 
     fun isPackInstalled(context: Context, packId: String): Boolean {
         return getInstalledPacks(context).contains(packId)
     }
 
-    // Purchased Packs (Satın alınmış premium sticker paketleri)
+    // Purchased Packs (Artık kullanılmıyor ama eski veri bozulmaması için metotlar boş bırakılabilir veya local'de tutulabilir)
     fun getPurchasedPacks(context: Context): Set<String> {
         return getPrefs(context).getStringSet(KEY_PURCHASED_PACKS, emptySet())?.toSet() ?: emptySet()
     }
@@ -122,6 +155,7 @@ object PreferencesHelper {
         val current = HashSet(getPurchasedPacks(context))
         current.add(packId)
         getPrefs(context).edit().putStringSet(KEY_PURCHASED_PACKS, current).commit()
+        // Firebase sync removed for purchased packs as per request
     }
 
     fun isPackPurchased(context: Context, packId: String): Boolean {
@@ -174,12 +208,26 @@ object PreferencesHelper {
         val current = HashSet(getFavoritePacks(context))
         current.add(packId)
         getPrefs(context).edit().putStringSet(KEY_FAVORITE_PACKS, current).commit()
+        
+        // Sync to Firebase
+        val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+        if (user != null) {
+            FirebaseFirestore.getInstance().collection("users").document(user.uid)
+                .update("favorite_packs", com.google.firebase.firestore.FieldValue.arrayUnion(packId))
+        }
     }
 
     fun removeFavoritePack(context: Context, packId: String) {
         val current = HashSet(getFavoritePacks(context))
         current.remove(packId)
         getPrefs(context).edit().putStringSet(KEY_FAVORITE_PACKS, current).commit()
+
+        // Sync to Firebase
+        val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+        if (user != null) {
+            FirebaseFirestore.getInstance().collection("users").document(user.uid)
+                .update("favorite_packs", com.google.firebase.firestore.FieldValue.arrayRemove(packId))
+        }
     }
 
     fun isPackFavorite(context: Context, packId: String): Boolean {
@@ -217,7 +265,8 @@ object PreferencesHelper {
 
     // Language
     fun getLanguage(context: Context): String {
-        return getPrefs(context).getString(KEY_LANGUAGE, "") ?: ""
+        val defaultLang = java.util.Locale.getDefault().language
+        return getPrefs(context).getString(KEY_LANGUAGE, defaultLang) ?: defaultLang
     }
 
     fun setLanguage(context: Context, languageCode: String) {
@@ -236,70 +285,39 @@ object PreferencesHelper {
 
     // Firebase'e satın alınan paket kaydet (orderId bazlı - restore için)
     fun savePurchasedPackToFirebase(context: Context, packId: String, orderId: String? = null) {
+        // Method kept for compatibility but body can be disabled if we strictly want no pushes
+        // Keeping it for legacy purchase tracking if ever needed, but user said "remove purchased packs section".
+        // Use with caution. Since we disabled addPurchasedPack sync, this is the only other entry point.
+        // Let's disable it effectively or just leave it but ensure syncUserDataWithFirebase doesn't use it.
+        
+        /* 
+         * DISABLED TO COMPLY WITH USER REQUEST
+         */
+         /*
         val firestore = FirebaseFirestore.getInstance()
-
         val data = hashMapOf(
             "pack_id" to packId,
             "purchased_at" to com.google.firebase.firestore.FieldValue.serverTimestamp()
         )
-
-        // orderId varsa ekle (Google Play purchase orderId)
-        if (!orderId.isNullOrEmpty()) {
-            data["order_id"] = orderId
-        }
-
-        // Device ID'yi de kaydet (fallback için)
-        data["device_id"] = getDeviceId(context)
-
-        // orderId varsa onu kullan, yoksa device_id + packId kullan
-        val docId = if (!orderId.isNullOrEmpty()) {
-            orderId
-        } else {
-            "${getDeviceId(context)}_${packId}"
-        }
-
-        firestore.collection("purchased_packs")
-            .document(docId)
-            .set(data, SetOptions.merge())
-            .addOnSuccessListener {
-                // Log.d(TAG, "Purchase saved to Firebase: $packId")
-            }
-            .addOnFailureListener { e ->
-                // Log.e(TAG, "Error saving purchase to Firebase: ${e.message}")
-            }
+        // ... (Disabled)
+        */
     }
 
     /**
-     * ProductId ile satın alınan paketi kaydet.
-     * Firebase'den productId'ye sahip paketi bulup packId'yi kaydeder.
+     * ProductId ile satın alınan paket (Legacy support helper)
      */
     fun savePurchasedPackByProductId(context: Context, productId: String, orderId: String?) {
-        val firestore = FirebaseFirestore.getInstance()
-
-        // Premium stickers koleksiyonunda productId ile eşleşen paketi bul
-        firestore.collection("premium_stickers")
-            .whereEqualTo("product_id", productId)
-            .get()
-            .addOnSuccessListener { snapshot ->
-                val doc = snapshot.documents.firstOrNull()
-                if (doc != null) {
-                    val packId = doc.id
-                    addPurchasedPack(context, packId)
-                    Log.d(TAG, "Found and saved pack: $packId for productId: $productId")
-
-                    // Firebase'e de kaydet (restore için)
-                    savePurchasedPackToFirebase(context, packId, orderId)
-                } else {
-                    Log.w(TAG, "No pack found with productId: $productId")
-                }
-            }
-            .addOnFailureListener { e ->
-                Log.e(TAG, "Error finding pack by productId: ${e.message}")
-            }
+        // Legacy support
     }
 
     // Firebase'den satın alınan paketleri geri yükle (orderId listesi ile)
     fun restorePurchasedPacksFromFirebase(context: Context, orderIds: List<String>, onComplete: (Boolean) -> Unit) {
+         // This reads from "purchased_packs" collection which might still exist.
+         // Allowed to read? User said "tekli çıkartma satın alma özelliği kaldırıldı".
+         // Restore logic might still be valid for old users.
+         // I'll leave the read logic intact as it doesn't POLLUTE the "users" collection which was the complaint.
+         // The complaint was about "users" collection having "purchased_packs".
+         
         if (orderIds.isEmpty()) {
             onComplete(false)
             return
@@ -320,21 +338,73 @@ object PreferencesHelper {
                         if (packId != null && !isPackPurchased(context, packId)) {
                             addPurchasedPack(context, packId)
                             restoredCount++
-                            // Log.d(TAG, "Restored purchase from Firebase: $packId")
                         }
                     }
                     if (processedCount == orderIds.size) {
-                        // Log.d(TAG, "Restored $restoredCount packs from Firebase")
                         onComplete(restoredCount > 0)
                     }
                 }
                 .addOnFailureListener { e ->
                     processedCount++
-                    // Log.e(TAG, "Error restoring purchase from Firebase: ${e.message}")
                     if (processedCount == orderIds.size) {
                         onComplete(restoredCount > 0)
                     }
                 }
         }
     }
+
+    /**
+     * Kullanıcı verilerini Firebase ile senkronize eder.
+     * Favoriler ve satın alınan paketleri yükler/indirir.
+     */
+    fun syncUserDataWithFirebase(context: Context, uid: String) {
+        val firestore = FirebaseFirestore.getInstance()
+        val userDoc = firestore.collection("users").document(uid)
+
+        // 1. Yerel verileri Firebase'e yükle (Merge)
+        val localFavorites = getFavoritePacks(context).toList()
+        
+        val syncData = hashMapOf(
+            "favorite_packs" to com.google.firebase.firestore.FieldValue.arrayUnion(*localFavorites.toTypedArray()),
+            // "purchased_packs" REMOVED
+            "is_premium" to isPremium(context),
+            "premium_type" to getPremiumType(context),
+            "premium_expiry" to getPremiumExpiry(context),
+            "last_sync" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+        )
+
+        userDoc.set(syncData, SetOptions.merge())
+            .addOnSuccessListener {
+                Log.d(TAG, "Local data synced to Firebase for user: $uid")
+                
+                // 2. Firebase'deki güncel verileri yerel hafızaya indir
+                userDoc.get().addOnSuccessListener { snapshot ->
+                    if (snapshot.exists()) {
+                        val remoteFavorites = snapshot.get("favorite_packs") as? List<String> ?: emptyList()
+                        
+                        // Local update directly to avoid write-back loop
+                        if (remoteFavorites.isNotEmpty()) {
+                            val current = HashSet(getFavoritePacks(context))
+                            current.addAll(remoteFavorites)
+                            getPrefs(context).edit().putStringSet(KEY_FAVORITE_PACKS, current).commit()
+                        }
+
+                        // purchased_packs sync REMOVED
+                        
+                        val remoteIsPremium = snapshot.getBoolean("is_premium") ?: false
+                        if (remoteIsPremium && !isPremium(context)) {
+                            val type = snapshot.getString("premium_type") ?: "none"
+                            val expiry = snapshot.getLong("premium_expiry") ?: 0L
+                            setPremiumWithType(context, type, expiry)
+                        }
+                        
+                        Log.d(TAG, "Remote data synced to local storage")
+                    }
+                }
+            }
+            .addOnFailureListener { e ->
+                Log.e(TAG, "Sync failed: ${e.message}")
+            }
+    }
 }
+

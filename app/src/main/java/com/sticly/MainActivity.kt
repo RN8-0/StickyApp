@@ -35,9 +35,12 @@ import com.google.android.material.switchmaterial.SwitchMaterial
 import com.google.android.material.textfield.TextInputEditText
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.messaging.FirebaseMessaging
+import com.google.android.material.floatingactionbutton.FloatingActionButton
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.Dispatchers
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -50,33 +53,37 @@ class MainActivity : AppCompatActivity() {
     private lateinit var rv: RecyclerView
     private lateinit var loadingOverlay: View
     private lateinit var swipeRefresh: SwipeRefreshLayout
+    private lateinit var mainContent: View
     private lateinit var adapter: PackAdapter
     private lateinit var btnFilter: ImageButton
     private lateinit var menuBtn: ImageButton
     private lateinit var toolbarTitle: TextView
     private lateinit var toolbarSubtitle: TextView
 
+    // Empty State
+    private lateinit var emptyStateView: View
+    private lateinit var btnCreateFirstSticker: View
+
+    // Header Add Button
+    private lateinit var btnAddStickerHeader: ImageButton
+
     // Bottom Nav
     private lateinit var tabExplore: View
     private lateinit var tabFavorites: View
-    private lateinit var tabCreate: View
-    private lateinit var tabMyStickers: View
+    private lateinit var tabMyStickers: LinearLayout
     private lateinit var iconExplore: ImageView
     private lateinit var iconFavorites: ImageView
-    private lateinit var iconCreate: ImageView
     private lateinit var iconMyStickers: ImageView
     private lateinit var textExplore: TextView
     private lateinit var textFavorites: TextView
-    private lateinit var textCreate: TextView
     private lateinit var textMyStickers: TextView
 
-    // Carousel
-    private lateinit var topStickersCarousel: ViewPager2
-    private lateinit var carouselIndicator: LinearLayout
-    private lateinit var carouselContainer: View
-    private var carouselAdapter: TopStickerAdapter? = null
-    private var carouselHandler: Handler? = null
-    private var carouselRunnable: Runnable? = null
+    // Regional Popular
+    private lateinit var regionalPopularContainer: View
+    private lateinit var regionalPopularTitle: TextView
+    private lateinit var rvRegional: RecyclerView
+    private var regionalAdapter: RegionalAdapter? = null
+
 
     // Category Chips
     private lateinit var categoryChipGroup: ChipGroup
@@ -107,7 +114,6 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(s: Bundle?) {
         super.onCreate(s)
-        applyTheme()
         if (PreferencesHelper.isFirstLaunch(this)) {
             startActivity(Intent(this, OnboardingActivity::class.java))
             finish()
@@ -136,16 +142,19 @@ class MainActivity : AppCompatActivity() {
 
         initViews()
         setupBottomNav()
-        setupCarousel()
         setupCategoryChips()
         setupDrawerMenu()
         setupSearch()
 
         loadPacksFromFirebase()
+        AdManager.loadInterstitial(this)
         StickerRepository.startObservingPacks(this)
         observePacksUpdateFlow()
         checkAndRequestNotificationPermission()
         setupEdgeToEdge()
+
+        // İlk açılışta ve her girişte WhatsApp durumunu doğrula
+        checkInstallationUpdates()
     }
 
     private fun setupEdgeToEdge() {
@@ -171,30 +180,41 @@ class MainActivity : AppCompatActivity() {
         toolbarTitle = findViewById(R.id.toolbarTitle)
         toolbarSubtitle = findViewById(R.id.toolbarSubtitle)
         btnFilter = findViewById(R.id.btnFilter)
+        mainContent = findViewById(R.id.mainContent)
+        emptyStateView = findViewById(R.id.emptyStateView)
+        btnCreateFirstSticker = findViewById(R.id.btnCreateFirstSticker)
+        btnAddStickerHeader = findViewById(R.id.btnAddStickerHeader)
+        
+        btnAddStickerHeader.setOnClickListener {
+            @Suppress("DEPRECATION")
+            startActivityForResult(Intent(this, StickerMakerActivity::class.java), REQUEST_STICKER_MAKER)
+            overridePendingTransition(R.anim.fade_in, R.anim.fade_out)
+        }
 
-        topStickersCarousel = findViewById(R.id.topStickersCarousel)
-        carouselIndicator = findViewById(R.id.carouselIndicator)
-        carouselContainer = findViewById(R.id.carouselContainer)
         categoryChipGroup = findViewById(R.id.categoryChipGroup)
+        
+        regionalPopularContainer = findViewById(R.id.regionalPopularContainer)
+        regionalPopularTitle = findViewById(R.id.regionalPopularTitle)
+        rvRegional = findViewById(R.id.rvRegional)
+        setupRegionalSection()
 
         // Bottom Nav
         tabExplore = findViewById(R.id.tabExplore)
         tabFavorites = findViewById(R.id.tabFavorites)
-        tabCreate = findViewById(R.id.tabCreate)
         tabMyStickers = findViewById(R.id.tabMyStickers)
         iconExplore = findViewById(R.id.iconExplore)
         iconFavorites = findViewById(R.id.iconFavorites)
-        iconCreate = findViewById(R.id.iconCreate)
         iconMyStickers = findViewById(R.id.iconMyStickers)
         textExplore = findViewById(R.id.textExplore)
         textFavorites = findViewById(R.id.textFavorites)
-        textCreate = findViewById(R.id.textCreate)
         textMyStickers = findViewById(R.id.textMyStickers)
 
         swipeRefresh.setColorSchemeResources(R.color.accent)
         swipeRefresh.setOnRefreshListener { refreshPacks() }
 
         rv.layoutManager = LinearLayoutManager(this)
+        rv.setItemViewCacheSize(30)
+        rv.setHasFixedSize(true)
         adapter = PackAdapter(allPacks, { pack ->
             startActivity(Intent(this, DetailsActivity::class.java).putExtra("id", pack.id))
         }, {
@@ -205,25 +225,21 @@ class MainActivity : AppCompatActivity() {
         rv.adapter = adapter
 
         menuBtn.setOnClickListener {
-            if (currentFilter == FilterType.CUSTOM || currentFilter == FilterType.FAVORITES) {
-                currentFilter = FilterType.ALL
-                applyFilters()
-                updateBottomNavUI()
-            } else {
-                drawer.openDrawer(GravityCompat.END)
-            }
+            startActivity(Intent(this, SettingsActivity::class.java))
+            overridePendingTransition(R.anim.fade_in, R.anim.fade_out)
         }
-
-        val btnTheme = findViewById<ImageButton>(R.id.btnTheme)
-        val prefs = getSharedPreferences("settings", MODE_PRIVATE)
-        updateThemeIcon(btnTheme, prefs.getInt("theme", 0))
-        btnTheme.setOnClickListener { showThemeMenu(it, btnTheme) }
 
         btnFilter.setOnClickListener { showFilterMenu(it) }
 
         val btnPremiumHeader = findViewById<ImageButton>(R.id.btnPremiumHeader)
         btnPremiumHeader.setOnClickListener {
             startActivity(Intent(this, PremiumActivity::class.java))
+            overridePendingTransition(R.anim.fade_in, R.anim.fade_out)
+        }
+
+        btnCreateFirstSticker.setOnClickListener {
+            @Suppress("DEPRECATION")
+            startActivityForResult(Intent(this, StickerMakerActivity::class.java), REQUEST_STICKER_MAKER)
             overridePendingTransition(R.anim.fade_in, R.anim.fade_out)
         }
     }
@@ -235,30 +251,24 @@ class MainActivity : AppCompatActivity() {
             applyFilters()
             updateBottomNavUI()
             updateCategoryChipSelection()
-            carouselContainer.visibility = View.VISIBLE
+            categoryChipGroup.visibility = View.VISIBLE
+            regionalPopularContainer.visibility = if (regionalAdapter?.itemCount ?: 0 > 0) View.VISIBLE else View.GONE
         }
 
         tabFavorites.setOnClickListener {
             currentFilter = FilterType.FAVORITES
             applyFilters()
             updateBottomNavUI()
-            carouselContainer.visibility = View.GONE
-        }
-
-        tabCreate.setOnClickListener {
-            @Suppress("DEPRECATION")
-            startActivityForResult(Intent(this, StickerMakerActivity::class.java), REQUEST_STICKER_MAKER)
-            overridePendingTransition(R.anim.fade_in, R.anim.fade_out)
+            categoryChipGroup.visibility = View.GONE
+            regionalPopularContainer.visibility = View.GONE
         }
 
         tabMyStickers.setOnClickListener {
             currentFilter = FilterType.CUSTOM
             applyFilters()
             updateBottomNavUI()
-            carouselContainer.visibility = View.GONE
-            if (allPacks.none { it.category == "custom" }) {
-                Toast.makeText(this, R.string.no_custom_packs, Toast.LENGTH_SHORT).show()
-            }
+            categoryChipGroup.visibility = View.GONE
+            regionalPopularContainer.visibility = View.GONE
         }
 
         updateBottomNavUI()
@@ -271,125 +281,114 @@ class MainActivity : AppCompatActivity() {
         // Reset all
         iconExplore.setColorFilter(inactiveColor)
         textExplore.setTextColor(inactiveColor)
-        textExplore.setTypeface(null, android.graphics.Typeface.NORMAL)
-
+        
         iconFavorites.setColorFilter(inactiveColor)
         textFavorites.setTextColor(inactiveColor)
-        textFavorites.setTypeface(null, android.graphics.Typeface.NORMAL)
-
-        iconCreate.setColorFilter(inactiveColor)
-        textCreate.setTextColor(inactiveColor)
-        textCreate.setTypeface(null, android.graphics.Typeface.NORMAL)
 
         iconMyStickers.setColorFilter(inactiveColor)
         textMyStickers.setTextColor(inactiveColor)
-        textMyStickers.setTypeface(null, android.graphics.Typeface.NORMAL)
 
         // Activate selected
         when (currentFilter) {
             FilterType.ALL, FilterType.INSTALLED, FilterType.PREMIUM, FilterType.PURCHASED -> {
                 iconExplore.setColorFilter(activeColor)
                 textExplore.setTextColor(activeColor)
-                textExplore.setTypeface(null, android.graphics.Typeface.BOLD)
+                
                 menuBtn.setImageResource(R.drawable.ic_menu)
                 toolbarSubtitle.visibility = View.GONE
                 btnFilter.visibility = View.VISIBLE
-                carouselContainer.visibility = View.VISIBLE
+                categoryChipGroup.visibility = View.VISIBLE
+                regionalPopularContainer.visibility = if (regionalAdapter?.itemCount ?: 0 > 0) View.VISIBLE else View.GONE
             }
             FilterType.FAVORITES -> {
                 iconFavorites.setColorFilter(activeColor)
                 textFavorites.setTextColor(activeColor)
-                textFavorites.setTypeface(null, android.graphics.Typeface.BOLD)
-                menuBtn.setImageResource(R.drawable.ic_back)
+                
+                menuBtn.setImageResource(R.drawable.ic_menu)
                 toolbarSubtitle.visibility = View.VISIBLE
                 toolbarSubtitle.text = getString(R.string.filter_favorites)
                 btnFilter.visibility = View.INVISIBLE
+                categoryChipGroup.visibility = View.GONE
+                regionalPopularContainer.visibility = View.GONE
             }
             FilterType.CUSTOM -> {
                 iconMyStickers.setColorFilter(activeColor)
                 textMyStickers.setTextColor(activeColor)
-                textMyStickers.setTypeface(null, android.graphics.Typeface.BOLD)
-                menuBtn.setImageResource(R.drawable.ic_back)
+                
+                menuBtn.setImageResource(R.drawable.ic_menu)
                 toolbarSubtitle.visibility = View.VISIBLE
                 toolbarSubtitle.text = getString(R.string.your_stickers)
                 btnFilter.visibility = View.INVISIBLE
+                categoryChipGroup.visibility = View.GONE
+                regionalPopularContainer.visibility = View.GONE
+                btnAddStickerHeader.visibility = View.VISIBLE
             }
+        }
+        
+        if (currentFilter != FilterType.CUSTOM) {
+            btnAddStickerHeader.visibility = View.GONE
         }
     }
 
-    private fun setupCarousel() {
-        carouselAdapter = TopStickerAdapter { pack ->
-            startActivity(Intent(this, DetailsActivity::class.java).putExtra("id", pack.id))
-        }
-        topStickersCarousel.adapter = carouselAdapter
-        // Sadece aktif kartın görünmesi için transformer kaldırıldı.
 
-        topStickersCarousel.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
-            override fun onPageSelected(position: Int) {
-                updateCarouselIndicator(position)
+
+    private fun setupRegionalSection() {
+        regionalAdapter = RegionalAdapter(
+            pages = emptyList(),
+            onClick = { pack ->
+                startActivity(Intent(this, DetailsActivity::class.java).putExtra("id", pack.id))
+            },
+            onAddClick = { pack ->
+                // Detay sayfasına gönder veya direkt ekle (Sticker.ly tarzı detay daha mantıklı)
+                startActivity(Intent(this, DetailsActivity::class.java).putExtra("id", pack.id))
             }
-        })
+        )
+        rvRegional.layoutManager = LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false)
+        rvRegional.adapter = regionalAdapter
     }
 
-    private fun updateCarousel(packs: List<Pack>) {
-        val topPacks = packs
+    private fun updateRegionalPacks(packs: List<Pack>) {
+        val locale = Locale.getDefault()
+        var country = getString(R.string.category_all) // Fallback
+        
+        try {
+            country = locale.getDisplayCountry(Locale("tr"))
+            if (country.isEmpty()) country = locale.displayCountry
+            if (country.isEmpty()) country = "Türkiye" // Hard fallback for typical users
+        } catch (e: Exception) {}
+
+        regionalPopularTitle.text = "🏆 $country bölgesindeki en popülerler"
+
+        // En popüler 10 paketi al (özel paketler hariç)
+        val regionalTopPacks = packs
             .filter { it.isActive && it.category != "custom" }
             .sortedByDescending { it.downloadCount }
-            .take(5)
+            .take(10)
 
-        carouselAdapter?.updatePacks(topPacks)
-        setupCarouselIndicator(topPacks.size)
-        startAutoScroll(topPacks.size)
-    }
-
-    private fun setupCarouselIndicator(count: Int) {
-        carouselIndicator.removeAllViews()
-        for (i in 0 until count) {
-            val dot = View(this).apply {
-                layoutParams = LinearLayout.LayoutParams(8.dpToPx(), 8.dpToPx()).apply {
-                    marginStart = 4.dpToPx()
-                    marginEnd = 4.dpToPx()
-                }
-                setBackgroundResource(R.drawable.carousel_indicator_inactive)
-            }
-            carouselIndicator.addView(dot)
+        if (regionalTopPacks.isEmpty()) {
+            regionalPopularContainer.visibility = View.GONE
+            return
         }
-        if (count > 0) updateCarouselIndicator(0)
-    }
 
-    private fun updateCarouselIndicator(position: Int) {
-        for (i in 0 until carouselIndicator.childCount) {
-            val dot = carouselIndicator.getChildAt(i)
-            dot.setBackgroundResource(
-                if (i == position) R.drawable.carousel_indicator_active
-                else R.drawable.carousel_indicator_inactive
-            )
+        if (currentFilter == FilterType.ALL && currentCategory == "all") {
+            regionalPopularContainer.visibility = View.VISIBLE
+        } else {
+            regionalPopularContainer.visibility = View.GONE
         }
-    }
-
-    private fun startAutoScroll(itemCount: Int) {
-        stopAutoScroll()
-        if (itemCount <= 1) return
-
-        carouselHandler = Handler(Looper.getMainLooper())
-        carouselRunnable = object : Runnable {
-            override fun run() {
-                val current = topStickersCarousel.currentItem
-                val next = if (current >= itemCount - 1) 0 else current + 1
-                topStickersCarousel.setCurrentItem(next, true)
-                carouselHandler?.postDelayed(this, 3500)
-            }
+        
+        // Paketleri ikili grupla
+        val pages = mutableListOf<Pair<Pack, Pack?>>()
+        for (i in regionalTopPacks.indices step 2) {
+            val top = regionalTopPacks[i]
+            val bottom = if (i + 1 < regionalTopPacks.size) regionalTopPacks[i + 1] else null
+            pages.add(top to bottom)
         }
-        carouselRunnable?.let { runnable ->
-            carouselHandler?.postDelayed(runnable, 3500)
-        }
+        
+        regionalAdapter?.updateData(pages)
     }
 
-    private fun stopAutoScroll() {
-        carouselRunnable?.let { carouselHandler?.removeCallbacks(it) }
-        carouselHandler = null
-        carouselRunnable = null
-    }
+
+
 
     private fun Int.dpToPx(): Int = (this * resources.displayMetrics.density).toInt()
 
@@ -532,7 +531,6 @@ class MainActivity : AppCompatActivity() {
         val navNotifications = findViewById<LinearLayout>(R.id.navNotifications)
         val navPrivacy = findViewById<LinearLayout>(R.id.navPrivacy)
         val navRestorePurchases = findViewById<LinearLayout>(R.id.navRestorePurchases)
-        val navLanguage = findViewById<LinearLayout>(R.id.navLanguage)
 
         navFaq.setOnClickListener { drawer.closeDrawers(); showFaqDialog() }
         navAbout.setOnClickListener { drawer.closeDrawers(); showAboutDialog() }
@@ -556,18 +554,23 @@ class MainActivity : AppCompatActivity() {
         navNotifications.setOnClickListener { drawer.closeDrawers(); showNotificationSettings() }
         navPrivacy.setOnClickListener { drawer.closeDrawers(); showPrivacyDialog() }
         navRestorePurchases.setOnClickListener { drawer.closeDrawers(); restorePurchases() }
-        navLanguage.setOnClickListener { drawer.closeDrawers(); showLanguageDialog() }
+        navRestorePurchases.setOnClickListener { drawer.closeDrawers(); restorePurchases() }
     }
 
     private fun setupSearch() {
         val searchBox = findViewById<EditText>(R.id.searchBox)
 
+        var searchJob: Job? = null
         searchBox.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
             override fun afterTextChanged(s: Editable?) {
-                currentSearchQuery = s?.toString() ?: ""
-                applyFilters()
+                searchJob?.cancel()
+                searchJob = lifecycleScope.launch {
+                    delay(300) // Debounce
+                    currentSearchQuery = s?.toString() ?: ""
+                    applyFilters()
+                }
             }
         })
 
@@ -598,16 +601,52 @@ class MainActivity : AppCompatActivity() {
         searchBox.clearFocus()
     }
 
+    /**
+     * WhatsApp'tan silinen ama bizde yüklü görünen paketleri temizle
+     */
+    private fun checkInstallationUpdates() {
+        lifecycleScope.launch(Dispatchers.IO) {
+            // WhatsApp'ın ContentProvider'ının hazır olması için bazen küçük bir bekleme gerekebilir
+            delay(500)
+            
+            val installedPackIds = PreferencesHelper.getInstalledPacks(this@MainActivity)
+            if (installedPackIds.isEmpty()) return@launch
+
+            var changed = false
+            val currentList = installedPackIds.toMutableSet()
+            
+            installedPackIds.forEach { packId ->
+                val stillInWhatsApp = WhitelistCheck.isWhitelisted(this@MainActivity, packId)
+                if (!stillInWhatsApp) {
+                    PreferencesHelper.removeInstalledPack(this@MainActivity, packId)
+                    changed = true
+                }
+            }
+
+            if (changed) {
+                withContext(Dispatchers.Main) {
+                    if (::adapter.isInitialized) {
+                        adapter.notifyDataSetChanged()
+                    }
+                }
+            }
+        }
+    }
+
     override fun onResume() {
         super.onResume()
         
         // Sticker Maker için reklamı önceden yükle (Anında gelmesi için)
         AdManager.preloadMakerNativeAd(this)
 
+        // WhatsApp durumunu güncelle
+        checkInstallationUpdates()
+
         if (::adapter.isInitialized) {
             lifecycleScope.launch {
                 val customPacks = CustomStickerManager.getCustomPacks(this@MainActivity).mapNotNull { cp ->
-                    CustomStickerManager.toWhatsAppPack(this@MainActivity, cp.id)?.copy(category = "custom")
+                    val pack = CustomStickerManager.toWhatsAppPack(this@MainActivity, cp.id)?.copy(category = "custom")
+                    if (pack != null && pack.stickers.isNotEmpty()) pack else null
                 }
                 val firebasePacks = allPacks.filter { it.category != "custom" }
                 allPacks = firebasePacks + customPacks
@@ -618,7 +657,6 @@ class MainActivity : AppCompatActivity() {
 
     override fun onPause() {
         super.onPause()
-        stopAutoScroll()
     }
 
     private fun showNoInternetDialog() {
@@ -644,14 +682,19 @@ class MainActivity : AppCompatActivity() {
 
                 if (loadedPacks.isNotEmpty()) {
                     val firebasePackIds = loadedPacks.filter { it.category != "custom" }.map { it.id }.toSet()
-                    StickerRepository.cleanupInvalidCache(this@MainActivity, firebasePackIds)
-                    loadedPacks.filter { it.category != "custom" }.forEach { pack ->
-                        StickerRepository.updatePackCache(this@MainActivity, pack)
+                    
+                    // KRITIK: Dosya işlemlerini IO thread'ine taşı (Donmayı önler)
+                    withContext(Dispatchers.IO) {
+                        StickerRepository.cleanupInvalidCache(this@MainActivity, firebasePackIds)
+                        loadedPacks.filter { it.category != "custom" }.forEach { pack ->
+                            StickerRepository.updatePackCache(this@MainActivity, pack)
+                        }
                     }
+
                     allPacks = loadedPacks
                     setupCategoryChips() // Kategorileri güncelle
                     applyFilters()
-                    updateCarousel(loadedPacks)
+                    updateRegionalPacks(loadedPacks)
                 }
                 showContent()
             } catch (e: Exception) {
@@ -667,9 +710,13 @@ class MainActivity : AppCompatActivity() {
             .setDuration(300)
             .withEndAction {
                 loadingOverlay.visibility = View.GONE
+                mainContent.visibility = View.VISIBLE
+                mainContent.alpha = 0f
+                mainContent.animate().alpha(1f).setDuration(200).start()
+                
+                // SwipeRefresh da aktif olsun
                 swipeRefresh.visibility = View.VISIBLE
-                swipeRefresh.alpha = 0f
-                swipeRefresh.animate().alpha(1f).setDuration(200).start()
+                swipeRefresh.isRefreshing = false
             }
             .start()
     }
@@ -681,7 +728,7 @@ class MainActivity : AppCompatActivity() {
                 allPacks = updatedPacks
                 setupCategoryChips() // Kategorileri güncelle
                 applyFilters()
-                updateCarousel(updatedPacks)
+                updateRegionalPacks(updatedPacks)
             }
         }
     }
@@ -695,114 +742,115 @@ class MainActivity : AppCompatActivity() {
     enum class FilterType { ALL, INSTALLED, PREMIUM, FAVORITES, PURCHASED, CUSTOM }
 
     private fun applyFilters() {
-        var filtered = allPacks
+        lifecycleScope.launch(Dispatchers.Default) {
+            var filtered = allPacks
 
-        if (currentSearchQuery.isNotEmpty()) {
-            val query = currentSearchQuery.lowercase(Locale.getDefault())
-            filtered = filtered.filter {
-                it.localizedName.lowercase(Locale.getDefault()).contains(query) ||
-                it.pub.lowercase(Locale.getDefault()).contains(query)
-            }
-        }
-
-        if (currentFilter != FilterType.INSTALLED && currentFilter != FilterType.PURCHASED) {
-            filtered = filtered.filter { it.isActive }
-        }
-
-        filtered = when (currentFilter) {
-            FilterType.ALL -> {
-                var result = filtered.filter { it.category != "custom" }
-                if (currentCategory != "all") {
-                    result = result.filter { normalizeCategoryKey(it.category) == currentCategory }
+            if (currentSearchQuery.isNotEmpty()) {
+                val query = currentSearchQuery.lowercase(Locale.getDefault())
+                filtered = filtered.filter {
+                    it.localizedName.lowercase(Locale.getDefault()).contains(query) ||
+                    it.pub.lowercase(Locale.getDefault()).contains(query)
                 }
-                result
             }
-            FilterType.INSTALLED -> filtered.filter { PreferencesHelper.isPackInstalled(this, it.id) }
-            FilterType.PREMIUM -> filtered.filter { it.isPremium }
-            FilterType.FAVORITES -> filtered.filter { PreferencesHelper.isPackFavorite(this, it.id) }
-            FilterType.PURCHASED -> filtered.filter { PreferencesHelper.hasAccessToPremiumPack(this, it.id) }
-            FilterType.CUSTOM -> filtered.filter { it.category == "custom" }
-        }
 
-        // Profesyonel Sıralama Algoritması (YouTube/Play Store Benzeri)
-        // Skor = ( (İndirme + Favori*5) * (1 + CVR) ) * Yenilik_Bonusu
-        val sorted = filtered.sortedByDescending { pack ->
-            val downloads = pack.downloadCount.toDouble()
-            val views = pack.viewCount.toDouble()
-            val favorites = pack.favoriteCount.toDouble()
-            
-            // 1. Verimlilik (CVR)
-            val cvr = if (views > 0) downloads / views else 0.0
-            
-            // 2. Etkileşim Skoru (Favoriler indirmeden 5 kat daha değerli)
-            val engagementScore = downloads + (favorites * 5.0)
-            
-            // 3. Yenilik Bonusu (Son 7 gün içindeyse skoru 3.5 katına çıkart - Daha belirgin olması için artırıldı)
-            var freshnessMultiplier = 1.0
-            if (pack.createdAt.isNotEmpty()) {
-                try {
-                    val format = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
-                    val createdDate = format.parse(pack.createdAt)
-                    if (createdDate != null) {
-                        val diffDays = java.util.concurrent.TimeUnit.MILLISECONDS.toDays(System.currentTimeMillis() - createdDate.time)
-                        if (diffDays <= 7) freshnessMultiplier = 3.5 
+            if (currentFilter != FilterType.INSTALLED && currentFilter != FilterType.PURCHASED) {
+                filtered = filtered.filter { it.isActive }
+            }
+
+            filtered = when (currentFilter) {
+                FilterType.ALL -> {
+                    var result = filtered.filter { it.category != "custom" && !it.id.startsWith("custom_") }
+                    if (currentCategory != "all") {
+                        result = result.filter { normalizeCategoryKey(it.category) == currentCategory }
                     }
-                } catch (e: Exception) {}
+                    result
+                }
+                FilterType.INSTALLED -> filtered.filter { PreferencesHelper.isPackInstalled(this@MainActivity, it.id) }
+                FilterType.PREMIUM -> filtered.filter { it.isPremium }
+                FilterType.FAVORITES -> filtered.filter { PreferencesHelper.isPackFavorite(this@MainActivity, it.id) }
+                FilterType.PURCHASED -> filtered.filter { PreferencesHelper.hasAccessToPremiumPack(this@MainActivity, it.id) }
+                FilterType.CUSTOM -> filtered.filter { (it.category == "custom" || it.id.startsWith("custom_")) && it.stickers.isNotEmpty() }
             }
-            
-        val finalScore = (engagementScore * (1.0 + cvr)) * freshnessMultiplier
-            Log.d("Ranking", "Pack: ${pack.name} | DL: $downloads | Fav: $favorites | CVR: ${String.format("%.2f", cvr)} | Fresh: $freshnessMultiplier | SCORE: ${String.format("%.1f", finalScore)}")
-            finalScore
-        }
 
-        // Reklamları listeye enjekte et
-        val itemsWithAds = mutableListOf<Any>()
-        if (sorted.isNotEmpty() && !PreferencesHelper.isPremium(this)) {
-            if (currentFilter == FilterType.FAVORITES) {
-                // Favoriler için özel kural: En az 2 paket varsa 2. paketten sonra 1 tane reklam
-                if (sorted.size >= 2) {
-                    sorted.forEachIndexed { index, pack ->
+            // Profesyonel Sıralama Algoritması
+            val currentTime = System.currentTimeMillis()
+            val sorted = filtered.sortedByDescending { pack ->
+                val downloads = pack.downloadCount.toDouble()
+                val views = pack.viewCount.toDouble()
+                val favorites = pack.favoriteCount.toDouble()
+                
+                val cvr = if (views > 0) downloads / views else 0.0
+                val engagementScore = downloads + (favorites * 5.0)
+                
+                var freshnessMultiplier = 1.0
+                if (pack.createdAt.isNotEmpty()) {
+                    try {
+                        val format = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+                        val createdDate = format.parse(pack.createdAt)
+                        if (createdDate != null) {
+                            val diffDays = java.util.concurrent.TimeUnit.MILLISECONDS.toDays(currentTime - createdDate.time)
+                            if (diffDays <= 7) freshnessMultiplier = 3.5 
+                        }
+                    } catch (e: Exception) {}
+                }
+                
+                (engagementScore * (1.0 + cvr)) * freshnessMultiplier
+            }
+
+            // Reklamları listeye enjekte et
+            val itemsWithAds = mutableListOf<Any>()
+            val isPremium = PreferencesHelper.isPremium(this@MainActivity)
+            
+            if (sorted.isNotEmpty() && !isPremium) {
+                if (currentFilter == FilterType.FAVORITES) {
+                    if (sorted.size >= 2) {
+                        sorted.forEachIndexed { index, pack ->
+                            itemsWithAds.add(pack)
+                            if (index == 1) itemsWithAds.add("AD_FAVORITE_PLACEHOLDER")
+                        }
+                    } else itemsWithAds.addAll(sorted)
+                } else if (currentFilter == FilterType.CUSTOM) {
+                    if (sorted.isNotEmpty()) {
+                        sorted.forEachIndexed { index, pack ->
+                            itemsWithAds.add(pack)
+                            if (index == 0) itemsWithAds.add("AD_MY_STICKERS_PLACEHOLDER")
+                        }
+                    } else itemsWithAds.addAll(sorted)
+                } else {
+                    var nextAdGap = (3..6).random()
+                    var itemsSinceLastAd = 0
+                    sorted.forEach { pack ->
                         itemsWithAds.add(pack)
-                        if (index == 1) { // 2. paketten sonra
-                            itemsWithAds.add("AD_FAVORITE_PLACEHOLDER")
+                        itemsSinceLastAd++
+                        if (itemsSinceLastAd >= nextAdGap) {
+                            itemsWithAds.add("AD_LIST_PLACEHOLDER")
+                            nextAdGap = (3..6).random()
+                            itemsSinceLastAd = 0
                         }
                     }
-                } else {
-                    itemsWithAds.addAll(sorted)
-                }
-            } else if (currentFilter == FilterType.CUSTOM) {
-                // Stickerlarım (Custom) için özel kural: En az 1 paket varsa 1. paketten sonra 1 tane reklam
-                if (sorted.isNotEmpty()) {
-                    sorted.forEachIndexed { index, pack ->
-                        itemsWithAds.add(pack)
-                        if (index == 0) { // İlk paketten hemen sonra
-                            itemsWithAds.add("AD_MY_STICKERS_PLACEHOLDER")
-                        }
-                    }
-                } else {
-                    itemsWithAds.addAll(sorted)
                 }
             } else {
-                // Ana sayfa ve diğer listeler için dinamik reklam mantığı (3-6 aralık)
-                var nextAdGap = (3..6).random()
-                var itemsSinceLastAd = 0
+                itemsWithAds.addAll(sorted)
+            }
 
-                sorted.forEachIndexed { index, pack ->
-                    itemsWithAds.add(pack)
-                    itemsSinceLastAd++
+            withContext(Dispatchers.Main) {
+                if (currentFilter == FilterType.CUSTOM && sorted.isEmpty()) {
+                    rv.visibility = View.GONE
+                    emptyStateView.visibility = View.VISIBLE
+                } else {
+                    rv.visibility = View.VISIBLE
+                    emptyStateView.visibility = View.GONE
+                    adapter.updateList(itemsWithAds)
+                }
 
-                    if (itemsSinceLastAd >= nextAdGap && index != sorted.size - 1) {
-                        itemsWithAds.add("AD_PLACEHOLDER")
-                        itemsSinceLastAd = 0
-                        nextAdGap = (3..6).random()
-                    }
+                // Popüler bölümün görünürlüğünü güncelle
+                if (currentFilter == FilterType.ALL && currentCategory == "all" && (regionalAdapter?.itemCount ?: 0) > 0) {
+                    regionalPopularContainer.visibility = View.VISIBLE
+                } else {
+                    regionalPopularContainer.visibility = View.GONE
                 }
             }
-        } else {
-            itemsWithAds.addAll(sorted)
         }
-
-        adapter.updateList(itemsWithAds)
     }
 
     @Deprecated("Deprecated in Java")
@@ -813,6 +861,8 @@ class MainActivity : AppCompatActivity() {
             currentFilter = FilterType.ALL
             applyFilters()
             updateBottomNavUI()
+            categoryChipGroup.visibility = View.VISIBLE
+            updateCategoryChipSelection()
         } else {
             super.onBackPressed()
         }
@@ -820,16 +870,19 @@ class MainActivity : AppCompatActivity() {
 
     private fun showFilterMenu(anchor: View) {
         val popup = PopupMenu(this, anchor)
-        popup.menu.add(0, 2, 0, R.string.filter_installed)
-        popup.menu.add(0, 3, 1, R.string.filter_premium)
-        popup.menu.add(0, 4, 2, R.string.filter_purchased)
+        popup.menu.add(0, 1, 0, R.string.filter_all)
+        popup.menu.add(0, 2, 1, R.string.filter_installed)
+        popup.menu.add(0, 3, 2, R.string.filter_premium)
 
         popup.setOnMenuItemClickListener { item ->
-            currentFilter = when (item.itemId) {
-                2 -> FilterType.INSTALLED
-                3 -> FilterType.PREMIUM
-                4 -> FilterType.PURCHASED
-                else -> currentFilter
+            when (item.itemId) {
+                1 -> {
+                    currentFilter = FilterType.ALL
+                    currentCategory = "all"
+                    updateCategoryChipSelection()
+                }
+                2 -> currentFilter = FilterType.INSTALLED
+                3 -> currentFilter = FilterType.PREMIUM
             }
             applyFilters()
             updateFilterIcon()
@@ -865,46 +918,6 @@ class MainActivity : AppCompatActivity() {
                     searchBox.setText(history[item.itemId])
                     searchBox.setSelection(searchBox.text.length)
                 }
-            }
-            true
-        }
-        popup.show()
-    }
-
-    private fun applyTheme() {
-        val prefs = getSharedPreferences("settings", MODE_PRIVATE)
-        when (prefs.getInt("theme", 0)) {
-            0 -> AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM)
-            1 -> AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO)
-            2 -> AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_YES)
-        }
-    }
-
-    private fun updateThemeIcon(btnTheme: ImageButton, themeMode: Int) {
-        val icon = when (themeMode) {
-            1 -> R.drawable.ic_sun
-            2 -> R.drawable.ic_moon
-            else -> R.drawable.ic_theme
-        }
-        btnTheme.setImageResource(icon)
-    }
-
-    private fun showThemeMenu(anchor: View, btnTheme: ImageButton) {
-        val popup = PopupMenu(this, anchor)
-        popup.menuInflater.inflate(R.menu.menu_theme, popup.menu)
-        val prefs = getSharedPreferences("settings", MODE_PRIVATE)
-        val currentTheme = prefs.getInt("theme", 0)
-
-        popup.setOnMenuItemClickListener { item ->
-            val newTheme = when (item.itemId) {
-                R.id.theme_light -> 1
-                R.id.theme_dark -> 2
-                R.id.theme_system -> 0
-                else -> currentTheme
-            }
-            if (newTheme != currentTheme) {
-                prefs.edit().putInt("theme", newTheme).apply()
-                recreate()
             }
             true
         }
@@ -1031,7 +1044,6 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        stopAutoScroll()
         StickerRepository.stopObservingPacks()
         billingManager?.destroy()
     }
@@ -1165,7 +1177,8 @@ class MainActivity : AppCompatActivity() {
 
                 // Switch to My Stickers tab to show the newly added sticker
                 currentFilter = FilterType.CUSTOM
-                carouselContainer.visibility = View.GONE
+                categoryChipGroup.visibility = View.GONE
+                regionalPopularContainer.visibility = View.GONE
                 updateBottomNavUI()
                 applyFilters()
             }

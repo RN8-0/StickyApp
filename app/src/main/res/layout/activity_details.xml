@@ -1,10 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/details_root"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:orientation="vertical">
+    android:layout_height="match_parent">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical">
 
     <!-- Toolbar with App name and logo -->
     <LinearLayout
@@ -65,7 +69,7 @@
                 android:layout_height="48dp"
                 android:background="?selectableItemBackgroundBorderless"
                 android:src="@drawable/ic_delete"
-                app:tint="@color/text_on_primary"
+                app:tint="@color/delete_red"
                 android:visibility="gone"
                 android:contentDescription="Seçilenleri Sil" />
 
@@ -272,33 +276,6 @@
         </LinearLayout>
 
         <!-- Loading Container (shown while stickers are loading) -->
-        <LinearLayout
-            android:id="@+id/loadingContainer"
-            android:layout_width="match_parent"
-            android:layout_height="56dp"
-            android:orientation="horizontal"
-            android:gravity="center"
-            android:visibility="gone"
-            android:background="@drawable/bg_rounded_button"
-            android:backgroundTint="@color/surface_variant">
-
-            <ProgressBar
-                android:id="@+id/loadingProgress"
-                android:layout_width="24dp"
-                android:layout_height="24dp"
-                android:indeterminateTint="@color/primary" />
-
-            <TextView
-                android:id="@+id/loadingText"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="12dp"
-                android:text="@string/stickers_loading"
-                android:textColor="@color/text_primary"
-                android:textSize="14sp" />
-
-        </LinearLayout>
-
         <!-- Legacy Button (Firebase packs) -->
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnAction"
@@ -345,8 +322,50 @@
                 android:layout_height="0dp"
                 android:visibility="gone" />
 
-        </LinearLayout>
+    </LinearLayout>
 
     </LinearLayout>
 
-</LinearLayout>
+    </LinearLayout>
+
+    <!-- Professional Loading Overlay -->
+    <FrameLayout
+        android:id="@+id/professionalLoadingOverlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#99000000"
+        android:clickable="true"
+        android:focusable="true"
+        android:elevation="99dp"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:background="@drawable/bg_rounded_button"
+            android:padding="28dp"
+            android:elevation="100dp"
+            android:orientation="vertical"
+            android:gravity="center">
+
+            <ProgressBar
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:indeterminateTint="@color/primary" />
+
+            <TextView
+                android:id="@+id/tvOverlayLoadingText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:text="@string/stickers_loading"
+                android:textColor="@color/text_primary"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+
+        </LinearLayout>
+
+    </FrameLayout>
+
+</FrameLayout>

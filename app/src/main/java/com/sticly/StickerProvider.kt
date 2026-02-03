@@ -81,17 +81,25 @@ class StickerProvider : ContentProvider() {
     private fun getAllPacks(): List<Pack> {
         val allPacks = mutableMapOf<String, Pack>()
 
-        // 1. Memory Cache (En hızlı)
+        // 1. Statik Cache ve Disk Cache Senkronizasyonu
+        if (StickerRepository.allPacksCache.isEmpty()) {
+            val diskCache = StickerRepository.loadCacheFromDisk(context!!)
+            if (diskCache.isNotEmpty()) {
+                StickerRepository.allPacksCache = diskCache
+            }
+        }
+        
+        // Statik cache'deki tüm paketleri ekle
         StickerRepository.allPacksCache.forEach { allPacks[it.id] = it }
 
-        // 2. Lokal Assets (Her zaman güvenli)
+        // 2. Lokal Assets (Lokal paketler her zaman öncelikli ve güvenli)
         Loader.load(context!!).forEach { allPacks[it.id] = it }
 
-        // 3. KRITIK: Custom paketleri filesDir/custom_stickers'dan yükle (KALICI DEPOLAMA)
+        // 3. Custom Paketler (Kullanıcının kendi yaptıkları)
         val customDir = File(context!!.filesDir, "custom_stickers")
         if (customDir.exists() && customDir.isDirectory) {
             customDir.listFiles()?.forEach { packDir ->
-                if (packDir.isDirectory && packDir.name.startsWith("custom_") && !allPacks.containsKey(packDir.name)) {
+                if (packDir.isDirectory && packDir.name.startsWith("custom_")) {
                     CustomStickerManager.toWhatsAppPack(context!!, packDir.name)?.let {
                         allPacks[packDir.name] = it
                     }
@@ -99,35 +107,32 @@ class StickerProvider : ContentProvider() {
             }
         }
 
-        // 4. Cache Dizini Taraması (Firebase paketleri için)
+        // 4. Fallback: Cache Dizini Taraması (Firebase paketleri için son çare)
         val cacheDir = File(context!!.cacheDir, CACHE_DIR)
         if (cacheDir.exists() && cacheDir.isDirectory) {
             cacheDir.listFiles()?.forEach { packDir ->
-                if (packDir.isDirectory && !allPacks.containsKey(packDir.name)) {
+                if (packDir.isDirectory && !packDir.name.startsWith("custom_") && !allPacks.containsKey(packDir.name)) {
                     val packId = packDir.name
-                    // Custom paketler zaten filesDir'dan yüklendi, atla
-                    if (!packId.startsWith("custom_")) {
-                        // Firebase paketi (reconstruct from files)
-                        val trayFile = File(packDir, "tray.webp")
-                        if (trayFile.exists()) {
-                            val stickers = packDir.listFiles { _, name ->
-                                name.endsWith(".webp") && name != "tray.webp"
-                            }
-                                ?.sortedBy { it.name }
-                                ?.map { Sticker(file = it.name, emojis = listOf("😊")) }
-                                ?: emptyList()
+                    val trayFile = File(packDir, "tray.webp")
+                    if (trayFile.exists()) {
+                        val stickers = packDir.listFiles { _, name ->
+                            name.endsWith(".webp") && name != "tray.webp"
+                        }
+                            ?.sortedBy { it.name }
+                            ?.map { Sticker(file = it.name, emojis = listOf("😊")) }
+                            ?: emptyList()
 
-                            if (stickers.isNotEmpty()) {
-                                allPacks[packId] = Pack(
-                                    id = packId,
-                                    name = packId,
-                                    pub = "Sticky",
-                                    tray = "tray.webp",
-                                    stickers = stickers,
-                                    isPremium = false,
-                                    isAnimated = false
-                                )
-                            }
+                        if (stickers.isNotEmpty()) {
+                            val isAnimated = File(packDir, ".animated").exists()
+                            allPacks[packId] = Pack(
+                                id = packId,
+                                name = packId.replace("_", " ").replaceFirstChar { it.uppercase() },
+                                pub = "Sticky",
+                                tray = "tray.webp",
+                                stickers = stickers,
+                                isPremium = false,
+                                isAnimated = isAnimated 
+                            )
                         }
                     }
                 }
@@ -303,8 +308,16 @@ class StickerProvider : ContentProvider() {
                 }
             }
 
+            // 4. SON ÇARE: Herhangi bir sticker'ı tray olarak kullan
+            if (sourceFile == null && cacheDir.exists()) {
+                sourceFile = cacheDir.listFiles()?.find { it.name.endsWith(".webp") || it.name.endsWith(".png") }
+                if (sourceFile != null) {
+                    android.util.Log.d("StickerProvider", "Found fallback sticker for tray: ${sourceFile.absolutePath}")
+                }
+            }
+
             if (sourceFile == null || !sourceFile.exists()) {
-                android.util.Log.e("StickerProvider", "Tray source file not found for $identifier")
+                android.util.Log.e("StickerProvider", "Tray source file not found for $identifier even as fallback")
                 return null
             }
 

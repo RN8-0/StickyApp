@@ -22,8 +22,8 @@ object AdManager {
     private const val TAG = "AdManager"
 
     // REKLAM KIMLIKLERI
-    private const val INTERSTITIAL_ID = "ca-app-pub-1522897791319993/6303114381"
-    private const val BANNER_ID = "ca-app-pub-1522897791319993/1423689771"
+    private const val INTERSTITIAL_MY_STICKERS_ID = "ca-app-pub-1522897791319993/6303114381" // Stickerlarım whatsapp'a ekle
+    private const val INTERSTITIAL_WA_ADD_ID = "ca-app-pub-1522897791319993/4917880521"      // Whatsapp'a ekle butonu
     private const val LIST_NATIVE_AD_ID = "ca-app-pub-1522897791319993/9417073326"
     private const val MAKER_NATIVE_AD_ID = "ca-app-pub-1522897791319993/2892861725"
     private const val FAV_NATIVE_AD_ID = "ca-app-pub-1522897791319993/7323061326"
@@ -82,33 +82,64 @@ object AdManager {
         return ad
     }
 
+    private var lastLoadTime = 0L
+    private var retryCount = 0
+    private const val MAX_RETRY = 3
+
     fun loadInterstitial(context: Context) {
-        Log.d(TAG, "loadInterstitial called. isLoading: $isLoading, hasAd: ${interstitialAd != null}, isPremium: ${PreferencesHelper.isPremium(context)}")
-        if (isLoading || interstitialAd != null) return
-        if (PreferencesHelper.isPremium(context)) {
-            Log.d(TAG, "User is premium, skipping interstitial load")
+        val now = System.currentTimeMillis()
+        Log.d(TAG, "loadInterstitial called. isLoading: $isLoading, hasAd: ${interstitialAd != null}")
+        
+        // Eğer zaten yükleniyorsa ama 15 saniyeden fazla sürdüyse, takılmış olabilir, tekrar dene
+        if (isLoading && (now - lastLoadTime < 15000)) {
+            Log.d(TAG, "Still loading, wait for callback...")
+            return
+        }
+        
+        if (interstitialAd != null) {
+            Log.d(TAG, "Ad already loaded.")
             return
         }
 
+        if (PreferencesHelper.isPremium(context)) return
+
         isLoading = true
-        Log.d(TAG, "Loading interstitial ad...")
-        InterstitialAd.load(context, INTERSTITIAL_ID, AdRequest.Builder().build(),
+        lastLoadTime = now
+        val adRequest = AdRequest.Builder().build()
+        
+        InterstitialAd.load(context, INTERSTITIAL_WA_ADD_ID, adRequest,
             object : InterstitialAdLoadCallback() {
                 override fun onAdLoaded(ad: InterstitialAd) {
                     Log.d(TAG, "Interstitial ad loaded successfully")
                     interstitialAd = ad
                     isLoading = false
+                    retryCount = 0 
+                    
                     ad.fullScreenContentCallback = object : FullScreenContentCallback() {
                         override fun onAdDismissedFullScreenContent() {
+                            Log.d(TAG, "Ad dismissed")
+                            interstitialAd = null
+                            loadInterstitial(context)
+                        }
+                        override fun onAdFailedToShowFullScreenContent(error: AdError) {
+                            Log.e(TAG, "Ad failed to show: ${error.message}")
                             interstitialAd = null
                             loadInterstitial(context)
                         }
                     }
                 }
                 override fun onAdFailedToLoad(error: LoadAdError) {
-                    Log.e(TAG, "Interstitial ad failed to load: ${error.message} Code: ${error.code}")
+                    Log.e(TAG, "Interstitial failed to load: ${error.message} Code: ${error.code}")
                     interstitialAd = null
                     isLoading = false
+                    
+                    if (retryCount < MAX_RETRY) {
+                        retryCount++
+                        val delay = (retryCount * 2000L) // 2s, 4s, 6s...
+                        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                            loadInterstitial(context)
+                        }, delay)
+                    }
                 }
             })
     }
@@ -118,13 +149,60 @@ object AdManager {
         interstitialAd?.show(activity) ?: loadInterstitial(activity)
     }
 
+    /**
+     * Interstitial reklam göster ve kapandığında callback'i çağır
+     * Bu sayede önce reklam gösterilir, sonra işlem devam eder
+     */
+    fun showInterstitialWithCallback(activity: Activity, onAdClosed: () -> Unit) {
+        if (PreferencesHelper.isPremium(activity)) {
+            Log.d(TAG, "User is premium, skipping ad and calling callback")
+            onAdClosed()
+            return
+        }
+
+        val ad = interstitialAd
+        if (ad != null) {
+            Log.d(TAG, "Showing interstitial ad...")
+            ad.fullScreenContentCallback = object : FullScreenContentCallback() {
+                override fun onAdDismissedFullScreenContent() {
+                    Log.d(TAG, "Interstitial dismissed, calling callback")
+                    interstitialAd = null
+                    loadInterstitial(activity)
+                    onAdClosed()
+                }
+                override fun onAdFailedToShowFullScreenContent(error: AdError) {
+                    Log.e(TAG, "Failed to show interstitial: ${error.message}")
+                    interstitialAd = null
+                    loadInterstitial(activity)
+                    onAdClosed()
+                }
+            }
+            ad.show(activity)
+        } else {
+            // Reklam yüklenmemişse, yüklemeyi başlat
+            Log.d(TAG, "No interstitial loaded, starting load if not already loading")
+            if (!isLoading) {
+                loadInterstitial(activity)
+            }
+            
+            // Eğer reklam hazır değilse DetailsActivity 5 saniye bekliyor zaten. 
+            // Hala hazır değilse direkt geçiyoruz (Kullanıcıyı engellememek için)
+            onAdClosed()
+        }
+    }
+
+    fun isInterstitialReady(): Boolean = interstitialAd != null
+
     fun loadBanner(activity: Activity, adContainer: ViewGroup) {
         if (PreferencesHelper.isPremium(activity)) {
             adContainer.visibility = View.GONE
             return
         }
         val adView = AdView(activity)
-        adView.adUnitId = BANNER_ID
+        // Senin listende Banner (Afiş) reklamı yok, sadece Native Advanced var. 
+        // Eğer bir yere Banner eklemek istersen FAV_NATIVE_AD_ID'yi veya yeni bir banner ID'yi kullanmalıson.
+        // Şimdilik çökmemesi için FAV_NATIVE_AD_ID'yi veriyorum (Çalışmayabilir, Banner ve Native farklıdır)
+        adView.adUnitId = FAV_NATIVE_AD_ID 
         adView.setAdSize(AdSize.BANNER)
         adContainer.removeAllViews()
         adContainer.addView(adView)

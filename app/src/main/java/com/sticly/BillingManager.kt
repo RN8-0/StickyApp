@@ -6,6 +6,8 @@ import android.util.Log
 import android.widget.Toast
 import com.android.billingclient.api.*
 import kotlinx.coroutines.*
+import java.util.LinkedList
+import java.util.Queue
 
 class BillingManager(
     private val context: Context,
@@ -27,6 +29,8 @@ class BillingManager(
     }
 
     private val billingScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    
+    private val pendingRunnables: Queue<() -> Unit> = LinkedList()
 
     private var billingClient: BillingClient = BillingClient.newBuilder(context)
         .setListener(this)
@@ -47,26 +51,55 @@ class BillingManager(
     var lastPurchaseOrderId: String? = null
         private set
 
+    private var isConnecting = false
+
     init {
         startConnection()
     }
 
     private fun startConnection() {
+        if (isConnecting || billingClient.isReady) {
+            if (billingClient.isReady) {
+                processPendingRunnables()
+            }
+            return
+        }
+        isConnecting = true
+        
         billingClient.startConnection(object : BillingClientStateListener {
             override fun onBillingSetupFinished(billingResult: BillingResult) {
+                isConnecting = false
                 if (billingResult.responseCode == BillingClient.BillingResponseCode.OK) {
                     retryAttempt = 0
                     queryProducts()
                     checkExistingPurchases()
+                    processPendingRunnables()
                 } else {
                     Log.e(TAG, "Billing setup failed: ${billingResult.debugMessage}")
                 }
             }
 
             override fun onBillingServiceDisconnected() {
+                isConnecting = false
                 retryWithExponentialBackoff()
             }
         })
+    }
+    
+    // Bağlantı hazır olduğunda bekleyen işlemleri çalıştır
+    private fun executeServiceRequest(runnable: () -> Unit) {
+        if (billingClient.isReady) {
+            runnable()
+        } else {
+            pendingRunnables.add(runnable)
+            startConnection()
+        }
+    }
+    
+    private fun processPendingRunnables() {
+        while (pendingRunnables.isNotEmpty()) {
+            pendingRunnables.poll()?.invoke()
+        }
     }
 
     private fun retryWithExponentialBackoff() {
@@ -222,27 +255,35 @@ class BillingManager(
     }
 
     fun launchPurchase(activity: Activity, productId: String) {
-        val product = premiumProductDetails[productId] ?: return
-
-        val productDetailsParamsList = mutableListOf<BillingFlowParams.ProductDetailsParams>()
-        val builder = BillingFlowParams.ProductDetailsParams.newBuilder()
-            .setProductDetails(product)
-
-        // For subscriptions, we must set the offer token (Billing 7.x required)
-        if (product.productType == BillingClient.ProductType.SUBS) {
-            val offerToken = product.subscriptionOfferDetails?.firstOrNull()?.offerToken
-            if (offerToken != null) {
-                builder.setOfferToken(offerToken)
+        executeServiceRequest {
+            val product = premiumProductDetails[productId]
+            if (product == null) {
+                // Try to launch connection and retry? Or just fail.
+                // If details are missing, it means query hasn't finished or product id is wrong.
+                Log.e(TAG, "Product details not found for $productId")
+                return@executeServiceRequest
             }
+
+            val productDetailsParamsList = mutableListOf<BillingFlowParams.ProductDetailsParams>()
+            val builder = BillingFlowParams.ProductDetailsParams.newBuilder()
+                .setProductDetails(product)
+
+            // For subscriptions, we must set the offer token (Billing 7.x required)
+            if (product.productType == BillingClient.ProductType.SUBS) {
+                val offerToken = product.subscriptionOfferDetails?.firstOrNull()?.offerToken
+                if (offerToken != null) {
+                    builder.setOfferToken(offerToken)
+                }
+            }
+
+            productDetailsParamsList.add(builder.build())
+
+            val billingFlowParams = BillingFlowParams.newBuilder()
+                .setProductDetailsParamsList(productDetailsParamsList)
+                .build()
+
+            billingClient.launchBillingFlow(activity, billingFlowParams)
         }
-
-        productDetailsParamsList.add(builder.build())
-
-        val billingFlowParams = BillingFlowParams.newBuilder()
-            .setProductDetailsParamsList(productDetailsParamsList)
-            .build()
-
-        billingClient.launchBillingFlow(activity, billingFlowParams)
     }
 
     override fun onPurchasesUpdated(billingResult: BillingResult, purchases: MutableList<Purchase>?) {
@@ -349,6 +390,9 @@ class BillingManager(
                     PreferencesHelper.setPremiumWithType(context, "subscription", expiryEstimate)
                 }
             }
+            
+            // Firebase'e de kaydet
+            PreferencesHelper.savePurchasedPackByProductId(context, productId, purchase.orderId)
         }
     }
 
@@ -361,71 +405,58 @@ class BillingManager(
     }
 
     fun checkExistingPurchases() {
-        if (!billingClient.isReady) {
-            Log.w(TAG, "checkExistingPurchases: BillingClient not ready, retrying connection...")
-            startConnection()
-            return
-        }
+        executeServiceRequest {
+            var hasLifetime = false
+            var hasActiveSub = false
 
-        var hasLifetime = false
-        var hasActiveSub = false
-
-        // Check INAPP (lifetime + sticker packs)
-        billingClient.queryPurchasesAsync(
-            QueryPurchasesParams.newBuilder()
-                .setProductType(BillingClient.ProductType.INAPP)
-                .build()
-        ) { resultInApp, inAppPurchases ->
-            if (resultInApp.responseCode == BillingClient.BillingResponseCode.OK) {
-                // Log.d(TAG, "Found ${inAppPurchases.size} INAPP purchases")
-                for (purchase in inAppPurchases) {
-                    // Log.d(TAG, "INAPP Purchase: products=${purchase.products}, state=${purchase.purchaseState}")
-                    if (purchase.purchaseState == Purchase.PurchaseState.PURCHASED) {
-                        // Acknowledge edilmemişse acknowledge et
-                        if (!purchase.isAcknowledged) {
-                            acknowledgePurchaseAndHandle(purchase)
-                        } else {
-                            handleSuccessfulPurchase(purchase)
-                        }
-                        if (purchase.products.contains(PREMIUM_LIFETIME)) {
-                            hasLifetime = true
-                        }
-                    }
-                }
-            } else {
-                Log.e(TAG, "INAPP query failed: ${resultInApp.responseCode} - ${resultInApp.debugMessage}")
-            }
-
-            // Check SUBS (after INAPP completes)
+            // Check INAPP (lifetime + sticker packs)
             billingClient.queryPurchasesAsync(
                 QueryPurchasesParams.newBuilder()
-                    .setProductType(BillingClient.ProductType.SUBS)
+                    .setProductType(BillingClient.ProductType.INAPP)
                     .build()
-            ) { resultSubs, subsPurchases ->
-                if (resultSubs.responseCode == BillingClient.BillingResponseCode.OK) {
-                    Log.d(TAG, "Found ${subsPurchases.size} SUBS purchases")
-                    for (purchase in subsPurchases) {
-                        Log.d(TAG, "SUBS Purchase: products=${purchase.products}, state=${purchase.purchaseState}, acknowledged=${purchase.isAcknowledged}")
+            ) { resultInApp, inAppPurchases ->
+                if (resultInApp.responseCode == BillingClient.BillingResponseCode.OK) {
+                    for (purchase in inAppPurchases) {
                         if (purchase.purchaseState == Purchase.PurchaseState.PURCHASED) {
-                            // Acknowledge edilmemişse acknowledge et
                             if (!purchase.isAcknowledged) {
                                 acknowledgePurchaseAndHandle(purchase)
                             } else {
                                 handleSuccessfulPurchase(purchase)
                             }
-                            hasActiveSub = true
+                            if (purchase.products.contains(PREMIUM_LIFETIME)) {
+                                hasLifetime = true
+                            }
                         }
                     }
-                } else {
-                    Log.e(TAG, "SUBS query failed: ${resultSubs.responseCode} - ${resultSubs.debugMessage}")
                 }
 
-                // If no lifetime and no active subscription, revoke premium
-                if (!hasLifetime && !hasActiveSub) {
-                    Log.d(TAG, "No active premium purchase found, revoking premium status")
-                    PreferencesHelper.setPremium(context, false)
-                } else {
-                    // Log.d(TAG, "Active purchase found: lifetime=$hasLifetime, subscription=$hasActiveSub")
+                // Check SUBS
+                billingClient.queryPurchasesAsync(
+                    QueryPurchasesParams.newBuilder()
+                        .setProductType(BillingClient.ProductType.SUBS)
+                        .build()
+                ) { resultSubs, subsPurchases ->
+                    if (resultSubs.responseCode == BillingClient.BillingResponseCode.OK) {
+                        for (purchase in subsPurchases) {
+                            if (purchase.purchaseState == Purchase.PurchaseState.PURCHASED) {
+                                if (!purchase.isAcknowledged) {
+                                    acknowledgePurchaseAndHandle(purchase)
+                                } else {
+                                    handleSuccessfulPurchase(purchase)
+                                }
+                                hasActiveSub = true
+                            }
+                        }
+                    }
+
+                    // If no lifetime and no active subscription, revoke premium
+                    if (!hasLifetime && !hasActiveSub) {
+                        // Ancak burada dikkatli olmaliyiz, belki gecici olarak offline
+                        // Sadece eminsek iptal ediyoruz.
+                        // PreferencesHelper.setPremium(context, false) 
+                        // -> Bunu otomatik iptal etmek riskli olabilir (offline durumlar).
+                        // Yine de "Geri Yükle" butonu ile manuel tetiklenince mantıklı.
+                    }
                 }
             }
         }
@@ -451,67 +482,45 @@ class BillingManager(
     }
 
     fun restorePurchases(onResult: (RestoreResult) -> Unit) {
-        if (!billingClient.isReady) {
-            Log.w(TAG, "restorePurchases: BillingClient not ready, starting connection...")
-            // Bağlantı kur ve tekrar dene
-            billingClient.startConnection(object : BillingClientStateListener {
-                override fun onBillingSetupFinished(billingResult: BillingResult) {
-                    if (billingResult.responseCode == BillingClient.BillingResponseCode.OK) {
-                        restorePurchasesInternal(onResult)
-                    } else {
-                        Log.e(TAG, "Billing setup failed during restore: ${billingResult.debugMessage}")
-                        onResult(RestoreResult.ERROR)
-                    }
-                }
-                override fun onBillingServiceDisconnected() {
-                    onResult(RestoreResult.ERROR)
-                }
-            })
-            return
+        executeServiceRequest {
+            restorePurchasesInternal(onResult)
         }
-        restorePurchasesInternal(onResult)
     }
 
     private fun restorePurchasesInternal(onResult: (RestoreResult) -> Unit) {
         var foundPurchases = false
 
-        // Log.d(TAG, "Starting purchase restoration...")
-
-        val processPurchases = { result: BillingResult, purchases: List<Purchase>, type: String ->
-            if (result.responseCode == BillingClient.BillingResponseCode.OK) {
-                // Log.d(TAG, "Found ${purchases.size} $type purchases to restore")
-                for (purchase in purchases) {
-                    if (purchase.purchaseState == Purchase.PurchaseState.PURCHASED) {
-                        foundPurchases = true
-                        // Log.d(TAG, "Restoring $type purchase: ${purchase.products}")
-                        if (!purchase.isAcknowledged) {
-                            acknowledgePurchaseAndHandle(purchase)
-                        } else {
-                            handleSuccessfulPurchase(purchase)
-                        }
-                    }
-                }
-            } else {
-                Log.e(TAG, "$type query failed: ${result.responseCode} - ${result.debugMessage}")
-            }
-        }
-
+        // INAPP ve SUBS sorgula
         billingClient.queryPurchasesAsync(
             QueryPurchasesParams.newBuilder().setProductType(BillingClient.ProductType.INAPP).build()
         ) { resultInApp, purchasesInApp ->
-            processPurchases(resultInApp, purchasesInApp, "INAPP")
+            
+            if (resultInApp.responseCode == BillingClient.BillingResponseCode.OK) {
+                for (purchase in purchasesInApp) {
+                    if (purchase.purchaseState == Purchase.PurchaseState.PURCHASED) {
+                        foundPurchases = true
+                        handleSuccessfulPurchase(purchase)
+                    }
+                }
+            }
 
             billingClient.queryPurchasesAsync(
                 QueryPurchasesParams.newBuilder().setProductType(BillingClient.ProductType.SUBS).build()
             ) { resultSubs, purchasesSubs ->
-                processPurchases(resultSubs, purchasesSubs, "SUBS")
+                
+                if (resultSubs.responseCode == BillingClient.BillingResponseCode.OK) {
+                    for (purchase in purchasesSubs) {
+                        if (purchase.purchaseState == Purchase.PurchaseState.PURCHASED) {
+                            foundPurchases = true
+                            handleSuccessfulPurchase(purchase)
+                        }
+                    }
+                }
 
                 billingScope.launch(Dispatchers.Main) {
                     if (foundPurchases) {
-                        Log.d(TAG, "Purchase restoration completed successfully")
                         onResult(RestoreResult.SUCCESS)
                     } else {
-                        Log.d(TAG, "No purchases found to restore")
                         onResult(RestoreResult.NOT_FOUND)
                     }
                 }

@@ -25,6 +25,14 @@
     <string name="privacy_policy">Gizlilik Politikası</string>
     <string name="notification_settings">Bildirim Ayarları</string>
     <string name="language">Dil</string>
+    <string name="premium_banner_title">Premium edinin</string>
+    <string name="premium_banner_desc">Reklamsız çıkartmaların keyfini çıkarın. Tüm premium özelliklere erişin.</string>
+    <string name="notification_menu_title">Çıkartmalar için bildirimler</string>
+    <string name="notification_menu_desc">Bildirimleri etkinleştirmek için tıklayın</string>
+    <string name="login_banner_text">Oturum açın ve verilerinizi güvende tutun!</string>
+    <string name="invite_friend">Bir arkadaş davet et</string>
+    <string name="support_and_share_title">Destek ve Paylaşım</string>
+    <string name="connect_with">İle bağlantı</string>
     <string name="select_language">Dil Seçin</string>
 
     <!-- Contact Us -->
@@ -57,6 +65,7 @@
 
     <!-- Share -->
     <string name="share_text">Sticky uygulamasını deneyin! WhatsApp için harika stickerlar: https://play.google.com/store/apps/details?id=com.sticly</string>
+    <string name="share_pack">Çıkartmaları Paylaş</string>
 
     <!-- Privacy -->
     <string name="privacy_title">Gizlilik Politikası</string>
@@ -125,7 +134,12 @@
     <string name="restore_purchases">Satın Alımları Geri Yükle</string>
     <string name="restore_success">Satın alımlarınız geri yüklendi!</string>
     <string name="restore_not_found">Geri yüklenecek satın alım bulunamadı</string>
-    <string name="restore_error">Geri yükleme başarısız. Lütfen tekrar deneyin.</string>
+    <string name="btn_restore_subscription">Satın Alma İşlemini Geri Yükle</string>
+    <string name="restore_error">Geri yükleme hatası. Lütfen tekrar deneyin.</string>
+    <string name="subscription_activated">Abonelik aktif edildi.</string>
+    <string name="no_subscription_found">Daha önce mevcut aboneliğiniz bulunmamaktadır.</string>
+    <string name="remove_ads">Reklamları Kaldır</string>
+    <string name="remove_ads_desc">Reklamsız bir deneyim yaşayın</string>
     <string name="restoring">Geri yükleniyor…</string>
 
     <!-- Product -->
@@ -229,6 +243,7 @@
     <string name="stickers_loading">Çıkartmalar yükleniyor…</string>
     <string name="stickers_load_failed">Çıkartmalar yüklenemedi</string>
     <string name="loading_percent">Yükleniyor %1$d%%</string>
+    <string name="ad_preparing">Hazırlanıyor…</string>
 
     <!-- Pack Validation Errors -->
     <string name="pack_empty_error">📦 Bu pakette çıkartma yok! Önce en az 3 çıkartma ekleyin.</string>
@@ -249,6 +264,9 @@
     <string name="whatsapp_not_available_message">WhatsApp açılamadı. Lütfen şunları kontrol edin:\n\n• WhatsApp\'ın yüklü olduğundan\n• WhatsApp\'a giriş yaptığınızdan\n• WhatsApp\'ın güncel olduğundan\n\nemin olun.</string>
     <string name="whatsapp_error_detailed">WhatsApp hatası: %s\n\nLütfen WhatsApp\'ın düzgün çalıştığından emin olun.</string>
     <string name="sticker_count">%d çıkartma</string>
+    <string name="btn_add_short">Ekle</string>
+    <string name="btn_share_short">Paylaş</string>
+    <string name="download_label">indirme</string>
     <string name="no_custom_packs">Henüz hiç çıkartma paketin yok. Hemen oluştur!</string>
     <string name="pack_deleted_whatsapp_sync">Paket silindi ve WhatsApp senkronizasyonu tetiklendi. Birkaç saniye sürebilir.</string>
     <string name="pack_delete_failed">Paket silinemedi</string>

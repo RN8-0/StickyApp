@@ -13,6 +13,7 @@ export interface StickerPack {
     name_ar: string;
     name_hi: string;
     name_pt: string;
+    [key: `name_${string}`]: string | any; // Tüm dil kodlarını desteklemek için
     publisher: string;
     publisher_email: string;
     privacy_policy_website: string;
@@ -21,7 +22,7 @@ export interface StickerPack {
     tray_url: string;
     is_animated: boolean;
     is_premium: boolean;
-    product_id?: string; // Artık kullanılmıyor - eski veriler için tutuldu
+    product_id?: string;
     category: string;
     download_count: number;
     fake_download_base: number;

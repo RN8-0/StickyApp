@@ -205,7 +205,7 @@ class OnboardingActivity : AppCompatActivity() {
 
     private fun onFinish() {
         PreferencesHelper.setFirstLaunchComplete(this)
-        startActivity(Intent(this, MainActivity::class.java))
+        startActivity(Intent(this, LoginActivity::class.java))
         finish()
         overridePendingTransition(R.anim.fade_in, R.anim.fade_out)
     }

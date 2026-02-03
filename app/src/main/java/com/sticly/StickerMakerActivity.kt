@@ -1164,6 +1164,9 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
     private fun saveSticker() {
         showLoading()
 
+        // Geçici olarak arka planı kaldır (Şeffaflık için)
+        photoEditorView.background = null
+
         val file = File(cacheDir, "sticker_${System.currentTimeMillis()}.png")
 
         val saveSettings = SaveSettings.Builder()
@@ -1175,6 +1178,8 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
             override fun onSuccess(imagePath: String) {
                 val bitmap = BitmapFactory.decodeFile(imagePath)
                 runOnUiThread {
+                    // Arka planı geri yükle
+                    photoEditorView.setBackgroundResource(R.drawable.chat_wallpaper_pattern)
                     hideLoading()
                     showPackSelectionDialog(bitmap)
                 }
@@ -1182,6 +1187,8 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
 
             override fun onFailure(exception: Exception) {
                 runOnUiThread {
+                    // Arka planı geri yükle
+                    photoEditorView.setBackgroundResource(R.drawable.chat_wallpaper_pattern)
                     hideLoading()
                     Toast.makeText(this@StickerMakerActivity, getString(R.string.error_save_failed, exception.message), Toast.LENGTH_SHORT).show()
                 }

@@ -32,9 +32,11 @@ data class Pack(
     val favoriteCount: Int = 0,  // Favori sayısı
     val isAnimated: Boolean = false, // Animasyonlu paket mi?
     val isActive: Boolean = true, // Paket aktif mi?
-    val priceTRY: String = "",    // TRY fiyatı (örn: "4,99 TL")
-    val priceUSD: String = "",    // USD fiyatı (örn: "$0.99")
-    val priceEUR: String = ""     // EUR fiyatı (örn: "€0.99")
+    val priceTRY: String = "",
+    val priceUSD: String = "",
+    val priceEUR: String = "",
+    // Dinamik çeviriler (Gemini tarafından üretilen name_xx alanları burada toplanır)
+    val translations: Map<String, String> = emptyMap()
 )
 
 data class BillingSettings(

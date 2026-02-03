@@ -31,6 +31,14 @@ class StickerAdapter(
     private val onSelectionChanged: ((Int) -> Unit)? = null
 ) : RecyclerView.Adapter<StickerAdapter.VH>() {
 
+    init {
+        setHasStableIds(true)
+    }
+
+    override fun getItemId(position: Int): Long {
+        return items.getOrNull(position)?.file?.hashCode()?.toLong() ?: position.toLong()
+    }
+
     class VH(v: View) : RecyclerView.ViewHolder(v) {
         val img: ImageView = v.findViewById(R.id.img)
         val progressBar: ProgressBar = v.findViewById(R.id.progressBar)
@@ -135,7 +143,7 @@ class StickerAdapter(
                     )
                     .placeholder(R.drawable.sticker_placeholder)
                     .error(R.drawable.sticker_placeholder)
-                    .diskCacheStrategy(DiskCacheStrategy.DATA)
+                    .diskCacheStrategy(DiskCacheStrategy.ALL)
                     .override(256, 256)
                     .into(h.img)
             }
@@ -151,7 +159,7 @@ class StickerAdapter(
                     )
                     .placeholder(R.drawable.sticker_placeholder)
                     .error(R.drawable.sticker_placeholder)
-                    .diskCacheStrategy(DiskCacheStrategy.DATA)
+                    .diskCacheStrategy(DiskCacheStrategy.ALL)
                     .override(256, 256)
                     .into(h.img)
             }

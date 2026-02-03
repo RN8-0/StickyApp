@@ -9,7 +9,8 @@ import {
   arrayRemove,
   setDoc,
   serverTimestamp,
-  onSnapshot
+  onSnapshot,
+  getDoc
 } from 'firebase/firestore';
 import {
   ref,
@@ -20,7 +21,8 @@ import {
   getBytes,
 } from 'firebase/storage';
 import {
-  signInWithEmailAndPassword,
+  signInWithPopup,
+  GoogleAuthProvider,
   onAuthStateChanged,
   signOut,
   type User
@@ -55,9 +57,16 @@ import {
   Send,
   Filter,
   ChevronDown,
-  Bot,
-  CloudLightning
+  CloudLightning,
+  Sparkles,
+  Wand2,
+  Zap,
+  Image as ImageIcon,
+  CheckCircle2,
+  Menu
 } from 'lucide-react';
+import { translateTextAllLanguages, TARGET_LANGUAGES } from './utils/translator';
+import { magicWizardService, type GifResult } from './utils/magicWizardService';
 import {
   BarChart,
   Bar,
@@ -103,21 +112,73 @@ const CATEGORIES = [
   { id: 'other', name: 'Diğer', emoji: '📂' }
 ];
 
+// ========== COMPONENTS ==========
+
+const StatCard = ({ label, value, color }: { label: string, value: number, color: 'primary' | 'accent' }) => (
+  <div className="bg-card px-5 py-3 rounded-2xl border border-white/5 flex flex-col min-w-[100px]">
+    <span className="text-[10px] font-bold text-textSec uppercase tracking-widest mb-1">{label}</span>
+    <span className={cn("text-2xl font-black", color === 'primary' ? 'text-primary' : 'text-accent')}>
+      {(value || 0).toLocaleString()}
+    </span>
+  </div>
+);
+
+const Modal = ({ show, onClose, title, children }: { show: boolean, onClose: () => void, title: string, children: React.ReactNode }) => {
+  if (!show) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-md animate-in fade-in duration-200" onClick={onClose}>
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="glass w-full max-w-2xl rounded-3xl overflow-hidden animate-in zoom-in-95 duration-200 shadow-[0_0_100px_rgba(0,168,132,0.1)]"
+      >
+        <div className="px-8 py-6 border-b border-white/5 flex items-center justify-between bg-card/50">
+          <h3 className="text-xl font-black tracking-tight text-white">{title}</h3>
+          <button onClick={onClose} className="p-2 hover:bg-hover rounded-xl transition-all">
+            <X size={20} className="text-textSec" />
+          </button>
+        </div>
+        <div className="p-8 max-h-[80vh] overflow-y-auto custom-scrollbar bg-background/50">
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const Input = ({ label, value, onChange, placeholder, type = "text", helpText }: any) => (
+  <div className="space-y-2 w-full">
+    <label className="text-[10px] font-black text-textSec uppercase tracking-[0.2em] px-1">{label}</label>
+    <div className="relative group">
+      <input
+        type={type}
+        value={value}
+        onChange={onChange}
+        placeholder={placeholder}
+        className="w-full h-14 bg-hover border border-transparent focus:border-primary/50 rounded-xl px-5 text-white font-bold placeholder:text-textSec/30 outline-none transition-all"
+      />
+      <div className="absolute inset-0 rounded-xl bg-primary/5 opacity-0 group-focus-within:opacity-100 pointer-events-none transition-opacity" />
+    </div>
+    {helpText && <p className="text-[10px] text-textSec/60 font-medium px-1 italic">{helpText}</p>}
+  </div>
+);
+
+
+
 function App() {
   const [user, setUser] = useState<User | null>(null);
   console.log("STICKY ADMIN V3 LOADING...");
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+
   const [packs, setPacks] = useState<StickerPack[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedPack, setSelectedPack] = useState<StickerPack | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'stats' | 'messages' | 'notifications' | 'automation'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'stats' | 'messages' | 'notifications' | 'magic-wizard'>('dashboard');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'passive' | 'premium' | 'normal' | 'new'>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [statsFilter, setStatsFilter] = useState<'all' | 'active' | 'passive' | 'premium' | 'normal'>('all');
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
 
   // Mail System States
   const [messages, setMessages] = useState<ContactMessage[]>([]);
@@ -128,9 +189,11 @@ function App() {
   const [showNewPackModal, setShowNewPackModal] = useState(false);
   const [showEditPackModal, setShowEditPackModal] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isTranslating, setIsTranslating] = useState(false);
+  const [langSearch, setLangSearch] = useState('');
 
   // Form States
-  const [newPackData, setNewPackData] = useState({
+  const [newPackData, setNewPackData] = useState<any>({
     name: '',
     name_tr: '',
     name_zh: '',
@@ -164,13 +227,71 @@ function App() {
   // Silme progress state
   const [deleteProgress, setDeleteProgress] = useState<{ deleting: boolean, message: string, current: number, total: number } | null>(null);
 
-  // Otomasyon State'leri
+  // Magic Wizard State'leri
+  const [wizardStep, setWizardStep] = useState(1);
+  const [wizardSuggestions, setWizardSuggestions] = useState<string[]>([]);
+  const [wizardMetadata, setWizardMetadata] = useState<any>(null);
+  const [wizardGifs, setWizardGifs] = useState<GifResult[]>([]);
+  const [selectedGifs, setSelectedGifs] = useState<GifResult[]>([]);
+  const [wizardLoading, setWizardLoading] = useState(false);
+  const [wizardSearchQuery, setWizardSearchQuery] = useState('');
+  const [wizardView, setWizardView] = useState<'create' | 'drafts'>('create');
+  const [wizardPage, setWizardPage] = useState(0);
+
+  // Otomasyon / Taslak State'leri
   const [automationDrafts, setAutomationDrafts] = useState<StickerPack[]>([]);
   const [loadingDrafts, setLoadingDrafts] = useState(false);
   const [selectedDraft, setSelectedDraft] = useState<StickerPack | null>(null);
 
+  const [adminName, setAdminName] = useState('');
+  const [showWelcome, setShowWelcome] = useState(false);
+  const [welcomeExit, setWelcomeExit] = useState(false);
+
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (u) => {
+    const unsubscribe = onAuthStateChanged(auth, async (u) => {
+      if (u && u.email) {
+        setLoading(true);
+        try {
+          console.log("Admin kontrolü yapılıyor:", u.email);
+          const adminDoc = await getDoc(doc(db, 'admins', u.email));
+          if (!adminDoc.exists()) {
+            console.warn("YETKESİZ GİRİŞ DENEMESİ:", u.email);
+            await signOut(auth);
+            setUser(null);
+            alert("Yetkisiz Erişim: " + u.email + " yönetici listesinde bulunamadı.");
+            setLoading(false);
+            return;
+          }
+
+          const adminData = adminDoc.data();
+          // Hem 'name' hem 'admin' alanına bak, yoksa e-posta ismini al
+          const name = adminData?.name || adminData?.admin || u.email.split('@')[0];
+          setAdminName(name);
+
+          // Eğer yeni giriş yapılıyorsa hoş geldin ekranını göster
+          if (!user && !showWelcome) {
+            setShowWelcome(true);
+            setWelcomeExit(false);
+            // 2.9 saniyede fırlamaya başla, 3.5 saniyede bitir
+            setTimeout(() => setWelcomeExit(true), 2900);
+            setTimeout(() => {
+              setShowWelcome(false);
+              setLoading(false);
+            }, 3500);
+          } else {
+            setLoading(false);
+          }
+
+          console.log("Admin girişi başarılı, isim:", name);
+        } catch (error: any) {
+          console.error("Admin yetkisi kontrol edilirken hata:", error);
+          alert("Giriş Hatası: " + (error?.message || "Yetki kontrolü yapılamadı."));
+          await signOut(auth);
+          setUser(null);
+          setLoading(false);
+          return;
+        }
+      }
       setUser(u);
       if (u) fetchPacks();
       else setLoading(false);
@@ -292,13 +413,15 @@ function App() {
   };
 
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
+
+  const handleGoogleLogin = async () => {
     setLoading(true);
     try {
-      await signInWithEmailAndPassword(auth, email, password);
-    } catch (error) {
-      alert("Giriş hatası: Şifre veya e-posta hatalı.");
+      const provider = new GoogleAuthProvider();
+      await signInWithPopup(auth, provider);
+    } catch (error: any) {
+      console.error("Google login error:", error);
+      alert("Google ile giriş yapılamadı: " + error.message);
     } finally {
       setLoading(false);
     }
@@ -345,17 +468,213 @@ function App() {
         })
       ];
 
+      // Fallback: Eğer hiç paket bulunamadıysa eski koleksiyonu (sticker_packs) kontrol et
+      if (allPacks.length === 0) {
+        console.warn("Standart koleksiyonlar boş, 'sticker_packs' kontrol ediliyor...");
+        try {
+          const oldPacks = await getDocs(collection(db, 'sticker_packs'));
+          const oldPacksData = oldPacks.docs.map(d => {
+            const data = d.data();
+            return {
+              id: d.id,
+              ...data,
+              is_premium: false,
+              is_animated: data.is_animated ?? data.animated ?? false,
+              download_count: Number(data.download_count || data.downloadCount || data.downloads || 0),
+              fake_download_base: Number(data.fake_download_base || 0),
+              view_count: Number(data.view_count || data.viewCount || data.views || 0),
+              favorite_count: Number(data.favorite_count || data.favoriteCount || data.favorites || 0),
+              sticker_count: Number(data.sticker_count || data.stickers?.length || 0),
+            } as StickerPack;
+          });
+          allPacks.push(...oldPacksData);
+        } catch (e) {
+          console.warn("Eski koleksiyon (sticker_packs) okunurken hata:", e);
+        }
+      }
+
       console.log("FETCHED PACKS DATA:");
       console.table(allPacks.map(p => ({ name: p.name, dl: p.download_count, views: p.view_count })));
-      setPacks(allPacks.sort((a, b) => a.name.localeCompare(b.name)));
-    } catch (error) {
+      // Güvenli sıralama (name undefined olabilir)
+      setPacks(allPacks.sort((a, b) => (a.name || '').localeCompare(b.name || '')));
+    } catch (error: any) {
       console.error("Fetch error:", error);
+      alert("Firebase Veri Çekme Hatası: " + (error?.message || "Bilinmeyen hata"));
     } finally {
       setLoading(false);
     }
   };
 
-  // ========== OTOMASYON FONKSİYONLARI ==========
+  // ========== MAGIC WIZARD (SİHİRBAZ) FONKSİYONLARI ==========
+
+  const fetchWizardSuggestions = async () => {
+    setWizardLoading(true);
+    try {
+      const suggestions = await magicWizardService.getTopicSuggestions();
+      setWizardSuggestions(suggestions);
+    } catch (error) {
+      console.error("Suggestions error:", error);
+    } finally {
+      setWizardLoading(false);
+    }
+  };
+
+  const handleSelectTopic = async (topic: string) => {
+    setWizardStep(2);
+    setWizardLoading(true);
+    setWizardPage(0);
+    try {
+      const existingNames = packs.map(p => p.name);
+      const meta = await magicWizardService.generatePackMetadata(topic, existingNames);
+      if (meta) {
+        setWizardMetadata(meta);
+        setWizardSearchQuery(meta.search_keyword || topic);
+      }
+    } catch (error) {
+      console.error("Meta generation error:", error);
+    } finally {
+      setWizardLoading(false);
+    }
+  };
+
+  const handleWizardRegenerateMetadata = async () => {
+    if (!wizardMetadata) return;
+    setWizardLoading(true);
+    try {
+      const existingNames = packs.map(p => p.name);
+      const meta = await magicWizardService.generatePackMetadata(wizardSearchQuery, existingNames);
+      if (meta) {
+        setWizardMetadata(meta);
+      }
+    } catch (error) {
+      console.error("Regenerate error:", error);
+    } finally {
+      setWizardLoading(false);
+    }
+  };
+
+  const handleWizardSearch = async (page: number = 0) => {
+    if (!wizardSearchQuery) return;
+    setWizardLoading(true);
+    setWizardPage(page);
+    try {
+      const gifs = await magicWizardService.searchGifs(wizardSearchQuery, page);
+      setWizardGifs(gifs);
+      // Sayfa değişince yukarı kaydır (opsiyonel)
+      const container = document.getElementById('wizard-gif-container');
+      if (container) container.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (error) {
+      console.error("Search error:", error);
+    } finally {
+      setWizardLoading(false);
+    }
+  };
+
+  const toggleGifSelection = (gif: GifResult) => {
+    if (selectedGifs.find(g => g.id === gif.id)) {
+      setSelectedGifs(selectedGifs.filter(g => g.id !== gif.id));
+    } else {
+      if (selectedGifs.length >= 30) {
+        alert("WhatsApp limitleri gereği en fazla 30 sticker seçebilirsiniz.");
+        return;
+      }
+      setSelectedGifs([...selectedGifs, gif]);
+    }
+  };
+
+  const handleCreateWizardDraft = async () => {
+    if (selectedGifs.length < 3) {
+      alert("Bir paket için en az 3 sticker seçmelisiniz.");
+      return;
+    }
+
+    setIsProcessing(true);
+    const packId = `wizard_${Date.now()}_${wizardMetadata.name.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '')}`;
+
+    try {
+      setDeleteProgress({ deleting: true, message: 'Dosyalar işleniyor (FFmpeg)...', current: 0, total: selectedGifs.length });
+
+      const processedStickers: any[] = [];
+      let trayUrl = "";
+
+      // 1. Her bir GIF'i indir ve WebP'ye çevir
+      for (let i = 0; i < selectedGifs.length; i++) {
+        const gif = selectedGifs[i];
+        setDeleteProgress(prev => prev ? { ...prev, current: i + 1, message: `Dönüştürülüyor: ${gif.title || 'Sticker'}` } : null);
+
+        const response = await fetch(gif.url);
+        const blob = await response.blob();
+        const file = new File([blob], `stk_${i}.gif`, { type: 'image/gif' });
+
+        const processedBlob = await stickerProcessor.processAnimated(file);
+        const fileName = `stk_${Date.now()}_${i}.webp`;
+        const storageRef = ref(storage, `automation_drafts/${packId}/${fileName}`);
+
+        await uploadBytes(storageRef, processedBlob);
+        const downloadUrl = await getDownloadURL(storageRef);
+
+        processedStickers.push({
+          image_file: fileName,
+          url: downloadUrl,
+          emojis: ["😀"] // Default emoji
+        });
+
+        // İlk sticker'ı tray yap
+        if (i === 0) {
+          const trayBlob = await stickerProcessor.processTray(file);
+          const trayRef = ref(storage, `automation_drafts/${packId}/tray.png`);
+          await uploadBytes(trayRef, trayBlob);
+          trayUrl = await getDownloadURL(trayRef);
+        }
+      }
+
+      setDeleteProgress(prev => prev ? { ...prev, message: 'Firestore kaydı oluşturuluyor...' } : null);
+
+      // 2. Draft verisini Firestore'a yaz
+      const draftData = {
+        id: packId,
+        name: wizardMetadata.name,
+        name_tr: wizardMetadata.name_tr || wizardMetadata.name,
+        category: wizardMetadata.category || 'other',
+        publisher: 'Sticky Wizard',
+        publisher_email: 'wizard@sticly.com',
+        is_premium: false,
+        is_active: false,
+        is_animated: true,
+        sticker_count: processedStickers.length,
+        stickers: processedStickers,
+        tray_url: trayUrl,
+        storage_path: `automation_drafts/${packId}`,
+        source_query: wizardSearchQuery,
+        created_at: new Date().toISOString(),
+        automation_created: true
+      };
+
+      await setDoc(doc(db, 'automation_drafts', packId), draftData);
+
+      setDeleteProgress(null);
+      alert(`✅ "${wizardMetadata.name}" paketi başarıyla taslak olarak oluşturuldu! Şimdi ana listeye gidip onaylayabilirsin.`);
+
+      // Wizard'ı sıfırla ve dashboard'a dön
+      resetWizard();
+      setActiveTab('dashboard');
+      fetchPacks();
+    } catch (error) {
+      console.error("Wizard draft creation error:", error);
+      alert("Taslak oluşturulurken hata oluştu.");
+      setDeleteProgress(null);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const resetWizard = () => {
+    setWizardStep(1);
+    setWizardMetadata(null);
+    setWizardGifs([]);
+    setSelectedGifs([]);
+    setWizardPage(0);
+  };
 
   const fetchAutomationDrafts = async () => {
     setLoadingDrafts(true);
@@ -568,12 +887,16 @@ function App() {
     }
   };
 
-  // Otomasyon sekmesine geçince taslakları yükle
+  // Wizard sekmesine geçince otomatik yüklemeler
   useEffect(() => {
-    if (activeTab === 'automation' && automationDrafts.length === 0) {
-      fetchAutomationDrafts();
+    if (activeTab === 'magic-wizard') {
+      if (wizardView === 'create' && wizardSuggestions.length === 0) {
+        fetchWizardSuggestions();
+      } else if (wizardView === 'drafts') {
+        fetchAutomationDrafts();
+      }
     }
-  }, [activeTab]);
+  }, [activeTab, wizardView]);
 
   // ========== OTOMASYON FONKSİYONLARI SON ==========
 
@@ -586,17 +909,11 @@ function App() {
 
       const packData: any = {
         name: newPackData.name,
-        name_tr: newPackData.name_tr,
-        name_zh: newPackData.name_zh || '',
-        name_es: newPackData.name_es || '',
-        name_ar: newPackData.name_ar || '',
-        name_hi: newPackData.name_hi || '',
-        name_pt: newPackData.name_pt || '',
         publisher: newPackData.publisher,
         publisher_email: "contact@sticly.com",
         category: newPackData.category,
         is_premium: newPackData.is_premium,
-        is_animated: true, // Always animated
+        is_animated: true,
         download_count: 0,
         fake_download_base: Math.floor(Math.random() * 7001) + 3000,
         view_count: 0,
@@ -605,11 +922,17 @@ function App() {
         image_data_version: "1",
         is_active: newPackData.is_active,
         ...(newPackData.is_premium ? { price_try: "4,99 TL", price_usd: "$0.99", price_eur: "€0.99" } : {}),
-
         stickers: [],
         tray_url: "",
         created_at: serverTimestamp()
       };
+
+      // Tüm name_ ile başlayan alanları kopyala (Çeviriler)
+      Object.keys(newPackData).forEach(key => {
+        if (key.startsWith('name_')) {
+          packData[key] = (newPackData as any)[key] || '';
+        }
+      });
 
       await setDoc(doc(db, collectionName, packId), packData);
 
@@ -640,6 +963,30 @@ function App() {
       alert("Hata: " + e);
     } finally {
       setIsProcessing(false);
+    }
+  };
+
+  const handleAutoTranslate = async (isEdit: boolean) => {
+    const textToTranslate = isEdit ? editFormData.name : newPackData.name;
+    if (!textToTranslate) {
+      alert("Lütfen önce bir ana isim (İngilizce) girin.");
+      return;
+    }
+
+    setIsTranslating(true);
+    try {
+      const translations = await translateTextAllLanguages(textToTranslate);
+      if (isEdit) {
+        setEditFormData((prev: any) => ({ ...prev, ...translations }));
+      } else {
+        setNewPackData((prev: any) => ({ ...prev, ...translations }));
+      }
+      alert("✅ Gemini tüm dilleri başarıyla çevirdi!");
+    } catch (error) {
+      console.error("Gemini Error:", error);
+      alert("⚠️ Çeviri sırasında bir hata oluştu. Lütfen tekrar deneyin.");
+    } finally {
+      setIsTranslating(false);
     }
   };
 
@@ -998,6 +1345,88 @@ function App() {
     }
   };
 
+  if (showWelcome) {
+    return (
+      <div className={cn(
+        "fixed inset-0 z-[9999] bg-[#08090A] flex flex-col items-center justify-center transition-all duration-700 ease-out-expo",
+        welcomeExit ? "scale-[2] blur-3xl opacity-0 -translate-y-full" : "scale-100 opacity-100"
+      )}>
+        {/* Techy Grid Background */}
+        <div className="absolute inset-0 opacity-[0.03] pointer-events-none"
+          style={{ backgroundImage: 'radial-gradient(#10B981 1px, transparent 0)', backgroundSize: '40px 40px' }} />
+
+        {/* Scanning Line */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <div className="w-full h-[2px] bg-gradient-to-r from-transparent via-primary to-transparent animate-scan shadow-[0_0_20px_#10B981]" />
+        </div>
+
+        <div className="relative z-10 text-center space-y-12 max-w-4xl px-4">
+          {/* Hexagon/Circle Container */}
+          <div className="relative mx-auto w-32 h-32 animate-in zoom-in duration-700">
+            <div className="absolute inset-0 bg-primary/20 rounded-3xl rotate-12 animate-pulse" />
+            <div className="absolute inset-0 bg-primary/20 rounded-3xl -rotate-12 animate-pulse delay-75" />
+            <div className="relative bg-[#0F1112] border-2 border-primary/50 w-full h-full rounded-3xl flex items-center justify-center shadow-[0_0_50px_rgba(16,185,129,0.3)]">
+              <Wand2 className="text-primary animate-bounce-subtle" size={56} />
+            </div>
+            {/* Spinning Rings */}
+            <div className="absolute -inset-4 border border-primary/10 rounded-full border-t-primary/40 animate-spin-slow" />
+            <div className="absolute -inset-8 border border-primary/5 rounded-full border-b-primary/20 animate-reverse-spin" />
+          </div>
+
+          <div className="space-y-6">
+            <div className="inline-flex items-center gap-2 px-4 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-mono tracking-widest animate-in fade-in slide-in-from-top-4 duration-500">
+              <CloudLightning size={14} className="animate-pulse" />
+              ERİŞİM ONAYLANDI • SİSTEM GÜVENLİ
+            </div>
+
+            <h1 className="text-7xl font-black tracking-tight leading-none italic animate-in slide-in-from-bottom-8 duration-700">
+              <span className="block text-textSec text-2xl font-mono uppercase tracking-[0.5em] mb-4 opacity-40">HOŞ GELDİN</span>
+              <span className="text-transparent bg-clip-text bg-gradient-to-br from-white via-primary to-emerald-500 drop-shadow-[0_0_30px_rgba(16,185,129,0.3)]">
+                {adminName.toLowerCase()}
+              </span>
+            </h1>
+
+            <div className="font-mono text-primary/40 text-sm tracking-widest flex justify-center gap-8 pt-4">
+              <div className="flex flex-col gap-1">
+                <span className="text-[10px] uppercase opacity-50">KİMLİK</span>
+                <span className="text-white/80">DOĞRULANDI</span>
+              </div>
+              <div className="w-px h-8 bg-white/10" />
+              <div className="flex flex-col gap-1">
+                <span className="text-[10px] uppercase opacity-50">PROTOKOL</span>
+                <span className="text-white/80">ŞİFRELENDİ</span>
+              </div>
+              <div className="w-px h-8 bg-white/10" />
+              <div className="flex flex-col gap-1">
+                <span className="text-[10px] uppercase opacity-50">DURUM</span>
+                <span className="text-primary font-bold">AKTİF</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* CSS for custom animations */}
+        <style dangerouslySetInnerHTML={{
+          __html: `
+          @keyframes scan {
+            0% { transform: translateY(-100%); opacity: 0; }
+            50% { opacity: 1; }
+            100% { transform: translateY(100vh); opacity: 0; }
+          }
+          .animate-scan { animation: scan 3s linear infinite; }
+          .animate-spin-slow { animation: spin 8s linear infinite; }
+          .animate-reverse-spin { animation: spin 12s linear reverse infinite; }
+          .animate-bounce-subtle { animation: bounceSubtle 2s ease-in-out infinite; }
+          @keyframes bounceSubtle {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-8px); }
+          }
+          .ease-out-expo { transition-timing-function: cubic-bezier(0.19, 1, 0.22, 1); }
+        ` }} />
+      </div>
+    );
+  }
+
   if (loading && !user) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -1018,45 +1447,32 @@ function App() {
             <p className="text-textSec text-sm">Yönetim paneline erişmek için giriş yapın</p>
           </div>
 
-          <form onSubmit={handleLogin} className="space-y-4">
-            <div className="space-y-1">
-              <label className="text-xs font-semibold text-textSec uppercase">E-posta</label>
-              <div className="relative">
-                <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-textSec" size={18} />
-                <input
-                  type="email"
-                  required
-                  placeholder="admin@sticly.com"
-                  className="w-full bg-hover border-none rounded-xl pl-10 pr-4 py-3 outline-none focus:ring-2 focus:ring-primary transition-all text-white"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
-              </div>
-            </div>
 
-            <div className="space-y-1">
-              <label className="text-xs font-semibold text-textSec uppercase">Şifre</label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-textSec" size={18} />
-                <input
-                  type="password"
-                  required
-                  placeholder="••••••••"
-                  className="w-full bg-hover border-none rounded-xl pl-10 pr-4 py-3 outline-none focus:ring-2 focus:ring-primary transition-all text-white"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-primary hover:bg-primary/90 py-3 rounded-xl font-bold text-white transition-all shadow-lg shadow-primary/20 disabled:opacity-50"
-            >
-              {loading ? 'Giriş Yapılıyor...' : 'Giriş Yap'}
-            </button>
-          </form>
+          <button
+            onClick={handleGoogleLogin}
+            disabled={loading}
+            className="w-full bg-white hover:bg-gray-100 py-3 rounded-xl font-bold text-black transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+          >
+            <svg className="w-5 h-5" viewBox="0 0 24 24">
+              <path
+                fill="currentColor"
+                d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+              />
+              <path
+                fill="currentColor"
+                d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+              />
+              <path
+                fill="currentColor"
+                d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"
+              />
+              <path
+                fill="currentColor"
+                d="M12 5.38c1.62 0 3.06.56 4.21 1.66l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 12-4.53z"
+              />
+            </svg>
+            Google ile Giriş Yap
+          </button>
         </div>
       </div>
     );
@@ -1092,7 +1508,7 @@ function App() {
   });
 
   return (
-    <div className="min-h-screen bg-background text-textMain flex flex-col font-sans">
+    <div className="min-h-screen bg-background text-textMain flex flex-col font-sans overflow-x-hidden">
       {/* Delete Progress Overlay */}
       {deleteProgress && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center">
@@ -1120,109 +1536,178 @@ function App() {
       )}
 
       {/* Header */}
-      <header className="glass sticky top-0 z-20 px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-5">
-          <div className="w-11 h-11 bg-primary rounded-2xl flex items-center justify-center shadow-lg shadow-primary/20 transition-transform duration-500 hover:scale-110">
-            <div className="w-3.5 h-3.5 bg-white rounded-full" />
-          </div>
-          <div className="flex flex-col">
-            <h1 className="text-2xl font-black tracking-tight text-white flex items-center gap-2">
-              Sticky <span className="text-primary/80">Web Admin</span>
-            </h1>
-            <div className="flex items-center gap-2">
-              <div className="w-1.5 h-1.5 bg-primary rounded-full shadow-[0_0_8px_rgba(0,168,132,0.6)]" />
-              <span className="text-[10px] text-textSec font-black uppercase tracking-[0.2em]">Sistem Çevrimiçi</span>
+      <header className="glass sticky top-0 z-40 px-4 md:px-8 py-4 flex items-center justify-between border-b border-white/5">
+        <div className="flex items-center gap-4">
+          {/* Mobile Menu Toggle */}
+          <button
+            onClick={() => setShowMobileMenu(true)}
+            className="md:hidden p-2.5 bg-white/5 hover:bg-white/10 rounded-xl text-textSec active:scale-95 transition-all"
+          >
+            <Menu size={20} />
+          </button>
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center shadow-lg shadow-primary/20">
+              <div className="w-3 h-3 bg-white rounded-full" />
+            </div>
+            <div className="flex flex-col">
+              <h1 className="text-xl font-black tracking-tight text-white flex items-center gap-1.5 leading-none mb-0.5">
+                Sticky <span className="text-primary/70">Admin</span>
+              </h1>
+              <div className="flex items-center gap-1.5">
+                <div className="w-1 h-1 bg-primary rounded-full animate-pulse shadow-[0_0_8px_rgba(0,168,132,0.8)]" />
+                <span className="text-[9px] text-textSec font-black uppercase tracking-widest opacity-80">Aktif</span>
+              </div>
             </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-4">
-          <div className="relative group">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-textSec group-focus-within:text-primary transition-colors" size={18} />
+        <div className="flex items-center gap-3 md:gap-4">
+          <div className="relative group hidden sm:block">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-textSec/50 group-focus-within:text-primary transition-colors" size={16} />
             <input
               type="text"
-              placeholder="Paket ara..."
-              className="bg-hover border-transparent border rounded-full pl-10 pr-4 py-2.5 focus:ring-2 focus:ring-primary focus:bg-background outline-none text-sm w-64 transition-all text-white"
+              placeholder="Hızlı arama..."
+              className="bg-white/5 border border-white/5 rounded-full pl-10 pr-4 py-2 focus:ring-2 focus:ring-primary/20 focus:border-primary/50 outline-none text-sm w-48 md:w-64 transition-all text-white placeholder:text-textSec/30"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
+
           <button
             onClick={fetchPacks}
-            className="p-2.5 hover:bg-hover rounded-xl transition-all active:scale-95"
+            className="p-2.5 hover:bg-white/10 rounded-xl transition-all active:scale-90 group relative"
+            title="Sistemi Yenile"
           >
-            <RefreshCcw size={20} className={cn("text-textSec", loading && 'animate-spin text-primary')} />
+            <RefreshCcw size={18} className={cn("text-textSec group-hover:text-primary transition-colors", loading && 'animate-spin text-primary')} />
           </button>
-          <div className="w-px h-6 bg-white/10 mx-2" />
+
+          <div className="w-px h-6 bg-white/10 mx-1 hidden md:block" />
+
           <button
-            onClick={() => signOut(auth)}
-            className="flex items-center gap-2 px-3 py-2 hover:bg-danger/10 text-textSec hover:text-danger rounded-xl transition-all"
+            onClick={() => {
+              if (window.confirm("Güvenli çıkış yapmak istiyor musunuz?")) signOut(auth);
+            }}
+            className="hidden md:flex items-center gap-2.5 px-4 py-2 bg-danger/5 hover:bg-danger/10 text-textSec hover:text-danger rounded-xl transition-all border border-transparent hover:border-danger/20"
           >
-            <LogOut size={18} />
-            <span className="text-sm font-semibold">Çıkış</span>
+            <LogOut size={16} />
+            <span className="text-xs font-black uppercase tracking-wider">Çıkış</span>
           </button>
         </div>
       </header>
 
-      <main className="flex-1 overflow-hidden flex">
-        {/* Navigation Sidebar */}
-        <div className="w-16 flex flex-col items-center py-6 gap-6 border-r border-white/5 bg-card/20">
-          <button
-            onClick={() => setActiveTab('dashboard')}
-            className={cn("p-3 rounded-2xl transition-all", activeTab === 'dashboard' ? "bg-primary text-white shadow-lg" : "text-textSec hover:bg-hover")}
-            title="Dashboard"
-          >
-            <Grid size={24} />
-          </button>
-          <button
-            onClick={() => setActiveTab('stats')}
-            className={cn("p-3 rounded-2xl transition-all", activeTab === 'stats' ? "bg-primary text-white shadow-lg" : "text-textSec hover:bg-hover")}
-            title="İstatistikler"
-          >
-            <BarChart3 size={24} />
-          </button>
-          <button
-            onClick={() => setActiveTab('messages')}
-            className={cn("p-3 rounded-2xl transition-all relative", activeTab === 'messages' ? "bg-primary text-white shadow-lg" : "text-textSec hover:bg-hover")}
-            title="Mesajlar"
-          >
-            <Mail size={24} />
-            {messages.filter(m => m.status === 'unread').length > 0 && (
-              <span className="absolute -top-1 -right-1 bg-danger text-white text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center">
-                {messages.filter(m => m.status === 'unread').length}
-              </span>
-            )}
-          </button>
+      {/* Mobile Menu Overlay */}
+      {showMobileMenu && (
+        <div className="fixed inset-0 z-50 md:hidden bg-background/95 backdrop-blur-xl animate-in fade-in duration-300">
+          <div className="flex flex-col h-full p-8">
+            <div className="flex items-center justify-between mb-12">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center">
+                  <div className="w-3 h-3 bg-white rounded-full" />
+                </div>
+                <span className="text-xl font-black text-white">Sticky Admin</span>
+              </div>
+              <button
+                onClick={() => setShowMobileMenu(false)}
+                className="p-3 bg-white/5 rounded-2xl text-textSec"
+              >
+                <X size={24} />
+              </button>
+            </div>
 
-          <button
-            onClick={() => setActiveTab('notifications')}
-            className={cn("p-3 rounded-2xl transition-all shadow-inner", activeTab === 'notifications' ? "bg-primary text-white shadow-lg" : "text-textSec hover:bg-hover")}
-            title="Bildirim Gönder"
-          >
-            <Bell size={24} />
-          </button>
+            <div className="flex-1 space-y-4">
+              {[
+                { id: 'dashboard', label: 'Dashboard', icon: Grid },
+                { id: 'stats', label: 'İstatistikler', icon: BarChart3 },
+                { id: 'messages', label: 'Mesajlar', icon: Mail, count: messages.filter(m => m.status === 'unread').length },
+                { id: 'notifications', label: 'Bildirimler', icon: Bell },
+                { id: 'magic-wizard', label: 'Sihirbaz', icon: Wand2, count: automationDrafts.length }
+              ].map((item) => (
+                <button
+                  key={item.id}
+                  onClick={() => {
+                    setActiveTab(item.id as any);
+                    setShowMobileMenu(false);
+                  }}
+                  className={cn(
+                    "w-full flex items-center gap-5 p-5 rounded-3xl transition-all border",
+                    activeTab === item.id
+                      ? "bg-primary border-primary/20 text-white shadow-xl shadow-primary/20"
+                      : "bg-white/5 border-transparent text-textSec hover:bg-white/10"
+                  )}
+                >
+                  <item.icon size={24} />
+                  <span className="text-lg font-black uppercase tracking-widest">{item.label}</span>
+                  {item.count ? (
+                    <span className="ml-auto bg-white/20 text-white text-xs font-black min-w-[24px] h-6 flex items-center justify-center rounded-full px-2">
+                      {item.count}
+                    </span>
+                  ) : null}
+                </button>
+              ))}
+            </div>
 
-          <button
-            onClick={() => setActiveTab('automation')}
-            className={cn("p-3 rounded-2xl transition-all relative", activeTab === 'automation' ? "bg-primary text-white shadow-lg" : "text-textSec hover:bg-hover")}
-            title="Otomasyon"
-          >
-            <Bot size={24} />
-            {automationDrafts.length > 0 && (
-              <span className="absolute -top-1 -right-1 bg-warning text-black text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center">
-                {automationDrafts.length}
-              </span>
-            )}
-          </button>
-
+            <div className="pt-8 border-t border-white/5">
+              <button
+                onClick={() => {
+                  if (window.confirm("Çıkış yapmak istediğinize emin misiniz?")) signOut(auth);
+                }}
+                className="w-full flex items-center justify-center gap-4 p-5 bg-danger/10 text-danger rounded-3xl font-black uppercase tracking-widest"
+              >
+                <LogOut size={24} />
+                Güvenli Çıkış
+              </button>
+            </div>
+          </div>
         </div>
+      )}
+
+      <main className="flex-1 overflow-hidden flex flex-col md:flex-row relative">
+        {/* Navigation Sidebar (Vertical Center on Desktop) */}
+        <div className="hidden md:flex fixed left-0 top-0 bottom-0 w-24 flex-col items-center justify-center z-30 pointer-events-none">
+          <div className="bg-card/40 backdrop-blur-2xl border border-white/5 rounded-[2.5rem] p-4 space-y-6 pointer-events-auto shadow-2xl shadow-black/40">
+            {[
+              { id: 'dashboard', icon: Grid, label: 'Panel' },
+              { id: 'stats', icon: BarChart3, label: 'Veriler' },
+              { id: 'messages', icon: Mail, label: 'Mesajlar', count: messages.filter(m => m.status === 'unread').length },
+              { id: 'notifications', icon: Bell, label: 'Bildirim' },
+              { id: 'magic-wizard', icon: Wand2, label: 'Sihirbaz', count: automationDrafts.length }
+            ].map(item => (
+              <button
+                key={item.id}
+                onClick={() => setActiveTab(item.id as any)}
+                className={cn(
+                  "relative w-14 h-14 flex items-center justify-center rounded-2xl transition-all duration-300 group",
+                  activeTab === item.id
+                    ? "bg-primary text-white shadow-xl shadow-primary/20 scale-105"
+                    : "text-textSec hover:bg-white/10 hover:scale-110"
+                )}
+                title={item.label}
+              >
+                <item.icon size={26} />
+                {item.count ? (
+                  <span className="absolute -top-1 -right-1 bg-danger text-white text-[9px] font-black w-5 h-5 rounded-full flex items-center justify-center border-2 border-background ring-2 ring-danger/20">
+                    {item.count}
+                  </span>
+                ) : null}
+
+                {/* Tooltip-like label */}
+                <div className="absolute left-full ml-6 px-3 py-1.5 bg-card border border-white/10 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 shadow-2xl">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-white">{item.label}</span>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Desktop Sidebar Spacer */}
+        <div className="hidden md:block w-24 shrink-0" />
 
         {activeTab === 'dashboard' ? (
           <>
             {/* Sidebar / Pack List */}
             <div className={cn(
-              "border-r border-white/5 flex flex-col bg-card/30 transition-all duration-500",
-              selectedPack ? "w-[400px]" : "w-full"
+              "border-r border-white/5 flex-col bg-card/30 transition-all duration-500",
+              selectedPack ? "md:w-[400px] w-full hidden md:flex" : "w-full flex"
             )}>
               <div className="p-5 space-y-4">
                 <div className="flex items-center justify-between">
@@ -1420,9 +1905,17 @@ function App() {
             {selectedPack ? (
               <div className="flex-1 flex flex-col bg-background/80 overflow-hidden animate-in fade-in slide-in-from-right-10 duration-500">
                 {/* Detail Header */}
-                <div className="p-8 border-b border-white/5 bg-card/20 backdrop-blur-xl">
-                  <div className="max-w-7xl mx-auto flex items-start justify-between">
-                    <div className="flex gap-8 items-center">
+                <div className="p-4 md:p-8 border-b border-white/5 bg-card/20 backdrop-blur-xl">
+                  <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-start justify-between gap-6">
+                    {/* Mobile Back Button */}
+                    <button
+                      onClick={() => setSelectedPack(null)}
+                      className="md:hidden flex items-center gap-2 text-textSec hover:text-white mb-2"
+                    >
+                      <ChevronRight className="rotate-180" size={20} />
+                      <span className="text-sm font-bold">Listeye Dön</span>
+                    </button>
+                    <div className="flex flex-col md:flex-row gap-4 md:gap-8 items-center md:items-start text-center md:text-left w-full md:w-auto">
                       <div className="w-32 h-32 bg-card rounded-3xl overflow-hidden glass flex items-center justify-center p-4 shadow-2xl relative group">
                         {selectedPack.tray_url ? (
                           <img src={selectedPack.tray_url} alt="" className="w-full h-full object-contain group-hover:scale-110 transition-transform duration-500" />
@@ -1488,9 +1981,9 @@ function App() {
                 </div>
 
                 {/* Sticker Grid */}
-                <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
+                <div className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar pb-24 md:pb-8">
                   <div className="max-w-7xl mx-auto">
-                    <div className="flex items-center justify-between mb-8">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
                       <h3 className="text-xl font-bold flex items-center gap-3">
                         <Grid className="text-primary" size={24} />
                         Paket İçeriği
@@ -1501,7 +1994,7 @@ function App() {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7 xl:grid-cols-8 gap-5">
+                    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7 xl:grid-cols-8 gap-3 md:gap-5">
                       {selectedPack.stickers?.map((sticker, idx) => (
                         <div
                           key={idx}
@@ -1547,15 +2040,15 @@ function App() {
             )}
           </>
         ) : activeTab === 'stats' ? (
-          <div className="flex-1 overflow-y-auto p-12 custom-scrollbar bg-background">
-            <div className="max-w-6xl mx-auto space-y-12 animate-in fade-in duration-500">
-              <div className="flex items-center justify-between">
+          <div className="flex-1 overflow-y-auto p-4 md:p-12 custom-scrollbar bg-background">
+            <div className="max-w-6xl mx-auto space-y-8 md:space-y-12 animate-in fade-in duration-500">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
                 <div>
                   <div className="flex items-center gap-3 mb-1">
-                    <BarChart3 className="text-primary" size={28} />
-                    <h2 className="text-4xl font-black text-white uppercase tracking-tighter">Performans Analizi</h2>
+                    <BarChart3 className="text-primary" size={24} />
+                    <h2 className="text-2xl md:text-4xl font-black text-white uppercase tracking-tighter">Performans Analizi</h2>
                   </div>
-                  <p className="text-textSec font-medium">Uygulama genelindeki etkileşim ve verimlilik raporu</p>
+                  <p className="text-textSec text-xs md:text-base font-medium">Uygulama genelindeki etkileşim ve verimlilik raporu</p>
                 </div>
 
                 <div className="flex items-center gap-4">
@@ -1620,15 +2113,15 @@ function App() {
               </div>
 
               {/* Fake Base Controls */}
-              <div className="glass rounded-3xl p-4 mb-6 border border-white/10">
+              <div className="glass rounded-[2rem] p-4 md:p-6 mb-6 border border-white/10">
                 <div className="flex flex-wrap items-center gap-4">
-                  <span className="text-xs font-bold text-textSec uppercase">Fake İndirme Aralığı:</span>
+                  <span className="text-xs font-black text-textSec uppercase tracking-widest shrink-0">Fake İndirme Aralığı:</span>
                   <div className="flex items-center gap-2">
                     <input
                       type="number"
                       value={fakeBaseMin}
                       onChange={(e) => setFakeBaseMin(Number(e.target.value))}
-                      className="w-28 px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white text-sm"
+                      className="w-24 md:w-28 px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-white text-sm outline-none focus:border-primary/50 transition-all"
                       placeholder="Min"
                     />
                     <span className="text-textSec">-</span>
@@ -1636,24 +2129,26 @@ function App() {
                       type="number"
                       value={fakeBaseMax}
                       onChange={(e) => setFakeBaseMax(Number(e.target.value))}
-                      className="w-28 px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white text-sm"
+                      className="w-24 md:w-28 px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-white text-sm outline-none focus:border-primary/50 transition-all"
                       placeholder="Max"
                     />
                   </div>
-                  <button
-                    onClick={() => updateAllPacksWithFakeBase(false)}
-                    disabled={isProcessing}
-                    className="px-4 py-2 bg-primary/20 hover:bg-primary/30 border border-primary/30 rounded-xl text-primary text-xs font-bold transition-all active:scale-90 disabled:opacity-50"
-                  >
-                    {isProcessing ? 'İşleniyor...' : 'Eksiklere Ekle'}
-                  </button>
-                  <button
-                    onClick={() => updateAllPacksWithFakeBase(true)}
-                    disabled={isProcessing}
-                    className="px-4 py-2 bg-warning/20 hover:bg-warning/30 border border-warning/30 rounded-xl text-warning text-xs font-bold transition-all active:scale-90 disabled:opacity-50"
-                  >
-                    {isProcessing ? 'İşleniyor...' : 'Tümünü Güncelle'}
-                  </button>
+                  <div className="flex items-center gap-2 flex-1 md:flex-none justify-end md:justify-start">
+                    <button
+                      onClick={() => updateAllPacksWithFakeBase(false)}
+                      disabled={isProcessing}
+                      className="flex-1 md:flex-none px-4 py-2 bg-primary/20 hover:bg-primary/30 border border-primary/30 rounded-xl text-primary text-[10px] font-black uppercase tracking-tight transition-all active:scale-90 disabled:opacity-50"
+                    >
+                      {isProcessing ? '..' : 'Eksiklere'}
+                    </button>
+                    <button
+                      onClick={() => updateAllPacksWithFakeBase(true)}
+                      disabled={isProcessing}
+                      className="flex-1 md:flex-none px-4 py-2 bg-warning/20 hover:bg-warning/30 border border-warning/30 rounded-xl text-warning text-[10px] font-black uppercase tracking-tight transition-all active:scale-90 disabled:opacity-50"
+                    >
+                      {isProcessing ? '..' : 'Tümünü'}
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -1742,8 +2237,8 @@ function App() {
                 <div className="lg:col-span-2 glass p-10 rounded-[3rem] border border-white/5 bg-card/20 shadow-2xl relative overflow-hidden">
                   <div className="flex items-center justify-between mb-10 relative z-10">
                     <div className="space-y-1">
-                      <h3 className="text-2xl font-black text-white tracking-tight">Eğilim Analizi</h3>
-                      <p className="text-textSec text-sm">En popüler 10 paketin performans karşılaştırması</p>
+                      <h3 className="text-xl md:text-2xl font-black text-white tracking-tight">Eğilim Analizi</h3>
+                      <p className="text-textSec text-[10px] md:text-sm">En popüler 10 paketin performans karşılaştırması</p>
                     </div>
                     <div className="flex items-center gap-4">
                       <div className="flex items-center gap-2">
@@ -1771,11 +2266,14 @@ function App() {
                           })
                           .sort((a, b) => (b.download_count || 0) - (a.download_count || 0))
                           .slice(0, 10)
-                          .map(p => ({
-                            name: p.name.length > 10 ? p.name.substring(0, 8) + '..' : p.name,
-                            downloads: p.download_count || 0,
-                            views: p.view_count || 0
-                          }))}
+                          .map(p => {
+                            const pName = p.name || 'İsimsiz Paket';
+                            return {
+                              name: pName.length > 10 ? pName.substring(0, 8) + '..' : pName,
+                              downloads: p.download_count || 0,
+                              views: p.view_count || 0
+                            };
+                          })}
                         margin={{ top: 10, right: 10, left: 0, bottom: 20 }}
                         barGap={12}
                       >
@@ -1806,9 +2304,9 @@ function App() {
 
                 {/* Best Performers Mini Table */}
                 <div className="glass p-8 rounded-[3rem] border border-white/5 bg-card/20 shadow-2xl flex flex-col">
-                  <div className="mb-8">
-                    <h3 className="text-xl font-black text-white mb-1 uppercase tracking-tighter">🏆 Lider Tablosu</h3>
-                    <p className="text-[10px] font-bold text-textSec uppercase tracking-widest">En çok indirilen ilk 5</p>
+                  <div className="mb-6 md:mb-8">
+                    <h3 className="text-lg md:text-xl font-black text-white mb-1 uppercase tracking-tighter">🏆 Lider Tablosu</h3>
+                    <p className="text-[9px] md:text-[10px] font-bold text-textSec uppercase tracking-widest">En çok indirilen ilk 5</p>
                   </div>
                   <div className="flex-1 space-y-4">
                     {packs
@@ -1833,7 +2331,7 @@ function App() {
                             {i + 1}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <div className="text-xs font-black text-white truncate group-hover:text-primary transition-colors">{p.name}</div>
+                            <div className="text-xs font-black text-white truncate group-hover:text-primary transition-colors">{p.name || 'İsimsiz Paket'}</div>
                             <div className="text-[9px] font-bold text-textSec uppercase tracking-tighter">{p.category}</div>
                           </div>
                           <div className="text-right">
@@ -1854,23 +2352,23 @@ function App() {
 
               {/* Full Performance List */}
               <div className="glass rounded-[3rem] border border-white/5 overflow-hidden shadow-2xl">
-                <div className="px-10 py-8 border-b border-white/5 bg-white/2 flex items-center justify-between">
+                <div className="px-4 md:px-10 py-6 md:py-8 border-b border-white/5 bg-white/2 flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="bg-primary p-2.5 rounded-xl">
-                      <Grid className="text-white" size={20} />
+                    <div className="bg-primary p-2 rounded-xl">
+                      <Grid className="text-white" size={18} />
                     </div>
-                    <h3 className="text-2xl font-black text-white tracking-tighter uppercase">Detaylı Performans Listesi</h3>
+                    <h3 className="text-lg md:text-2xl font-black text-white tracking-tighter uppercase">Detaylı Performans Listesi</h3>
                   </div>
                 </div>
                 <div className="overflow-x-auto custom-scrollbar">
                   <table className="w-full text-left border-collapse">
                     <thead>
                       <tr className="bg-card">
-                        <th className="px-10 py-5 text-[10px] font-black uppercase tracking-widest text-textSec border-b border-white/5">Paket Bilgisi</th>
-                        <th className="px-10 py-5 text-[10px] font-black uppercase tracking-widest text-textSec border-b border-white/5 text-center">İndirme</th>
-                        <th className="px-10 py-5 text-[10px] font-black uppercase tracking-widest text-textSec border-b border-white/5 text-center">Görüntülenme</th>
-                        <th className="px-10 py-5 text-[10px] font-black uppercase tracking-widest text-textSec border-b border-white/5 text-center">Favori</th>
-                        <th className="px-10 py-5 text-[10px] font-black uppercase tracking-widest text-textSec border-b border-white/5 text-right w-64">Dönüşüm Oranı (CVR)</th>
+                        <th className="px-4 md:px-10 py-4 md:py-5 text-[9px] md:text-[10px] font-black uppercase tracking-widest text-textSec border-b border-white/5">Paket Bilgisi</th>
+                        <th className="px-4 md:px-10 py-4 md:py-5 text-[9px] md:text-[10px] font-black uppercase tracking-widest text-textSec border-b border-white/5 text-center">İndirme</th>
+                        <th className="hidden sm:table-cell px-4 md:px-10 py-4 md:py-5 text-[9px] md:text-[10px] font-black uppercase tracking-widest text-textSec border-b border-white/5 text-center">Görüntülenme</th>
+                        <th className="hidden lg:table-cell px-4 md:px-10 py-4 md:py-5 text-[9px] md:text-[10px] font-black uppercase tracking-widest text-textSec border-b border-white/5 text-center">Favori</th>
+                        <th className="hidden md:table-cell px-4 md:px-10 py-4 md:py-5 text-[9px] md:text-[10px] font-black uppercase tracking-widest text-textSec border-b border-white/5 text-right w-64">Dönüşüm Oranı (CVR)</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-white/2">
@@ -1886,18 +2384,18 @@ function App() {
                         .sort((a, b) => (b.download_count || 0) - (a.download_count || 0))
                         .map((p) => (
                           <tr key={p.id} className="hover:bg-white/3 transition-all group">
-                            <td className="px-10 py-6">
-                              <div className="flex items-center gap-5">
-                                <div className="w-12 h-12 rounded-2xl bg-card border border-white/5 p-1 relative overflow-hidden group-hover:scale-110 transition-transform">
+                            <td className="px-4 md:px-10 py-4 md:py-6">
+                              <div className="flex items-center gap-3 md:gap-5">
+                                <div className="w-10 h-10 md:w-12 md:h-12 rounded-2xl bg-card border border-white/5 p-1 relative overflow-hidden group-hover:scale-110 transition-transform">
                                   <img src={p.tray_url} className="w-full h-full object-contain" />
                                   {p.is_premium && <div className="absolute top-0 right-0 w-3 h-3 bg-warning rounded-bl-lg" />}
                                 </div>
                                 <div className="min-w-0">
-                                  <div className="font-black text-white text-base group-hover:text-primary transition-colors truncate">{p.name}</div>
-                                  <div className="flex items-center gap-2 mt-1">
-                                    <span className="text-[10px] font-bold text-textSec uppercase tracking-widest">{p.category}</span>
+                                  <div className="font-black text-white text-sm md:text-base group-hover:text-primary transition-colors truncate">{p.name || 'İsimsiz Paket'}</div>
+                                  <div className="flex items-center gap-2 mt-0.5">
+                                    <span className="text-[8px] md:text-[10px] font-bold text-textSec uppercase tracking-widest transition-all truncate">{p.category}</span>
                                     <span className={cn(
-                                      "px-2 py-0.5 rounded-md text-[8px] font-black tracking-widest uppercase",
+                                      "px-1.5 py-0.5 rounded-md text-[7px] md:text-[8px] font-black tracking-widest uppercase",
                                       p.is_active !== false ? "bg-primary/20 text-primary" : "bg-danger/20 text-danger"
                                     )}>
                                       {p.is_active !== false ? 'AKTİF' : 'PASİF'}
@@ -1906,16 +2404,16 @@ function App() {
                                 </div>
                               </div>
                             </td>
-                            <td className="px-10 py-6 text-center">
-                              <span className="text-lg font-black text-primary">{(p.download_count || 0).toLocaleString()}</span>
+                            <td className="px-4 md:px-10 py-4 md:py-6 text-center">
+                              <span className="text-sm md:text-lg font-black text-primary">{(p.download_count || 0).toLocaleString()}</span>
                             </td>
-                            <td className="px-10 py-6 text-center">
-                              <span className="text-lg font-black text-accent">{(p.view_count || 0).toLocaleString()}</span>
+                            <td className="hidden sm:table-cell px-4 md:px-10 py-4 md:py-6 text-center">
+                              <span className="text-sm md:text-lg font-black text-accent">{(p.view_count || 0).toLocaleString()}</span>
                             </td>
-                            <td className="px-10 py-6 text-center">
-                              <span className="text-lg font-black text-warning">{(p.favorite_count || 0).toLocaleString()}</span>
+                            <td className="hidden lg:table-cell px-4 md:px-10 py-4 md:py-6 text-center">
+                              <span className="text-sm md:text-lg font-black text-warning">{(p.favorite_count || 0).toLocaleString()}</span>
                             </td>
-                            <td className="px-10 py-6">
+                            <td className="hidden md:table-cell px-4 md:px-10 py-4 md:py-6">
                               <div className="flex items-center justify-end gap-5">
                                 <div className="flex-1 max-w-[120px] h-2 bg-white/5 rounded-full overflow-hidden shadow-inner">
                                   <div
@@ -1941,18 +2439,18 @@ function App() {
           </div>
 
         ) : activeTab === 'notifications' ? (
-          <div className="flex-1 overflow-y-auto p-12 custom-scrollbar bg-background">
+          <div className="flex-1 overflow-y-auto p-4 md:p-12 custom-scrollbar bg-background">
             <div className="max-w-3xl mx-auto space-y-12 animate-in fade-in duration-500">
               <div>
-                <div className="flex items-center gap-4 mb-2">
-                  <Bell className="text-primary" size={32} />
-                  <h2 className="text-4xl font-black text-white">BİLDİRİM GÖNDER</h2>
+                <div className="flex flex-col md:flex-row md:items-center gap-4 mb-2">
+                  <Bell className="text-primary w-6 h-6 md:w-8 md:h-8" />
+                  <h2 className="text-2xl md:text-4xl font-black text-white uppercase tracking-tighter">BİLDİRİM GÖNDER</h2>
                 </div>
-                <p className="text-textSec text-lg">Sticky uygulamasını kullanan tüm cihazlara anlık bildirim gönderin.</p>
+                <p className="text-textSec text-xs md:text-lg">Sticky uygulamasını kullanan tüm cihazlara anlık bildirim gönderin.</p>
               </div>
 
-              <form onSubmit={handleSendNotification} className="space-y-8">
-                <div className="glass p-10 rounded-[2.5rem] bg-gradient-to-br from-primary/5 to-transparent border border-white/5 shadow-2xl space-y-8">
+              <form onSubmit={handleSendNotification} className="space-y-6 md:space-y-8">
+                <div className="glass p-5 md:p-10 rounded-[2rem] md:rounded-[2.5rem] bg-gradient-to-br from-primary/5 to-transparent border border-white/5 shadow-2xl space-y-6 md:space-y-8">
                   <div className="space-y-3">
                     <label className="text-xs font-bold text-textSec uppercase tracking-widest flex items-center gap-2">
                       <Info size={14} className="text-primary" /> BİLDİRİM BAŞLIĞI
@@ -1962,25 +2460,25 @@ function App() {
                       value={notifTitle}
                       onChange={(e) => setNotifTitle(e.target.value)}
                       placeholder="Sticky"
-                      className="w-full bg-card/60 border border-white/10 rounded-2xl px-5 py-4 text-white font-bold outline-none focus:ring-2 focus:ring-primary focus:bg-background transition-all"
+                      className="w-full bg-card/60 border border-white/10 rounded-xl md:rounded-2xl px-4 md:px-5 py-3 md:py-4 text-white text-sm md:text-base font-bold outline-none focus:ring-2 focus:ring-primary focus:bg-background transition-all"
                     />
-                    <p className="text-[10px] text-textSec font-medium pl-1">Bildirimde görünecek kalın başlık. Boş bırakılırsa "Sticky" yazısı görünecektir.</p>
+                    <p className="text-[9px] md:text-[10px] text-textSec font-medium pl-1">Bildirimde görünecek kalın başlık. Boş bırakılırsa "Sticky" yazısı görünecektir.</p>
                   </div>
 
                   <div className="space-y-4">
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       <label className="text-xs font-bold text-textSec uppercase tracking-widest flex items-center gap-2">
                         <MessageSquare size={14} className="text-accent" /> BİLDİRİM MESAJI
                       </label>
 
                       {/* Emojis Grid */}
-                      <div className="flex flex-wrap gap-1.5 max-w-[400px] justify-end">
+                      <div className="flex flex-wrap gap-1 md:gap-1.5 max-w-full sm:max-w-[400px] justify-start sm:justify-end">
                         {['😊', '😂', '❤️', '🔥', '✨', '🚀', '🎉', '🌟', '💫', '🎁', '💎', '📱', '🌈', '🎭', '🐱', '🧿', '👑', '⚡', '🔔', '💯'].map(emoji => (
                           <button
                             key={emoji}
                             type="button"
                             onClick={() => setNotifBody(prev => prev + emoji)}
-                            className="w-8 h-8 flex items-center justify-center bg-card/40 hover:bg-accent/20 border border-white/5 rounded-lg text-sm transition-all hover:scale-110 active:scale-95"
+                            className="w-7 h-7 md:w-8 md:h-8 flex items-center justify-center bg-card/40 hover:bg-accent/20 border border-white/5 rounded-lg text-xs md:text-sm transition-all hover:scale-110 active:scale-95"
                           >
                             {emoji}
                           </button>
@@ -2050,57 +2548,57 @@ function App() {
         ) : activeTab === 'messages' ? (
           <div className="flex-1 overflow-y-auto p-12 custom-scrollbar bg-background">
             <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in duration-500">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 md:gap-0">
                 <div>
-                  <h2 className="text-4xl font-black text-white">MESAJLAR VE ÖNERİLER</h2>
-                  <p className="text-textSec">Uygulama kullanıcılarından gelen iletişim talepleri</p>
+                  <h2 className="text-2xl md:text-4xl font-black text-white uppercase tracking-tighter">Mesajlar ve Öneriler</h2>
+                  <p className="text-textSec text-xs md:text-base">Uygulama kullanıcılarından gelen iletişim talepleri</p>
                 </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-xs text-green-500 flex items-center gap-1">
-                    <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                <div className="flex flex-wrap items-center gap-2 md:gap-3">
+                  <span className="text-[10px] text-green-500 font-black uppercase tracking-widest flex items-center gap-1.5 bg-green-500/5 px-2 py-1 rounded-lg border border-green-500/10">
+                    <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span>
                     Canlı
                   </span>
                   <button
                     onClick={clearAllMessages}
-                    className="px-3 py-1.5 bg-danger/20 hover:bg-danger/30 text-danger text-xs font-bold rounded-lg transition-all"
+                    className="px-3 py-1.5 bg-danger/10 hover:bg-danger/20 text-danger text-[10px] font-black uppercase tracking-widest rounded-xl transition-all border border-danger/10"
                   >
-                    Mesajları Temizle
+                    Temizle (Mesaj)
                   </button>
                   <button
                     onClick={clearAllSuggestions}
-                    className="px-3 py-1.5 bg-warning/20 hover:bg-warning/30 text-warning text-xs font-bold rounded-lg transition-all"
+                    className="px-3 py-1.5 bg-warning/10 hover:bg-warning/20 text-warning text-[10px] font-black uppercase tracking-widest rounded-xl transition-all border border-warning/10"
                   >
-                    Önerileri Temizle
+                    Temizle (Öneri)
                   </button>
                 </div>
               </div>
 
               {/* Sub Tabs */}
-              <div className="flex bg-hover rounded-2xl p-1.5 gap-1">
+              <div className="flex bg-hover/50 rounded-2xl p-1 gap-1">
                 <button
                   onClick={() => setMessagesSubTab('messages')}
                   className={cn(
-                    "flex-1 py-3 px-6 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2",
-                    messagesSubTab === 'messages' ? "bg-primary text-white shadow-lg" : "text-textSec hover:text-white"
+                    "flex-1 py-2.5 md:py-3 px-3 md:px-6 rounded-xl text-xs md:text-sm font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2",
+                    messagesSubTab === 'messages' ? "bg-primary text-white shadow-lg" : "text-textSec hover:text-white hover:bg-white/5"
                   )}
                 >
-                  <MessageSquare size={18} />
+                  <MessageSquare size={16} />
                   Mesajlar
                   {messages.length > 0 && (
-                    <span className="bg-white/20 px-2 py-0.5 rounded-full text-xs">{messages.length}</span>
+                    <span className="bg-white/20 px-2 py-0.5 rounded-full text-[10px]">{messages.length}</span>
                   )}
                 </button>
                 <button
                   onClick={() => setMessagesSubTab('suggestions')}
                   className={cn(
-                    "flex-1 py-3 px-6 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2",
-                    messagesSubTab === 'suggestions' ? "bg-warning text-background shadow-lg" : "text-textSec hover:text-white"
+                    "flex-1 py-2.5 md:py-3 px-3 md:px-6 rounded-xl text-xs md:text-sm font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2",
+                    messagesSubTab === 'suggestions' ? "bg-warning text-background shadow-lg" : "text-textSec hover:text-white hover:bg-white/5"
                   )}
                 >
-                  <Lightbulb size={18} />
-                  Sticker Önerileri
+                  <Lightbulb size={16} />
+                  Öneriler
                   {suggestions.length > 0 && (
-                    <span className="bg-white/20 px-2 py-0.5 rounded-full text-xs">{suggestions.length}</span>
+                    <span className="bg-white/20 px-2 py-0.5 rounded-full text-[10px]">{suggestions.length}</span>
                   )}
                 </button>
               </div>
@@ -2109,10 +2607,10 @@ function App() {
               {messagesSubTab === 'messages' ? (
                 <div className="space-y-4">
                   {messages.length === 0 ? (
-                    <div className="glass rounded-[2rem] p-12 text-center">
-                      <MessageSquare className="mx-auto text-textSec mb-4" size={48} />
-                      <h3 className="text-xl font-bold text-white">Henüz mesaj yok</h3>
-                      <p className="text-textSec mt-2">Kullanıcılar uygulamadan mesaj gönderdiğinde burada görünecek.</p>
+                    <div className="glass rounded-[2rem] p-8 md:p-12 text-center border border-white/5 bg-white/2">
+                      <MessageSquare className="mx-auto text-textSec mb-4 opacity-20" size={32} />
+                      <h3 className="text-lg font-black text-white uppercase tracking-tighter">Henüz mesaj yok</h3>
+                      <p className="text-textSec text-xs mt-2">Kullanıcılar uygulamadan mesaj gönderdiğinde burada görünecek.</p>
                     </div>
                   ) : (
                     messages.map(msg => (
@@ -2202,203 +2700,505 @@ function App() {
                           </button>
                         </div>
                       </div>
-                    )))}
+                    ))
+                  )}
                 </div>
               )}
             </div>
           </div>
-        ) : activeTab === 'automation' ? (
-          <div className="flex-1 overflow-auto p-8">
-            <div className="max-w-6xl mx-auto">
-              {/* Header */}
-              <div className="flex items-center justify-between mb-8">
-                <div className="flex items-center gap-4">
-                  <div className="p-4 bg-gradient-to-br from-primary/20 to-accent/20 rounded-2xl">
-                    <Bot size={32} className="text-primary" />
+        ) : activeTab === 'magic-wizard' ? (
+          <div className="flex-1 overflow-y-auto p-4 md:p-12 custom-scrollbar bg-background">
+            <div className="max-w-6xl mx-auto space-y-8 md:space-y-12">
+              {/* Wizard Header */}
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-8 gap-4 px-4">
+                <div className="flex items-center gap-5">
+                  <div className="w-16 h-16 bg-gradient-to-br from-primary/20 to-accent/20 rounded-2xl flex items-center justify-center shadow-inner">
+                    <Wand2 size={36} className="text-primary animate-pulse" />
                   </div>
                   <div>
-                    <h1 className="text-2xl font-bold text-white">Otomasyon Taslakları</h1>
-                    <p className="text-textSec text-sm">Python bot tarafından oluşturulan paketler</p>
-                  </div>
-                </div>
-                <button
-                  onClick={fetchAutomationDrafts}
-                  disabled={loadingDrafts}
-                  className="flex items-center gap-2 px-4 py-2.5 bg-card hover:bg-hover rounded-xl transition-all disabled:opacity-50"
-                >
-                  <RefreshCcw size={18} className={loadingDrafts ? "animate-spin" : ""} />
-                  <span className="font-medium">Yenile</span>
-                </button>
-              </div>
-
-              {/* Info Box */}
-              <div className="bg-gradient-to-r from-primary/10 to-accent/10 border border-primary/20 rounded-2xl p-6 mb-8">
-                <div className="flex items-start gap-4">
-                  <div className="p-2 bg-primary/20 rounded-xl">
-                    <Info size={24} className="text-primary" />
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-white mb-1">Nasıl Çalışır?</h3>
-                    <p className="text-textSec text-sm">
-                      Python botu (<code className="text-primary">sticker_bot.py</code>) trend konulardan GIF'ler indirir,
-                      WebP'ye dönüştürür ve buraya taslak olarak yükler. Sen beğendiğin paketleri "Yayınla" butonu ile
-                      uygulamaya ekleyebilir, beğenmediklerini silebilirsin.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Drafts Grid */}
-              {loadingDrafts ? (
-                <div className="flex items-center justify-center py-20">
-                  <div className="text-center">
-                    <RefreshCcw size={48} className="animate-spin text-primary mx-auto mb-4" />
-                    <p className="text-textSec">Taslaklar yükleniyor...</p>
-                  </div>
-                </div>
-              ) : automationDrafts.length === 0 ? (
-                <div className="text-center py-20">
-                  <div className="p-6 bg-card/50 rounded-full w-24 h-24 mx-auto mb-6 flex items-center justify-center">
-                    <Package size={48} className="text-textSec" />
-                  </div>
-                  <h3 className="text-xl font-bold text-white mb-2">Bekleyen Taslak Yok</h3>
-                  <p className="text-textSec max-w-md mx-auto">
-                    Python botu çalıştırarak yeni paketler oluşturabilirsin.
-                    <br />
-                    <code className="text-primary text-sm">python automation/sticker_bot.py</code>
-                  </p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                  {automationDrafts.map(draft => (
-                    <div
-                      key={draft.id}
-                      className="bg-card rounded-2xl overflow-hidden border border-white/5 hover:border-primary/30 transition-all cursor-pointer group"
-                      onClick={() => setSelectedDraft(draft)}
-                    >
-                      {/* Tray Image */}
-                      <div className="h-40 bg-gradient-to-br from-bgSecondary to-card flex items-center justify-center relative overflow-hidden">
-                        <div className="absolute inset-0 bg-primary/0 group-hover:bg-primary/5 transition-all" />
-                        {draft.tray_url ? (
-                          <img
-                            src={draft.tray_url}
-                            alt={draft.name}
-                            className="w-24 h-24 object-contain group-hover:scale-110 transition-transform duration-500"
-                          />
-                        ) : (
-                          <Package size={48} className="text-textSec" />
+                    <h1 className="text-3xl font-black text-white tracking-tight">Sihirbaz v2.0</h1>
+                    <div className="flex items-center gap-6 mt-2">
+                      <button
+                        onClick={() => setWizardView('create')}
+                        className={cn("text-xs font-black uppercase tracking-widest transition-all", wizardView === 'create' ? "text-primary border-b-2 border-primary pb-1" : "text-textSec hover:text-white")}
+                      >
+                        Paket Tasarla
+                      </button>
+                      <button
+                        onClick={() => setWizardView('drafts')}
+                        className={cn("text-xs font-black uppercase tracking-widest transition-all relative", wizardView === 'drafts' ? "text-primary border-b-2 border-primary pb-1" : "text-textSec hover:text-white")}
+                      >
+                        Bekleyen Taslaklar
+                        {automationDrafts.length > 0 && (
+                          <span className="absolute -top-3 -right-4 w-5 h-5 bg-danger text-[10px] text-white rounded-full flex items-center justify-center border-2 border-background font-black">
+                            {automationDrafts.length}
+                          </span>
                         )}
-                        <div className="absolute top-3 right-3 px-2 py-1 bg-warning/20 text-warning text-[10px] font-bold rounded-lg uppercase tracking-wider">
-                          TASLAK
-                        </div>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {wizardView === 'create' && (
+                  <div className="flex items-center gap-3 bg-card/50 backdrop-blur-md rounded-2xl p-2 border border-white/5">
+                    {[1, 2, 3].map(step => (
+                      <div
+                        key={step}
+                        className={cn(
+                          "px-4 h-10 rounded-xl flex items-center gap-2 text-xs font-black transition-all",
+                          wizardStep === step ? "bg-primary text-white shadow-lg shadow-primary/20" : wizardStep > step ? "bg-success/20 text-success" : "text-textSec bg-white/5"
+                        )}
+                      >
+                        <span className="w-5 h-5 rounded-lg flex items-center justify-center bg-black/20">
+                          {wizardStep > step ? <Check size={12} /> : step}
+                        </span>
+                        <span className="hidden sm:inline">
+                          {step === 1 ? 'KONU' : step === 2 ? 'DETAYLAR' : 'GÖRSELLER'}
+                        </span>
                       </div>
+                    ))}
+                  </div>
+                )}
+              </div>
 
-                      {/* Info */}
-                      <div className="p-4">
-                        <h3 className="font-bold text-white text-lg mb-1">{draft.name}</h3>
-                        <div className="flex items-center gap-3 text-textSec text-xs mb-4">
-                          <span>{draft.sticker_count} çıkartma</span>
-                          <span>•</span>
-                          <span>{(draft as any).category || 'Diğer'}</span>
+              {/* Wizard Body */}
+              <div className="bg-card/40 backdrop-blur-sm rounded-[40px] border border-white/5 overflow-hidden shadow-2xl relative min-h-[600px] flex flex-col transition-all duration-500">
+                {wizardLoading && (
+                  <div className="absolute inset-0 bg-background/80 backdrop-blur-md z-50 flex flex-col items-center justify-center animate-in fade-in duration-300">
+                    <div className="relative mb-8">
+                      <div className="absolute inset-0 bg-primary/20 blur-[60px] rounded-full animate-pulse" />
+                      <RefreshCcw size={64} className="animate-spin text-primary relative z-10" />
+                    </div>
+                    <h3 className="text-2xl font-black text-white uppercase tracking-tighter">AI Sihir Yapıyor...</h3>
+                    <p className="text-textSec text-sm mt-3 font-bold opacity-60">Milyarlarca görsel arasında sizin için en iyileri aranıyor</p>
+                  </div>
+                )}
+
+                {wizardView === 'create' && wizardStep === 1 && (
+                  <div className="p-5 md:p-10 flex-1 flex flex-col animate-in fade-in slide-in-from-bottom-8 duration-700">
+                    <div className="max-w-3xl mx-auto w-full text-center space-y-2 md:space-y-4 mb-8 md:mb-12 relative">
+                      <h2 className="text-2xl md:text-5xl font-black text-white tracking-tighter italic">Yeni Bir Hikaye Başlat.</h2>
+                      <p className="text-sm md:text-lg text-textSec font-medium">Trendlerden birini seçin veya hayalinizdeki konuyu AI'ya anlatın.</p>
+                      <button
+                        onClick={fetchWizardSuggestions}
+                        className="absolute -top-4 -right-8 p-4 bg-primary/10 hover:bg-primary/20 text-primary rounded-2xl transition-all shadow-xl z-20"
+                        title="Önerileri Yenile"
+                      >
+                        <RefreshCcw size={24} className={wizardLoading ? "animate-spin" : ""} />
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-12">
+                      {wizardSuggestions.map((suggestion, idx) => (
+                        <button
+                          key={idx}
+                          onClick={() => handleSelectTopic(suggestion)}
+                          className="group relative h-32 md:h-48 bg-hover/30 hover:bg-primary/10 border border-white/5 rounded-[2rem] p-5 md:p-6 text-left transition-all hover:scale-[1.02] hover:border-primary/20"
+                        >
+                          <div className="bg-primary/10 w-8 h-8 md:w-10 md:h-10 rounded-xl flex items-center justify-center text-primary mb-3 md:mb-4 group-hover:scale-110 group-hover:bg-primary group-hover:text-white transition-all">
+                            <Sparkles className="w-4 h-4 md:w-5 md:h-5 text-primary group-hover:text-white transition-colors" />
+                          </div>
+                          <span className="block font-black text-white text-base md:text-xl leading-tight tracking-tight">{suggestion}</span>
+                          <div className="absolute bottom-6 right-6 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <ChevronRight size={24} className="text-primary" />
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="max-w-2xl mx-auto w-full">
+                      <div className="relative group">
+                        <div className="absolute inset-0 bg-primary/10 blur-2xl rounded-full opacity-0 group-focus-within:opacity-100 transition-opacity" />
+                        <input
+                          type="text"
+                          placeholder="Kendi konunu yaz..."
+                          className="relative w-full h-14 md:h-20 bg-hover/50 border border-white/10 rounded-full px-6 md:px-10 pr-16 md:pr-20 text-sm md:text-xl text-white font-bold placeholder:text-textSec/40 focus:border-primary focus:bg-card outline-none transition-all shadow-2xl"
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleSelectTopic(e.currentTarget.value);
+                          }}
+                        />
+                        <button
+                          onClick={(e) => handleSelectTopic((e.currentTarget.previousSibling as HTMLInputElement).value)}
+                          className="absolute right-2 md:right-4 top-2 md:top-4 w-10 h-10 md:w-12 md:h-12 bg-primary hover:bg-primary/80 rounded-full flex items-center justify-center text-white transition-all shadow-lg shadow-primary/30 active:scale-90"
+                        >
+                          <Send className="w-4 h-4 md:w-5 md:h-5 text-white" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Step 2: Confirmation & Metadata */}
+                {wizardView === 'create' && wizardStep === 2 && (
+                  <div className="p-5 md:p-10 flex-1 animate-in fade-in slide-in-from-right-8 duration-700">
+                    <div className="flex items-center gap-6 mb-12">
+                      <button onClick={() => setWizardStep(1)} className="w-12 h-12 bg-hover hover:bg-white/10 rounded-2xl flex items-center justify-center text-textSec transition-all">
+                        <ChevronRight size={24} className="rotate-180" />
+                      </button>
+                      <h2 className="text-4xl font-black text-white tracking-tighter italic">Paket Kimliği.</h2>
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 max-w-5xl mx-auto">
+                      <div className="lg:col-span-12 space-y-10">
+                        <div className="flex items-end gap-4">
+                          <div className="flex-1">
+                            <Input
+                              label="Paket İsmi (İngilizce)"
+                              value={wizardMetadata?.name || ''}
+                              onChange={(e: any) => setWizardMetadata({ ...wizardMetadata, name: e.target.value })}
+                              placeholder="Emoji Master ✨"
+                              helpText="Emoji ve isim mağazada bu şekilde görünecek."
+                            />
+                          </div>
+                          <button
+                            onClick={handleWizardRegenerateMetadata}
+                            className="w-14 h-14 bg-primary/10 hover:bg-primary/20 text-primary rounded-xl flex items-center justify-center transition-all shrink-0 mb-6"
+                            title="Yeni İsim Öner"
+                          >
+                            <RefreshCcw size={24} className={wizardLoading ? "animate-spin" : ""} />
+                          </button>
                         </div>
 
-                        {/* Stickers Preview */}
-                        {draft.stickers && draft.stickers.length > 0 && (
-                          <div className="flex flex-wrap gap-1 mb-4">
-                            {draft.stickers.slice(0, 6).map((sticker, i) => (
-                              <img
-                                key={i}
-                                src={sticker.url}
-                                alt=""
-                                className="w-10 h-10 object-contain rounded-lg bg-bgSecondary border border-white/5"
-                              />
-                            ))}
-                            {draft.stickers.length > 6 && (
-                              <div className="w-10 h-10 rounded-lg bg-bgSecondary flex items-center justify-center text-textSec text-[10px] font-bold border border-white/5">
-                                +{draft.stickers.length - 6}
-                              </div>
-                            )}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                          <div className="space-y-2 relative group">
+                            <label className="text-[10px] font-black text-textSec uppercase tracking-widest px-1">Kategori</label>
+                            <div className="flex gap-2">
+                              <select
+                                value={wizardMetadata?.category || 'other'}
+                                onChange={(e) => setWizardMetadata({ ...wizardMetadata, category: e.target.value })}
+                                className="flex-1 h-14 bg-hover border-transparent border focus:border-primary/50 rounded-xl px-4 outline-none transition-all text-white font-bold appearance-none"
+                              >
+                                {CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.emoji} {c.name}</option>)}
+                              </select>
+                              <button
+                                onClick={async () => {
+                                  setWizardLoading(true);
+                                  const cat = await magicWizardService.getAutoCategory(wizardMetadata?.name || wizardSearchQuery);
+                                  setWizardMetadata({ ...wizardMetadata, category: cat });
+                                  setWizardLoading(false);
+                                }}
+                                className="w-14 h-14 bg-success/10 hover:bg-success/20 text-success rounded-xl flex items-center justify-center transition-all"
+                                title="AI ile Kategori Belirle"
+                              >
+                                <Zap size={20} />
+                              </button>
+                            </div>
                           </div>
-                        )}
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-black text-textSec uppercase tracking-widest px-1">Tip</label>
+                            <div className="h-14 bg-success/10 border border-success/20 rounded-xl px-6 flex items-center justify-between text-success font-black text-sm">
+                              <span>HAREKETLİ (ANIMATED)</span>
+                              <Sparkles size={18} />
+                            </div>
+                          </div>
+                        </div>
 
-                        {/* Source Query */}
-                        {(draft as any).source_query && (
-                          <p className="text-textSec text-[10px] mb-4 opacity-50 italic">
-                            Kaynak: {(draft as any).source_query}
-                          </p>
-                        )}
-
-                        {/* Actions */}
-                        <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
-                          <button
-                            onClick={() => approveAutomationDraft(draft)}
-                            disabled={isProcessing}
-                            className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-primary hover:bg-primary/80 text-white rounded-xl text-sm font-bold transition-all disabled:opacity-50"
-                          >
-                            <Check size={16} />
-                            Yayınla
-                          </button>
-                          <button
-                            onClick={() => deleteAutomationDraft(draft)}
-                            disabled={isProcessing}
-                            className="flex items-center justify-center gap-2 px-3 py-2 bg-danger/10 hover:bg-danger/20 text-danger rounded-xl transition-all disabled:opacity-50"
-                          >
-                            <Trash2 size={16} />
-                          </button>
+                        <div className="bg-primary/5 border border-primary/10 rounded-[32px] p-8 flex items-start gap-6">
+                          <div className="w-16 h-16 bg-primary/20 rounded-2xl flex items-center justify-center text-primary shrink-0 transition-transform group-hover:scale-110">
+                            <Search size={32} />
+                          </div>
+                          <div className="space-y-2 flex-1">
+                            <label className="text-[10px] font-black text-primary uppercase tracking-[0.2em]">GIF Arama Stratejisi</label>
+                            <p className="text-textSec text-sm font-medium leading-relaxed">
+                              Sizin için en iyi sonuçları verecek anahtar kelimeyi hazırladık. İsterseniz değiştirebilirsiniz.
+                            </p>
+                            <input
+                              type="text"
+                              value={wizardSearchQuery}
+                              onChange={(e) => setWizardSearchQuery(e.target.value)}
+                              className="w-full mt-4 bg-white/5 border border-white/10 rounded-xl px-6 py-4 text-white font-bold focus:border-primary outline-none"
+                            />
+                          </div>
                         </div>
                       </div>
                     </div>
-                  ))}
-                </div>
-              )}
+
+                    <div className="mt-16 flex justify-end">
+                      <button
+                        onClick={() => {
+                          setWizardStep(3);
+                          handleWizardSearch(0);
+                        }}
+                        className="px-12 h-20 bg-primary hover:bg-primary/80 text-white rounded-[24px] font-black text-xl flex items-center justify-center gap-4 transition-all shadow-xl shadow-primary/20 hover:scale-[1.02] active:scale-95"
+                      >
+                        GÖRSELLERİ BUL
+                        <ChevronRight size={28} />
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Step 3: GIF Selection */}
+                {wizardView === 'create' && wizardStep === 3 && (
+                  <div className="p-8 flex-1 flex flex-col animate-in fade-in slide-in-from-right-8 duration-700">
+                    <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-8 gap-6 px-4">
+                      <div className="flex items-center gap-6">
+                        <button onClick={() => setWizardStep(2)} className="w-12 h-12 bg-hover hover:bg-white/10 rounded-2xl flex items-center justify-center text-textSec transition-all">
+                          <ChevronRight size={24} className="rotate-180" />
+                        </button>
+                        <div>
+                          <h2 className="text-3xl font-black text-white italic tracking-tight">Koleksiyonu Oluştur.</h2>
+                          <div className="flex items-center gap-3">
+                            <p className="text-textSec font-bold text-sm opacity-60">Paketiniz için en az 3, en fazla 30 görsel seçin.</p>
+                            <span className="w-1.5 h-1.5 rounded-full bg-white/20" />
+                            <p className="text-primary font-black text-sm uppercase tracking-widest">SAYFA {wizardPage + 1}</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-4 bg-hover/50 p-2 rounded-[24px] border border-white/5 w-full md:w-auto">
+                        <div className="flex items-center gap-2 pl-4 flex-1">
+                          <Search className="text-textSec" size={20} />
+                          <input
+                            type="text"
+                            value={wizardSearchQuery}
+                            onChange={(e) => setWizardSearchQuery(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && handleWizardSearch(0)}
+                            className="bg-transparent border-none outline-none text-white font-bold text-base md:w-64"
+                            placeholder="Farklı stickerlar ara..."
+                          />
+                        </div>
+                        <button onClick={() => handleWizardSearch(0)} className="h-12 px-8 bg-primary hover:bg-primary/80 text-white font-black rounded-full transition-all text-xs uppercase tracking-widest shadow-lg shadow-primary/20">ARA</button>
+                      </div>
+                    </div>
+
+                    <div id="wizard-gif-container" className="flex-1 overflow-auto bg-black/20 rounded-[40px] p-6 border border-white/5 custom-scrollbar min-h-[460px]">
+                      {wizardGifs.length === 0 ? (
+                        <div className="h-full flex flex-col items-center justify-center opacity-40">
+                          <div className="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center mb-4">
+                            <ImageIcon size={40} />
+                          </div>
+                          <p className="font-black uppercase tracking-widest text-xs">Görsel Bulunamadı</p>
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
+                          {wizardGifs.map((gif) => {
+                            const isSelected = selectedGifs.find(g => g.id === gif.id);
+                            return (
+                              <div
+                                key={gif.id}
+                                onClick={() => toggleGifSelection(gif)}
+                                className={cn(
+                                  "aspect-square rounded-[32px] p-4 border-2 relative group cursor-pointer transition-all duration-300",
+                                  isSelected ? "border-primary bg-primary/5 shadow-2xl scale-[0.95]" : "border-transparent bg-hover/20 hover:bg-hover/40"
+                                )}
+                              >
+                                <img
+                                  src={gif.preview}
+                                  alt=""
+                                  className={cn("w-full h-full object-contain transition-all duration-500", isSelected ? "animate-pulse" : "group-hover:scale-110")}
+                                />
+                                <div className={cn(
+                                  "absolute top-4 right-4 w-8 h-8 rounded-xl flex items-center justify-center transition-all shadow-lg",
+                                  isSelected ? "bg-primary text-white scale-110" : "bg-black/40 text-white/0 group-hover:text-white/50"
+                                )}>
+                                  <Check size={20} strokeWidth={4} />
+                                </div>
+                                <div className="absolute inset-x-4 bottom-4 opacity-0 group-hover:opacity-100 transition-all">
+                                  <div className="bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-lg text-[10px] font-black text-white/80 truncate uppercase text-center border border-white/10">
+                                    {gif.title || 'STICKER'}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="mt-8 flex flex-col sm:flex-row items-center justify-between gap-6 px-4">
+                      <div className="flex items-center gap-6">
+                        <div className="flex -space-x-4 overflow-hidden p-2">
+                          {selectedGifs.slice(0, 6).map((g, i) => (
+                            <div key={i} className="relative">
+                              <img src={g.preview} className="inline-block h-12 w-12 rounded-2xl ring-4 ring-card object-cover bg-bgSecondary" />
+                            </div>
+                          ))}
+                          {selectedGifs.length > 6 && (
+                            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-hover ring-4 ring-card text-xs font-black text-white">
+                              +{selectedGifs.length - 6}
+                            </div>
+                          )}
+                        </div>
+                        <div>
+                          <span className="block text-2xl font-black text-white leading-none">{selectedGifs.length} <span className="text-sm font-bold opacity-40">/ 30</span></span>
+                          <span className="text-[10px] font-black text-primary uppercase tracking-[0.2em]">Seçilen Görsel</span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-2 bg-white/5 p-1 rounded-2xl mr-4 border border-white/5">
+                          <button
+                            onClick={() => handleWizardSearch(wizardPage - 1)}
+                            disabled={wizardPage === 0 || wizardLoading}
+                            className="w-12 h-12 rounded-xl flex items-center justify-center hover:bg-white/10 disabled:opacity-20 transition-all font-black text-white"
+                          >
+                            <ChevronRight size={24} className="rotate-180" />
+                          </button>
+                          <span className="w-12 text-center font-black text-white text-sm">{wizardPage + 1}</span>
+                          <button
+                            onClick={() => handleWizardSearch(wizardPage + 1)}
+                            disabled={wizardGifs.length < 30 || wizardLoading}
+                            className="w-12 h-12 rounded-xl flex items-center justify-center hover:bg-white/10 disabled:opacity-20 transition-all font-black text-white"
+                          >
+                            <ChevronRight size={24} />
+                          </button>
+                        </div>
+
+                        <button
+                          onClick={handleCreateWizardDraft}
+                          disabled={selectedGifs.length < 3 || isProcessing}
+                          className="w-full sm:w-auto px-12 h-16 bg-primary hover:bg-primary/80 disabled:opacity-30 disabled:grayscale text-white rounded-[24px] font-black text-lg flex items-center justify-center gap-4 transition-all shadow-xl shadow-primary/30 hover:scale-[1.05] active:scale-95"
+                        >
+                          <Zap size={24} className="fill-current" />
+                          TASLAĞI KAYDET VE BİTİR
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Drafts View */}
+                {wizardView === 'drafts' && (
+                  <div className="p-10 flex-1 flex flex-col animate-in fade-in slide-in-from-bottom-8 duration-700">
+                    <div className="flex items-center justify-between mb-10">
+                      <h2 className="text-4xl font-black text-white tracking-tighter italic">Taslak Havuzu.</h2>
+                      <button
+                        onClick={fetchAutomationDrafts}
+                        disabled={loadingDrafts}
+                        className="flex items-center gap-3 px-6 py-3 bg-white/5 hover:bg-white/10 border border-white/5 rounded-2xl text-xs font-black uppercase tracking-widest text-textSec hover:text-white transition-all"
+                      >
+                        <RefreshCcw size={16} className={loadingDrafts ? "animate-spin" : ""} />
+                        LİSTEYİ GÜNCELLE
+                      </button>
+                    </div>
+
+                    {loadingDrafts ? (
+                      <div className="flex-1 flex flex-col items-center justify-center py-20 grayscale opacity-50">
+                        <RefreshCcw size={64} className="animate-spin text-primary mb-6" />
+                        <p className="text-white font-black uppercase tracking-widest text-sm">Veriler Çekiliyor...</p>
+                      </div>
+                    ) : automationDrafts.length === 0 ? (
+                      <div className="flex-1 flex flex-col items-center justify-center py-20 text-center space-y-6">
+                        <div className="w-32 h-32 bg-white/5 rounded-[40px] flex items-center justify-center text-textSec/20">
+                          <Package size={64} />
+                        </div>
+                        <div className="space-y-2">
+                          <h3 className="text-2xl font-black text-textSec uppercase">Havuz Tamamen Boş</h3>
+                          <p className="text-textSec text-sm font-medium opacity-50 max-w-xs mx-auto">Henüz yayına hazırlanan bir paket taslağı bulunmuyor.</p>
+                        </div>
+                        <button
+                          onClick={() => setWizardView('create')}
+                          className="px-8 py-4 bg-primary/20 text-primary hover:bg-primary/30 rounded-2xl font-black text-sm uppercase tracking-widest transition-all"
+                        >
+                          İLK PAKETİNİ TASARLA
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
+                        {automationDrafts.map(draft => (
+                          <div
+                            key={draft.id}
+                            className="bg-hover/20 rounded-[32px] border border-white/5 overflow-hidden group hover:border-primary/20 hover:bg-hover/40 transition-all flex flex-col shadow-xl"
+                          >
+                            <div className="h-40 bg-gradient-to-br from-white/5 to-transparent flex items-center justify-center relative p-6">
+                              <div className="absolute inset-0 bg-primary/5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                              {draft.tray_url ? (
+                                <img src={draft.tray_url} className="w-20 h-20 object-contain filter drop-shadow-2xl transition-transform duration-500 group-hover:scale-110" alt="" />
+                              ) : (
+                                <ImageIcon size={64} className="text-textSec/20" />
+                              )}
+                              <div className="absolute top-4 right-4 px-3 py-1.5 bg-black/40 backdrop-blur-md text-white text-[10px] font-black rounded-lg uppercase border border-white/5">
+                                {draft.sticker_count} Stickers
+                              </div>
+                            </div>
+                            <div className="p-6 flex-1 flex flex-col space-y-6">
+                              <div>
+                                <h3 className="text-xl font-black text-white mb-1 truncate">{draft.name}</h3>
+                                <div className="flex items-center gap-2">
+                                  <span className="w-2 h-2 bg-warning rounded-full shadow-[0_0_8px_rgba(255,191,0,0.5)]" />
+                                  <span className="text-textSec text-[10px] font-black uppercase tracking-widest">ONAY BEKLİYOR • {(draft as any).category}</span>
+                                </div>
+                              </div>
+
+                              <div className="flex gap-3">
+                                <button
+                                  onClick={() => setSelectedDraft(draft)}
+                                  className="flex-1 h-12 bg-white/5 hover:bg-white/10 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-all border border-white/5"
+                                >
+                                  ÖNİZLE
+                                </button>
+                                <button
+                                  onClick={() => approveAutomationDraft(draft)}
+                                  className="h-12 px-6 bg-primary hover:bg-primary/80 text-white rounded-xl transition-all shadow-lg shadow-primary/20"
+                                >
+                                  <Check size={20} strokeWidth={3} />
+                                </button>
+                                <button
+                                  onClick={() => deleteAutomationDraft(draft)}
+                                  className="h-12 px-6 bg-danger/10 hover:bg-danger/20 text-danger rounded-xl transition-all"
+                                >
+                                  <Trash2 size={20} />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
 
               {/* Draft Preview Modal */}
               {selectedDraft && (
                 <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-                  <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setSelectedDraft(null)} />
-                  <div className="bg-card w-full max-w-4xl max-h-[90vh] rounded-[32px] overflow-hidden border border-white/10 shadow-2xl relative z-10 flex flex-col">
+                  <div className="absolute inset-0 bg-black/90 backdrop-blur-2xl" onClick={() => setSelectedDraft(null)} />
+                  <div className="bg-card w-full max-w-5xl max-h-[90vh] rounded-[40px] overflow-hidden border border-white/10 shadow-2xl relative z-10 flex flex-col animate-in zoom-in-95 duration-300">
                     {/* Modal Header */}
-                    <div className="p-6 border-b border-white/5 flex items-center justify-between bg-gradient-to-r from-card to-bgSecondary">
-                      <div className="flex items-center gap-4">
-                        <div className="w-16 h-16 bg-bgSecondary rounded-2xl flex items-center justify-center p-2 border border-white/5">
-                          <img src={selectedDraft.tray_url} alt="" className="w-full h-full object-contain" />
+                    <div className="p-10 border-b border-white/5 flex items-center justify-between bg-gradient-to-br from-card to-background">
+                      <div className="flex items-center gap-8">
+                        <div className="w-24 h-24 bg-white/5 rounded-[32px] flex items-center justify-center p-4 border border-white/5 shadow-inner">
+                          <img src={selectedDraft.tray_url} alt="" className="w-full h-full object-contain filter drop-shadow-xl" />
                         </div>
                         <div>
-                          <h2 className="text-2xl font-bold text-white">{selectedDraft.name}</h2>
-                          <p className="text-textSec text-sm">{(selectedDraft as any).category} • {selectedDraft.sticker_count} Çıkartma</p>
+                          <div className="flex items-center gap-3 mb-2">
+                            <h2 className="text-4xl font-black text-white tracking-tighter italic">{selectedDraft.name}</h2>
+                            <span className="px-3 py-1 bg-primary/20 text-primary text-[10px] font-black rounded-full uppercase tracking-widest">{(selectedDraft as any).category}</span>
+                          </div>
+                          <p className="text-textSec font-bold tracking-widest text-xs uppercase opacity-40">Toplam {selectedDraft.sticker_count} Profesyonel Çıkartma</p>
                         </div>
                       </div>
-                      <button onClick={() => setSelectedDraft(null)} className="p-2 hover:bg-white/5 rounded-full transition-all">
-                        <X size={24} />
+                      <button onClick={() => setSelectedDraft(null)} className="w-14 h-14 bg-white/5 hover:bg-danger/20 hover:text-danger rounded-2xl flex items-center justify-center transition-all">
+                        <X size={28} />
                       </button>
                     </div>
 
                     {/* Modal Content */}
-                    <div className="flex-1 overflow-auto p-8">
-                      <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-4">
+                    <div className="flex-1 overflow-auto p-10 bg-black/20 custom-scrollbar">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
                         {selectedDraft.stickers?.map((sticker, idx) => (
                           <div
                             key={idx}
-                            className="aspect-square bg-bgSecondary rounded-2xl p-2 border border-white/5 flex items-center justify-center relative group cursor-zoom-in"
+                            className="aspect-square bg-hover/10 rounded-[32px] p-6 border border-white/5 flex items-center justify-center relative group hover:bg-hover/30 transition-all cursor-zoom-in"
                             onClick={() => setPreviewSticker({ url: sticker.url, title: sticker.image_file })}
                           >
                             <img
                               src={sticker.url}
                               alt=""
-                              className="w-full h-full object-contain hover:scale-110 transition-transform pointer-events-none"
+                              className="w-full h-full object-contain transition-transform duration-500 group-hover:scale-125 pointer-events-none"
                             />
-                            <div className="absolute inset-0 bg-primary/20 opacity-0 group-hover:opacity-100 transition-all rounded-2xl flex items-end justify-center p-1 pointer-events-none">
-                              <span className="text-[10px] font-bold text-white bg-black/50 px-2 py-0.5 rounded-full">{sticker.emojis.join('')}</span>
+                            <div className="absolute inset-0 bg-primary/20 opacity-0 group-hover:opacity-100 transition-all rounded-[32px] flex items-end justify-center p-4 pointer-events-none">
+                              <span className="text-xs font-black text-white bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/10 shadow-xl">{sticker.emojis.join('')}</span>
                             </div>
-                            {/* Single Sticker Delete Button */}
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
                                 removeStickerFromDraft(selectedDraft, idx);
                               }}
-                              className="absolute top-1 right-1 w-6 h-6 bg-danger/80 text-white rounded-lg flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all hover:bg-danger"
+                              className="absolute top-2 right-2 w-10 h-10 bg-danger text-white rounded-xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all shadow-xl hover:scale-110 active:scale-90"
                             >
-                              <X size={14} />
+                              <X size={20} strokeWidth={3} />
                             </button>
                           </div>
                         ))}
@@ -2406,17 +3206,17 @@ function App() {
                     </div>
 
                     {/* Modal Footer */}
-                    <div className="p-6 border-t border-white/5 flex gap-4">
+                    <div className="p-10 border-t border-white/5 flex gap-6 bg-card/50">
                       <button
                         onClick={() => {
                           approveAutomationDraft(selectedDraft);
                           setSelectedDraft(null);
                         }}
                         disabled={isProcessing}
-                        className="flex-1 h-14 bg-primary hover:bg-primary/80 text-white rounded-2xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg shadow-primary/20"
+                        className="flex-1 h-20 bg-primary hover:bg-primary/80 text-white rounded-[24px] font-black text-xl flex items-center justify-center gap-4 transition-all shadow-2xl shadow-primary/20 hover:scale-[1.02] active:scale-95"
                       >
-                        <Check size={20} />
-                        Taslağı Onayla ve Yayınla
+                        <CheckCircle2 size={24} />
+                        ONAYLA VE MAĞAZAYA GÖNDER
                       </button>
                       <button
                         onClick={() => {
@@ -2424,9 +3224,9 @@ function App() {
                           setSelectedDraft(null);
                         }}
                         disabled={isProcessing}
-                        className="w-14 h-14 bg-danger/10 hover:bg-danger/20 text-danger rounded-2xl flex items-center justify-center transition-all"
+                        className="w-20 h-20 bg-danger/10 hover:bg-danger/20 text-danger rounded-[24px] flex items-center justify-center transition-all border border-danger/10"
                       >
-                        <Trash2 size={24} />
+                        <Trash2 size={32} />
                       </button>
                     </div>
                   </div>
@@ -2437,7 +3237,7 @@ function App() {
         ) : null}
       </main>
 
-      <footer className="glass h-8 px-6 flex items-center justify-between text-[10px] font-bold text-textSec uppercase tracking-widest border-t border-white/5 fixed bottom-0 left-0 right-0 z-30">
+      <footer className="hidden md:flex glass h-8 px-6 items-center justify-between text-[10px] font-bold text-textSec uppercase tracking-widest border-t border-white/5 fixed bottom-0 left-0 right-0 z-30">
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-2">
             <div className="w-1.5 h-1.5 bg-primary rounded-full shadow-sm shadow-primary/50" />
@@ -2467,96 +3267,92 @@ function App() {
             </div>
 
             <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="flex items-center gap-2 text-sm font-medium text-textSec mb-1">
-                  <span>🇬🇧</span> İngilizce (Varsayılan)
-                </label>
-                <input
-                  type="text"
-                  placeholder="Funny Cats"
-                  className="w-full bg-bgSecondary border border-white/10 rounded-lg p-2.5 text-white placeholder:text-white/30"
-                  value={newPackData.name}
-                  onChange={(e: any) => setNewPackData({ ...newPackData, name: e.target.value })}
-                />
-              </div>
-              <div>
-                <label className="flex items-center gap-2 text-sm font-medium text-textSec mb-1">
-                  <span>🇹🇷</span> Türkçe
-                </label>
-                <input
-                  type="text"
-                  placeholder="Komik Kediler"
-                  className="w-full bg-bgSecondary border border-white/10 rounded-lg p-2.5 text-white placeholder:text-white/30"
-                  value={newPackData.name_tr}
-                  onChange={(e: any) => setNewPackData({ ...newPackData, name_tr: e.target.value })}
-                />
-              </div>
-            </div>
+              <div className="col-span-2">
+                {/* Header */}
+                <div className="flex items-center justify-between mb-3">
+                  <label className="flex items-center gap-2 text-primary font-bold text-sm">
+                    <Globe size={18} />
+                    Çoklu Dil Desteği ({TARGET_LANGUAGES.length} dil)
+                  </label>
+                  <button
+                    onClick={() => handleAutoTranslate(false)}
+                    disabled={isTranslating || !newPackData.name}
+                    type="button"
+                    className="px-4 py-2 bg-gradient-to-r from-primary to-accent text-white rounded-xl flex items-center gap-2 hover:opacity-90 transition-all font-bold text-sm disabled:opacity-40 disabled:cursor-not-allowed shadow-lg"
+                  >
+                    {isTranslating ? <RefreshCcw size={16} className="animate-spin" /> : <Sparkles size={16} />}
+                    {isTranslating ? 'AI Çeviriyor...' : '✨ Otomatik Çevir'}
+                  </button>
+                </div>
 
-            <div className="grid grid-cols-3 gap-3">
-              <div>
-                <label className="flex items-center gap-2 text-sm font-medium text-textSec mb-1">
-                  <span>🇨🇳</span> Çince
-                </label>
-                <input
-                  type="text"
-                  placeholder="搞笑猫咪"
-                  className="w-full bg-bgSecondary border border-white/10 rounded-lg p-2.5 text-white placeholder:text-white/30"
-                  value={newPackData.name_zh}
-                  onChange={(e: any) => setNewPackData({ ...newPackData, name_zh: e.target.value })}
-                />
-              </div>
-              <div>
-                <label className="flex items-center gap-2 text-sm font-medium text-textSec mb-1">
-                  <span>🇪🇸</span> İspanyolca
-                </label>
-                <input
-                  type="text"
-                  placeholder="Gatos Graciosos"
-                  className="w-full bg-bgSecondary border border-white/10 rounded-lg p-2.5 text-white placeholder:text-white/30"
-                  value={newPackData.name_es}
-                  onChange={(e: any) => setNewPackData({ ...newPackData, name_es: e.target.value })}
-                />
-              </div>
-              <div>
-                <label className="flex items-center gap-2 text-sm font-medium text-textSec mb-1">
-                  <span>🇸🇦</span> Arapça
-                </label>
-                <input
-                  type="text"
-                  placeholder="قطط مضحكة"
-                  className="w-full bg-bgSecondary border border-white/10 rounded-lg p-2.5 text-white placeholder:text-white/30 text-right"
-                  dir="rtl"
-                  value={newPackData.name_ar}
-                  onChange={(e: any) => setNewPackData({ ...newPackData, name_ar: e.target.value })}
-                />
-              </div>
-            </div>
+                {/* Ana İsim (İngilizce) */}
+                <div className="mb-3">
+                  <label className="flex items-center gap-2 text-xs font-bold text-white/80 mb-1.5">
+                    🇬🇧 İngilizce (Ana İsim) <span className="text-red-400">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Örn: Funny Cats, Love Stickers..."
+                    className="w-full bg-bgSecondary border-2 border-primary/50 rounded-xl p-3 text-white placeholder:text-white/30 text-base focus:border-primary outline-none transition-all"
+                    value={newPackData.name}
+                    onChange={(e) => setNewPackData({ ...newPackData, name: e.target.value, name_en: e.target.value })}
+                  />
+                  <p className="text-xs text-textSec mt-1">İngilizce ismi girin, ardından "Otomatik Çevir" butonuna tıklayın</p>
+                </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="flex items-center gap-2 text-sm font-medium text-textSec mb-1">
-                  <span>🇮🇳</span> Hintçe
-                </label>
-                <input
-                  type="text"
-                  placeholder="मज़ेदार बिल्लियाँ"
-                  className="w-full bg-bgSecondary border border-white/10 rounded-lg p-2.5 text-white placeholder:text-white/30"
-                  value={newPackData.name_hi}
-                  onChange={(e: any) => setNewPackData({ ...newPackData, name_hi: e.target.value })}
-                />
-              </div>
-              <div>
-                <label className="flex items-center gap-2 text-sm font-medium text-textSec mb-1">
-                  <span>🇧🇷</span> Portekizce
-                </label>
-                <input
-                  type="text"
-                  placeholder="Gatos Engraçados"
-                  className="w-full bg-bgSecondary border border-white/10 rounded-lg p-2.5 text-white placeholder:text-white/30"
-                  value={newPackData.name_pt}
-                  onChange={(e: any) => setNewPackData({ ...newPackData, name_pt: e.target.value })}
-                />
+                {/* Arama */}
+                <div className="relative mb-3">
+                  <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-textSec" />
+                  <input
+                    type="text"
+                    placeholder="Dil ara... (Turkish, German, Japanese...)"
+                    className="w-full bg-bgSecondary border border-white/10 rounded-xl py-2.5 pl-10 pr-4 text-sm text-white placeholder:text-white/30"
+                    value={langSearch}
+                    onChange={(e) => setLangSearch(e.target.value)}
+                  />
+                </div>
+
+                {/* Doluluk Durumu */}
+                <div className="flex items-center gap-4 mb-3 text-xs">
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-green-500"></span>
+                    Dolu: {TARGET_LANGUAGES.filter(l => (newPackData as any)[`name_${l.code}`]).length}
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-white/20"></span>
+                    Boş: {TARGET_LANGUAGES.filter(l => !(newPackData as any)[`name_${l.code}`]).length}
+                  </span>
+                </div>
+
+                {/* Dil Listesi */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-[280px] overflow-y-auto pr-2 p-3 bg-black/20 rounded-xl border border-white/5">
+                  {TARGET_LANGUAGES
+                    .filter(lang => lang.code !== 'en') // İngilizce zaten yukarıda
+                    .filter(lang =>
+                      langSearch === '' ||
+                      lang.name.toLowerCase().includes(langSearch.toLowerCase()) ||
+                      lang.code.toLowerCase().includes(langSearch.toLowerCase())
+                    )
+                    .map((lang) => {
+                      const value = (newPackData as any)[`name_${lang.code}`] || '';
+                      const isFilled = value.length > 0;
+                      return (
+                        <div key={lang.code} className="space-y-1">
+                          <label className={`flex items-center gap-1.5 text-xs font-medium ${isFilled ? 'text-green-400' : 'text-textSec'}`}>
+                            <span>{lang.flag}</span> {lang.name}
+                            {isFilled && <Check size={12} className="text-green-400" />}
+                          </label>
+                          <input
+                            type="text"
+                            placeholder={`${lang.name}...`}
+                            className={`w-full bg-bgSecondary border rounded-lg p-2 text-sm text-white placeholder:text-white/20 ${isFilled ? 'border-green-500/30' : 'border-white/10'}`}
+                            value={value}
+                            onChange={(e) => setNewPackData({ ...newPackData, [`name_${lang.code}`]: e.target.value })}
+                          />
+                        </div>
+                      );
+                    })}
+                </div>
               </div>
             </div>
           </div>
@@ -2627,96 +3423,91 @@ function App() {
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="flex items-center gap-2 text-sm font-medium text-textSec mb-1">
-                    <span>🇬🇧</span> İngilizce (Varsayılan)
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Funny Cats"
-                    className="w-full bg-bgSecondary border border-white/10 rounded-lg p-2.5 text-white placeholder:text-white/30"
-                    value={editFormData.name}
-                    onChange={(e: any) => setEditFormData({ ...editFormData, name: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <label className="flex items-center gap-2 text-sm font-medium text-textSec mb-1">
-                    <span>🇹🇷</span> Türkçe
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Komik Kediler"
-                    className="w-full bg-bgSecondary border border-white/10 rounded-lg p-2.5 text-white placeholder:text-white/30"
-                    value={editFormData.name_tr}
-                    onChange={(e: any) => setEditFormData({ ...editFormData, name_tr: e.target.value })}
-                  />
-                </div>
-              </div>
+                <div className="col-span-2">
+                  {/* Header */}
+                  <div className="flex items-center justify-between mb-3">
+                    <label className="flex items-center gap-2 text-primary font-bold text-sm">
+                      <Globe size={18} />
+                      Çoklu Dil Desteği ({TARGET_LANGUAGES.length} dil)
+                    </label>
+                    <button
+                      onClick={() => handleAutoTranslate(true)}
+                      disabled={isTranslating || !editFormData.name}
+                      type="button"
+                      className="px-4 py-2 bg-gradient-to-r from-primary to-accent text-white rounded-xl flex items-center gap-2 hover:opacity-90 transition-all font-bold text-sm disabled:opacity-40 disabled:cursor-not-allowed shadow-lg"
+                    >
+                      {isTranslating ? <RefreshCcw size={16} className="animate-spin" /> : <Sparkles size={16} />}
+                      {isTranslating ? 'AI Çeviriyor...' : '✨ Otomatik Çevir'}
+                    </button>
+                  </div>
 
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="flex items-center gap-2 text-sm font-medium text-textSec mb-1">
-                    <span>🇨🇳</span> Çince
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="搞笑猫咪"
-                    className="w-full bg-bgSecondary border border-white/10 rounded-lg p-2.5 text-white placeholder:text-white/30"
-                    value={editFormData.name_zh}
-                    onChange={(e: any) => setEditFormData({ ...editFormData, name_zh: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <label className="flex items-center gap-2 text-sm font-medium text-textSec mb-1">
-                    <span>🇪🇸</span> İspanyolca
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Gatos Graciosos"
-                    className="w-full bg-bgSecondary border border-white/10 rounded-lg p-2.5 text-white placeholder:text-white/30"
-                    value={editFormData.name_es}
-                    onChange={(e: any) => setEditFormData({ ...editFormData, name_es: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <label className="flex items-center gap-2 text-sm font-medium text-textSec mb-1">
-                    <span>🇸🇦</span> Arapça
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="قطط مضحكة"
-                    className="w-full bg-bgSecondary border border-white/10 rounded-lg p-2.5 text-white placeholder:text-white/30 text-right"
-                    dir="rtl"
-                    value={editFormData.name_ar}
-                    onChange={(e: any) => setEditFormData({ ...editFormData, name_ar: e.target.value })}
-                  />
-                </div>
-              </div>
+                  {/* Ana İsim (İngilizce) */}
+                  <div className="mb-3">
+                    <label className="flex items-center gap-2 text-xs font-bold text-white/80 mb-1.5">
+                      🇬🇧 İngilizce (Ana İsim) <span className="text-red-400">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Örn: Funny Cats, Love Stickers..."
+                      className="w-full bg-bgSecondary border-2 border-primary/50 rounded-xl p-3 text-white placeholder:text-white/30 text-base focus:border-primary outline-none transition-all"
+                      value={editFormData.name || ''}
+                      onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value, name_en: e.target.value })}
+                    />
+                  </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="flex items-center gap-2 text-sm font-medium text-textSec mb-1">
-                    <span>🇮🇳</span> Hintçe
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="मज़ेदार बिल्लियाँ"
-                    className="w-full bg-bgSecondary border border-white/10 rounded-lg p-2.5 text-white placeholder:text-white/30"
-                    value={editFormData.name_hi}
-                    onChange={(e: any) => setEditFormData({ ...editFormData, name_hi: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <label className="flex items-center gap-2 text-sm font-medium text-textSec mb-1">
-                    <span>🇧🇷</span> Portekizce
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Gatos Engraçados"
-                    className="w-full bg-bgSecondary border border-white/10 rounded-lg p-2.5 text-white placeholder:text-white/30"
-                    value={editFormData.name_pt}
-                    onChange={(e: any) => setEditFormData({ ...editFormData, name_pt: e.target.value })}
-                  />
+                  {/* Arama */}
+                  <div className="relative mb-3">
+                    <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-textSec" />
+                    <input
+                      type="text"
+                      placeholder="Dil ara... (Turkish, German, Japanese...)"
+                      className="w-full bg-bgSecondary border border-white/10 rounded-xl py-2.5 pl-10 pr-4 text-sm text-white placeholder:text-white/30"
+                      value={langSearch}
+                      onChange={(e) => setLangSearch(e.target.value)}
+                    />
+                  </div>
+
+                  {/* Doluluk Durumu */}
+                  <div className="flex items-center gap-4 mb-3 text-xs">
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-green-500"></span>
+                      Dolu: {TARGET_LANGUAGES.filter(l => (editFormData as any)[`name_${l.code}`]).length}
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-white/20"></span>
+                      Boş: {TARGET_LANGUAGES.filter(l => !(editFormData as any)[`name_${l.code}`]).length}
+                    </span>
+                  </div>
+
+                  {/* Dil Listesi */}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-[280px] overflow-y-auto pr-2 p-3 bg-black/20 rounded-xl border border-white/5">
+                    {TARGET_LANGUAGES
+                      .filter(lang => lang.code !== 'en')
+                      .filter(lang =>
+                        langSearch === '' ||
+                        lang.name.toLowerCase().includes(langSearch.toLowerCase()) ||
+                        lang.code.toLowerCase().includes(langSearch.toLowerCase())
+                      )
+                      .map((lang) => {
+                        const value = (editFormData as any)[`name_${lang.code}`] || '';
+                        const isFilled = value.length > 0;
+                        return (
+                          <div key={lang.code} className="space-y-1">
+                            <label className={`flex items-center gap-1.5 text-xs font-medium ${isFilled ? 'text-green-400' : 'text-textSec'}`}>
+                              <span>{lang.flag}</span> {lang.name}
+                              {isFilled && <Check size={12} className="text-green-400" />}
+                            </label>
+                            <input
+                              type="text"
+                              placeholder={`${lang.name}...`}
+                              className={`w-full bg-bgSecondary border rounded-lg p-2 text-sm text-white placeholder:text-white/20 ${isFilled ? 'border-green-500/30' : 'border-white/10'}`}
+                              value={value}
+                              onChange={(e) => setEditFormData({ ...editFormData, [`name_${lang.code}`]: e.target.value })}
+                            />
+                          </div>
+                        );
+                      })}
+                  </div>
                 </div>
               </div>
             </div>
@@ -2912,78 +3703,34 @@ function App() {
       }
 
       {/* Sticker Preview Modal */}
-      {previewSticker && (
-        <div
-          className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-xl animate-in fade-in duration-300"
-          onClick={() => setPreviewSticker(null)}
-        >
-          <div className="absolute top-6 right-6 flex items-center gap-4">
-            <span className="text-white/40 font-mono text-xs uppercase tracking-[0.3em] font-black">{previewSticker.title}</span>
-            <button className="p-3 bg-white/10 hover:bg-white/20 text-white rounded-full transition-all">
-              <X size={24} />
-            </button>
-          </div>
-          <div className="relative group max-w-[90vw] max-h-[90vh]">
-            <img
-              src={previewSticker.url}
-              alt=""
-              className="max-w-full max-h-[80vh] object-contain drop-shadow-[0_0_50px_rgba(0,168,132,0.3)] animate-in zoom-in-90 duration-300"
-              onClick={(e) => e.stopPropagation()}
-            />
-            <div className="absolute -bottom-12 left-1/2 -translate-x-1/2 text-primary font-black text-sm tracking-widest uppercase opacity-0 group-hover:opacity-100 transition-opacity">
-              STICKER ÖNİZLEME
+      {
+        previewSticker && (
+          <div
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-xl animate-in fade-in duration-300"
+            onClick={() => setPreviewSticker(null)}
+          >
+            <div className="absolute top-6 right-6 flex items-center gap-4">
+              <span className="text-white/40 font-mono text-xs uppercase tracking-[0.3em] font-black">{previewSticker.title}</span>
+              <button className="p-3 bg-white/10 hover:bg-white/20 text-white rounded-full transition-all">
+                <X size={24} />
+              </button>
+            </div>
+            <div className="relative group max-w-[90vw] max-h-[90vh]">
+              <img
+                src={previewSticker.url}
+                alt=""
+                className="max-w-full max-h-[80vh] object-contain drop-shadow-[0_0_50px_rgba(0,168,132,0.3)] animate-in zoom-in-90 duration-300"
+                onClick={(e) => e.stopPropagation()}
+              />
+              <div className="absolute -bottom-12 left-1/2 -translate-x-1/2 text-primary font-black text-sm tracking-widest uppercase opacity-0 group-hover:opacity-100 transition-opacity">
+                STICKER ÖNİZLEME
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )
+      }
 
     </div >
-  );
-}
-
-// Components
-function StatCard({ label, value, color }: { label: string, value: number, color: 'primary' | 'accent' }) {
-  return (
-    <div className="bg-card px-5 py-3 rounded-2xl border border-white/5 flex flex-col min-w-[100px]">
-      <span className="text-[10px] font-bold text-textSec uppercase tracking-widest mb-1">{label}</span>
-      <span className={cn("text-2xl font-black", color === 'primary' ? 'text-primary' : 'text-accent')}>
-        {(value || 0).toLocaleString()}
-      </span>
-    </div>
-  );
-}
-
-function Modal({ show, onClose, title, children }: { show: boolean, onClose: () => void, title: string, children: React.ReactNode }) {
-  if (!show) return null;
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-md animate-in fade-in duration-200" onClick={onClose}>
-      <div
-        onClick={(e) => e.stopPropagation()}
-        className="glass w-full max-w-2xl rounded-3xl overflow-hidden animate-in zoom-in-95 duration-200 shadow-[0_0_100px_rgba(0,168,132,0.1)]"
-      >
-        <div className="px-8 py-6 border-b border-white/5 flex items-center justify-between bg-card/50">
-          <h3 className="text-xl font-black tracking-tight text-white">{title}</h3>
-          <button onClick={onClose} className="p-2 hover:bg-hover rounded-xl transition-all">
-            <X size={20} className="text-textSec" />
-          </button>
-        </div>
-        <div className="p-8 max-h-[80vh] overflow-y-auto custom-scrollbar bg-background/50">
-          {children}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function Input({ label, ...props }: any) {
-  return (
-    <div className="space-y-2">
-      <label className="text-[10px] font-black text-textSec uppercase tracking-widest px-1">{label}</label>
-      <input
-        className="w-full bg-hover border-transparent border focus:border-primary/50 rounded-xl px-4 py-3 outline-none transition-all placeholder:text-textSec/30 text-white"
-        {...props}
-      />
-    </div>
   );
 }
 

@@ -91,11 +91,19 @@ object StickerRepository {
 
             val result = shufflePacks(allPacks)
             allPacksCache = result // Statik cache'i güncelle
+            saveCacheToDisk(context, result) // Diske kaydet (Provider için)
             return@withContext result
 
         } catch (e: Exception) {
             Log.e(TAG, "Error loading packs: ${e.message}")
-            // Hata durumunda lokal assets'ten yükle
+            // Hata durumunda disk cache'ini dene
+            val diskCache = loadCacheFromDisk(context)
+            if (diskCache.isNotEmpty()) {
+                allPacksCache = diskCache
+                return@withContext diskCache
+            }
+            
+            // Disk de boşsa lokal assets'ten yükle
             val localPacks = try {
                 Loader.load(context) ?: emptyList()
             } catch (ex: Exception) {
@@ -104,6 +112,28 @@ object StickerRepository {
             val result = shufflePacks(localPacks + allPacks)
             allPacksCache = result // Statik cache'i güncelle
             return@withContext result
+        }
+    }
+
+    fun saveCacheToDisk(context: Context, packs: List<Pack>) {
+        try {
+            val file = File(context.filesDir, "packs_cache.json")
+            file.writeText(Gson().toJson(packs))
+        } catch (e: Exception) {
+            Log.e(TAG, "Error saving cache to disk: ${e.message}")
+        }
+    }
+
+    fun loadCacheFromDisk(context: Context): List<Pack> {
+        return try {
+            val file = File(context.filesDir, "packs_cache.json")
+            if (file.exists()) {
+                val json = file.readText()
+                Gson().fromJson(json, Array<Pack>::class.java).toList()
+            } else emptyList()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error loading cache from disk: ${e.message}")
+            emptyList()
         }
     }
 
@@ -240,9 +270,13 @@ object StickerRepository {
             }
 
             // WhatsApp zorunlu alanlar için varsayılan değerler
-            val publisher = (data["publisher"] as? String).takeIf { !it.isNullOrBlank() } ?: "Sticly"
-            val email = (data["publisher_email"] as? String).takeIf { !it.isNullOrBlank() } ?: "contact@sticly.com"
-            val privacy = (data["privacy_policy_website"] as? String).takeIf { !it.isNullOrBlank() } ?: "https://sticly.com/privacy"
+            val publisher = (data["publisher"] as? String).takeIf { !it.isNullOrBlank() } ?: "Sticky"
+            val email = (data["publisher_email"] as? String).takeIf { !it.isNullOrBlank() } ?: "contact@sticky.com"
+            val privacy = (data["privacy_policy_website"] as? String).takeIf { !it.isNullOrBlank() } ?: "https://sticky.com/privacy"
+
+            val translations = data.filterKeys { it.startsWith("name_") }
+                .mapValues { it.value?.toString() ?: "" }
+                .mapKeys { it.key.substringAfter("name_") }
 
             Pack(
                 id = doc.id,
@@ -253,6 +287,7 @@ object StickerRepository {
                 nameAr = data["name_ar"] as? String ?: "",
                 nameHi = data["name_hi"] as? String ?: "",
                 namePt = data["name_pt"] as? String ?: "",
+                translations = translations,
                 pub = publisher,
                 email = email,
                 privacy = privacy,
@@ -447,6 +482,13 @@ object StickerRepository {
                         }
                     }
 
+                    // KRITIK: Reconstructed provider fallback için animated bilgisini işaretle
+                    if (pack.isAnimated) {
+                        try {
+                            File(File(context.cacheDir, "$CACHE_DIR/${pack.id}"), ".animated").createNewFile()
+                        } catch (_: Exception) {}
+                    }
+
                     // Hepsini bekle ve sonuçları kontrol et
                     val trayFile = trayJob.await()
                     val stickerFiles = stickerJobs.awaitAll()
@@ -516,12 +558,14 @@ object StickerRepository {
         val cacheDir = File(context.cacheDir, "$CACHE_DIR/${pack.id}")
         if (!cacheDir.exists()) return false
 
-        // Tray ve en az bir sticker var mı kontrol et
+        // Tray kontrolü
         val trayFile = File(cacheDir, pack.tray)
-        if (!trayFile.exists()) return false
+        if (!trayFile.exists() || trayFile.length() <= 0) return false
 
+        // Sticker kontrolü
         return pack.stickers.all { sticker ->
-            File(cacheDir, sticker.file).exists()
+            val f = File(cacheDir, sticker.file)
+            f.exists() && f.length() > 0
         }
     }
 
@@ -823,7 +867,11 @@ val Pack.localizedName: String
     get() {
         val locale = java.util.Locale.getDefault().language
         
-        // 1. Check for native language field matches first
+        // 1. Check dynamic translations map (Populated from Gemini)
+        val dynamicName = translations[locale]
+        if (!dynamicName.isNullOrBlank()) return dynamicName
+
+        // 2. Check legacy hardcoded fields
         when (locale) {
             "tr" -> if (nameTr.isNotBlank()) return nameTr
             "zh" -> if (nameZh.isNotBlank()) return nameZh
@@ -833,29 +881,18 @@ val Pack.localizedName: String
             "pt" -> if (namePt.isNotBlank()) return namePt
         }
         
-        // 2. If no native field, apply Global/Turkish logic
+        // 3. If no match, use primary name or English fallback
         return if (locale == "tr") {
             if (nameTr.isNotBlank()) nameTr else name
         } else {
             // ENGLISH/GLOBAL MODE (for en, zh, es, ar, hi, pt etc.)
             
-            // 1. First, try translating 'name' (Global name field)
-            val translatedName = TranslationHelper.translate(name)
-            if (translatedName != name) return translatedName
-            
-            // 2. If 'name' is English-like (no Turkish specific chars), trust it as English
+            // 1. Try name directly if it looks non-Turkish
             if (name.isNotBlank() && !isLikelyTurkish(name)) return name
             
-            // 3. If 'name' is Turkish-like, try 'nameTr' (Local name field)
+            // 2. Fallback to Turkish name if it looks like English (rare case)
             if (nameTr.isNotBlank() && !isLikelyTurkish(nameTr)) return nameTr
             
-            // 4. Try translating 'nameTr'
-            val translatedTr = TranslationHelper.translate(nameTr)
-            if (translatedTr != nameTr) return translatedTr
-            
-            // 5. Final attempt: Deep translation
-            val deep = TranslationHelper.translate(name)
-            if (deep != name) return deep
             
             // Fallback to name, then nameTr
             if (name.isNotBlank()) name else nameTr

@@ -10,6 +10,10 @@ class StickyApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        
+        // Karanlık temayı tamamen devre dışı bırak (Hep açık tema)
+        androidx.appcompat.app.AppCompatDelegate.setDefaultNightMode(androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_NO)
+
         // Reklam sistemini başlat
         try {
             android.util.Log.d("StickyApp", "Starting AdManager initialization...")
