@@ -7,7 +7,7 @@ import android.content.pm.PackageManager
 import android.graphics.*
 import android.net.Uri
 import android.os.Bundle
-import android.provider.MediaStore
+
 import android.view.LayoutInflater
 import android.view.View
 import android.view.MotionEvent
@@ -41,6 +41,8 @@ import java.util.*
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.*
 import com.bumptech.glide.Glide
+import android.media.ExifInterface
+import android.os.Build
 
 class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
 
@@ -393,11 +395,24 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
     }
 
     private fun startCropFromUri(uri: Uri) {
-        val cacheDir = File(cacheDir, "crop")
-        if (!cacheDir.exists()) cacheDir.mkdirs()
-        val destFile = File(cacheDir, "cropped_${System.currentTimeMillis()}.png")
+        val cropCacheDir = File(cacheDir, "crop")
+        if (!cropCacheDir.exists()) cropCacheDir.mkdirs()
+        val destFile = File(cropCacheDir, "cropped_${System.currentTimeMillis()}.png")
         val destUri = Uri.fromFile(destFile)
 
+        showLoading()
+        lifecycleScope.launch(Dispatchers.IO) {
+            // Fix EXIF orientation before passing to UCrop to prevent flipped images
+            val sourceUri = fixImageOrientation(uri, cropCacheDir)
+
+            withContext(Dispatchers.Main) {
+                hideLoading()
+                launchCrop(sourceUri, destUri)
+            }
+        }
+    }
+
+    private fun launchCrop(sourceUri: Uri, destUri: Uri) {
         val options = UCrop.Options().apply {
             setCompressionFormat(Bitmap.CompressFormat.PNG)
             setCompressionQuality(100)
@@ -409,16 +424,82 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
             setFreeStyleCropEnabled(true)
         }
 
-        val intent = UCrop.of(uri, destUri)
+        val intent = UCrop.of(sourceUri, destUri)
             .withOptions(options)
             .getIntent(this)
 
         cropLauncher.launch(intent)
     }
 
+    private fun fixImageOrientation(uri: Uri, cacheDir: File): Uri {
+        try {
+            val inputStream = contentResolver.openInputStream(uri) ?: return uri
+            val exif = ExifInterface(inputStream)
+            val orientation = exif.getAttributeInt(
+                ExifInterface.TAG_ORIENTATION,
+                ExifInterface.ORIENTATION_NORMAL
+            )
+            inputStream.close()
+
+            if (orientation == ExifInterface.ORIENTATION_NORMAL ||
+                orientation == ExifInterface.ORIENTATION_UNDEFINED) {
+                return uri
+            }
+
+            val bitmap = contentResolver.openInputStream(uri)?.use { stream ->
+                BitmapFactory.decodeStream(stream)
+            } ?: return uri
+
+            val matrix = Matrix()
+            when (orientation) {
+                ExifInterface.ORIENTATION_ROTATE_90 -> matrix.postRotate(90f)
+                ExifInterface.ORIENTATION_ROTATE_180 -> matrix.postRotate(180f)
+                ExifInterface.ORIENTATION_ROTATE_270 -> matrix.postRotate(270f)
+                ExifInterface.ORIENTATION_FLIP_HORIZONTAL -> matrix.postScale(-1f, 1f)
+                ExifInterface.ORIENTATION_FLIP_VERTICAL -> matrix.postScale(1f, -1f)
+                ExifInterface.ORIENTATION_TRANSPOSE -> {
+                    matrix.postRotate(90f)
+                    matrix.postScale(-1f, 1f)
+                }
+                ExifInterface.ORIENTATION_TRANSVERSE -> {
+                    matrix.postRotate(-90f)
+                    matrix.postScale(-1f, 1f)
+                }
+            }
+
+            val corrected = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+            if (corrected != bitmap) bitmap.recycle()
+
+            val correctedFile = File(cacheDir, "exif_corrected_${System.currentTimeMillis()}.jpg")
+            FileOutputStream(correctedFile).use { out ->
+                corrected.compress(Bitmap.CompressFormat.JPEG, 100, out)
+            }
+            corrected.recycle()
+
+            return Uri.fromFile(correctedFile)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            return uri
+        }
+    }
+
     private fun loadImageAfterCrop(uri: Uri) {
         try {
-            val bitmap = MediaStore.Images.Media.getBitmap(contentResolver, uri)
+            val bitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                val source = ImageDecoder.createSource(contentResolver, uri)
+                ImageDecoder.decodeBitmap(source) { decoder, _, _ ->
+                    decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
+                    decoder.isMutableRequired = true
+                }
+            } else {
+                contentResolver.openInputStream(uri)?.use { stream ->
+                    BitmapFactory.decodeStream(stream)
+                }
+            }
+            if (bitmap == null) {
+                Toast.makeText(this, getString(R.string.error_loading_image), Toast.LENGTH_SHORT).show()
+                return
+            }
             originalBitmap = bitmap
             currentBitmap = bitmap.copy(Bitmap.Config.ARGB_8888, true)
             backgroundRemoved = false
