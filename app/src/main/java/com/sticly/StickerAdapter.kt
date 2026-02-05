@@ -117,8 +117,8 @@ class StickerAdapter(
                 if (customFile.exists()) {
                     glide.load(customFile)
                         .signature(ObjectKey(customFile.lastModified()))
-                        .diskCacheStrategy(DiskCacheStrategy.NONE)
                         .placeholder(R.drawable.sticker_placeholder)
+                        .error(R.drawable.sticker_placeholder)
                         .into(h.img)
                 } else {
                     h.img.setImageResource(R.drawable.sticker_placeholder)
@@ -128,57 +128,39 @@ class StickerAdapter(
             cachedFile.exists() && cachedFile.length() > 0 -> {
                 glide.load(cachedFile)
                     .signature(ObjectKey(cachedFile.lastModified()))
-                    .diskCacheStrategy(DiskCacheStrategy.NONE)
                     .placeholder(R.drawable.sticker_placeholder)
+                    .error(R.drawable.sticker_placeholder)
                     .into(h.img)
             }
             // 2. Firebase URL varsa oradan yükle
             sticker.url.isNotEmpty() -> {
-                // Önce küçük thumbnail yükle (hızlı), sonra tam kalite
                 glide.load(sticker.url)
-                    .thumbnail(
-                        glide.load(sticker.url)
-                            .override(64, 64)
-                            .diskCacheStrategy(DiskCacheStrategy.DATA)
-                    )
                     .placeholder(R.drawable.sticker_placeholder)
                     .error(R.drawable.sticker_placeholder)
-                    .diskCacheStrategy(DiskCacheStrategy.ALL)
+                    .diskCacheStrategy(DiskCacheStrategy.DATA) // Match preload strategy & support animations
                     .override(256, 256)
                     .into(h.img)
             }
             // 3. URL yoksa direkt storage URL hesapla ve yükle
             storagePath.isNotEmpty() -> {
                 val directUrl = StickerRepository.getStickerDirectUrl(packId, sticker.file, storagePath)
-                // Önce küçük thumbnail yükle (hızlı), sonra tam kalite
                 glide.load(directUrl)
-                    .thumbnail(
-                        glide.load(directUrl)
-                            .override(64, 64)
-                            .diskCacheStrategy(DiskCacheStrategy.DATA)
-                    )
                     .placeholder(R.drawable.sticker_placeholder)
                     .error(R.drawable.sticker_placeholder)
-                    .diskCacheStrategy(DiskCacheStrategy.ALL)
+                    .diskCacheStrategy(DiskCacheStrategy.DATA)
                     .override(256, 256)
                     .into(h.img)
             }
             // 4. Lokal assets'ten yükle
             else -> {
-                try {
-                    val path = "$packId/${sticker.file}"
-                    val stream = context.assets.open(path)
-                    val bitmap = BitmapFactory.decodeStream(stream)
-                    stream.close()
-
-                    glide.load(bitmap)
-                        .placeholder(R.drawable.sticker_placeholder)
-                        .diskCacheStrategy(DiskCacheStrategy.NONE)
-                        .into(h.img)
-                } catch (e: Exception) {
-                    // Assets'te yok - placeholder göster
-                    h.img.setImageResource(R.drawable.sticker_placeholder)
-                }
+                val assetPath = "file:///android_asset/$packId/${sticker.file}"
+                android.util.Log.d("StickerAdapter", "Loading asset: $assetPath")
+                glide.load(android.net.Uri.parse(assetPath))
+                    .placeholder(R.drawable.sticker_placeholder)
+                    .error(R.drawable.sticker_placeholder)
+                    // DiskCacheStrategy.DATA keeps the original data (webp), helpful for animations
+                    .diskCacheStrategy(DiskCacheStrategy.DATA)
+                    .into(h.img)
             }
         }
     }

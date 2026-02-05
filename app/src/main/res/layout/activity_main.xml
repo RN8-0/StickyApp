@@ -102,9 +102,9 @@
                 <EditText
                     android:id="@+id/searchBox"
                     android:layout_width="0dp"
-                    android:layout_height="44dp"
+                    android:layout_height="48dp"
                     android:layout_weight="1"
-                    android:background="@drawable/search_bg"
+                    android:background="@drawable/search_bg_modern"
                     android:drawableStart="@drawable/ic_search"
                     android:drawablePadding="12dp"
                     android:hint="@string/search_hint"
@@ -114,32 +114,35 @@
                     android:paddingHorizontal="16dp"
                     android:textSize="14sp"
                     android:maxLines="1"
-                    android:imeOptions="actionSearch" />
+                    android:imeOptions="actionSearch"
+                    android:elevation="2dp" />
 
                 <ImageButton
                     android:id="@+id/btnFilter"
-                    android:layout_width="44dp"
-                    android:layout_height="44dp"
-                    android:layout_marginStart="12dp"
-                    android:background="@drawable/search_bg"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:layout_marginStart="8dp"
+                    android:background="@drawable/btn_circle_white"
                     android:src="@drawable/ic_filter"
-                    app:tint="@color/text_secondary"
+                    app:tint="@color/accent"
                     android:padding="12dp"
                     android:scaleType="fitCenter"
+                    android:elevation="2dp"
+                    android:visibility="gone"
                     android:contentDescription="@string/filter" />
 
                 <ImageButton
                     android:id="@+id/btnAddStickerHeader"
-                    android:layout_width="44dp"
-                    android:layout_height="44dp"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
                     android:layout_marginStart="8dp"
-                    android:background="@drawable/search_bg"
+                    android:background="@drawable/btn_circle_accent"
                     android:src="@drawable/ic_add"
-                    app:tint="@color/accent"
-                    android:padding="10dp"
+                    app:tint="@color/white"
+                    android:padding="12dp"
                     android:scaleType="fitCenter"
-                    android:contentDescription="@string/create_sticker_option"
-                    android:visibility="gone" />
+                    android:elevation="4dp"
+                    android:contentDescription="@string/create_sticker_option" />
             </LinearLayout>
 
             <!-- Content Container -->
@@ -276,32 +279,67 @@
                     android:gravity="center"
                     android:orientation="vertical"
                     android:visibility="gone"
-                    android:padding="32dp">
+                    android:padding="48dp">
 
-                    <ImageView
-                        android:layout_width="120dp"
-                        android:layout_height="120dp"
-                        android:src="@drawable/ic_sticker"
-                        app:tint="@color/text_secondary"
-                        android:alpha="0.5" />
+                    <!-- Modern Icon Container -->
+                    <FrameLayout
+                        android:layout_width="140dp"
+                        android:layout_height="140dp"
+                        android:layout_gravity="center">
+
+                        <View
+                            android:layout_width="140dp"
+                            android:layout_height="140dp"
+                            android:background="@drawable/empty_state_circle_bg"
+                            android:alpha="0.15" />
+
+                        <View
+                            android:layout_width="100dp"
+                            android:layout_height="100dp"
+                            android:layout_gravity="center"
+                            android:background="@drawable/empty_state_circle_bg"
+                            android:alpha="0.25" />
+
+                        <ImageView
+                            android:id="@+id/emptyStateIcon"
+                            android:layout_width="60dp"
+                            android:layout_height="60dp"
+                            android:layout_gravity="center"
+                            android:src="@drawable/ic_sticker"
+                            app:tint="@color/accent" />
+
+                    </FrameLayout>
 
                     <TextView
-                        android:layout_width="wrap_content"
+                        android:id="@+id/emptyStateText"
+                        android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="16dp"
+                        android:layout_marginTop="32dp"
                         android:text="@string/no_custom_packs"
-                        android:textColor="@color/text_secondary"
+                        android:textColor="@color/text_primary"
                         android:textSize="18sp"
-                        android:textAlignment="center" />
-                        
+                        android:textStyle="bold"
+                        android:gravity="center"
+                        android:textAlignment="center"
+                        android:lineSpacingExtra="4dp" />
+
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btnCreateFirstSticker"
                         android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="24dp"
+                        android:layout_height="56dp"
+                        android:layout_marginTop="32dp"
+                        android:paddingHorizontal="32dp"
                         android:text="@string/create_sticker_option"
+                        android:textSize="14sp"
+                        android:textStyle="bold"
+                        android:textAllCaps="false"
                         app:icon="@drawable/ic_add"
-                        style="@style/Widget.MaterialComponents.Button.Icon" />
+                        app:iconGravity="textStart"
+                        app:iconPadding="8dp"
+                        app:cornerRadius="28dp"
+                        app:backgroundTint="@color/accent"
+                        android:textColor="@color/white"
+                        app:elevation="8dp" />
 
                 </LinearLayout>
 

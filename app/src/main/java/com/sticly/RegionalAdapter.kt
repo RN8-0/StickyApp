@@ -98,8 +98,8 @@ class RegionalAdapter(
         if (isInstalled) {
             btnAdd.text = ""
             btnAdd.setIconResource(R.drawable.ic_share)
-            btnAdd.iconTint = androidx.core.content.ContextCompat.getColorStateList(context, R.color.white)
-            btnAdd.background = androidx.core.content.ContextCompat.getDrawable(context, R.drawable.bg_gradient_share)
+            btnAdd.iconTint = androidx.core.content.ContextCompat.getColorStateList(context, R.color.share_blue)
+            btnAdd.background = null
             btnAdd.backgroundTintList = null
             btnAdd.iconPadding = 0
             val params = btnAdd.layoutParams

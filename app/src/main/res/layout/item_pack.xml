@@ -7,8 +7,8 @@
     android:layout_height="wrap_content"
     android:orientation="vertical"
     android:paddingHorizontal="8dp"
-    android:paddingTop="12dp"
-    android:paddingBottom="8dp"
+    android:paddingTop="8dp"
+    android:paddingBottom="6dp"
     android:background="?selectableItemBackground">
 
     <!-- Üst Bilgi Satırı -->
@@ -53,7 +53,7 @@
                 android:id="@+id/name"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:textSize="15sp"
+                android:textSize="14sp"
                 android:textStyle="bold"
                 android:textColor="@color/text_primary"
                 android:maxLines="1"
@@ -135,7 +135,7 @@
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="2dp"
+        android:layout_marginTop="1dp"
         android:orientation="horizontal"
         android:gravity="center_vertical">
 
@@ -144,7 +144,7 @@
             android:id="@+id/pub"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:textSize="12sp"
+            android:textSize="11sp"
             android:textColor="@color/text_secondary"
             android:maxLines="1"
             android:ellipsize="end"
@@ -154,9 +154,9 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginHorizontal="6dp"
+            android:layout_marginHorizontal="5dp"
             android:text="•"
-            android:textSize="12sp"
+            android:textSize="11sp"
             android:textColor="@color/text_hint" />
 
         <!-- İndirme sayısı -->
@@ -164,7 +164,7 @@
             android:id="@+id/downloadCount"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:textSize="12sp"
+            android:textSize="11sp"
             android:textColor="@color/text_hint"
             tools:text="13.6K indirme" />
 
@@ -219,9 +219,10 @@
 
     <!-- Çıkartma Önizlemeleri -->
     <HorizontalScrollView
+        android:id="@+id/stickerScrollView"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="10dp"
+        android:layout_marginTop="6dp"
         android:scrollbars="none"
         android:clipToPadding="false"
         android:fillViewport="true"
@@ -232,7 +233,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:paddingStart="8dp"
+            android:paddingStart="2dp"
             android:paddingEnd="8dp"
             android:gravity="start|center_vertical" />
 

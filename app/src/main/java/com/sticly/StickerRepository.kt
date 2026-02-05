@@ -649,8 +649,15 @@ object StickerRepository {
 
     /**
      * Paket görüntülenme sayısını artır
+     * NOT: Custom (yerel) paketler için istatistik tutulmaz
      */
     fun incrementViewCount(packId: String, isPremium: Boolean) {
+        // Custom paketler için istatistik tutma - sadece yerel cihazda kalmalı
+        if (packId.startsWith("custom_")) {
+            Log.d(TAG, "Skipping view count for custom pack: $packId")
+            return
+        }
+
         try {
             val collection = if (isPremium) "premium_stickers" else "stickers"
             val docRef = firestore.collection(collection).document(packId)
@@ -675,8 +682,15 @@ object StickerRepository {
 
     /**
      * Paket indirme (WhatsApp'a ekleme) sayısını artır
+     * NOT: Custom (yerel) paketler için istatistik tutulmaz
      */
     fun incrementDownloadCount(packId: String, isPremium: Boolean) {
+        // Custom paketler için istatistik tutma - sadece yerel cihazda kalmalı
+        if (packId.startsWith("custom_")) {
+            Log.d(TAG, "Skipping download count for custom pack: $packId")
+            return
+        }
+
         try {
             val collection = if (isPremium) "premium_stickers" else "stickers"
             val docRef = firestore.collection(collection).document(packId)
@@ -699,8 +713,15 @@ object StickerRepository {
 
     /**
      * Paket favori sayısını artır
+     * NOT: Custom (yerel) paketler için istatistik tutulmaz
      */
     fun incrementFavoriteCount(packId: String, isPremium: Boolean) {
+        // Custom paketler için istatistik tutma - sadece yerel cihazda kalmalı
+        if (packId.startsWith("custom_")) {
+            Log.d(TAG, "Skipping favorite count for custom pack: $packId")
+            return
+        }
+
         try {
             val collection = if (isPremium) "premium_stickers" else "stickers"
             val docRef = firestore.collection(collection).document(packId)
@@ -723,8 +744,15 @@ object StickerRepository {
 
     /**
      * Paket favori sayısını azalt
+     * NOT: Custom (yerel) paketler için istatistik tutulmaz
      */
     fun decrementFavoriteCount(packId: String, isPremium: Boolean) {
+        // Custom paketler için istatistik tutma - sadece yerel cihazda kalmalı
+        if (packId.startsWith("custom_")) {
+            Log.d(TAG, "Skipping favorite decrement for custom pack: $packId")
+            return
+        }
+
         try {
             val collection = if (isPremium) "premium_stickers" else "stickers"
             val docRef = firestore.collection(collection).document(packId)

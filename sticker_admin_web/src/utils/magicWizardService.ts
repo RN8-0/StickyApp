@@ -61,16 +61,22 @@ export const magicWizardService = {
         }
     },
 
-    async generatePackMetadata(topic: string, existingNames: string[]) {
+    async generatePackMetadata(topic: string, existingNames: string[], avoidName?: string) {
         try {
             const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+            let excludedNames = existingNames.slice(-40);
+            if (avoidName) {
+                excludedNames.push(avoidName);
+            }
+
             const prompt = `Create professional sticker pack metadata for: "${topic}".
       1. Very creative English title (max 3 words) + 1-2 cool emojis.
       2. Turkish translation for internal display.
       3. One specific and effective keyword for GIF search in English.
       4. Best category from: humor, love, religious, entertainment, background, morning, night, birthday, congrats, animals, sports, gaming, movie, music, food, emoji, cars, motivation, cute, text, anime, memes, nature, other.
       
-      CRITICAL: English title MUST NOT be in: [${existingNames.slice(-40).join(', ')}].
+      CRITICAL: English title MUST NOT be in: [${excludedNames.join(', ')}].
       Make the English name unique and appealing for global users.
       
       Return ONLY a JSON object:
@@ -108,7 +114,8 @@ export const magicWizardService = {
     async searchGifs(query: string, page: number = 0, limit: number = 30): Promise<GifResult[]> {
         try {
             const offset = page * limit;
-            const url = `https://api.giphy.com/v1/gifs/search?api_key=${GIPHY_KEY}&q=${encodeURIComponent(query)}&limit=${limit}&offset=${offset}&rating=g&lang=tr`;
+            // Changed from 'gifs' to 'stickers' to return transparent stickers
+            const url = `https://api.giphy.com/v1/stickers/search?api_key=${GIPHY_KEY}&q=${encodeURIComponent(query)}&limit=${limit}&offset=${offset}&rating=pg-13&lang=tr`;
             const response = await fetch(url).catch(() => null);
             if (!response) return [];
 

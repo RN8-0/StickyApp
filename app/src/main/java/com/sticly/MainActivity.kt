@@ -209,8 +209,7 @@ class MainActivity : AppCompatActivity() {
         textFavorites = findViewById(R.id.textFavorites)
         textMyStickers = findViewById(R.id.textMyStickers)
 
-        swipeRefresh.setColorSchemeResources(R.color.accent)
-        swipeRefresh.setOnRefreshListener { refreshPacks() }
+        swipeRefresh.isEnabled = false
 
         rv.layoutManager = LinearLayoutManager(this)
         rv.setItemViewCacheSize(30)
@@ -307,7 +306,7 @@ class MainActivity : AppCompatActivity() {
                 menuBtn.setImageResource(R.drawable.ic_menu)
                 toolbarSubtitle.visibility = View.VISIBLE
                 toolbarSubtitle.text = getString(R.string.filter_favorites)
-                btnFilter.visibility = View.INVISIBLE
+                btnFilter.visibility = View.GONE
                 categoryChipGroup.visibility = View.GONE
                 regionalPopularContainer.visibility = View.GONE
             }
@@ -318,7 +317,7 @@ class MainActivity : AppCompatActivity() {
                 menuBtn.setImageResource(R.drawable.ic_menu)
                 toolbarSubtitle.visibility = View.VISIBLE
                 toolbarSubtitle.text = getString(R.string.your_stickers)
-                btnFilter.visibility = View.INVISIBLE
+                btnFilter.visibility = View.GONE
                 categoryChipGroup.visibility = View.GONE
                 regionalPopularContainer.visibility = View.GONE
                 btnAddStickerHeader.visibility = View.VISIBLE
@@ -714,9 +713,7 @@ class MainActivity : AppCompatActivity() {
                 mainContent.alpha = 0f
                 mainContent.animate().alpha(1f).setDuration(200).start()
                 
-                // SwipeRefresh da aktif olsun
                 swipeRefresh.visibility = View.VISIBLE
-                swipeRefresh.isRefreshing = false
             }
             .start()
     }
@@ -734,9 +731,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun refreshPacks() {
-        swipeRefresh.isRefreshing = true
         loadPacksFromFirebase(forceRefresh = true)
-        swipeRefresh.postDelayed({ swipeRefresh.isRefreshing = false }, 1000)
     }
 
     enum class FilterType { ALL, INSTALLED, PREMIUM, FAVORITES, PURCHASED, CUSTOM }
@@ -774,14 +769,12 @@ class MainActivity : AppCompatActivity() {
 
             // Profesyonel Sıralama Algoritması
             val currentTime = System.currentTimeMillis()
-            val sorted = filtered.sortedByDescending { pack ->
+            fun rankScore(pack: Pack): Double {
                 val downloads = pack.downloadCount.toDouble()
                 val views = pack.viewCount.toDouble()
                 val favorites = pack.favoriteCount.toDouble()
-                
                 val cvr = if (views > 0) downloads / views else 0.0
                 val engagementScore = downloads + (favorites * 5.0)
-                
                 var freshnessMultiplier = 1.0
                 if (pack.createdAt.isNotEmpty()) {
                     try {
@@ -789,12 +782,41 @@ class MainActivity : AppCompatActivity() {
                         val createdDate = format.parse(pack.createdAt)
                         if (createdDate != null) {
                             val diffDays = java.util.concurrent.TimeUnit.MILLISECONDS.toDays(currentTime - createdDate.time)
-                            if (diffDays <= 7) freshnessMultiplier = 3.5 
+                            if (diffDays <= 7) freshnessMultiplier = 3.5
                         }
                     } catch (e: Exception) {}
                 }
-                
-                (engagementScore * (1.0 + cvr)) * freshnessMultiplier
+                return (engagementScore * (1.0 + cvr)) * freshnessMultiplier
+            }
+
+            // Premium paketleri ayır ve her 2-4 pakette bir araya serpiştir
+            val sorted = if (currentFilter == FilterType.ALL) {
+                val freePacks = filtered.filter { !it.isPremium }.sortedByDescending { rankScore(it) }
+                val premiumPacks = filtered.filter { it.isPremium }.sortedByDescending { rankScore(it) }.toMutableList()
+                premiumPacks.shuffle() // Her yenilemede farklı sıra
+
+                val merged = mutableListOf<Pack>()
+                var freeIndex = 0
+                var premiumIndex = 0
+                var nextPremiumGap = (2..4).random()
+                var sinceLastPremium = 0
+
+                while (freeIndex < freePacks.size || premiumIndex < premiumPacks.size) {
+                    if (premiumIndex < premiumPacks.size && sinceLastPremium >= nextPremiumGap) {
+                        merged.add(premiumPacks[premiumIndex++])
+                        nextPremiumGap = (2..4).random()
+                        sinceLastPremium = 0
+                    } else if (freeIndex < freePacks.size) {
+                        merged.add(freePacks[freeIndex++])
+                        sinceLastPremium++
+                    } else {
+                        // Kalan premium paketleri ekle
+                        merged.add(premiumPacks[premiumIndex++])
+                    }
+                }
+                merged
+            } else {
+                filtered.sortedByDescending { rankScore(it) }
             }
 
             // Reklamları listeye enjekte et
@@ -834,9 +856,28 @@ class MainActivity : AppCompatActivity() {
             }
 
             withContext(Dispatchers.Main) {
-                if (currentFilter == FilterType.CUSTOM && sorted.isEmpty()) {
-                    rv.visibility = View.GONE
-                    emptyStateView.visibility = View.VISIBLE
+                if (sorted.isEmpty()) {
+                    if (currentFilter == FilterType.CUSTOM) {
+                        rv.visibility = View.GONE
+                        emptyStateView.visibility = View.VISIBLE
+                        findViewById<TextView>(R.id.emptyStateText).setText(R.string.no_custom_packs)
+                        btnCreateFirstSticker.visibility = View.VISIBLE
+                    } else if (currentFilter == FilterType.FAVORITES) {
+                        rv.visibility = View.GONE
+                        emptyStateView.visibility = View.VISIBLE
+                        findViewById<TextView>(R.id.emptyStateText).setText(R.string.no_favorites_yet)
+                        btnCreateFirstSticker.visibility = View.GONE
+                    } else if (currentFilter == FilterType.INSTALLED) {
+                        // Installed but empty?
+                        rv.visibility = View.VISIBLE
+                        emptyStateView.visibility = View.GONE
+                        adapter.updateList(itemsWithAds)
+                    } else {
+                         // Default empty handling
+                        rv.visibility = View.VISIBLE
+                        emptyStateView.visibility = View.GONE
+                        adapter.updateList(itemsWithAds)
+                    }
                 } else {
                     rv.visibility = View.VISIBLE
                     emptyStateView.visibility = View.GONE

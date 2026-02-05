@@ -173,7 +173,7 @@ function App() {
   const [selectedPack, setSelectedPack] = useState<StickerPack | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState<'dashboard' | 'stats' | 'messages' | 'notifications' | 'magic-wizard'>('dashboard');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'passive' | 'premium' | 'normal' | 'new'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'passive' | 'premium' | 'normal' | 'animated' | 'static' | 'new'>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [statsFilter, setStatsFilter] = useState<'all' | 'active' | 'passive' | 'premium' | 'normal'>('all');
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
@@ -542,7 +542,7 @@ function App() {
     setWizardLoading(true);
     try {
       const existingNames = packs.map(p => p.name);
-      const meta = await magicWizardService.generatePackMetadata(wizardSearchQuery, existingNames);
+      const meta = await magicWizardService.generatePackMetadata(wizardSearchQuery, existingNames, wizardMetadata.name);
       if (meta) {
         setWizardMetadata(meta);
       }
@@ -1100,7 +1100,33 @@ function App() {
 
         let processedBlob: Blob;
         const isAnimatedPack = selectedPack.is_animated ?? false;
-        if (isAnimatedPack) {
+        const isWebP = file.type === 'image/webp' || file.name.toLowerCase().endsWith('.webp');
+
+        // WebP dosyalarını da işle (WhatsApp koşullarına uygun hale getir)
+        if (isWebP) {
+          // Animasyonlu WebP mi kontrol et
+          const isAnimatedWebP = await stickerProcessor.isAnimatedWebP(file);
+
+          if (isAnimatedPack && isAnimatedWebP) {
+            // Animasyonlu paket + Animasyonlu WebP
+            processedBlob = await stickerProcessor.processAnimatedWebP(file, (p) => {
+              setUploadProgress(prev => prev ? { ...prev, message: `${file.name}: ${p.message}` } : null);
+            });
+          } else if (isAnimatedPack && !isAnimatedWebP) {
+            // Animasyonlu pakete statik WebP eklenemez
+            alert(`Hata: Bu paket hareketli bir pakettir. "${file.name}" statik bir WebP dosyasıdır.`);
+            continue;
+          } else if (!isAnimatedPack && isAnimatedWebP) {
+            // Statik pakete animasyonlu WebP eklenemez
+            alert(`Hata: Bu paket statik bir pakettir. "${file.name}" animasyonlu bir WebP dosyasıdır.`);
+            continue;
+          } else {
+            // Statik paket + Statik WebP
+            processedBlob = await stickerProcessor.processStaticWebP(file, (p) => {
+              setUploadProgress(prev => prev ? { ...prev, message: `${file.name}: ${p.message}` } : null);
+            });
+          }
+        } else if (isAnimatedPack) {
           processedBlob = await stickerProcessor.processAnimated(file, (p) => {
             setUploadProgress(prev => prev ? { ...prev, message: `${file.name}: ${p.message}` } : null);
           });
@@ -1503,6 +1529,8 @@ function App() {
     if (statusFilter === 'passive') return p.is_active === false;
     if (statusFilter === 'premium') return p.is_premium === true;
     if (statusFilter === 'normal') return p.is_premium === false;
+    if (statusFilter === 'animated') return p.is_animated === true;
+    if (statusFilter === 'static') return p.is_animated !== true;
     if (statusFilter === 'new') return isNew(p);
     return true;
   });
@@ -1747,6 +1775,8 @@ function App() {
                               { id: 'passive', label: 'Pasif Paketler', icon: X },
                               { id: 'premium', label: 'Premium Paketler', icon: DollarSign },
                               { id: 'normal', label: 'Normal Paketler', icon: Package },
+                              { id: 'animated', label: 'Hareketli Paketler', icon: RefreshCcw },
+                              { id: 'static', label: 'Statik Paketler', icon: ImageIcon },
                               { id: 'new', label: 'Yeni Eklenenler', icon: Clock }
                             ].map(f => (
                               <button
@@ -3392,13 +3422,23 @@ function App() {
 
 
 
-          <div className="bg-primary/5 border border-primary/20 p-4 rounded-xl flex items-center gap-3">
-            <RefreshCcw className="text-primary animate-spin" size={20} />
-            <span className="text-xs text-textMain/70 font-bold uppercase">HAREKETLİ PAKET MODALI AKTİF</span>
+          <div className="flex bg-hover rounded-xl p-1 gap-1">
+            <button
+              onClick={() => setNewPackData({ ...newPackData, is_animated: false })}
+              className={cn("flex-1 py-2 rounded-lg text-[10px] font-black transition-all", !newPackData.is_animated ? "bg-blue-500 text-white" : "text-textSec")}
+            >STATİK PAKET</button>
+            <button
+              onClick={() => setNewPackData({ ...newPackData, is_animated: true })}
+              className={cn("flex-1 py-2 rounded-lg text-[10px] font-black transition-all", newPackData.is_animated ? "bg-purple-500 text-white" : "text-textSec")}
+            >HAREKETLİ PAKET</button>
           </div>
           <div className="bg-primary/5 border border-primary/20 p-4 rounded-xl flex items-center gap-3">
             <Info className="text-primary" size={20} />
-            <span className="text-xs text-textMain/70 uppercase font-bold">Yeni paket oluşturduktan sonra video ekleme paneli açılacaktır.</span>
+            <span className="text-xs text-textMain/70 uppercase font-bold">
+              {newPackData.is_animated
+                ? "Hareketli paket: GIF, Video ve Animasyonlu WebP destekler"
+                : "Statik paket: PNG, JPG ve Statik WebP destekler"}
+            </span>
           </div>
           <button
             onClick={handleCreatePack}

@@ -271,7 +271,9 @@
     <string name="btn_add_short">Add</string>
     <string name="btn_share_short">Share</string>
     <string name="download_label">downloads</string>
-    <string name="no_custom_packs">You don\'t have any sticker packs yet. Create one now!</string>
+    <string name="no_custom_packs">No Sticker Packs Yet</string>
+    <string name="empty_state_subtitle">Create your first sticker pack and express yourself!</string>
+    <string name="no_favorites_yet">You haven\'t added any favorites yet.</string>
     <string name="pack_deleted_whatsapp_sync">Pack deleted and WhatsApp sync triggered. It may take a few seconds.</string>
     <string name="pack_delete_failed">Pack could not be deleted</string>
     <string name="static_sticker">Static Sticker</string>

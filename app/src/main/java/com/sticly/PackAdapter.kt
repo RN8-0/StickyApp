@@ -64,6 +64,7 @@ class PackAdapter(
         val timeAgo: TextView = v.findViewById(R.id.timeAgo)
         val btnAdd: MaterialButton = v.findViewById(R.id.btnAdd)
         val stickerPreviewContainer: LinearLayout = v.findViewById(R.id.stickerPreviewContainer)
+        val stickerScrollView: android.widget.HorizontalScrollView = v.findViewById(R.id.stickerScrollView)
     }
 
     class AdVH(v: View) : RecyclerView.ViewHolder(v) {
@@ -164,14 +165,14 @@ class PackAdapter(
         if (isInstalled) {
             h.btnAdd.text = ""
             h.btnAdd.setIconResource(R.drawable.ic_share)
-            h.btnAdd.iconTint = androidx.core.content.ContextCompat.getColorStateList(context, R.color.white)
-            h.btnAdd.background = androidx.core.content.ContextCompat.getDrawable(context, R.drawable.bg_gradient_share)
-            h.btnAdd.backgroundTintList = null 
+            h.btnAdd.iconTint = androidx.core.content.ContextCompat.getColorStateList(context, R.color.share_blue)
+            h.btnAdd.background = null
+            h.btnAdd.backgroundTintList = null
             h.btnAdd.iconPadding = 0
-            h.btnAdd.iconGravity = com.google.android.material.button.MaterialButton.ICON_GRAVITY_TEXT_START // text boş olduğu için ortalanır
+            h.btnAdd.iconGravity = com.google.android.material.button.MaterialButton.ICON_GRAVITY_TEXT_START
             h.btnAdd.minWidth = 0
-            h.btnAdd.layoutParams.width = (40 * context.resources.displayMetrics.density).toInt()
-            h.btnAdd.layoutParams.height = (40 * context.resources.displayMetrics.density).toInt()
+            h.btnAdd.layoutParams.width = (36 * context.resources.displayMetrics.density).toInt()
+            h.btnAdd.layoutParams.height = (36 * context.resources.displayMetrics.density).toInt()
         } else {
             h.btnAdd.text = context.getString(R.string.btn_add_short)
             h.btnAdd.setIconResource(R.drawable.ic_whatsapp_small)
@@ -254,9 +255,9 @@ class PackAdapter(
         container.removeAllViews()
 
         val displayMetrics = context.resources.displayMetrics
-        // Çıkartma boyutunu büyütüyoruz (100dp -> 120dp)
-        val stickerSize = (120 * displayMetrics.density).toInt()
-        val stickerMargin = (8 * displayMetrics.density).toInt()
+        // Çıkartma boyutu (90dp - daha kompakt)
+        val stickerSize = (90 * displayMetrics.density).toInt()
+        val stickerMargin = (6 * displayMetrics.density).toInt()
         
         // Netlik için Glide override boyutunu artırıyoruz
         val glideOverrideSize = (320 * displayMetrics.density).toInt() 
@@ -294,45 +295,51 @@ class PackAdapter(
                     previewView.setImageResource(R.drawable.ic_sticker_placeholder)
                 }
             } else {
-                when {
-                    sticker.url.isNotEmpty() -> {
-                        Glide.with(context)
-                            .load(sticker.url)
+                // Determine URL (Firestore packs might miss sticker.url but have storagePath)
+                var urlToLoad = sticker.url
+                if (urlToLoad.isEmpty() && pack.storagePath.isNotEmpty()) {
+                    urlToLoad = StickerRepository.getStickerDirectUrl(pack.id, sticker.file, pack.storagePath)
+                }
+
+                if (urlToLoad.isNotEmpty()) {
+                    // Load from URL (Firebase/Web)
+                    Glide.with(context)
+                        .load(urlToLoad)
+                        .override(glideOverrideSize)
+                        // .dontAnimate() REMOVED for animated previews in list
+                        .placeholder(R.drawable.ic_sticker_placeholder)
+                        .error(R.drawable.ic_sticker_placeholder)
+                        .diskCacheStrategy(DiskCacheStrategy.DATA)
+                        .into(previewView)
+                } else {
+                    // Local Cache or Asset Logic
+                    val cachedSticker = StickerRepository.getCachedStickerPath(context, pack.id, sticker.file)
+                    if (cachedSticker.exists() && cachedSticker.length() > 0) {
+                         Glide.with(context)
+                            .load(cachedSticker)
                             .override(glideOverrideSize)
-                            .dontAnimate()
-                            .thumbnail(Glide.with(context).load(sticker.url).override(stickerSize / 2).dontAnimate())
+                            // .dontAnimate() REMOVED
                             .placeholder(R.drawable.ic_sticker_placeholder)
                             .error(R.drawable.ic_sticker_placeholder)
-                            .diskCacheStrategy(DiskCacheStrategy.ALL)
+                            .signature(ObjectKey(cachedSticker.lastModified()))
+                            .diskCacheStrategy(DiskCacheStrategy.DATA)
                             .into(previewView)
-                    }
-                    else -> {
-                        val cachedSticker = StickerRepository.getCachedStickerPath(context, pack.id, sticker.file)
-                        if (cachedSticker.exists() && cachedSticker.length() > 0) {
-                            Glide.with(context)
-                                .load(cachedSticker)
-                                .override(glideOverrideSize)
-                                .dontAnimate()
-                                .placeholder(R.drawable.ic_sticker_placeholder)
-                                .error(R.drawable.ic_sticker_placeholder)
-                                .signature(ObjectKey(cachedSticker.lastModified()))
-                                .diskCacheStrategy(DiskCacheStrategy.ALL)
-                                .into(previewView)
-                        } else {
-                            try {
-                                val path = "${pack.id}/${sticker.file}"
-                                val stream = context.assets.open(path)
-                                val bitmap = BitmapFactory.decodeStream(stream)
-                                stream.close()
-                                previewView.setImageBitmap(bitmap)
-                            } catch (e: Exception) {
-                                previewView.setImageResource(R.drawable.ic_sticker_placeholder)
-                            }
-                        }
+                    } else {
+                        // Asset Fallback
+                        val assetPath = "file:///android_asset/${pack.id}/${sticker.file}"
+                        Glide.with(context)
+                            .load(android.net.Uri.parse(assetPath))
+                            .override(glideOverrideSize)
+                            // .dontAnimate() REMOVED
+                            .placeholder(R.drawable.ic_sticker_placeholder)
+                            .error(R.drawable.ic_sticker_placeholder)
+                            .diskCacheStrategy(DiskCacheStrategy.DATA)
+                            .into(previewView)
                     }
                 }
             }
         }
+
     }
 
     private fun getTimeAgo(createdAt: String, context: android.content.Context): String {
