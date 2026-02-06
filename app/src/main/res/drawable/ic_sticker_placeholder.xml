@@ -1,23 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="96dp"
-    android:height="96dp"
-    android:viewportWidth="96"
-    android:viewportHeight="96">
-
-    <!-- Background rounded square -->
-    <path
-        android:fillColor="#E0E0E0"
-        android:pathData="M16,8h64c4.4,0 8,3.6 8,8v64c0,4.4 -3.6,8 -8,8H16c-4.4,0 -8,-3.6 -8,-8V16c0,-4.4 3.6,-8 8,-8z"/>
-
-    <!-- Sticker icon -->
-    <path
-        android:fillColor="#9E9E9E"
-        android:pathData="M48,24c-13.3,0 -24,10.7 -24,24s10.7,24 24,24 24,-10.7 24,-24 -10.7,-24 -24,-24zM48,68c-11,0 -20,-9 -20,-20s9,-20 20,-20 20,9 20,20 -9,20 -20,20z"/>
-
-    <!-- Smile -->
-    <path
-        android:fillColor="#9E9E9E"
-        android:pathData="M38,44c1.7,0 3,-1.3 3,-3s-1.3,-3 -3,-3 -3,1.3 -3,3 1.3,3 3,3zM58,44c1.7,0 3,-1.3 3,-3s-1.3,-3 -3,-3 -3,1.3 -3,3 1.3,3 3,3zM48,58c-4.4,0 -8,-3.6 -8,-8h-4c0,6.6 5.4,12 12,12s12,-5.4 12,-12h-4c0,4.4 -3.6,8 -8,8z"/>
-
-</vector>
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="#F5F5F5" />
+    <corners android:radius="8dp" />
+</shape>

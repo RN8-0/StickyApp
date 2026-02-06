@@ -43,7 +43,7 @@
 
     <!-- Premium -->
     <string name="premium_title">العضوية المميزة</string>
-    <string name="premium_description">بشراء لمرة واحدة:\n\n• تجربة خالية من الإعلانات\n• حزم ملصقات مميزة\n• دعم ذو أولوية</string>
+    <string name="premium_description">مع اشتراك Premium:\n\n• تجربة خالية من الإعلانات\n• حزم ملصقات مميزة\n• دعم ذو أولوية</string>
     <string name="premium_price">$4.99</string>
     <string name="sticker_price">$0.49</string>
     <string name="buy_premium">اشترِ الآن</string>
@@ -102,7 +102,7 @@
 
     <!-- Premium Promo Dialog -->
     <string name="premium_promo_title">تجربة خالية من الإعلانات</string>
-    <string name="premium_promo_message">نعلم أن الإعلانات مزعجة أحياناً.\n\nنحتاج لتمويل بسيط لتحسين تطبيقنا.\n\nيمكنك الحصول على عضوية مرة واحدة لتجربة بدون إعلانات وحزم ملصقات مميزة 💙</string>
+    <string name="premium_promo_message">نعلم أن الإعلانات مزعجة أحياناً.\n\nنحتاج لتمويل بسيط لتحسين تطبيقنا.\n\nيمكنك الحصول على اشتراك Premium لتجربة بدون إعلانات وحزم ملصقات مميزة 💙</string>
     <string name="get_premium">احصل على المميز</string>
     <string name="maybe_later">ربما لاحقاً</string>
 
@@ -267,15 +267,10 @@
     <string name="ad_free_experience">تجربة بدون إعلانات</string>
     <string name="current_plan">الخطة الحالية</string>
     <string name="recommended">⭐ موصى به</string>
-    <string name="one_time_payment">دفع لمرة واحدة</string>
-    <string name="one_time">لمرة واحدة</string>
     <string name="all_packs">جميع الحزم</string>
     <string name="all_premium_packs">جميع الحزم المميزة</string>
     <string name="unlimited_access_detail">وصول غير محدود لمئات الحزم المميزة</string>
     <string name="ad_free_detail">استخدام متواصل بدون إعلانات</string>
-    <string name="lifetime_access">وصول مدى الحياة</string>
-    <string name="lifetime_access_detail">كن عضواً مميزاً للأبد بدفع لمرة واحدة</string>
-    <string name="no_subscription_note">💡 دفع لمرة واحدة، لا يوجد اشتراك!\nيمكنك استعادة المشتريات متى شئت.</string>
     <string name="premium_advantages">مزايا المميز</string>
     <string name="how_to_create_sticker">كيف تود إنشاء ملصق؟</string>
     <string name="create_static_desc">بسرعة من الصور</string>
@@ -329,12 +324,9 @@
     <string name="premium_remove_limits_desc">تجربة خالية من الإعلانات والوصول إلى جميع الملصقات.</string>
     <string name="plan_monthly">شهري</string>
     <string name="plan_yearly">سنوي</string>
-    <string name="plan_lifetime">مدى الحياة</string>
     <string name="plan_monthly_price">شهري</string>
     <string name="plan_yearly_price">سنوي</string>
-    <string name="plan_lifetime_price">مدى الحياة</string>
     <string name="save_percentage">الأفضل قيمة</string>
-    <string name="one_time_billing">دفع لمرة واحدة</string>
     <string name="restore_purchases_short">استعادة</string>
     <string name="privacy_short">سياسة الخصوصية</string>
     <string name="var_label">نعم</string>
@@ -346,8 +338,6 @@
     <string name="plan_monthly_note">🚀 ابدأ الآن</string>
     <string name="plan_yearly_subtitle">12 شهراً من البريميوم 🎉</string>
     <string name="plan_yearly_note">⭐ الأكثر شعبية</string>
-    <string name="plan_lifetime_subtitle">ادفع مرة واحدة، استخدم للأبد 💫</string>
-    <string name="plan_lifetime_note">👑 أفضل صفقة</string>
     <string name="premium_ai_removal">إزالة الخلفية بالذكاء الاصطناعي</string>
     <string name="premium_plan">بريميوم</string>
     <string name="free_plan">مجاني</string>

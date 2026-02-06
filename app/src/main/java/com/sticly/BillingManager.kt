@@ -22,9 +22,6 @@ class BillingManager(
         const val PREMIUM_MONTHLY = "sticky_monthly_premium"
         const val PREMIUM_YEARLY = "sticky_yearly_premium"
 
-        // In-App (Lifetime) ID
-        const val PREMIUM_LIFETIME = "sticky_lifetime_premium"
-
         private const val MAX_RETRY_ATTEMPTS = 3
     }
 
@@ -36,8 +33,8 @@ class BillingManager(
         .setListener(this)
         .enablePendingPurchases(
             PendingPurchasesParams.newBuilder()
-                .enableOneTimeProducts()
                 .enablePrepaidPlans()
+                .enableOneTimeProducts()
                 .build()
         )
         .build()
@@ -117,18 +114,7 @@ class BillingManager(
     }
 
     private fun queryProducts() {
-        var subsLoaded = false
-        var inAppLoaded = false
-
-        fun checkAllLoaded() {
-            if (subsLoaded && inAppLoaded) {
-                billingScope.launch(Dispatchers.Main) {
-                    onBillingReady?.invoke()
-                }
-            }
-        }
-
-        // 1. Query Subscriptions (Monthly + Yearly)
+        // Query Subscriptions (Monthly + Yearly)
         val subSkus = listOf(PREMIUM_MONTHLY, PREMIUM_YEARLY)
         val subProductList = subSkus.map { sku ->
             QueryProductDetailsParams.Product.newBuilder()
@@ -147,30 +133,9 @@ class BillingManager(
                 Log.d(TAG, "Loaded ${productDetailsList.size} subscription products")
                 writePricesToFirebase()
             }
-            subsLoaded = true
-            checkAllLoaded()
-        }
-
-        // 2. Query In-App Products (Lifetime only)
-        val inAppSkus = listOf(PREMIUM_LIFETIME)
-        val inAppProductList = inAppSkus.map { sku ->
-            QueryProductDetailsParams.Product.newBuilder()
-                .setProductId(sku)
-                .setProductType(BillingClient.ProductType.INAPP)
-                .build()
-        }
-
-        val inAppParams = QueryProductDetailsParams.newBuilder()
-            .setProductList(inAppProductList)
-            .build()
-
-        billingClient.queryProductDetailsAsync(inAppParams) { billingResult, productDetailsList ->
-            if (billingResult.responseCode == BillingClient.BillingResponseCode.OK) {
-                productDetailsList.forEach { premiumProductDetails[it.productId] = it }
-                Log.d(TAG, "Loaded ${productDetailsList.size} in-app products")
+            billingScope.launch(Dispatchers.Main) {
+                onBillingReady?.invoke()
             }
-            inAppLoaded = true
-            checkAllLoaded()
         }
     }
 
@@ -184,12 +149,8 @@ class BillingManager(
                 val priceData = mutableMapOf<String, Any>()
 
                 premiumProductDetails.forEach { (productId, details) ->
-                    val price = if (details.productType == BillingClient.ProductType.SUBS) {
-                        details.subscriptionOfferDetails?.firstOrNull()
-                            ?.pricingPhases?.pricingPhaseList?.firstOrNull()?.formattedPrice
-                    } else {
-                        details.oneTimePurchaseOfferDetails?.formattedPrice
-                    }
+                    val price = details.subscriptionOfferDetails?.firstOrNull()
+                        ?.pricingPhases?.pricingPhaseList?.firstOrNull()?.formattedPrice
                     if (price != null) {
                         priceData["google_play_price_$productId"] = price
                     }
@@ -209,12 +170,8 @@ class BillingManager(
 
     fun getFormattedPrice(productId: String): String? {
         val details = premiumProductDetails[productId] ?: return null
-        return if (details.productType == BillingClient.ProductType.SUBS) {
-            details.subscriptionOfferDetails?.firstOrNull()
-                ?.pricingPhases?.pricingPhaseList?.firstOrNull()?.formattedPrice
-        } else {
-            details.oneTimePurchaseOfferDetails?.formattedPrice
-        }
+        return details.subscriptionOfferDetails?.firstOrNull()
+            ?.pricingPhases?.pricingPhaseList?.firstOrNull()?.formattedPrice
     }
 
     /**
@@ -222,12 +179,8 @@ class BillingManager(
      */
     fun getPriceMicros(productId: String): Long? {
         val details = premiumProductDetails[productId] ?: return null
-        return if (details.productType == BillingClient.ProductType.SUBS) {
-            details.subscriptionOfferDetails?.firstOrNull()
-                ?.pricingPhases?.pricingPhaseList?.firstOrNull()?.priceAmountMicros
-        } else {
-            details.oneTimePurchaseOfferDetails?.priceAmountMicros
-        }
+        return details.subscriptionOfferDetails?.firstOrNull()
+            ?.pricingPhases?.pricingPhaseList?.firstOrNull()?.priceAmountMicros
     }
 
     /**
@@ -235,12 +188,8 @@ class BillingManager(
      */
     fun getPriceCurrencyCode(productId: String): String? {
         val details = premiumProductDetails[productId] ?: return null
-        return if (details.productType == BillingClient.ProductType.SUBS) {
-            details.subscriptionOfferDetails?.firstOrNull()
-                ?.pricingPhases?.pricingPhaseList?.firstOrNull()?.priceCurrencyCode
-        } else {
-            details.oneTimePurchaseOfferDetails?.priceCurrencyCode
-        }
+        return details.subscriptionOfferDetails?.firstOrNull()
+            ?.pricingPhases?.pricingPhaseList?.firstOrNull()?.priceCurrencyCode
     }
 
     /**
@@ -264,19 +213,16 @@ class BillingManager(
                 return@executeServiceRequest
             }
 
-            val productDetailsParamsList = mutableListOf<BillingFlowParams.ProductDetailsParams>()
             val builder = BillingFlowParams.ProductDetailsParams.newBuilder()
                 .setProductDetails(product)
 
-            // For subscriptions, we must set the offer token (Billing 7.x required)
-            if (product.productType == BillingClient.ProductType.SUBS) {
-                val offerToken = product.subscriptionOfferDetails?.firstOrNull()?.offerToken
-                if (offerToken != null) {
-                    builder.setOfferToken(offerToken)
-                }
+            // Set the offer token (Billing 7.x required for subscriptions)
+            val offerToken = product.subscriptionOfferDetails?.firstOrNull()?.offerToken
+            if (offerToken != null) {
+                builder.setOfferToken(offerToken)
             }
 
-            productDetailsParamsList.add(builder.build())
+            val productDetailsParamsList = listOf(builder.build())
 
             val billingFlowParams = BillingFlowParams.newBuilder()
                 .setProductDetailsParamsList(productDetailsParamsList)
@@ -377,14 +323,9 @@ class BillingManager(
     private fun handleSuccessfulPurchase(purchase: Purchase) {
         for (productId in purchase.products) {
             Log.d(TAG, "Processing successful purchase: $productId")
-            when {
-                // Lifetime Premium (INAPP)
-                productId == PREMIUM_LIFETIME -> {
-                    Log.d(TAG, "Setting lifetime premium")
-                    PreferencesHelper.setPremiumWithType(context, "lifetime", 0L)
-                }
+            when (productId) {
                 // Subscription Premium (SUBS) - monthly or yearly
-                productId == PREMIUM_MONTHLY || productId == PREMIUM_YEARLY -> {
+                PREMIUM_MONTHLY, PREMIUM_YEARLY -> {
                     val expiryEstimate = purchase.purchaseTime + estimateSubscriptionDurationMs(productId)
                     Log.d(TAG, "Setting subscription premium: $productId, expiry=$expiryEstimate")
                     PreferencesHelper.setPremiumWithType(context, "subscription", expiryEstimate)
@@ -406,56 +347,21 @@ class BillingManager(
 
     fun checkExistingPurchases() {
         executeServiceRequest {
-            var hasLifetime = false
-            var hasActiveSub = false
-
-            // Check INAPP (lifetime + sticker packs)
+            // Check SUBS
             billingClient.queryPurchasesAsync(
                 QueryPurchasesParams.newBuilder()
-                    .setProductType(BillingClient.ProductType.INAPP)
+                    .setProductType(BillingClient.ProductType.SUBS)
                     .build()
-            ) { resultInApp, inAppPurchases ->
-                if (resultInApp.responseCode == BillingClient.BillingResponseCode.OK) {
-                    for (purchase in inAppPurchases) {
+            ) { resultSubs, subsPurchases ->
+                if (resultSubs.responseCode == BillingClient.BillingResponseCode.OK) {
+                    for (purchase in subsPurchases) {
                         if (purchase.purchaseState == Purchase.PurchaseState.PURCHASED) {
                             if (!purchase.isAcknowledged) {
                                 acknowledgePurchaseAndHandle(purchase)
                             } else {
                                 handleSuccessfulPurchase(purchase)
                             }
-                            if (purchase.products.contains(PREMIUM_LIFETIME)) {
-                                hasLifetime = true
-                            }
                         }
-                    }
-                }
-
-                // Check SUBS
-                billingClient.queryPurchasesAsync(
-                    QueryPurchasesParams.newBuilder()
-                        .setProductType(BillingClient.ProductType.SUBS)
-                        .build()
-                ) { resultSubs, subsPurchases ->
-                    if (resultSubs.responseCode == BillingClient.BillingResponseCode.OK) {
-                        for (purchase in subsPurchases) {
-                            if (purchase.purchaseState == Purchase.PurchaseState.PURCHASED) {
-                                if (!purchase.isAcknowledged) {
-                                    acknowledgePurchaseAndHandle(purchase)
-                                } else {
-                                    handleSuccessfulPurchase(purchase)
-                                }
-                                hasActiveSub = true
-                            }
-                        }
-                    }
-
-                    // If no lifetime and no active subscription, revoke premium
-                    if (!hasLifetime && !hasActiveSub) {
-                        // Ancak burada dikkatli olmaliyiz, belki gecici olarak offline
-                        // Sadece eminsek iptal ediyoruz.
-                        // PreferencesHelper.setPremium(context, false) 
-                        // -> Bunu otomatik iptal etmek riskli olabilir (offline durumlar).
-                        // Yine de "Geri Yükle" butonu ile manuel tetiklenince mantıklı.
                     }
                 }
             }
@@ -490,13 +396,11 @@ class BillingManager(
     private fun restorePurchasesInternal(onResult: (RestoreResult) -> Unit) {
         var foundPurchases = false
 
-        // INAPP ve SUBS sorgula
         billingClient.queryPurchasesAsync(
-            QueryPurchasesParams.newBuilder().setProductType(BillingClient.ProductType.INAPP).build()
-        ) { resultInApp, purchasesInApp ->
-            
-            if (resultInApp.responseCode == BillingClient.BillingResponseCode.OK) {
-                for (purchase in purchasesInApp) {
+            QueryPurchasesParams.newBuilder().setProductType(BillingClient.ProductType.SUBS).build()
+        ) { resultSubs, purchasesSubs ->
+            if (resultSubs.responseCode == BillingClient.BillingResponseCode.OK) {
+                for (purchase in purchasesSubs) {
                     if (purchase.purchaseState == Purchase.PurchaseState.PURCHASED) {
                         foundPurchases = true
                         handleSuccessfulPurchase(purchase)
@@ -504,25 +408,11 @@ class BillingManager(
                 }
             }
 
-            billingClient.queryPurchasesAsync(
-                QueryPurchasesParams.newBuilder().setProductType(BillingClient.ProductType.SUBS).build()
-            ) { resultSubs, purchasesSubs ->
-                
-                if (resultSubs.responseCode == BillingClient.BillingResponseCode.OK) {
-                    for (purchase in purchasesSubs) {
-                        if (purchase.purchaseState == Purchase.PurchaseState.PURCHASED) {
-                            foundPurchases = true
-                            handleSuccessfulPurchase(purchase)
-                        }
-                    }
-                }
-
-                billingScope.launch(Dispatchers.Main) {
-                    if (foundPurchases) {
-                        onResult(RestoreResult.SUCCESS)
-                    } else {
-                        onResult(RestoreResult.NOT_FOUND)
-                    }
+            billingScope.launch(Dispatchers.Main) {
+                if (foundPurchases) {
+                    onResult(RestoreResult.SUCCESS)
+                } else {
+                    onResult(RestoreResult.NOT_FOUND)
                 }
             }
         }

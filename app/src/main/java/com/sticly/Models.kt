@@ -49,7 +49,7 @@ data class BillingSettings(
 data class BillingPlan(
     val id: String = "",
     val name: String = "",
-    val type: String = "subscription", // "subscription" or "onetime"
+    val type: String = "subscription",
     val priceTry: String = "",
     val priceUsd: String = "",
     val priceEur: String = "",

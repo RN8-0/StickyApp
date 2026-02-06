@@ -43,7 +43,7 @@
 
     <!-- Premium -->
     <string name="premium_title">高级会员</string>
-    <string name="premium_description">一次性购买：\n\n• 无广告体验\n• 高级贴纸包\n• 优先支持</string>
+    <string name="premium_description">Premium订阅：\n\n• 无广告体验\n• 高级贴纸包\n• 优先支持</string>
     <string name="premium_price">$4.99</string>
     <string name="sticker_price">$0.49</string>
     <string name="buy_premium">立即购买</string>
@@ -102,7 +102,7 @@
 
     <!-- Premium Promo Dialog -->
     <string name="premium_promo_title">无广告体验</string>
-    <string name="premium_promo_message">我们知道广告有时很烦人。\n\n我们需要一点收入来改进应用并添加新贴纸。\n\n您可以一次性购买高级会员，享受无广告体验和所有高级贴纸 💙</string>
+    <string name="premium_promo_message">我们知道广告有时很烦人。\n\n我们需要一点收入来改进应用并添加新贴纸。\n\n您可以订阅Premium会员，享受无广告体验和所有高级贴纸 💙</string>
     <string name="get_premium">获取高级会员</string>
     <string name="maybe_later">稍后再说</string>
 
@@ -267,15 +267,10 @@
     <string name="ad_free_experience">无广告体验</string>
     <string name="current_plan">当前方案</string>
     <string name="recommended">⭐ 推荐</string>
-    <string name="one_time_payment">一次性付款</string>
-    <string name="one_time">一次性</string>
     <string name="all_packs">所有包</string>
     <string name="all_premium_packs">所有高级包</string>
     <string name="unlimited_access_detail">无限访问数百个特别设计的高级贴纸包</string>
     <string name="ad_free_detail">使用过程中没有任何广告打扰</string>
-    <string name="lifetime_access">终身访问</string>
-    <string name="lifetime_access_detail">一次性付款，永久成为高级会员</string>
-    <string name="no_subscription_note">💡 一次性付款，非订阅制！\n您可以随时恢复购买。</string>
     <string name="premium_advantages">高级版优势</string>
     <string name="how_to_create_sticker">您想如何创建贴纸？</string>
     <string name="create_static_desc">从照片快速创建</string>
@@ -329,12 +324,9 @@
     <string name="premium_remove_limits_desc">无广告体验并访问所有贴纸。</string>
     <string name="plan_monthly">每月</string>
     <string name="plan_yearly">每年</string>
-    <string name="plan_lifetime">终身</string>
     <string name="plan_monthly_price">每月</string>
     <string name="plan_yearly_price">每年</string>
-    <string name="plan_lifetime_price">终身</string>
     <string name="save_percentage">最超值</string>
-    <string name="one_time_billing">一次性付款</string>
     <string name="restore_purchases_short">恢复</string>
     <string name="privacy_short">隐私政策</string>
     <string name="var_label">是</string>
@@ -346,8 +338,6 @@
     <string name="plan_monthly_note">🚀 立即开始</string>
     <string name="plan_yearly_subtitle">12个月高级会员 🎉</string>
     <string name="plan_yearly_note">⭐ 最受欢迎</string>
-    <string name="plan_lifetime_subtitle">一次付款，永久使用 💫</string>
-    <string name="plan_lifetime_note">👑 超值优惠</string>
     <string name="premium_ai_removal">AI 背景移除</string>
     <string name="premium_plan">高级版</string>
     <string name="free_plan">免费版</string>

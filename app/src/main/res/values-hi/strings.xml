@@ -43,7 +43,7 @@
 
     <!-- Premium -->
     <string name="premium_title">प्रीमियम सदस्यता</string>
-    <string name="premium_description">एक बार की खरीद के साथ:\n\n• विज्ञापन-मुक्त अनुभव\n• प्रीमियम स्टिकर पैक\n• प्राथमिकता सहायता</string>
+    <string name="premium_description">Premium सदस्यता के साथ:\n\n• विज्ञापन-मुक्त अनुभव\n• प्रीमियम स्टिकर पैक\n• प्राथमिकता सहायता</string>
     <string name="premium_price">₹399.00</string>
     <string name="sticker_price">₹39.00</string>
     <string name="buy_premium">अभी खरीदें</string>
@@ -102,7 +102,7 @@
 
     <!-- Premium Promo Dialog -->
     <string name="premium_promo_title">विज्ञापन-मुक्त अनुभव</string>
-    <string name="premium_promo_message">हम जानते हैं कि विज्ञापन कभी-कभी परेशान करने वाले हो सकते हैं।\n\nहमें अपने ऐप को बेहतर बनाने और नए स्टिकर जोड़ने के लिए थोड़े पैसे की आवश्यकता है।\n\nआप विज्ञापन-मुक्त उपयोग और सभी प्रीमियम स्टिकर के लिए एक बार की प्रीमियम सदस्यता ले सकते हैं 💙</string>
+    <string name="premium_promo_message">हम जानते हैं कि विज्ञापन कभी-कभी परेशान करने वाले हो सकते हैं।\n\nहमें अपने ऐप को बेहतर बनाने और नए स्टिकर जोड़ने के लिए थोड़े पैसे की आवश्यकता है।\n\nआप विज्ञापन-मुक्त उपयोग और सभी प्रीमियम स्टिकर के लिए Premium सदस्यता ले सकते हैं 💙</string>
     <string name="get_premium">प्रीमियम सदस्यता प्राप्त करें</string>
     <string name="maybe_later">शायद बाद में</string>
 
@@ -267,15 +267,10 @@
     <string name="ad_free_experience">विज्ञापन-मुक्त अनुभव</string>
     <string name="current_plan">वर्तमान योजना</string>
     <string name="recommended">⭐ अनुशंसित</string>
-    <string name="one_time_payment">एक बार का भुगतान</string>
-    <string name="one_time">एक बार</string>
     <string name="all_packs">सभी पैक</string>
     <string name="all_premium_packs">सभी प्रीमियम पैक</string>
     <string name="unlimited_access_detail">विशेष रूप से डिज़ाइन किए गए सैकड़ों प्रीमियम स्टिकर पैक तक असीमित पहुंच</string>
     <string name="ad_free_detail">बिना किसी विज्ञापन के निर्बाध उपयोग</string>
-    <string name="lifetime_access">लाइफटाइम एक्सेस</string>
-    <string name="lifetime_access_detail">एक बार के भुगतान के साथ हमेशा के लिए प्रीमियम सदस्य बनें</string>
-    <string name="no_subscription_note">💡 एक बार का भुगतान, कोई सदस्यता नहीं!\nआप किसी भी समय अपनी खरीद बहाल कर सकते हैं।</string>
     <string name="premium_advantages">प्रीमियम लाभ</string>
     <string name="how_to_create_sticker">आप स्टिकर कैसे बनाना चाहेंगे?</string>
     <string name="create_static_desc">तस्वीरों से जल्दी बनाएं</string>
@@ -329,12 +324,9 @@
     <string name="premium_remove_limits_desc">विज्ञापन-मुक्त अनुभव और सभी स्टिकर तक पहुंच।</string>
     <string name="plan_monthly">मासिक</string>
     <string name="plan_yearly">वार्षिक</string>
-    <string name="plan_lifetime">लाइफटाइम</string>
     <string name="plan_monthly_price">मासिक</string>
     <string name="plan_yearly_price">वार्षिक</string>
-    <string name="plan_lifetime_price">लाइफटाइम</string>
     <string name="save_percentage">सबसे अच्छा मूल्य</string>
-    <string name="one_time_billing">एक बार भुगतान</string>
     <string name="restore_purchases_short">पुनर्स्थापित करें</string>
     <string name="privacy_short">गोपनीयता नीति</string>
     <string name="var_label">हाँ</string>
@@ -346,8 +338,6 @@
     <string name="plan_monthly_note">🚀 अभी शुरू करें</string>
     <string name="plan_yearly_subtitle">12 महीने का प्रीमियम 🎉</string>
     <string name="plan_yearly_note">⭐ सबसे लोकप्रिय</string>
-    <string name="plan_lifetime_subtitle">एक बार भुगतान करें, हमेशा उपयोग करें 💫</string>
-    <string name="plan_lifetime_note">👑 सर्वश्रेष्ठ ऑफर</string>
     <string name="premium_ai_removal">AI बैकग्राउंड हटाना</string>
     <string name="premium_plan">प्रीमियम</string>
     <string name="free_plan">निःशुल्क</string>

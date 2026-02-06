@@ -43,7 +43,7 @@
 
     <!-- Premium -->
     <string name="premium_title">Membro Premium</string>
-    <string name="premium_description">Com uma compra única:\n\n• Experiência sem anúncios\n• Pacotes de stickers premium\n• Suporte prioritário</string>
+    <string name="premium_description">Com assinatura Premium:\n\n• Experiência sem anúncios\n• Pacotes de stickers premium\n• Suporte prioritário</string>
     <string name="premium_price">R$ 24,90</string>
     <string name="sticker_price">R$ 2,90</string>
     <string name="buy_premium">Comprar Agora</string>
@@ -102,7 +102,7 @@
 
     <!-- Premium Promo Dialog -->
     <string name="premium_promo_title">Experiência Sem Anúncios</string>
-    <string name="premium_promo_message">Sabemos que anúncios podem ser irritantes às vezes.\n\nPrecisamos de uma pequena renda para melhorar nosso app e adicionar novos stickers.\n\nVocê pode obter uma Membresia Premium de compra única para uso sem anúncios e todos os stickers premium 💙</string>
+    <string name="premium_promo_message">Sabemos que anúncios podem ser irritantes às vezes.\n\nPrecisamos de uma pequena renda para melhorar nosso app e adicionar novos stickers.\n\nVocê pode obter assinatura Premium para uso sem anúncios e todos os stickers premium 💙</string>
     <string name="get_premium">Obter Membresia Premium</string>
     <string name="maybe_later">Talvez Depois</string>
 
@@ -267,15 +267,10 @@
     <string name="ad_free_experience">Experiência sem anúncios</string>
     <string name="current_plan">Plano Atual</string>
     <string name="recommended">⭐ RECOMENDADO</string>
-    <string name="one_time_payment">pagamento único</string>
-    <string name="one_time">único</string>
     <string name="all_packs">Todos os pacotes</string>
     <string name="all_premium_packs">Todos os Pacotes Premium</string>
     <string name="unlimited_access_detail">Acesso ilimitado a centenas de pacotes de stickers premium especialmente desenhados</string>
     <string name="ad_free_detail">Uso ininterrupto sem anúncios</string>
-    <string name="lifetime_access">Acesso Vitalício</string>
-    <string name="lifetime_access_detail">Torne-se um membro premium para sempre com um pagamento único</string>
-    <string name="no_subscription_note">💡 Pagamento único, sem assinatura!\nVocê pode restaurar suas compras a qualquer momento.</string>
     <string name="premium_advantages">Vantagens Premium</string>
     <string name="how_to_create_sticker">Como você gostaria de criar um sticker?</string>
     <string name="create_static_desc">Crie rapidamente a partir de fotos</string>
@@ -329,12 +324,9 @@
     <string name="premium_remove_limits_desc">Experiência sem anúncios e acesso a todos os figurinhas.</string>
     <string name="plan_monthly">Mensal</string>
     <string name="plan_yearly">Anual</string>
-    <string name="plan_lifetime">Vitalício</string>
     <string name="plan_monthly_price">Mensal</string>
     <string name="plan_yearly_price">Anual</string>
-    <string name="plan_lifetime_price">Vitalício</string>
     <string name="save_percentage">Melhor Valor</string>
-    <string name="one_time_billing">Pagamento único</string>
     <string name="restore_purchases_short">Restaurar</string>
     <string name="privacy_short">Política de privacidade</string>
     <string name="var_label">Sim</string>
@@ -346,8 +338,6 @@
     <string name="plan_monthly_note">🚀 Comece agora</string>
     <string name="plan_yearly_subtitle">12 meses de premium 🎉</string>
     <string name="plan_yearly_note">⭐ Mais popular</string>
-    <string name="plan_lifetime_subtitle">Pague uma vez, use para sempre 💫</string>
-    <string name="plan_lifetime_note">👑 Melhor oferta</string>
     <string name="premium_ai_removal">Remover fundo com IA</string>
     <string name="premium_plan">Premium</string>
     <string name="free_plan">Grátis</string>

@@ -1,0 +1,12 @@
+<tr-TR>
+• Çıkartma yükleme performansı artırıldı ve animasyonlar düzeltildi.
+• Arka plan silme işlemi iyileştirildi, artık daha hızlı ve verimli.
+• Popüler paketler görünümü modernize edildi.
+• Uygulama genelinde kararlılık iyileştirmeleri ve hata düzeltmeleri yapıldı.
+</tr-TR>
+<en-US>
+• Improved sticker loading performance and fixed animations.
+• Optimized background removal process for better speed and efficiency.
+• Modernized the look of popular packs.
+• General stability improvements and bug fixes throughout the app.
+</en-US>

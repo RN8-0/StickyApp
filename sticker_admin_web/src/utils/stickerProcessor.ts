@@ -120,7 +120,14 @@ class StickerProcessor {
         });
 
         await decoder.tracks.ready;
-        const frameCount = Math.min(decoder.tracks.selectedTrack.frameCount, MAX_FRAMES);
+        const totalFrames = decoder.tracks.selectedTrack.frameCount;
+        const frameCount = Math.min(totalFrames, MAX_FRAMES);
+
+        // Minimum frame kontrolü - 3'ten az frame varsa bu GIF gerçekten animasyonlu değil
+        if (totalFrames < 3) {
+            decoder.close();
+            throw new Error(`GIF dosyası yeterli frame içermiyor (${totalFrames} frame). Animasyonlu çıkartmalar için en az 3 frame gerekli. Bu dosya statik bir görsel olabilir.`);
+        }
 
         onProgress?.({ message: `${frameCount} frame işleniyor...`, percentage: 15 });
 
@@ -162,6 +169,11 @@ class StickerProcessor {
         const buffer = await file.arrayBuffer();
         const gif = parseGIF(buffer);
         const frames = decompressFrames(gif, true);
+
+        // Minimum frame kontrolü - 3'ten az frame varsa bu GIF gerçekten animasyonlu değil
+        if (frames.length < 3) {
+            throw new Error(`GIF dosyası yeterli frame içermiyor (${frames.length} frame). Animasyonlu çıkartmalar için en az 3 frame gerekli. Bu dosya statik bir görsel olabilir.`);
+        }
 
         const gifWidth = gif.lsd.width;
         const gifHeight = gif.lsd.height;
@@ -231,7 +243,7 @@ class StickerProcessor {
      * ffmpeg ile WhatsApp uyumlu animated WebP oluştur, sonra ghosting'i önlemek için
      * ANMF disposal flag'larını "dispose to background" olarak patch'le
      */
-    private async createWebPFromFrames(frameCount: number, onProgress?: (p: StickerProgress) => void): Promise<Blob> {
+    private async createWebPFromFrames(frameCount: number, onProgress?: (p: StickerProgress) => void, fps: number = 10): Promise<Blob> {
         const ffmpeg = this.ffmpeg!;
         const outputName = 'output.webp';
         const MAX_SIZE = 500 * 1024;
@@ -245,8 +257,9 @@ class StickerProcessor {
             try { await ffmpeg.deleteFile(outputName); } catch { }
 
             await ffmpeg.exec([
-                '-framerate', '10',
+                '-framerate', fps.toString(),
                 '-i', 'frame_%04d.png',
+                '-vf', `scale=${STICKER_SIZE}:${STICKER_SIZE}:force_original_aspect_ratio=decrease,pad=${STICKER_SIZE}:${STICKER_SIZE}:(ow-iw)/2:(oh-ih)/2:color=black@0`,
                 '-t', MAX_DURATION.toString(),
                 '-c:v', 'libwebp',
                 '-lossless', '0',
@@ -321,17 +334,77 @@ class StickerProcessor {
     /**
      * Video işleme (MP4)
      */
-    private async processVideo(file: File, onProgress?: (p: StickerProgress) => void): Promise<Blob> {
+    private async processVideo(file: File, onProgress?: (p: StickerProgress) => void, removeBg: boolean = false): Promise<Blob> {
         await this.load();
         const ffmpeg = this.ffmpeg!;
         const outputName = 'output.webp';
         const MAX_SIZE = 500 * 1024;
 
-        onProgress?.({ message: 'Video işleniyor...', percentage: 20 });
+        onProgress?.({ message: 'Video analiz ediliyor...', percentage: 10 });
 
         const inputName = `input_${Date.now()}.mp4`;
         await ffmpeg.writeFile(inputName, await fetchFile(file));
 
+        // Eğer arka plan silinecekse, frame-by-frame işlem yap
+        if (removeBg) {
+            onProgress?.({ message: 'Frame\'ler çıkarılıyor...', percentage: 20 });
+
+            // 1. Frame'leri çıkar (10 fps, 512px - ULTRA YÜKSEK KALİTE)
+            await ffmpeg.exec([
+                '-i', inputName,
+                '-t', '2.5',
+                '-vf', 'fps=10,scale=512:512:force_original_aspect_ratio=decrease,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=black@0',
+                'frame_%04d.png'
+            ]);
+
+            const files = await ffmpeg.listDir('.');
+            const frames = files.filter(f => f.name.startsWith('frame_') && f.name.endsWith('.png'))
+                .sort((a, b) => a.name.localeCompare(b.name));
+
+            // 2.5 saniye x 10 fps = 25 kare
+            const frameCount = Math.min(frames.length, 25);
+
+            onProgress?.({ message: 'Arka Plan Hassas Temizleniyor (Yüksek Kalite)...', percentage: 25 });
+
+            // 2. Kareleri PARALEL işle
+            const batchSize = 2;
+            for (let i = 0; i < frameCount; i += batchSize) {
+                const batch = frames.slice(i, i + batchSize);
+
+                await Promise.all(batch.map(async (frame) => {
+                    const frameName = frame.name;
+                    const frameData = await ffmpeg.readFile(frameName);
+                    const frameBlob = new Blob([frameData as any], { type: 'image/png' });
+
+                    try {
+                        const processedBlob = await removeBackground(frameBlob, {
+                            model: 'isnet', // En kaliteli model
+                            progress: () => { }
+                        });
+                        await ffmpeg.writeFile(frameName, await fetchFile(processedBlob));
+                    } catch (err) {
+                        console.error("Hata:", err);
+                    }
+                }));
+
+                onProgress?.({
+                    message: `Akıcı işleme: %${Math.round((Math.min(i + batchSize, frameCount) / frameCount) * 100)}`,
+                    percentage: 25 + Math.round((Math.min(i + batchSize, frameCount) / frameCount) * 55)
+                });
+
+                await new Promise(resolve => setTimeout(resolve, 20));
+            }
+
+            // Fazlalık frame'leri temizle
+            for (let i = frameCount; i < frames.length; i++) {
+                try { await ffmpeg.deleteFile(frames[i].name); } catch { }
+            }
+
+            // 3. WebP oluştur (Yeni FPS: 10)
+            return this.createWebPFromFrames(frameCount, onProgress, 10);
+        }
+
+        // Arka plan silinmeyecekse standart hızlı dönüşüm
         let blob: Blob | null = null;
 
         for (const q of [75, 60, 50, 40, 30, 20]) {
@@ -370,15 +443,15 @@ class StickerProcessor {
     /**
      * Hareketli görsel işleme (GIF/MP4)
      */
-    async processAnimated(file: File, onProgress?: (p: StickerProgress) => void): Promise<Blob> {
+    async processAnimated(file: File, onProgress?: (p: StickerProgress) => void, removeBg: boolean = false): Promise<Blob> {
         const isGif = file.type === 'image/gif' || file.name.toLowerCase().endsWith('.gif');
 
-        if (isGif) {
-            // GIF: Canvas ile işle (şeffaflık korunur)
+        if (isGif && !removeBg) {
+            // GIF: Arka plan silinmeyecekse hızlı canvas işlemi
             return this.processGifFrames(file, onProgress);
         } else {
-            // Video: FFmpeg ile işle
-            return this.processVideo(file, onProgress);
+            // Video veya Arka planı silinecek GIF
+            return this.processVideo(file, onProgress, removeBg);
         }
     }
 

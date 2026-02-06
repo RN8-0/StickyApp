@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { db, storage, auth } from './firebase';
 import {
   collection,
@@ -10,7 +10,8 @@ import {
   setDoc,
   serverTimestamp,
   onSnapshot,
-  getDoc
+  getDoc,
+  arrayUnion
 } from 'firebase/firestore';
 import {
   ref,
@@ -18,7 +19,6 @@ import {
   uploadBytes,
   getDownloadURL,
   listAll,
-  getBytes,
 } from 'firebase/storage';
 import {
   signInWithPopup,
@@ -59,14 +59,15 @@ import {
   ChevronDown,
   CloudLightning,
   Sparkles,
-  Wand2,
-  Zap,
+  Users,
   Image as ImageIcon,
-  CheckCircle2,
-  Menu
+  Menu,
+  Crown,
+  Shield,
+  Edit3,
+  Wand2
 } from 'lucide-react';
 import { translateTextAllLanguages, TARGET_LANGUAGES } from './utils/translator';
-import { magicWizardService, type GifResult } from './utils/magicWizardService';
 import {
   BarChart,
   Bar,
@@ -76,7 +77,7 @@ import {
   Tooltip,
   ResponsiveContainer
 } from 'recharts';
-import type { StickerPack, Sticker, ContactMessage, StickerSuggestion } from './types';
+import type { StickerPack, Sticker, ContactMessage, StickerSuggestion, UserData, SubscriptionHistoryItem } from './types';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { stickerProcessor } from './utils/stickerProcessor';
@@ -84,6 +85,81 @@ import { stickerProcessor } from './utils/stickerProcessor';
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
+
+const CREATIVE_PREFIXES = [
+  "Super", "Mega", "Ultra", "Best of", "Top", "The Real", "Just", "Simply", "Pure", "Daily",
+  "Classic", "Modern", "Retro", "Vintage", "Neon", "Cyber", "Pixel", "Toon", "Chibi", "Kawaii",
+  "Official", "Original", "Prime", "Elite", "Pro", "Master", "Ultimate", "Hyper", "Giga", "Turbo"
+];
+
+const CREATIVE_ADJECTIVES = [
+  "Funny", "Cute", "Sad", "Happy", "Angry", "Crazy", "Sillly", "Weird", "Awkward", "Random",
+  "Savage", "Dank", "Spicy", "Wholesome", "Cursed", "Blessed", "Based", "Toxic", "Dark", "Emo",
+  "Lovely", "Sweet", "Soft", "Hard", "Loud", "Quiet", "Chill", "Cozy", "Comfy", "Lazy",
+  "Hype", "Lit", "Fire", "Icy", "Cool", "Fresh", "Clean", "Messy", "Broken", "Fixed",
+  "Golden", "Silver", "Diamond", "Rainbow", "Colorful", "Pastel", "Gothic", "Punk", "Metal", "Pop"
+];
+
+const CREATIVE_SUFFIXES = [
+  "Pack", "Stickers", "Collection", "Edition", "Box", "Bundle", "Set", "Series", "Vol. 1", "Vol. 2",
+  "Vibes", "Mood", "Moments", "Reactions", "Faces", "Expressions", "Emotions", "Feelings", "Thoughts", "Life",
+  "Memes", "Jokes", "Humor", "Comedy", "Drama", "Action", "Style", "Art", "Design", "World",
+  "Zone", "Club", "Squad", "Gang", "Crew", "Family", "Friends", "Lovers", "Haters", "Fans"
+];
+
+const CREATIVE_EMOJIS = [
+  "🔥", "✨", "🎉", "🚀", "😂", "🤯", "😍", "🥰", "😎", "🤔", "🙄", "😴", "😭", "💀", "👻", "👽", "💩", "🤡", "👹", "😻",
+  "🐶", "🐱", "🐭", "🐹", "🐰", "🦊", "🐻", "🐼", "🐻‍❄️", "🐨", "🐯", "🦁", "🐮", "🐷", "🐸", "🐵", "🐔", "🐧", "🐦", "🐤",
+  "❤️", "🧡", "💛", "💚", "💙", "💜", "🖤", "🤍", "🤎", "💔", "❣️", "💕", "💞", "💓", "💗", "💖", "💘", "💝", "💟", "☮️",
+  "💯", "💢", "💥", "💫", "💦", "💨", "🕳️", "💣", "💬", "👁️‍🗨️", "🗨️", "🗯️", "💭", "💤", "👋", "🤚", "🖐️", "✋", "🖖", "👌",
+  "🎨", "🎬", "🎤", "🎧", "🎼", "🎹", "🥁", "🎷", "🎺", "🎸", "🪕", "🎻", "🎲", "♟️", "🎯", "🎳", "🎮", "🎰", "🧩", "🧸"
+];
+
+const generateCreativeName = (currentName: string) => {
+  let cleanName = currentName || "";
+
+  // Remove emojis and specific symbols
+  cleanName = cleanName.replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F700}-\u{1F77F}\u{1F780}-\u{1F7FF}\u{1F800}-\u{1F8FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '');
+
+  // Remove known words to extract the core subject
+  const allModifiers = [...CREATIVE_PREFIXES, ...CREATIVE_ADJECTIVES, ...CREATIVE_SUFFIXES];
+  for (const word of allModifiers) {
+    const regex = new RegExp(`\\b${word}\\b`, 'gi');
+    cleanName = cleanName.replace(regex, "");
+  }
+
+  cleanName = cleanName.trim();
+  if (!cleanName || cleanName.length < 2) cleanName = "Stickers";
+
+  // Strategy Selection: 1=Prefix+Base, 2=Adj+Base, 3=Base+Suffix, 4=Adj+Base+Suffix
+  const strategy = Math.floor(Math.random() * 4);
+  const randomEmoji1 = CREATIVE_EMOJIS[Math.floor(Math.random() * CREATIVE_EMOJIS.length)];
+  const randomEmoji2 = Math.random() > 0.5 ? CREATIVE_EMOJIS[Math.floor(Math.random() * CREATIVE_EMOJIS.length)] : "";
+
+  let result = "";
+
+  switch (strategy) {
+    case 0: // Prefix + Base (e.g., "Captain Cats")
+      const pref = CREATIVE_PREFIXES[Math.floor(Math.random() * CREATIVE_PREFIXES.length)];
+      result = `${pref} ${cleanName}`;
+      break;
+    case 1: // Adj + Base (e.g., "Savage Cats")
+      const adj = CREATIVE_ADJECTIVES[Math.floor(Math.random() * CREATIVE_ADJECTIVES.length)];
+      result = `${adj} ${cleanName}`;
+      break;
+    case 2: // Base + Suffix (e.g., "Cats Empire")
+      const suf = CREATIVE_SUFFIXES[Math.floor(Math.random() * CREATIVE_SUFFIXES.length)];
+      result = `${cleanName} ${suf}`;
+      break;
+    case 3: // Adj + Base + Suffix (e.g., "Toxic Cats Squad") - Rare but cool
+      const adj2 = CREATIVE_ADJECTIVES[Math.floor(Math.random() * CREATIVE_ADJECTIVES.length)];
+      const suf2 = CREATIVE_SUFFIXES[Math.floor(Math.random() * CREATIVE_SUFFIXES.length)];
+      result = `${adj2} ${cleanName} ${suf2}`;
+      break;
+  }
+
+  return `${result} ${randomEmoji1}${randomEmoji2}`;
+};
 
 const CATEGORIES = [
   { id: 'humor', name: 'Mizah', emoji: '😂' },
@@ -172,7 +248,7 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [selectedPack, setSelectedPack] = useState<StickerPack | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'stats' | 'messages' | 'notifications' | 'magic-wizard'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'stats' | 'messages' | 'notifications' | 'users'>('dashboard');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'passive' | 'premium' | 'normal' | 'animated' | 'static' | 'new'>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [statsFilter, setStatsFilter] = useState<'all' | 'active' | 'passive' | 'premium' | 'normal'>('all');
@@ -227,25 +303,20 @@ function App() {
   // Silme progress state
   const [deleteProgress, setDeleteProgress] = useState<{ deleting: boolean, message: string, current: number, total: number } | null>(null);
 
-  // Magic Wizard State'leri
-  const [wizardStep, setWizardStep] = useState(1);
-  const [wizardSuggestions, setWizardSuggestions] = useState<string[]>([]);
-  const [wizardMetadata, setWizardMetadata] = useState<any>(null);
-  const [wizardGifs, setWizardGifs] = useState<GifResult[]>([]);
-  const [selectedGifs, setSelectedGifs] = useState<GifResult[]>([]);
-  const [wizardLoading, setWizardLoading] = useState(false);
-  const [wizardSearchQuery, setWizardSearchQuery] = useState('');
-  const [wizardView, setWizardView] = useState<'create' | 'drafts'>('create');
-  const [wizardPage, setWizardPage] = useState(0);
-
-  // Otomasyon / Taslak State'leri
-  const [automationDrafts, setAutomationDrafts] = useState<StickerPack[]>([]);
-  const [loadingDrafts, setLoadingDrafts] = useState(false);
-  const [selectedDraft, setSelectedDraft] = useState<StickerPack | null>(null);
+  // Users State
+  const [usersData, setUsersData] = useState<UserData[]>([]);
+  const [usersLoading, setUsersLoading] = useState(false);
+  const [userSearch, setUserSearch] = useState('');
+  const [userFilter, setUserFilter] = useState<'all' | 'premium' | 'free' | 'subscription'>('all');
+  const [selectedUser, setSelectedUser] = useState<UserData | null>(null);
+  const [editingSubscription, setEditingSubscription] = useState(false);
+  const [subPlan, setSubPlan] = useState('none');
 
   const [adminName, setAdminName] = useState('');
   const [showWelcome, setShowWelcome] = useState(false);
   const [welcomeExit, setWelcomeExit] = useState(false);
+  const [showVideoBgModal, setShowVideoBgModal] = useState(false);
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (u) => {
@@ -505,400 +576,179 @@ function App() {
     }
   };
 
-  // ========== MAGIC WIZARD (SİHİRBAZ) FONKSİYONLARI ==========
+  // ========== KULLANICI YÖNETİM FONKSİYONLARI ==========
 
-  const fetchWizardSuggestions = async () => {
-    setWizardLoading(true);
+  const fetchUsers = async () => {
+    setUsersLoading(true);
     try {
-      const suggestions = await magicWizardService.getTopicSuggestions();
-      setWizardSuggestions(suggestions);
+      const snapshot = await getDocs(collection(db, 'users'));
+      const usersList: UserData[] = snapshot.docs.map(d => ({
+        id: d.id,
+        email: d.data().email || '',
+        is_premium: d.data().is_premium || false,
+        premium_type: d.data().premium_type || 'none',
+        premium_expiry: d.data().premium_expiry || 0,
+        favorite_packs: d.data().favorite_packs || [],
+        last_sync: d.data().last_sync || null,
+        cancelled_at: d.data().cancelled_at || null,
+        cancelled_reason: d.data().cancelled_reason || '',
+      }));
+      setUsersData(usersList);
     } catch (error) {
-      console.error("Suggestions error:", error);
+      console.error("Users fetch error:", error);
     } finally {
-      setWizardLoading(false);
+      setUsersLoading(false);
     }
   };
 
-  const handleSelectTopic = async (topic: string) => {
-    setWizardStep(2);
-    setWizardLoading(true);
-    setWizardPage(0);
-    try {
-      const existingNames = packs.map(p => p.name);
-      const meta = await magicWizardService.generatePackMetadata(topic, existingNames);
-      if (meta) {
-        setWizardMetadata(meta);
-        setWizardSearchQuery(meta.search_keyword || topic);
-      }
-    } catch (error) {
-      console.error("Meta generation error:", error);
-    } finally {
-      setWizardLoading(false);
+  const filteredUsers = useMemo(() => {
+    let filtered = usersData;
+    if (userSearch) {
+      const q = userSearch.toLowerCase();
+      filtered = filtered.filter(u => u.email.toLowerCase().includes(q));
     }
-  };
+    if (userFilter === 'premium') filtered = filtered.filter(u => u.is_premium);
+    else if (userFilter === 'free') filtered = filtered.filter(u => !u.is_premium);
+    else if (userFilter === 'subscription') filtered = filtered.filter(u => u.premium_type === 'subscription');
 
-  const handleWizardRegenerateMetadata = async () => {
-    if (!wizardMetadata) return;
-    setWizardLoading(true);
+    return filtered;
+  }, [usersData, userSearch, userFilter]);
+
+  const userStats = useMemo(() => {
+    const total = usersData.length;
+    const premium = usersData.filter(u => u.is_premium).length;
+    const subscription = usersData.filter(u => u.premium_type === 'subscription').length;
+    const free = total - premium;
+    return { total, premium, subscription, free };
+  }, [usersData]);
+
+  const handleUpdateSubscription = async (userId: string, plan: string) => {
     try {
-      const existingNames = packs.map(p => p.name);
-      const meta = await magicWizardService.generatePackMetadata(wizardSearchQuery, existingNames, wizardMetadata.name);
-      if (meta) {
-        setWizardMetadata(meta);
-      }
-    } catch (error) {
-      console.error("Regenerate error:", error);
-    } finally {
-      setWizardLoading(false);
-    }
-  };
-
-  const handleWizardSearch = async (page: number = 0) => {
-    if (!wizardSearchQuery) return;
-    setWizardLoading(true);
-    setWizardPage(page);
-    try {
-      const gifs = await magicWizardService.searchGifs(wizardSearchQuery, page);
-      setWizardGifs(gifs);
-      // Sayfa değişince yukarı kaydır (opsiyonel)
-      const container = document.getElementById('wizard-gif-container');
-      if (container) container.scrollTo({ top: 0, behavior: 'smooth' });
-    } catch (error) {
-      console.error("Search error:", error);
-    } finally {
-      setWizardLoading(false);
-    }
-  };
-
-  const toggleGifSelection = (gif: GifResult) => {
-    if (selectedGifs.find(g => g.id === gif.id)) {
-      setSelectedGifs(selectedGifs.filter(g => g.id !== gif.id));
-    } else {
-      if (selectedGifs.length >= 30) {
-        alert("WhatsApp limitleri gereği en fazla 30 sticker seçebilirsiniz.");
+      const user = usersData.find(u => u.id === userId);
+      // Prevent changing Google Play subscriptions via Admin
+      if (user?.subscription_source === 'google_play' && plan !== 'none') {
+        alert("Google Play abonelikleri admin panelinden değiştirilemez.");
         return;
       }
-      setSelectedGifs([...selectedGifs, gif]);
+
+      let isPremium = false;
+      let type = 'none';
+      let expiry = 0;
+      let details = '';
+
+      if (plan === 'monthly') {
+        isPremium = true;
+        type = 'subscription';
+        const d = new Date();
+        d.setMonth(d.getMonth() + 1);
+        expiry = d.getTime();
+        details = 'Admin tarafindan 1 Aylik eklendi';
+      } else if (plan === 'yearly') {
+        isPremium = true;
+        type = 'subscription';
+        const d = new Date();
+        d.setFullYear(d.getFullYear() + 1);
+        expiry = d.getTime();
+        details = 'Admin tarafindan 1 Yillik eklendi';
+      }
+
+      // History item
+      const historyItem: SubscriptionHistoryItem = {
+        id: crypto.randomUUID(),
+        type: isPremium ? 'start' : 'cancel',
+        plan: plan === 'none' ? 'none' : (plan as 'monthly' | 'yearly'),
+        source: 'admin',
+        timestamp: Date.now(),
+        date_str: new Date().toLocaleDateString('tr-TR'),
+        details: details
+      };
+
+      const updateData: any = {
+        is_premium: isPremium,
+        premium_type: type,
+        premium_expiry: expiry,
+        last_sync: serverTimestamp(),
+        subscription_source: isPremium ? 'admin' : 'none',
+        subscription_history: arrayUnion(historyItem)
+      };
+
+      await updateDoc(doc(db, 'users', userId), updateData);
+
+      // Optimistic Update
+      const updatedUser: UserData = {
+        ...user!,
+        is_premium: isPremium,
+        premium_type: type,
+        premium_expiry: expiry,
+        subscription_source: (isPremium ? 'admin' : 'none') as 'admin' | 'none',
+        subscription_history: [...(user?.subscription_history || []), historyItem]
+      };
+
+      setUsersData(prev => prev.map(u => u.id === userId ? updatedUser : u));
+      setEditingSubscription(false);
+      setSelectedUser(updatedUser);
+    } catch (error) {
+      console.error("Update subscription error:", error);
+      alert("Abonelik güncellenirken hata oluştu.");
     }
   };
 
-  const handleCreateWizardDraft = async () => {
-    if (selectedGifs.length < 3) {
-      alert("Bir paket için en az 3 sticker seçmelisiniz.");
+  const handleRevokeSubscription = async (userId: string) => {
+    const user = usersData.find(u => u.id === userId);
+    if (!user) return;
+
+    if (user.subscription_source === 'google_play') {
+      alert("Google Play üzerinden alınan abonelikler buradan iptal edilemez. Kullanıcının Play Store üzerinden iptal etmesi gerekir.");
       return;
     }
 
-    setIsProcessing(true);
-    const packId = `wizard_${Date.now()}_${wizardMetadata.name.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '')}`;
+    if (!window.confirm("Bu kullanıcının aboneliğini iptal etmek istediğinize emin misiniz?")) return;
 
     try {
-      setDeleteProgress({ deleting: true, message: 'Dosyalar işleniyor (FFmpeg)...', current: 0, total: selectedGifs.length });
+      const historyItem: SubscriptionHistoryItem = {
+        id: crypto.randomUUID(),
+        type: 'cancel',
+        plan: 'none',
+        source: 'admin',
+        timestamp: Date.now(),
+        date_str: new Date().toLocaleDateString('tr-TR'),
+        details: 'Admin tarafindan iptal edildi'
+      };
 
-      const processedStickers: any[] = [];
-      let trayUrl = "";
-
-      // 1. Her bir GIF'i indir ve WebP'ye çevir
-      for (let i = 0; i < selectedGifs.length; i++) {
-        const gif = selectedGifs[i];
-        setDeleteProgress(prev => prev ? { ...prev, current: i + 1, message: `Dönüştürülüyor: ${gif.title || 'Sticker'}` } : null);
-
-        const response = await fetch(gif.url);
-        const blob = await response.blob();
-        const file = new File([blob], `stk_${i}.gif`, { type: 'image/gif' });
-
-        const processedBlob = await stickerProcessor.processAnimated(file);
-        const fileName = `stk_${Date.now()}_${i}.webp`;
-        const storageRef = ref(storage, `automation_drafts/${packId}/${fileName}`);
-
-        await uploadBytes(storageRef, processedBlob);
-        const downloadUrl = await getDownloadURL(storageRef);
-
-        processedStickers.push({
-          image_file: fileName,
-          url: downloadUrl,
-          emojis: ["😀"] // Default emoji
-        });
-
-        // İlk sticker'ı tray yap
-        if (i === 0) {
-          const trayBlob = await stickerProcessor.processTray(file);
-          const trayRef = ref(storage, `automation_drafts/${packId}/tray.png`);
-          await uploadBytes(trayRef, trayBlob);
-          trayUrl = await getDownloadURL(trayRef);
-        }
-      }
-
-      setDeleteProgress(prev => prev ? { ...prev, message: 'Firestore kaydı oluşturuluyor...' } : null);
-
-      // 2. Draft verisini Firestore'a yaz
-      const draftData = {
-        id: packId,
-        name: wizardMetadata.name,
-        name_tr: wizardMetadata.name_tr || wizardMetadata.name,
-        category: wizardMetadata.category || 'other',
-        publisher: 'Sticky Wizard',
-        publisher_email: 'wizard@sticly.com',
+      await updateDoc(doc(db, 'users', userId), {
         is_premium: false,
-        is_active: false,
-        is_animated: true,
-        sticker_count: processedStickers.length,
-        stickers: processedStickers,
-        tray_url: trayUrl,
-        storage_path: `automation_drafts/${packId}`,
-        source_query: wizardSearchQuery,
-        created_at: new Date().toISOString(),
-        automation_created: true
-      };
-
-      await setDoc(doc(db, 'automation_drafts', packId), draftData);
-
-      setDeleteProgress(null);
-      alert(`✅ "${wizardMetadata.name}" paketi başarıyla taslak olarak oluşturuldu! Şimdi ana listeye gidip onaylayabilirsin.`);
-
-      // Wizard'ı sıfırla ve dashboard'a dön
-      resetWizard();
-      setActiveTab('dashboard');
-      fetchPacks();
-    } catch (error) {
-      console.error("Wizard draft creation error:", error);
-      alert("Taslak oluşturulurken hata oluştu.");
-      setDeleteProgress(null);
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  const resetWizard = () => {
-    setWizardStep(1);
-    setWizardMetadata(null);
-    setWizardGifs([]);
-    setSelectedGifs([]);
-    setWizardPage(0);
-  };
-
-  const fetchAutomationDrafts = async () => {
-    setLoadingDrafts(true);
-    try {
-      const draftsSnap = await getDocs(collection(db, 'automation_drafts'));
-      const drafts: StickerPack[] = draftsSnap.docs.map(d => {
-        const data = d.data();
-        return {
-          id: d.id,
-          ...data,
-          is_premium: false,
-          is_animated: data.is_animated ?? true,
-          download_count: 0,
-          view_count: 0,
-          favorite_count: 0,
-          sticker_count: Number(data.sticker_count || data.stickers?.length || 0),
-        } as StickerPack;
-      });
-      setAutomationDrafts(drafts.sort((a, b) => (b.created_at || '').localeCompare(a.created_at || '')));
-    } catch (error) {
-      console.error("Automation drafts fetch error:", error);
-    } finally {
-      setLoadingDrafts(false);
-    }
-  };
-
-  const approveAutomationDraft = async (draft: StickerPack) => {
-    if (!window.confirm(`"${draft.name}" paketini yayına almak istediğinize emin misiniz?`)) return;
-
-    setIsProcessing(true);
-    // Overlay'in görünmesi için başlangıç değerleri
-    setDeleteProgress({ deleting: true, message: 'Paket hazırlanıyor (Sistem Aktarımı)...', current: 0, total: 100 });
-
-    try {
-      // Bir tick bekleyelim ki React render yapabilsin
-      await new Promise(resolve => setTimeout(resolve, 300));
-
-      const oldPath = (draft as any).storage_path || `automation_drafts/${draft.id}`;
-      const newPath = `stickers/${draft.id}`;
-
-      // 1. Dosyaları listele
-      const oldFolderRef = ref(storage, oldPath);
-      const filesRes = await listAll(oldFolderRef);
-      const totalFiles = filesRes.items.length;
-
-      if (totalFiles === 0) {
-        throw new Error("Taşınacak çıkartma bulunamadı! Lütfen taslağın hazır olduğundan emin olun.");
-      }
-
-      setDeleteProgress({ deleting: true, message: `${totalFiles} çıkartma taşınmaya hazır...`, current: 0, total: totalFiles });
-
-      const updatedStickers = [];
-      let newTrayUrl = draft.tray_url;
-
-      // 2. Dosyaları tek tek taşı (Hata riskini azaltmak için seri işlem)
-      for (let i = 0; i < totalFiles; i++) {
-        const item = filesRes.items[i];
-        const fileName = item.name;
-
-        setDeleteProgress(prev => prev ? { ...prev, current: i + 1, message: `Taşınıyor: ${fileName}` } : null);
-
-        // Dosyayı çek (CORS bypass)
-        const fileBytes = await getBytes(item);
-        const blob = new Blob([fileBytes]);
-
-        // Yeni konuma yükle
-        const newFileRef = ref(storage, `${newPath}/${fileName}`);
-        await uploadBytes(newFileRef, blob);
-        const newUrl = await getDownloadURL(newFileRef);
-
-        // Eskiyi sil
-        await deleteObject(item);
-
-        if (fileName.startsWith('tray')) {
-          newTrayUrl = newUrl;
-        } else {
-          const existingSticker = draft.stickers?.find(s => s.image_file === fileName);
-          if (existingSticker) {
-            updatedStickers.push({
-              image_file: fileName,
-              url: newUrl,
-              emojis: existingSticker.emojis || ["😀"]
-            });
-          }
-        }
-
-        // Sunucuya nefes aldır (Küçük bir gecikme)
-        await new Promise(resolve => setTimeout(resolve, 100));
-      }
-
-      setDeleteProgress(prev => prev ? { ...prev, message: 'Firestore güncelleniyor...' } : null);
-
-      // 3. Yeni pack verisini hazırla
-      const packData = {
-        ...draft,
-        stickers: updatedStickers,
-        sticker_count: updatedStickers.length,
-        tray_url: newTrayUrl,
-        is_active: true,
-        storage_path: "stickers", // Uygulamanın beklediği sabit yol
-        automation_created: false
-      };
-
-      delete (packData as any).source_query;
-
-      // 4. Ana koleksiyona yaz ve taslağı temizle
-      await setDoc(doc(db, 'stickers', draft.id), packData);
-      await deleteDoc(doc(db, 'automation_drafts', draft.id));
-
-      setAutomationDrafts(prev => prev.filter(d => d.id !== draft.id));
-      await fetchPacks();
-
-      setDeleteProgress(null);
-      alert(`✅ "${draft.name}" paketi başarıyla "stickers" klasörüne taşındı ve yayınlandı!`);
-    } catch (error: any) {
-      console.error("Approve error:", error);
-      let errorMsg = error.message || String(error);
-
-      if (errorMsg.includes('retry-limit-exceeded')) {
-        errorMsg = "Giriş/Çıkış Hatası (Ağ Sorunu). CORS ayarları uygulanmış olmalı. Lütfen sayfayı yenileyip tekrar deneyin.";
-      }
-
-      alert("⚠️ Onaylama sırasında bir sorun oluştu:\n\n" + errorMsg);
-      setDeleteProgress(null);
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  const removeStickerFromDraft = async (draft: StickerPack, stickerIdx: number) => {
-    if (!window.confirm("Bu çıkartmayı taslaktan kaldırmak istediğinize emin misiniz?")) return;
-
-    try {
-      const stickerToDelete = draft.stickers[stickerIdx];
-      const updatedStickers = [...draft.stickers];
-      updatedStickers.splice(stickerIdx, 1);
-
-      // 1. Firestore'u Güncelle
-      const draftRef = doc(db, 'automation_drafts', draft.id);
-      await updateDoc(draftRef, {
-        stickers: updatedStickers,
-        sticker_count: updatedStickers.length
+        premium_type: 'none',
+        premium_expiry: 0,
+        last_sync: serverTimestamp(),
+        subscription_source: 'none',
+        subscription_history: arrayUnion(historyItem)
       });
 
-      // 2. Storage'dan Sil
-      const storagePath = (draft as any).storage_path || `automation_drafts/${draft.id}`;
-      const fileRef = ref(storage, `${storagePath}/${stickerToDelete.image_file}`);
+      const updatedUser: UserData = {
+        ...user,
+        is_premium: false,
+        premium_type: 'none',
+        premium_expiry: 0,
+        subscription_source: 'none',
+        subscription_history: [...(user.subscription_history || []), historyItem]
+      };
 
-      try {
-        await deleteObject(fileRef);
-        console.log('[DRAFT DELETE] ✅ Storage dosyası silindi:', stickerToDelete.image_file);
-      } catch (storageErr: any) {
-        console.warn('[DRAFT DELETE] ⚠️ Storage dosyası zaten yok veya silinemedi:', storageErr.message);
-      }
-
-      // 3. State'i güncelle
-      const updatedDraft = { ...draft, stickers: updatedStickers, sticker_count: updatedStickers.length };
-      setAutomationDrafts(prev => prev.map(d => d.id === draft.id ? updatedDraft : d));
-      setSelectedDraft(updatedDraft);
-
-      // 4. Kullanıcıya Bildirim Ver
-      alert(`✅ "${stickerToDelete.image_file}" çıkartması taslaktan ve sunucudan başarıyla silindi.`);
+      setUsersData(prev => prev.map(u => u.id === userId ? updatedUser : u));
+      setSelectedUser(updatedUser);
     } catch (error) {
-      console.error("Remove sticker error:", error);
-      alert("Çıkartma silinemedi: " + error);
+      console.error("Revoke subscription error:", error);
+      alert("Abonelik iptal edilirken hata oluştu.");
     }
   };
 
-  const deleteAutomationDraft = async (draft: StickerPack) => {
-    if (!window.confirm(`"${draft.name}" taslağını silmek istediğinize emin misiniz? Bu işlem geri alınamaz.`)) return;
-
-    setIsProcessing(true);
-    setDeleteProgress({ deleting: true, message: 'Taslak siliniyor...', current: 0, total: 0 });
-
-    try {
-      const storagePath = (draft as any).storage_path || `automation_drafts/${draft.id}`;
-
-      // Storage'daki dosyaları sil
-      const folderRef = ref(storage, storagePath);
-      const files = await listAll(folderRef);
-
-      const totalFiles = files.items.length;
-      setDeleteProgress(prev => prev ? { ...prev, total: totalFiles, message: 'Dosyalar siliniyor...' } : null);
-
-      for (let i = 0; i < totalFiles; i++) {
-        const item = files.items[i];
-        setDeleteProgress(prev => prev ? { ...prev, current: i + 1, message: `Siliniyor: ${item.name}` } : null);
-        await deleteObject(item);
-      }
-
-      setDeleteProgress(prev => prev ? { ...prev, message: 'Veritabanı kaydı siliniyor...' } : null);
-
-      // Firestore'dan sil
-      await deleteDoc(doc(db, 'automation_drafts', draft.id));
-
-      // State'i güncelle
-      setAutomationDrafts(prev => prev.filter(d => d.id !== draft.id));
-
-      setTimeout(() => {
-        setDeleteProgress(null);
-        alert(`🗑️ "${draft.name}" taslağı silindi.`);
-      }, 500);
-
-    } catch (error) {
-      console.error("Delete draft error:", error);
-      setDeleteProgress(null);
-      alert("Silme sırasında hata oluştu: " + error);
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  // Wizard sekmesine geçince otomatik yüklemeler
+  // Users sekmesine geçince otomatik yükle
   useEffect(() => {
-    if (activeTab === 'magic-wizard') {
-      if (wizardView === 'create' && wizardSuggestions.length === 0) {
-        fetchWizardSuggestions();
-      } else if (wizardView === 'drafts') {
-        fetchAutomationDrafts();
-      }
+    if (activeTab === 'users' && usersData.length === 0) {
+      fetchUsers();
     }
-  }, [activeTab, wizardView]);
+  }, [activeTab]);
 
-  // ========== OTOMASYON FONKSİYONLARI SON ==========
+  // ========== KULLANICI YÖNETİM FONKSİYONLARI SON ==========
 
   const handleCreatePack = async () => {
     if (!newPackData.name || !newPackData.publisher) return alert("Lütfen isim ve yayıncı alanlarını doldurun.");
@@ -1049,27 +899,10 @@ function App() {
     }
   };
 
-  const handleAddSticker = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || !selectedPack) return;
+  const uploadStickersBatch = async (files: File[], removeBgForVideos: boolean = false) => {
+    if (!selectedPack) return;
 
-    const currentCount = selectedPack.sticker_count || 0;
     const uploadCount = files.length;
-    const totalCount = currentCount + uploadCount;
-
-    // WhatsApp Paket Standartları Kontrolü (Min 3, Max 30 Toplam)
-    if (totalCount > 30) {
-      alert(`Hata: Bir pakette en fazla 30 sticker olabilir. (Mevcut: ${currentCount}, Yeni: ${uploadCount}, Toplam: ${totalCount})`);
-      e.target.value = '';
-      return;
-    }
-
-    if (totalCount < 3) {
-      alert(`Hata: Bir pakette en az 3 sticker olmalıdır. (Mevcut: ${currentCount}, Yeni: ${uploadCount}, Toplam: ${totalCount}). En az ${3 - currentCount} adet daha eklemelisiniz.`);
-      e.target.value = '';
-      return;
-    }
-
     setIsProcessing(true);
     setUploadProgress({ current: 0, total: uploadCount, message: 'İşlem başlıyor...' });
 
@@ -1077,10 +910,12 @@ function App() {
       const collectionName = selectedPack.is_premium ? 'premium_stickers' : 'stickers';
       const packRef = doc(db, collectionName, selectedPack.id);
       const newStickers: Sticker[] = [];
+      const processedBlobs: Blob[] = [];
 
       for (let i = 0; i < uploadCount; i++) {
         const file = files[i];
         const isAnimatedFile = file.type.includes('video') || file.type.includes('gif');
+
 
         // Karışık paket kontrolü (WhatsApp kısıtlaması)
         if (selectedPack.is_animated && !isAnimatedFile && !file.name.endsWith('.webp')) {
@@ -1102,39 +937,49 @@ function App() {
         const isAnimatedPack = selectedPack.is_animated ?? false;
         const isWebP = file.type === 'image/webp' || file.name.toLowerCase().endsWith('.webp');
 
-        // WebP dosyalarını da işle (WhatsApp koşullarına uygun hale getir)
-        if (isWebP) {
-          // Animasyonlu WebP mi kontrol et
-          const isAnimatedWebP = await stickerProcessor.isAnimatedWebP(file);
+        try {
+          // WebP dosyalarını da işle (WhatsApp koşullarına uygun hale getir)
+          if (isWebP) {
+            // Animasyonlu WebP mi kontrol et
+            const isAnimatedWebP = await stickerProcessor.isAnimatedWebP(file);
 
-          if (isAnimatedPack && isAnimatedWebP) {
-            // Animasyonlu paket + Animasyonlu WebP
-            processedBlob = await stickerProcessor.processAnimatedWebP(file, (p) => {
+            if (isAnimatedPack && isAnimatedWebP) {
+              // Animasyonlu paket + Animasyonlu WebP
+              processedBlob = await stickerProcessor.processAnimatedWebP(file, (p) => {
+                setUploadProgress(prev => prev ? { ...prev, message: `${file.name}: ${p.message}` } : null);
+              });
+            } else if (isAnimatedPack && !isAnimatedWebP) {
+              // Animasyonlu pakete statik WebP eklenemez
+              alert(`Hata: Bu paket hareketli bir pakettir. "${file.name}" statik bir WebP dosyasıdır.`);
+              continue;
+            } else if (!isAnimatedPack && isAnimatedWebP) {
+              // Statik pakete animasyonlu WebP eklenemez
+              alert(`Hata: Bu paket statik bir pakettir. "${file.name}" animasyonlu bir WebP dosyasıdır.`);
+              continue;
+            } else {
+              // Statik paket + Statik WebP
+              processedBlob = await stickerProcessor.processStaticWebP(file, (p) => {
+                setUploadProgress(prev => prev ? { ...prev, message: `${file.name}: ${p.message}` } : null);
+              });
+            }
+          } else if (isAnimatedPack) {
+            // Video için removeBgForVideos parametresini geçir
+            processedBlob = await stickerProcessor.processAnimated(file, (p) => {
               setUploadProgress(prev => prev ? { ...prev, message: `${file.name}: ${p.message}` } : null);
-            });
-          } else if (isAnimatedPack && !isAnimatedWebP) {
-            // Animasyonlu pakete statik WebP eklenemez
-            alert(`Hata: Bu paket hareketli bir pakettir. "${file.name}" statik bir WebP dosyasıdır.`);
-            continue;
-          } else if (!isAnimatedPack && isAnimatedWebP) {
-            // Statik pakete animasyonlu WebP eklenemez
-            alert(`Hata: Bu paket statik bir pakettir. "${file.name}" animasyonlu bir WebP dosyasıdır.`);
-            continue;
+            }, removeBgForVideos);
           } else {
-            // Statik paket + Statik WebP
-            processedBlob = await stickerProcessor.processStaticWebP(file, (p) => {
+            processedBlob = await stickerProcessor.processStatic(file, (p) => {
               setUploadProgress(prev => prev ? { ...prev, message: `${file.name}: ${p.message}` } : null);
             });
           }
-        } else if (isAnimatedPack) {
-          processedBlob = await stickerProcessor.processAnimated(file, (p) => {
-            setUploadProgress(prev => prev ? { ...prev, message: `${file.name}: ${p.message}` } : null);
-          });
-        } else {
-          processedBlob = await stickerProcessor.processStatic(file, (p) => {
-            setUploadProgress(prev => prev ? { ...prev, message: `${file.name}: ${p.message}` } : null);
-          });
+        } catch (processingError: any) {
+          // Dosya işleme hatası - kullanıcıya bildir ve bu dosyayı atla
+          console.error(`Dosya işleme hatası (${file.name}):`, processingError);
+          alert(`Hata: "${file.name}" işlenemedi.\n\n${processingError.message || 'Bilinmeyen hata'}`);
+          continue;
         }
+
+        processedBlobs.push(processedBlob);
 
         const fileName = `${Date.now()}_${i}.webp`;
         const storagePath = `stickers/${selectedPack.id}/${fileName}`;
@@ -1156,87 +1001,121 @@ function App() {
         return;
       }
 
+      // AUTO TRAY: Randomly select one from the new batch to be the tray
+      let newTrayUrl = selectedPack.tray_url;
+      let newTrayFile = selectedPack.tray_image_file;
+
+      if (processedBlobs.length > 0) {
+        setUploadProgress({ current: uploadCount, total: uploadCount, message: 'Kapak resmi otomatik seçiliyor...' });
+
+        try {
+          // Eski kapak resmini sil (varsa)
+          if (selectedPack.tray_image_file) {
+            const oldTrayPath = `stickers/${selectedPack.id}/${selectedPack.tray_image_file}`;
+            try { await deleteObject(ref(storage, oldTrayPath)); } catch (e) { console.warn("Old tray delete fail", e); }
+          }
+
+          // Random seçim
+          const randomIdx = Math.floor(Math.random() * processedBlobs.length);
+          const chosenBlob = processedBlobs[randomIdx];
+
+          // Blob -> File dönüşümü (stickerProcessor.processTray için)
+          const tempFile = new File([chosenBlob], "auto_tray.webp", { type: 'image/webp' });
+
+          const trayProcessedBlob = await stickerProcessor.processTray(tempFile, (p) => {
+            setUploadProgress(prev => prev ? { ...prev, message: `Kapak: ${p.message}` } : null);
+          });
+
+          const trayFileName = `tray_${Date.now()}.png`;
+          const trayStorageRef = ref(storage, `stickers/${selectedPack.id}/${trayFileName}`);
+
+          await uploadBytes(trayStorageRef, trayProcessedBlob);
+          newTrayUrl = await getDownloadURL(trayStorageRef);
+          newTrayFile = trayFileName;
+
+        } catch (err) {
+          console.error("Auto tray failed:", err);
+          // Hata olsa bile stickerlar eklendi, devam et
+        }
+      }
+
       const newVersion = Date.now().toString();
-      await updateDoc(packRef, {
+      const updatedData = {
         stickers: [...(selectedPack.stickers || []), ...newStickers],
         sticker_count: Math.max(0, (selectedPack.sticker_count || 0) + newStickers.length),
-        image_data_version: newVersion
-      });
+        image_data_version: newVersion,
+        tray_url: newTrayUrl,
+        tray_image_file: newTrayFile
+      };
+
+      await updateDoc(packRef, updatedData);
 
       const updated = {
         ...selectedPack,
-        stickers: [...(selectedPack.stickers || []), ...newStickers],
-        sticker_count: (selectedPack.sticker_count || 0) + newStickers.length,
-        image_data_version: newVersion
+        ...updatedData
       };
 
       setPacks(packs.map(p => p.id === selectedPack.id ? updated : p));
       setSelectedPack(updated);
-      alert(`${newStickers.length} sticker başarıyla işlendi ve eklendi.`);
-    } catch (error) {
+      alert(`${newStickers.length} sticker başarıyla işlendi ve eklendi. Kapak resmi güncellendi.`);
+    } catch (error: any) {
       console.error(error);
-      alert("Yükleme hatası: " + error);
-    } finally {
-      setIsProcessing(false);
-      setUploadProgress(null);
-      if (e.target) e.target.value = '';
-    }
-  };
-
-  const handleUpdateTray = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !selectedPack) return;
-
-    setIsProcessing(true);
-    setUploadProgress({ current: 1, total: 1, message: 'Kapak resmi hazırlanıyor...' });
-
-    // Kısa gecikme: State'in render edilmesine ve overlay'in görünmesine izin ver
-    await new Promise(r => setTimeout(r, 100));
-
-    try {
-      // Eski kapak resmini sil (eğer varsa)
-      if (selectedPack.tray_image_file) {
-        setUploadProgress(prev => prev ? { ...prev, message: 'Eski kapak resmi siliniyor...' } : null);
-        const oldTrayPath = `stickers/${selectedPack.id}/${selectedPack.tray_image_file}`;
-        try {
-          await deleteObject(ref(storage, oldTrayPath));
-          console.log('Eski kapak resmi silindi:', oldTrayPath);
-        } catch (deleteError) {
-          console.log('Eski kapak resmi silinemedi (muhtemelen mevcut değil):', deleteError);
-        }
-      }
-
-      setUploadProgress(prev => prev ? { ...prev, message: 'Arka plan siliniyor...' } : null);
-      const processedBlob = await stickerProcessor.processTray(file, (p) => {
-        setUploadProgress(prev => prev ? { ...prev, message: p.message } : null);
-      });
-
-      const collectionName = selectedPack.is_premium ? 'premium_stickers' : 'stickers';
-      const fileName = `tray_${Date.now()}.png`;
-      const storagePath = `stickers/${selectedPack.id}/${fileName}`;
-      const storageRef = ref(storage, storagePath);
-
-      await uploadBytes(storageRef, processedBlob);
-      const url = await getDownloadURL(storageRef);
-      const newVersion = Date.now().toString();
-
-      await updateDoc(doc(db, collectionName, selectedPack.id), {
-        tray_url: url,
-        tray_image_file: fileName,
-        image_data_version: newVersion
-      });
-
-      const updated = { ...selectedPack, tray_url: url, tray_image_file: fileName, image_data_version: newVersion };
-      setPacks(packs.map(p => p.id === selectedPack.id ? updated : p));
-      setSelectedPack(updated);
-      alert("Kapak resmi başarıyla işlendi ve güncellendi. Eski kapak resmi silindi.");
-    } catch (e) {
-      alert("Hata: " + e);
+      alert("Yükleme hatası: " + error.message);
     } finally {
       setIsProcessing(false);
       setUploadProgress(null);
     }
   };
+
+  const handleVideoProcessingChoice = (removeBg: boolean) => {
+    setShowVideoBgModal(false);
+    if (pendingFiles.length > 0) {
+      uploadStickersBatch(pendingFiles, removeBg);
+      setPendingFiles([]);
+    }
+  };
+
+  const handleAddSticker = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const filesList = e.target.files;
+    if (!filesList || !selectedPack) return;
+
+    const currentCount = selectedPack.sticker_count || 0;
+    const uploadCount = filesList.length;
+    const totalCount = currentCount + uploadCount;
+
+    // WhatsApp Paket Standartları Kontrolü (Min 3, Max 30 Toplam)
+    if (totalCount > 30) {
+      alert(`Hata: Bir pakette en fazla 30 sticker olabilir. (Mevcut: ${currentCount}, Yeni: ${uploadCount}, Toplam: ${totalCount})`);
+      e.target.value = '';
+      return;
+    }
+
+    if (totalCount < 3) {
+      alert(`Hata: Bir pakette en az 3 sticker olmalıdır. (Mevcut: ${currentCount}, Yeni: ${uploadCount}, Toplam: ${totalCount}). En az ${3 - currentCount} adet daha eklemelisiniz.`);
+      e.target.value = '';
+      return;
+    }
+
+    const files = Array.from(filesList);
+
+    // Video (MP4) veya GIF kontrolü
+    const hasAnimatedWithPrompt = files.some(f =>
+      f.type.startsWith('video/mp4') || f.name.endsWith('.mp4') ||
+      f.type === 'image/gif' || f.name.endsWith('.gif')
+    );
+
+    if (hasAnimatedWithPrompt) {
+      setPendingFiles(files);
+      setShowVideoBgModal(true);
+      e.target.value = '';
+      return;
+    }
+
+    await uploadStickersBatch(files, false);
+    e.target.value = '';
+  };
+
+
 
   const deletePack = async (pack: StickerPack) => {
     if (!window.confirm(`"${pack.name}" paketini TAMAMEN silmek istediğinize emin misiniz?\n\nBu işlem geri alınamaz ve tüm dosyalar silinecek!`)) return;
@@ -1392,7 +1271,7 @@ function App() {
             <div className="absolute inset-0 bg-primary/20 rounded-3xl rotate-12 animate-pulse" />
             <div className="absolute inset-0 bg-primary/20 rounded-3xl -rotate-12 animate-pulse delay-75" />
             <div className="relative bg-[#0F1112] border-2 border-primary/50 w-full h-full rounded-3xl flex items-center justify-center shadow-[0_0_50px_rgba(16,185,129,0.3)]">
-              <Wand2 className="text-primary animate-bounce-subtle" size={56} />
+              <Sparkles className="text-primary animate-bounce-subtle" size={56} />
             </div>
             {/* Spinning Rings */}
             <div className="absolute -inset-4 border border-primary/10 rounded-full border-t-primary/40 animate-spin-slow" />
@@ -1648,7 +1527,7 @@ function App() {
                 { id: 'stats', label: 'İstatistikler', icon: BarChart3 },
                 { id: 'messages', label: 'Mesajlar', icon: Mail, count: messages.filter(m => m.status === 'unread').length },
                 { id: 'notifications', label: 'Bildirimler', icon: Bell },
-                { id: 'magic-wizard', label: 'Sihirbaz', icon: Wand2, count: automationDrafts.length }
+                { id: 'users', label: 'Kullanicilar', icon: Users }
               ].map((item) => (
                 <button
                   key={item.id}
@@ -1698,7 +1577,7 @@ function App() {
               { id: 'stats', icon: BarChart3, label: 'Veriler' },
               { id: 'messages', icon: Mail, label: 'Mesajlar', count: messages.filter(m => m.status === 'unread').length },
               { id: 'notifications', icon: Bell, label: 'Bildirim' },
-              { id: 'magic-wizard', icon: Wand2, label: 'Sihirbaz', count: automationDrafts.length }
+              { id: 'users', icon: Users, label: 'Kullanicilar' }
             ].map(item => (
               <button
                 key={item.id}
@@ -1952,10 +1831,7 @@ function App() {
                         ) : (
                           <Package className="w-16 h-16 text-textSec/20" />
                         )}
-                        <label className="absolute inset-0 bg-primary/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer">
-                          <RefreshCcw className="text-white" size={24} />
-                          <input type="file" className="hidden" onChange={handleUpdateTray} disabled={isProcessing} />
-                        </label>
+
                       </div>
                       <div className="space-y-4">
                         <div className="space-y-1">
@@ -2736,536 +2612,361 @@ function App() {
               )}
             </div>
           </div>
-        ) : activeTab === 'magic-wizard' ? (
+        ) : activeTab === 'users' ? (
           <div className="flex-1 overflow-y-auto p-4 md:p-12 custom-scrollbar bg-background">
-            <div className="max-w-6xl mx-auto space-y-8 md:space-y-12">
-              {/* Wizard Header */}
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-8 gap-4 px-4">
+            <div className="max-w-7xl mx-auto space-y-8 md:space-y-12">
+              {/* Users Header */}
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 px-4">
                 <div className="flex items-center gap-5">
                   <div className="w-16 h-16 bg-gradient-to-br from-primary/20 to-accent/20 rounded-2xl flex items-center justify-center shadow-inner">
-                    <Wand2 size={36} className="text-primary animate-pulse" />
+                    <Users size={36} className="text-primary" />
                   </div>
                   <div>
-                    <h1 className="text-3xl font-black text-white tracking-tight">Sihirbaz v2.0</h1>
-                    <div className="flex items-center gap-6 mt-2">
-                      <button
-                        onClick={() => setWizardView('create')}
-                        className={cn("text-xs font-black uppercase tracking-widest transition-all", wizardView === 'create' ? "text-primary border-b-2 border-primary pb-1" : "text-textSec hover:text-white")}
-                      >
-                        Paket Tasarla
-                      </button>
-                      <button
-                        onClick={() => setWizardView('drafts')}
-                        className={cn("text-xs font-black uppercase tracking-widest transition-all relative", wizardView === 'drafts' ? "text-primary border-b-2 border-primary pb-1" : "text-textSec hover:text-white")}
-                      >
-                        Bekleyen Taslaklar
-                        {automationDrafts.length > 0 && (
-                          <span className="absolute -top-3 -right-4 w-5 h-5 bg-danger text-[10px] text-white rounded-full flex items-center justify-center border-2 border-background font-black">
-                            {automationDrafts.length}
-                          </span>
-                        )}
-                      </button>
-                    </div>
+                    <h1 className="text-3xl font-black text-white tracking-tight">Kullanicilar</h1>
+                    <p className="text-textSec text-sm font-medium mt-1">Firebase kullanici yonetimi</p>
                   </div>
                 </div>
-
-                {wizardView === 'create' && (
-                  <div className="flex items-center gap-3 bg-card/50 backdrop-blur-md rounded-2xl p-2 border border-white/5">
-                    {[1, 2, 3].map(step => (
-                      <div
-                        key={step}
-                        className={cn(
-                          "px-4 h-10 rounded-xl flex items-center gap-2 text-xs font-black transition-all",
-                          wizardStep === step ? "bg-primary text-white shadow-lg shadow-primary/20" : wizardStep > step ? "bg-success/20 text-success" : "text-textSec bg-white/5"
-                        )}
-                      >
-                        <span className="w-5 h-5 rounded-lg flex items-center justify-center bg-black/20">
-                          {wizardStep > step ? <Check size={12} /> : step}
-                        </span>
-                        <span className="hidden sm:inline">
-                          {step === 1 ? 'KONU' : step === 2 ? 'DETAYLAR' : 'GÖRSELLER'}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                <button
+                  onClick={fetchUsers}
+                  disabled={usersLoading}
+                  className="flex items-center gap-3 px-6 py-3 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-2xl text-xs font-black uppercase tracking-widest transition-all"
+                >
+                  <RefreshCcw size={16} className={usersLoading ? "animate-spin" : ""} />
+                  Yenile
+                </button>
               </div>
 
-              {/* Wizard Body */}
-              <div className="bg-card/40 backdrop-blur-sm rounded-[40px] border border-white/5 overflow-hidden shadow-2xl relative min-h-[600px] flex flex-col transition-all duration-500">
-                {wizardLoading && (
-                  <div className="absolute inset-0 bg-background/80 backdrop-blur-md z-50 flex flex-col items-center justify-center animate-in fade-in duration-300">
-                    <div className="relative mb-8">
-                      <div className="absolute inset-0 bg-primary/20 blur-[60px] rounded-full animate-pulse" />
-                      <RefreshCcw size={64} className="animate-spin text-primary relative z-10" />
-                    </div>
-                    <h3 className="text-2xl font-black text-white uppercase tracking-tighter">AI Sihir Yapıyor...</h3>
-                    <p className="text-textSec text-sm mt-3 font-bold opacity-60">Milyarlarca görsel arasında sizin için en iyileri aranıyor</p>
-                  </div>
-                )}
+              {/* Stats Cards */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 px-4">
+                <div className="bg-card/60 backdrop-blur-sm px-5 py-4 rounded-2xl border border-white/5">
+                  <span className="text-[10px] font-bold text-textSec uppercase tracking-widest">Toplam</span>
+                  <p className="text-2xl font-black text-white mt-1">{userStats.total.toLocaleString()}</p>
+                </div>
+                <div className="bg-card/60 backdrop-blur-sm px-5 py-4 rounded-2xl border border-primary/10">
+                  <span className="text-[10px] font-bold text-primary uppercase tracking-widest">Premium</span>
+                  <p className="text-2xl font-black text-primary mt-1">{userStats.premium.toLocaleString()}</p>
+                </div>
+                <div className="bg-card/60 backdrop-blur-sm px-5 py-4 rounded-2xl border border-accent/10">
+                  <span className="text-[10px] font-bold text-accent uppercase tracking-widest">Abonelik</span>
+                  <p className="text-2xl font-black text-accent mt-1">{userStats.subscription.toLocaleString()}</p>
+                </div>
 
-                {wizardView === 'create' && wizardStep === 1 && (
-                  <div className="p-5 md:p-10 flex-1 flex flex-col animate-in fade-in slide-in-from-bottom-8 duration-700">
-                    <div className="max-w-3xl mx-auto w-full text-center space-y-2 md:space-y-4 mb-8 md:mb-12 relative">
-                      <h2 className="text-2xl md:text-5xl font-black text-white tracking-tighter italic">Yeni Bir Hikaye Başlat.</h2>
-                      <p className="text-sm md:text-lg text-textSec font-medium">Trendlerden birini seçin veya hayalinizdeki konuyu AI'ya anlatın.</p>
-                      <button
-                        onClick={fetchWizardSuggestions}
-                        className="absolute -top-4 -right-8 p-4 bg-primary/10 hover:bg-primary/20 text-primary rounded-2xl transition-all shadow-xl z-20"
-                        title="Önerileri Yenile"
-                      >
-                        <RefreshCcw size={24} className={wizardLoading ? "animate-spin" : ""} />
-                      </button>
-                    </div>
+              </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-12">
-                      {wizardSuggestions.map((suggestion, idx) => (
-                        <button
-                          key={idx}
-                          onClick={() => handleSelectTopic(suggestion)}
-                          className="group relative h-32 md:h-48 bg-hover/30 hover:bg-primary/10 border border-white/5 rounded-[2rem] p-5 md:p-6 text-left transition-all hover:scale-[1.02] hover:border-primary/20"
-                        >
-                          <div className="bg-primary/10 w-8 h-8 md:w-10 md:h-10 rounded-xl flex items-center justify-center text-primary mb-3 md:mb-4 group-hover:scale-110 group-hover:bg-primary group-hover:text-white transition-all">
-                            <Sparkles className="w-4 h-4 md:w-5 md:h-5 text-primary group-hover:text-white transition-colors" />
-                          </div>
-                          <span className="block font-black text-white text-base md:text-xl leading-tight tracking-tight">{suggestion}</span>
-                          <div className="absolute bottom-6 right-6 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <ChevronRight size={24} className="text-primary" />
-                          </div>
-                        </button>
-                      ))}
-                    </div>
+              {/* Search & Filter Bar */}
+              <div className="flex flex-col sm:flex-row gap-4 px-4">
+                <div className="flex-1 relative">
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-textSec" size={20} />
+                  <input
+                    type="text"
+                    value={userSearch}
+                    onChange={(e) => setUserSearch(e.target.value)}
+                    placeholder="E-posta ara..."
+                    className="w-full h-14 bg-hover border border-white/5 rounded-xl pl-12 pr-5 text-white font-bold placeholder:text-textSec/30 outline-none focus:border-primary/50 transition-all"
+                  />
+                </div>
+                <select
+                  value={userFilter}
+                  onChange={(e) => setUserFilter(e.target.value as any)}
+                  className="h-14 bg-hover border border-white/5 rounded-xl px-4 text-white font-bold outline-none focus:border-primary/50 transition-all appearance-none min-w-[160px]"
+                >
+                  <option value="all">Tumunu Goster</option>
+                  <option value="premium">Premium</option>
+                  <option value="free">Ucretsiz</option>
+                  <option value="subscription">Abonelik</option>
+                </select>
+              </div>
 
-                    <div className="max-w-2xl mx-auto w-full">
-                      <div className="relative group">
-                        <div className="absolute inset-0 bg-primary/10 blur-2xl rounded-full opacity-0 group-focus-within:opacity-100 transition-opacity" />
-                        <input
-                          type="text"
-                          placeholder="Kendi konunu yaz..."
-                          className="relative w-full h-14 md:h-20 bg-hover/50 border border-white/10 rounded-full px-6 md:px-10 pr-16 md:pr-20 text-sm md:text-xl text-white font-bold placeholder:text-textSec/40 focus:border-primary focus:bg-card outline-none transition-all shadow-2xl"
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') handleSelectTopic(e.currentTarget.value);
-                          }}
-                        />
-                        <button
-                          onClick={(e) => handleSelectTopic((e.currentTarget.previousSibling as HTMLInputElement).value)}
-                          className="absolute right-2 md:right-4 top-2 md:top-4 w-10 h-10 md:w-12 md:h-12 bg-primary hover:bg-primary/80 rounded-full flex items-center justify-center text-white transition-all shadow-lg shadow-primary/30 active:scale-90"
-                        >
-                          <Send className="w-4 h-4 md:w-5 md:h-5 text-white" />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )}
+              {/* Loading State */}
+              {usersLoading && (
+                <div className="flex flex-col items-center justify-center py-20">
+                  <RefreshCcw size={48} className="animate-spin text-primary mb-4" />
+                  <p className="text-white font-black uppercase tracking-widest text-sm">Kullanicilar yukleniyor...</p>
+                </div>
+              )}
 
-                {/* Step 2: Confirmation & Metadata */}
-                {wizardView === 'create' && wizardStep === 2 && (
-                  <div className="p-5 md:p-10 flex-1 animate-in fade-in slide-in-from-right-8 duration-700">
-                    <div className="flex items-center gap-6 mb-12">
-                      <button onClick={() => setWizardStep(1)} className="w-12 h-12 bg-hover hover:bg-white/10 rounded-2xl flex items-center justify-center text-textSec transition-all">
-                        <ChevronRight size={24} className="rotate-180" />
-                      </button>
-                      <h2 className="text-4xl font-black text-white tracking-tighter italic">Paket Kimliği.</h2>
+              {/* Users Content */}
+              {!usersLoading && (
+                <div className="flex flex-col lg:flex-row gap-6 px-4">
+                  {/* Users Table */}
+                  <div className="flex-1 bg-card/40 backdrop-blur-sm rounded-[32px] border border-white/5 overflow-hidden">
+                    {/* Table Header */}
+                    <div className="hidden md:grid grid-cols-12 gap-4 px-6 py-4 border-b border-white/5 bg-white/[0.02]">
+                      <span className="col-span-5 text-[10px] font-black text-textSec uppercase tracking-widest">E-posta</span>
+                      <span className="col-span-2 text-[10px] font-black text-textSec uppercase tracking-widest">Durum</span>
+                      <span className="col-span-2 text-[10px] font-black text-textSec uppercase tracking-widest">Tur</span>
+                      <span className="col-span-3 text-[10px] font-black text-textSec uppercase tracking-widest">Bitis</span>
                     </div>
 
-                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 max-w-5xl mx-auto">
-                      <div className="lg:col-span-12 space-y-10">
-                        <div className="flex items-end gap-4">
-                          <div className="flex-1">
-                            <Input
-                              label="Paket İsmi (İngilizce)"
-                              value={wizardMetadata?.name || ''}
-                              onChange={(e: any) => setWizardMetadata({ ...wizardMetadata, name: e.target.value })}
-                              placeholder="Emoji Master ✨"
-                              helpText="Emoji ve isim mağazada bu şekilde görünecek."
-                            />
+                    {/* Table Body */}
+                    <div className="max-h-[600px] overflow-y-auto custom-scrollbar divide-y divide-white/5">
+                      {filteredUsers.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-20 text-center space-y-4">
+                          <div className="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center text-textSec/20">
+                            <Users size={40} />
                           </div>
-                          <button
-                            onClick={handleWizardRegenerateMetadata}
-                            className="w-14 h-14 bg-primary/10 hover:bg-primary/20 text-primary rounded-xl flex items-center justify-center transition-all shrink-0 mb-6"
-                            title="Yeni İsim Öner"
-                          >
-                            <RefreshCcw size={24} className={wizardLoading ? "animate-spin" : ""} />
-                          </button>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                          <div className="space-y-2 relative group">
-                            <label className="text-[10px] font-black text-textSec uppercase tracking-widest px-1">Kategori</label>
-                            <div className="flex gap-2">
-                              <select
-                                value={wizardMetadata?.category || 'other'}
-                                onChange={(e) => setWizardMetadata({ ...wizardMetadata, category: e.target.value })}
-                                className="flex-1 h-14 bg-hover border-transparent border focus:border-primary/50 rounded-xl px-4 outline-none transition-all text-white font-bold appearance-none"
-                              >
-                                {CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.emoji} {c.name}</option>)}
-                              </select>
-                              <button
-                                onClick={async () => {
-                                  setWizardLoading(true);
-                                  const cat = await magicWizardService.getAutoCategory(wizardMetadata?.name || wizardSearchQuery);
-                                  setWizardMetadata({ ...wizardMetadata, category: cat });
-                                  setWizardLoading(false);
-                                }}
-                                className="w-14 h-14 bg-success/10 hover:bg-success/20 text-success rounded-xl flex items-center justify-center transition-all"
-                                title="AI ile Kategori Belirle"
-                              >
-                                <Zap size={20} />
-                              </button>
-                            </div>
-                          </div>
-                          <div className="space-y-2">
-                            <label className="text-[10px] font-black text-textSec uppercase tracking-widest px-1">Tip</label>
-                            <div className="h-14 bg-success/10 border border-success/20 rounded-xl px-6 flex items-center justify-between text-success font-black text-sm">
-                              <span>HAREKETLİ (ANIMATED)</span>
-                              <Sparkles size={18} />
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="bg-primary/5 border border-primary/10 rounded-[32px] p-8 flex items-start gap-6">
-                          <div className="w-16 h-16 bg-primary/20 rounded-2xl flex items-center justify-center text-primary shrink-0 transition-transform group-hover:scale-110">
-                            <Search size={32} />
-                          </div>
-                          <div className="space-y-2 flex-1">
-                            <label className="text-[10px] font-black text-primary uppercase tracking-[0.2em]">GIF Arama Stratejisi</label>
-                            <p className="text-textSec text-sm font-medium leading-relaxed">
-                              Sizin için en iyi sonuçları verecek anahtar kelimeyi hazırladık. İsterseniz değiştirebilirsiniz.
-                            </p>
-                            <input
-                              type="text"
-                              value={wizardSearchQuery}
-                              onChange={(e) => setWizardSearchQuery(e.target.value)}
-                              className="w-full mt-4 bg-white/5 border border-white/10 rounded-xl px-6 py-4 text-white font-bold focus:border-primary outline-none"
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="mt-16 flex justify-end">
-                      <button
-                        onClick={() => {
-                          setWizardStep(3);
-                          handleWizardSearch(0);
-                        }}
-                        className="px-12 h-20 bg-primary hover:bg-primary/80 text-white rounded-[24px] font-black text-xl flex items-center justify-center gap-4 transition-all shadow-xl shadow-primary/20 hover:scale-[1.02] active:scale-95"
-                      >
-                        GÖRSELLERİ BUL
-                        <ChevronRight size={28} />
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Step 3: GIF Selection */}
-                {wizardView === 'create' && wizardStep === 3 && (
-                  <div className="p-8 flex-1 flex flex-col animate-in fade-in slide-in-from-right-8 duration-700">
-                    <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-8 gap-6 px-4">
-                      <div className="flex items-center gap-6">
-                        <button onClick={() => setWizardStep(2)} className="w-12 h-12 bg-hover hover:bg-white/10 rounded-2xl flex items-center justify-center text-textSec transition-all">
-                          <ChevronRight size={24} className="rotate-180" />
-                        </button>
-                        <div>
-                          <h2 className="text-3xl font-black text-white italic tracking-tight">Koleksiyonu Oluştur.</h2>
-                          <div className="flex items-center gap-3">
-                            <p className="text-textSec font-bold text-sm opacity-60">Paketiniz için en az 3, en fazla 30 görsel seçin.</p>
-                            <span className="w-1.5 h-1.5 rounded-full bg-white/20" />
-                            <p className="text-primary font-black text-sm uppercase tracking-widest">SAYFA {wizardPage + 1}</p>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-4 bg-hover/50 p-2 rounded-[24px] border border-white/5 w-full md:w-auto">
-                        <div className="flex items-center gap-2 pl-4 flex-1">
-                          <Search className="text-textSec" size={20} />
-                          <input
-                            type="text"
-                            value={wizardSearchQuery}
-                            onChange={(e) => setWizardSearchQuery(e.target.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && handleWizardSearch(0)}
-                            className="bg-transparent border-none outline-none text-white font-bold text-base md:w-64"
-                            placeholder="Farklı stickerlar ara..."
-                          />
-                        </div>
-                        <button onClick={() => handleWizardSearch(0)} className="h-12 px-8 bg-primary hover:bg-primary/80 text-white font-black rounded-full transition-all text-xs uppercase tracking-widest shadow-lg shadow-primary/20">ARA</button>
-                      </div>
-                    </div>
-
-                    <div id="wizard-gif-container" className="flex-1 overflow-auto bg-black/20 rounded-[40px] p-6 border border-white/5 custom-scrollbar min-h-[460px]">
-                      {wizardGifs.length === 0 ? (
-                        <div className="h-full flex flex-col items-center justify-center opacity-40">
-                          <div className="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center mb-4">
-                            <ImageIcon size={40} />
-                          </div>
-                          <p className="font-black uppercase tracking-widest text-xs">Görsel Bulunamadı</p>
+                          <p className="text-textSec text-sm font-bold">Kullanici bulunamadi</p>
                         </div>
                       ) : (
-                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
-                          {wizardGifs.map((gif) => {
-                            const isSelected = selectedGifs.find(g => g.id === gif.id);
-                            return (
-                              <div
-                                key={gif.id}
-                                onClick={() => toggleGifSelection(gif)}
-                                className={cn(
-                                  "aspect-square rounded-[32px] p-4 border-2 relative group cursor-pointer transition-all duration-300",
-                                  isSelected ? "border-primary bg-primary/5 shadow-2xl scale-[0.95]" : "border-transparent bg-hover/20 hover:bg-hover/40"
-                                )}
-                              >
-                                <img
-                                  src={gif.preview}
-                                  alt=""
-                                  className={cn("w-full h-full object-contain transition-all duration-500", isSelected ? "animate-pulse" : "group-hover:scale-110")}
-                                />
-                                <div className={cn(
-                                  "absolute top-4 right-4 w-8 h-8 rounded-xl flex items-center justify-center transition-all shadow-lg",
-                                  isSelected ? "bg-primary text-white scale-110" : "bg-black/40 text-white/0 group-hover:text-white/50"
-                                )}>
-                                  <Check size={20} strokeWidth={4} />
-                                </div>
-                                <div className="absolute inset-x-4 bottom-4 opacity-0 group-hover:opacity-100 transition-all">
-                                  <div className="bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-lg text-[10px] font-black text-white/80 truncate uppercase text-center border border-white/10">
-                                    {gif.title || 'STICKER'}
-                                  </div>
-                                </div>
+                        filteredUsers.map((u) => (
+                          <button
+                            key={u.id}
+                            onClick={() => {
+                              setSelectedUser(u);
+                              setEditingSubscription(false);
+                            }}
+                            className={cn(
+                              "w-full grid grid-cols-1 md:grid-cols-12 gap-2 md:gap-4 px-6 py-4 text-left transition-all hover:bg-white/[0.03]",
+                              selectedUser?.id === u.id && "bg-primary/5 border-l-2 border-primary"
+                            )}
+                          >
+                            <div className="col-span-5 flex items-center gap-3 min-w-0">
+                              <div className={cn(
+                                "w-8 h-8 rounded-lg flex items-center justify-center shrink-0",
+                                u.is_premium ? "bg-primary/20 text-primary" : "bg-white/5 text-textSec"
+                              )}>
+                                <UserIcon size={16} />
                               </div>
-                            );
-                          })}
-                        </div>
+                              <span className="text-sm font-bold text-white truncate">{u.email || u.id}</span>
+                            </div>
+                            <div className="col-span-2 flex items-center">
+                              {u.is_premium ? (
+                                <span className="flex items-center gap-1.5 text-xs font-black text-primary">
+                                  <Crown size={14} />
+                                  Premium
+                                </span>
+                              ) : (
+                                <span className="text-xs font-bold text-textSec">Free</span>
+                              )}
+                            </div>
+                            <div className="col-span-2 flex items-center">
+                              <span className={cn(
+                                "text-xs font-bold px-2 py-1 rounded-lg",
+                                u.premium_type === 'subscription' ? "bg-accent/10 text-accent" : "text-textSec"
+                              )}>
+                                {u.premium_type === 'subscription' ? 'Abonelik' : '-'}
+                              </span>
+                            </div>
+                            <div className="col-span-3 flex items-center">
+                              <span className="text-xs font-bold text-textSec">
+                                {u.premium_expiry ? new Date(u.premium_expiry).toLocaleDateString('tr-TR') : '-'}
+                              </span>
+                            </div>
+                          </button>
+                        ))
                       )}
                     </div>
 
-                    <div className="mt-8 flex flex-col sm:flex-row items-center justify-between gap-6 px-4">
-                      <div className="flex items-center gap-6">
-                        <div className="flex -space-x-4 overflow-hidden p-2">
-                          {selectedGifs.slice(0, 6).map((g, i) => (
-                            <div key={i} className="relative">
-                              <img src={g.preview} className="inline-block h-12 w-12 rounded-2xl ring-4 ring-card object-cover bg-bgSecondary" />
-                            </div>
-                          ))}
-                          {selectedGifs.length > 6 && (
-                            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-hover ring-4 ring-card text-xs font-black text-white">
-                              +{selectedGifs.length - 6}
-                            </div>
-                          )}
-                        </div>
-                        <div>
-                          <span className="block text-2xl font-black text-white leading-none">{selectedGifs.length} <span className="text-sm font-bold opacity-40">/ 30</span></span>
-                          <span className="text-[10px] font-black text-primary uppercase tracking-[0.2em]">Seçilen Görsel</span>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-4">
-                        <div className="flex items-center gap-2 bg-white/5 p-1 rounded-2xl mr-4 border border-white/5">
-                          <button
-                            onClick={() => handleWizardSearch(wizardPage - 1)}
-                            disabled={wizardPage === 0 || wizardLoading}
-                            className="w-12 h-12 rounded-xl flex items-center justify-center hover:bg-white/10 disabled:opacity-20 transition-all font-black text-white"
-                          >
-                            <ChevronRight size={24} className="rotate-180" />
-                          </button>
-                          <span className="w-12 text-center font-black text-white text-sm">{wizardPage + 1}</span>
-                          <button
-                            onClick={() => handleWizardSearch(wizardPage + 1)}
-                            disabled={wizardGifs.length < 30 || wizardLoading}
-                            className="w-12 h-12 rounded-xl flex items-center justify-center hover:bg-white/10 disabled:opacity-20 transition-all font-black text-white"
-                          >
-                            <ChevronRight size={24} />
-                          </button>
-                        </div>
-
-                        <button
-                          onClick={handleCreateWizardDraft}
-                          disabled={selectedGifs.length < 3 || isProcessing}
-                          className="w-full sm:w-auto px-12 h-16 bg-primary hover:bg-primary/80 disabled:opacity-30 disabled:grayscale text-white rounded-[24px] font-black text-lg flex items-center justify-center gap-4 transition-all shadow-xl shadow-primary/30 hover:scale-[1.05] active:scale-95"
-                        >
-                          <Zap size={24} className="fill-current" />
-                          TASLAĞI KAYDET VE BİTİR
-                        </button>
-                      </div>
+                    {/* Table Footer */}
+                    <div className="px-6 py-3 border-t border-white/5 bg-white/[0.02]">
+                      <span className="text-[10px] font-black text-textSec uppercase tracking-widest">
+                        {filteredUsers.length} / {usersData.length} kullanici
+                      </span>
                     </div>
                   </div>
-                )}
 
-                {/* Drafts View */}
-                {wizardView === 'drafts' && (
-                  <div className="p-10 flex-1 flex flex-col animate-in fade-in slide-in-from-bottom-8 duration-700">
-                    <div className="flex items-center justify-between mb-10">
-                      <h2 className="text-4xl font-black text-white tracking-tighter italic">Taslak Havuzu.</h2>
-                      <button
-                        onClick={fetchAutomationDrafts}
-                        disabled={loadingDrafts}
-                        className="flex items-center gap-3 px-6 py-3 bg-white/5 hover:bg-white/10 border border-white/5 rounded-2xl text-xs font-black uppercase tracking-widest text-textSec hover:text-white transition-all"
-                      >
-                        <RefreshCcw size={16} className={loadingDrafts ? "animate-spin" : ""} />
-                        LİSTEYİ GÜNCELLE
-                      </button>
-                    </div>
-
-                    {loadingDrafts ? (
-                      <div className="flex-1 flex flex-col items-center justify-center py-20 grayscale opacity-50">
-                        <RefreshCcw size={64} className="animate-spin text-primary mb-6" />
-                        <p className="text-white font-black uppercase tracking-widest text-sm">Veriler Çekiliyor...</p>
-                      </div>
-                    ) : automationDrafts.length === 0 ? (
-                      <div className="flex-1 flex flex-col items-center justify-center py-20 text-center space-y-6">
-                        <div className="w-32 h-32 bg-white/5 rounded-[40px] flex items-center justify-center text-textSec/20">
-                          <Package size={64} />
-                        </div>
-                        <div className="space-y-2">
-                          <h3 className="text-2xl font-black text-textSec uppercase">Havuz Tamamen Boş</h3>
-                          <p className="text-textSec text-sm font-medium opacity-50 max-w-xs mx-auto">Henüz yayına hazırlanan bir paket taslağı bulunmuyor.</p>
-                        </div>
+                  {/* User Detail Panel */}
+                  {selectedUser && (
+                    <div className="lg:w-[420px] bg-card/40 backdrop-blur-sm rounded-[32px] border border-white/5 overflow-hidden shrink-0">
+                      {/* Detail Header */}
+                      <div className="p-6 border-b border-white/5 flex items-center justify-between">
+                        <h3 className="text-lg font-black text-white tracking-tight">Kullanici Detay</h3>
                         <button
-                          onClick={() => setWizardView('create')}
-                          className="px-8 py-4 bg-primary/20 text-primary hover:bg-primary/30 rounded-2xl font-black text-sm uppercase tracking-widest transition-all"
+                          onClick={() => setSelectedUser(null)}
+                          className="p-2 hover:bg-white/10 rounded-xl transition-all text-textSec"
                         >
-                          İLK PAKETİNİ TASARLA
+                          <X size={18} />
                         </button>
                       </div>
-                    ) : (
-                      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
-                        {automationDrafts.map(draft => (
-                          <div
-                            key={draft.id}
-                            className="bg-hover/20 rounded-[32px] border border-white/5 overflow-hidden group hover:border-primary/20 hover:bg-hover/40 transition-all flex flex-col shadow-xl"
-                          >
-                            <div className="h-40 bg-gradient-to-br from-white/5 to-transparent flex items-center justify-center relative p-6">
-                              <div className="absolute inset-0 bg-primary/5 opacity-0 group-hover:opacity-100 transition-opacity" />
-                              {draft.tray_url ? (
-                                <img src={draft.tray_url} className="w-20 h-20 object-contain filter drop-shadow-2xl transition-transform duration-500 group-hover:scale-110" alt="" />
-                              ) : (
-                                <ImageIcon size={64} className="text-textSec/20" />
-                              )}
-                              <div className="absolute top-4 right-4 px-3 py-1.5 bg-black/40 backdrop-blur-md text-white text-[10px] font-black rounded-lg uppercase border border-white/5">
-                                {draft.sticker_count} Stickers
+
+                      <div className="p-6 space-y-5">
+                        {/* Email */}
+                        <div className="space-y-1">
+                          <span className="text-[10px] font-black text-textSec uppercase tracking-widest">E-posta</span>
+                          <p className="text-sm font-bold text-white break-all">{selectedUser.email || selectedUser.id}</p>
+                        </div>
+
+                        {/* UID */}
+                        <div className="space-y-1">
+                          <span className="text-[10px] font-black text-textSec uppercase tracking-widest">UID</span>
+                          <p className="text-xs font-mono text-textSec break-all">{selectedUser.id}</p>
+                        </div>
+
+                        {/* Premium Status */}
+                        <div className="space-y-1">
+                          <span className="text-[10px] font-black text-textSec uppercase tracking-widest">Premium</span>
+                          <div className="flex items-center gap-2">
+                            {selectedUser.is_premium ? (
+                              <span className="flex items-center gap-2 px-3 py-1.5 bg-primary/10 text-primary rounded-lg text-xs font-black">
+                                <Crown size={14} /> Evet
+                              </span>
+                            ) : (
+                              <span className="flex items-center gap-2 px-3 py-1.5 bg-white/5 text-textSec rounded-lg text-xs font-bold">
+                                <Shield size={14} /> Hayir
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Type */}
+                        <div className="space-y-1">
+                          <span className="text-[10px] font-black text-textSec uppercase tracking-widest">Tur</span>
+                          <p className={cn(
+                            "text-sm font-black",
+                            selectedUser.premium_type === 'subscription' ? "text-accent" : "text-textSec"
+                          )}>
+                            {selectedUser.premium_type === 'subscription' ? 'Abonelik' : 'Yok'}
+                          </p>
+                        </div>
+
+                        {/* Expiry */}
+                        <div className="space-y-1">
+                          <span className="text-[10px] font-black text-textSec uppercase tracking-widest">Bitis Tarihi</span>
+                          <p className="text-sm font-bold text-white">
+                            {selectedUser.premium_expiry ? new Date(selectedUser.premium_expiry).toLocaleDateString('tr-TR', { year: 'numeric', month: 'long', day: 'numeric' }) : '-'}
+                          </p>
+                        </div>
+
+                        {/* Last Sync */}
+                        <div className="space-y-1">
+                          <span className="text-[10px] font-black text-textSec uppercase tracking-widest">Son Senkronizasyon</span>
+                          <p className="text-sm font-bold text-textSec">
+                            {selectedUser.last_sync?.toDate ? selectedUser.last_sync.toDate().toLocaleString('tr-TR') : selectedUser.last_sync ? new Date(selectedUser.last_sync).toLocaleString('tr-TR') : '-'}
+                          </p>
+                        </div>
+
+                        {/* Favourite Packs */}
+                        <div className="space-y-1">
+                          <span className="text-[10px] font-black text-textSec uppercase tracking-widest">Favori Paketler</span>
+                          <div className="flex flex-wrap gap-1.5">
+                            {selectedUser.favorite_packs && selectedUser.favorite_packs.length > 0 ? (
+                              selectedUser.favorite_packs.map((p, i) => (
+                                <span key={i} className="px-2 py-1 bg-white/5 text-textSec text-[10px] font-bold rounded-lg">{p}</span>
+                              ))
+                            ) : (
+                              <span className="text-textSec text-xs font-bold">-</span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Cancelled Info */}
+                        {selectedUser.cancelled_at && (
+                          <div className="space-y-1 bg-danger/5 border border-danger/10 rounded-xl p-3">
+                            <span className="text-[10px] font-black text-danger uppercase tracking-widest">Iptal Edildi</span>
+                            <p className="text-xs font-bold text-textSec">{selectedUser.cancelled_reason || '-'}</p>
+                          </div>
+                        )}
+
+                        <div className="border-t border-white/5 pt-5 space-y-3">
+
+                          {/* Subscription History */}
+                          {selectedUser.subscription_history && selectedUser.subscription_history.length > 0 && (
+                            <div className="space-y-2 mb-4">
+                              <label className="text-[10px] font-black text-textSec uppercase tracking-widest">Abonelik Gecmisi</label>
+                              <div className="bg-black/20 rounded-xl max-h-32 overflow-y-auto">
+                                {selectedUser.subscription_history.slice().reverse().map((item: any) => (
+                                  <div key={item.id} className="p-2 border-b border-white/5 last:border-0 flex items-center justify-between">
+                                    <div className="flex flex-col">
+                                      <span className="text-[10px] font-bold text-white capitalize">{item.type === 'start' ? 'Baslangic' : item.type === 'cancel' ? 'Iptal' : item.type}</span>
+                                      <span className="text-[9px] text-textSec">{item.date_str} • {item.source}</span>
+                                    </div>
+                                    <span className="text-[9px] font-medium text-textSec">{item.plan}</span>
+                                  </div>
+                                ))}
                               </div>
                             </div>
-                            <div className="p-6 flex-1 flex flex-col space-y-6">
-                              <div>
-                                <h3 className="text-xl font-black text-white mb-1 truncate">{draft.name}</h3>
-                                <div className="flex items-center gap-2">
-                                  <span className="w-2 h-2 bg-warning rounded-full shadow-[0_0_8px_rgba(255,191,0,0.5)]" />
-                                  <span className="text-textSec text-[10px] font-black uppercase tracking-widest">ONAY BEKLİYOR • {(draft as any).category}</span>
-                                </div>
+                          )}
+
+                          {/* Edit Subscription */}
+                          {!editingSubscription ? (
+                            <div className="flex gap-3">
+                              {/* Admin tarafindan eklenen aboneliklerde düzenleme aktif, Google Play ise pasif */}
+                              <button
+                                disabled={selectedUser.subscription_source !== 'admin'}
+                                onClick={() => {
+                                  if (selectedUser.subscription_source !== 'admin') return;
+                                  setEditingSubscription(true);
+                                  setSubPlan(selectedUser.premium_type === 'subscription' ? 'monthly' : 'none');
+                                }}
+                                className={cn(
+                                  "flex-1 h-12 rounded-xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-all",
+                                  selectedUser.subscription_source !== 'admin'
+                                    ? "bg-white/5 text-textSec cursor-not-allowed opacity-50"
+                                    : "bg-primary/10 hover:bg-primary/20 text-primary"
+                                )}
+                              >
+                                {selectedUser.subscription_source === 'admin' ? (
+                                  <>
+                                    <Edit3 size={14} />
+                                    Abonelik Duzenle
+                                  </>
+                                ) : (
+                                  <span className="text-[8px]">
+                                    {selectedUser.subscription_source === 'google_play' ? 'Play Store' : 'Uygulama İçi'}
+                                  </span>
+                                )}
+                              </button>
+
+                              {selectedUser.is_premium && (
+                                <button
+                                  disabled={selectedUser.subscription_source !== 'admin'}
+                                  onClick={() => handleRevokeSubscription(selectedUser.id)}
+                                  className={cn(
+                                    "h-12 px-4 rounded-xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-all",
+                                    selectedUser.subscription_source !== 'admin'
+                                      ? "bg-white/5 text-textSec cursor-not-allowed opacity-50"
+                                      : "bg-danger/10 hover:bg-danger/20 text-danger"
+                                  )}
+                                  title={selectedUser.subscription_source !== 'admin' ? "Sadece Admin tarafından verilen abonelikler iptal edilebilir" : "Iptal Et"}
+                                >
+                                  <X size={14} />
+                                  {selectedUser.subscription_source !== 'admin' ? 'Kilitli' : 'Iptal Et'}
+                                </button>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="space-y-4 bg-white/[0.02] border border-white/5 rounded-2xl p-4">
+                              <div className="space-y-2">
+                                <label className="text-[10px] font-black text-textSec uppercase tracking-widest">Abonelik Plani</label>
+                                <select
+                                  value={subPlan}
+                                  onChange={(e) => setSubPlan(e.target.value)}
+                                  className="w-full h-12 bg-hover border border-white/5 rounded-xl px-4 text-white font-bold outline-none focus:border-primary/50 transition-all appearance-none"
+                                >
+                                  <option value="none">Yok (Free)</option>
+                                  <option value="monthly">Aylik (Monthly)</option>
+                                  <option value="yearly">Yillik (Yearly)</option>
+                                </select>
                               </div>
 
                               <div className="flex gap-3">
                                 <button
-                                  onClick={() => setSelectedDraft(draft)}
-                                  className="flex-1 h-12 bg-white/5 hover:bg-white/10 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-all border border-white/5"
+                                  onClick={() => handleUpdateSubscription(selectedUser.id, subPlan)}
+                                  className="flex-1 h-10 bg-primary hover:bg-primary/80 text-white rounded-xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-all"
                                 >
-                                  ÖNİZLE
+                                  <Save size={14} />
+                                  Kaydet
                                 </button>
                                 <button
-                                  onClick={() => approveAutomationDraft(draft)}
-                                  className="h-12 px-6 bg-primary hover:bg-primary/80 text-white rounded-xl transition-all shadow-lg shadow-primary/20"
+                                  onClick={() => setEditingSubscription(false)}
+                                  className="h-10 px-4 bg-white/5 hover:bg-white/10 text-textSec rounded-xl font-black text-xs uppercase tracking-widest transition-all"
                                 >
-                                  <Check size={20} strokeWidth={3} />
-                                </button>
-                                <button
-                                  onClick={() => deleteAutomationDraft(draft)}
-                                  className="h-12 px-6 bg-danger/10 hover:bg-danger/20 text-danger rounded-xl transition-all"
-                                >
-                                  <Trash2 size={20} />
+                                  Vazgec
                                 </button>
                               </div>
                             </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              {/* Draft Preview Modal */}
-              {selectedDraft && (
-                <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-                  <div className="absolute inset-0 bg-black/90 backdrop-blur-2xl" onClick={() => setSelectedDraft(null)} />
-                  <div className="bg-card w-full max-w-5xl max-h-[90vh] rounded-[40px] overflow-hidden border border-white/10 shadow-2xl relative z-10 flex flex-col animate-in zoom-in-95 duration-300">
-                    {/* Modal Header */}
-                    <div className="p-10 border-b border-white/5 flex items-center justify-between bg-gradient-to-br from-card to-background">
-                      <div className="flex items-center gap-8">
-                        <div className="w-24 h-24 bg-white/5 rounded-[32px] flex items-center justify-center p-4 border border-white/5 shadow-inner">
-                          <img src={selectedDraft.tray_url} alt="" className="w-full h-full object-contain filter drop-shadow-xl" />
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-3 mb-2">
-                            <h2 className="text-4xl font-black text-white tracking-tighter italic">{selectedDraft.name}</h2>
-                            <span className="px-3 py-1 bg-primary/20 text-primary text-[10px] font-black rounded-full uppercase tracking-widest">{(selectedDraft as any).category}</span>
-                          </div>
-                          <p className="text-textSec font-bold tracking-widest text-xs uppercase opacity-40">Toplam {selectedDraft.sticker_count} Profesyonel Çıkartma</p>
+                          )}
                         </div>
                       </div>
-                      <button onClick={() => setSelectedDraft(null)} className="w-14 h-14 bg-white/5 hover:bg-danger/20 hover:text-danger rounded-2xl flex items-center justify-center transition-all">
-                        <X size={28} />
-                      </button>
                     </div>
-
-                    {/* Modal Content */}
-                    <div className="flex-1 overflow-auto p-10 bg-black/20 custom-scrollbar">
-                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
-                        {selectedDraft.stickers?.map((sticker, idx) => (
-                          <div
-                            key={idx}
-                            className="aspect-square bg-hover/10 rounded-[32px] p-6 border border-white/5 flex items-center justify-center relative group hover:bg-hover/30 transition-all cursor-zoom-in"
-                            onClick={() => setPreviewSticker({ url: sticker.url, title: sticker.image_file })}
-                          >
-                            <img
-                              src={sticker.url}
-                              alt=""
-                              className="w-full h-full object-contain transition-transform duration-500 group-hover:scale-125 pointer-events-none"
-                            />
-                            <div className="absolute inset-0 bg-primary/20 opacity-0 group-hover:opacity-100 transition-all rounded-[32px] flex items-end justify-center p-4 pointer-events-none">
-                              <span className="text-xs font-black text-white bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/10 shadow-xl">{sticker.emojis.join('')}</span>
-                            </div>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                removeStickerFromDraft(selectedDraft, idx);
-                              }}
-                              className="absolute top-2 right-2 w-10 h-10 bg-danger text-white rounded-xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all shadow-xl hover:scale-110 active:scale-90"
-                            >
-                              <X size={20} strokeWidth={3} />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Modal Footer */}
-                    <div className="p-10 border-t border-white/5 flex gap-6 bg-card/50">
-                      <button
-                        onClick={() => {
-                          approveAutomationDraft(selectedDraft);
-                          setSelectedDraft(null);
-                        }}
-                        disabled={isProcessing}
-                        className="flex-1 h-20 bg-primary hover:bg-primary/80 text-white rounded-[24px] font-black text-xl flex items-center justify-center gap-4 transition-all shadow-2xl shadow-primary/20 hover:scale-[1.02] active:scale-95"
-                      >
-                        <CheckCircle2 size={24} />
-                        ONAYLA VE MAĞAZAYA GÖNDER
-                      </button>
-                      <button
-                        onClick={() => {
-                          deleteAutomationDraft(selectedDraft);
-                          setSelectedDraft(null);
-                        }}
-                        disabled={isProcessing}
-                        className="w-20 h-20 bg-danger/10 hover:bg-danger/20 text-danger rounded-[24px] flex items-center justify-center transition-all border border-danger/10"
-                      >
-                        <Trash2 size={32} />
-                      </button>
-                    </div>
-                  </div>
+                  )}
                 </div>
               )}
             </div>
-          </div>
-        ) : null}
-      </main>
+          </div >
+        ) : null
+        }
+      </main >
 
       <footer className="hidden md:flex glass h-8 px-6 items-center justify-between text-[10px] font-bold text-textSec uppercase tracking-widest border-t border-white/5 fixed bottom-0 left-0 right-0 z-30">
         <div className="flex items-center gap-6">
@@ -3320,13 +3021,26 @@ function App() {
                   <label className="flex items-center gap-2 text-xs font-bold text-white/80 mb-1.5">
                     🇬🇧 İngilizce (Ana İsim) <span className="text-red-400">*</span>
                   </label>
-                  <input
-                    type="text"
-                    placeholder="Örn: Funny Cats, Love Stickers..."
-                    className="w-full bg-bgSecondary border-2 border-primary/50 rounded-xl p-3 text-white placeholder:text-white/30 text-base focus:border-primary outline-none transition-all"
-                    value={newPackData.name}
-                    onChange={(e) => setNewPackData({ ...newPackData, name: e.target.value, name_en: e.target.value })}
-                  />
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="Örn: Funny Cats, Love Stickers..."
+                      className="flex-1 bg-bgSecondary border-2 border-primary/50 rounded-xl p-3 text-white placeholder:text-white/30 text-base focus:border-primary outline-none transition-all"
+                      value={newPackData.name}
+                      onChange={(e) => setNewPackData({ ...newPackData, name: e.target.value, name_en: e.target.value })}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const newName = generateCreativeName(newPackData.name);
+                        setNewPackData({ ...newPackData, name: newName, name_en: newName });
+                      }}
+                      className="px-4 bg-accent/10 border-2 border-accent/20 hover:bg-accent/20 hover:border-accent/50 text-accent rounded-xl transition-all flex items-center justify-center active:scale-95 group"
+                      title="Yaratıcı İsim Öner"
+                    >
+                      <Wand2 size={24} className="group-hover:rotate-12 transition-transform" />
+                    </button>
+                  </div>
                   <p className="text-xs text-textSec mt-1">İngilizce ismi girin, ardından "Otomatik Çevir" butonuna tıklayın</p>
                 </div>
 
@@ -3486,13 +3200,26 @@ function App() {
                     <label className="flex items-center gap-2 text-xs font-bold text-white/80 mb-1.5">
                       🇬🇧 İngilizce (Ana İsim) <span className="text-red-400">*</span>
                     </label>
-                    <input
-                      type="text"
-                      placeholder="Örn: Funny Cats, Love Stickers..."
-                      className="w-full bg-bgSecondary border-2 border-primary/50 rounded-xl p-3 text-white placeholder:text-white/30 text-base focus:border-primary outline-none transition-all"
-                      value={editFormData.name || ''}
-                      onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value, name_en: e.target.value })}
-                    />
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="Örn: Funny Cats, Love Stickers..."
+                        className="flex-1 bg-bgSecondary border-2 border-primary/50 rounded-xl p-3 text-white placeholder:text-white/30 text-base focus:border-primary outline-none transition-all"
+                        value={editFormData.name || ''}
+                        onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value, name_en: e.target.value })}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const newName = generateCreativeName(editFormData.name || "");
+                          setEditFormData({ ...editFormData, name: newName, name_en: newName });
+                        }}
+                        className="px-4 bg-accent/10 border-2 border-accent/20 hover:bg-accent/20 hover:border-accent/50 text-accent rounded-xl transition-all flex items-center justify-center active:scale-95 group"
+                        title="Yaratıcı İsim Öner"
+                      >
+                        <Wand2 size={24} className="group-hover:rotate-12 transition-transform" />
+                      </button>
+                    </div>
                   </div>
 
                   {/* Arama */}
@@ -3769,6 +3496,53 @@ function App() {
           </div>
         )
       }
+
+      {/* Video/GIF Background Removal Modal */}
+      <Modal show={showVideoBgModal} onClose={() => setShowVideoBgModal(false)} title="Hareketli Medya İşleme">
+        <div className="space-y-6">
+          <div className="bg-primary/10 border border-primary/20 p-6 rounded-2xl flex items-center gap-4">
+            <div className="bg-primary/20 p-3 rounded-xl animate-pulse">
+              <CloudLightning className="text-primary" size={28} />
+            </div>
+            <div>
+              <h3 className="text-lg font-black text-white">Arka Plan Temizlensin mi?</h3>
+              <p className="text-textSec text-xs mt-1">Yüklediğiniz video veya GIF'in arka planı yapay zeka ile otomatik olarak silinebilir.</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <button
+              onClick={() => handleVideoProcessingChoice(false)}
+              className="bg-card hover:bg-hover border-2 border-white/5 rounded-2xl p-6 transition-all group flex flex-col items-center gap-3 active:scale-95"
+            >
+              <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center group-hover:bg-white/10 transition-colors">
+                <ImageIcon size={24} className="text-textSec group-hover:text-white" />
+              </div>
+              <div className="text-center">
+                <span className="block font-black text-sm text-white group-hover:text-textMain">HAYIR</span>
+                <span className="text-[10px] text-textSec">Olduğu gibi kalsın</span>
+              </div>
+            </button>
+
+            <button
+              onClick={() => handleVideoProcessingChoice(true)}
+              className="bg-primary hover:bg-primary/90 rounded-2xl p-6 transition-all group flex flex-col items-center gap-3 shadow-xl shadow-primary/20 hover:shadow-primary/40 active:scale-95 border-2 border-transparent"
+            >
+              <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center animate-bounce">
+                <Wand2 size={24} className="text-white" />
+              </div>
+              <div className="text-center">
+                <span className="block font-black text-sm text-white">EVET, TEMİZLE</span>
+                <span className="text-[10px] text-white/70">Yapay Zeka ile Sil</span>
+              </div>
+            </button>
+          </div>
+
+          <p className="text-[10px] text-center text-textSec opacity-60">
+            Not: Arka plan silme işlemi dosyanın uzunluğuna göre biraz zaman alabilir.
+          </p>
+        </div>
+      </Modal>
 
     </div >
   );

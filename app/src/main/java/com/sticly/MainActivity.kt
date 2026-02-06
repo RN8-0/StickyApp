@@ -99,6 +99,44 @@ class MainActivity : AppCompatActivity() {
 
     // Dinamik kategoriler - Firebase'den paketlerdeki kategorilerden oluşturulur
     private var dynamicCategories = mutableListOf<String>()
+    
+    // Auto Scroll
+    private var autoScrollJob: Job? = null
+    private var isUserInteractingWithCarousel = false
+    private val snapHelper = androidx.recyclerview.widget.LinearSnapHelper()
+
+    // Session-based rank caching to prevent jumping list order when favorites update
+    private val sessionRankScores = mutableMapOf<String, Double>()
+    
+    // Deterministic Random Seed for Session
+    private val sessionSeed = System.currentTimeMillis()
+
+    private fun getOrCalculateRankScore(pack: Pack): Double {
+        return sessionRankScores.getOrPut(pack.id) {
+            calculateRankScore(pack)
+        }
+    }
+
+    private fun calculateRankScore(pack: Pack): Double {
+        val currentTime = System.currentTimeMillis()
+        val downloads = pack.downloadCount.toDouble()
+        val views = pack.viewCount.toDouble()
+        val favorites = pack.favoriteCount.toDouble()
+        val cvr = if (views > 0) downloads / views else 0.0
+        val engagementScore = downloads + (favorites * 5.0)
+        var freshnessMultiplier = 1.0
+        if (pack.createdAt.isNotEmpty()) {
+            try {
+                val format = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+                val createdDate = format.parse(pack.createdAt)
+                if (createdDate != null) {
+                    val diffDays = java.util.concurrent.TimeUnit.MILLISECONDS.toDays(currentTime - createdDate.time)
+                    if (diffDays <= 7) freshnessMultiplier = 3.5
+                }
+            } catch (e: Exception) {}
+        }
+        return (engagementScore * (1.0 + cvr)) * freshnessMultiplier
+    }
 
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -139,6 +177,13 @@ class MainActivity : AppCompatActivity() {
         }
 
         FirebaseMessaging.getInstance().subscribeToTopic("stickers")
+
+        // Kullanıcı giriş yapmışsa Firebase ile senkronize et (e-posta dahil)
+        val currentUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+        if (currentUser != null) {
+            PreferencesHelper.syncUserDataWithFirebase(this, currentUser.uid)
+            PreferencesHelper.startRealtimeSync(this, currentUser.uid)
+        }
 
         initViews()
         setupBottomNav()
@@ -333,30 +378,37 @@ class MainActivity : AppCompatActivity() {
 
     private fun setupRegionalSection() {
         regionalAdapter = RegionalAdapter(
-            pages = emptyList(),
+            packs = emptyList(),
             onClick = { pack ->
                 startActivity(Intent(this, DetailsActivity::class.java).putExtra("id", pack.id))
             },
             onAddClick = { pack ->
-                // Detay sayfasına gönder veya direkt ekle (Sticker.ly tarzı detay daha mantıklı)
                 startActivity(Intent(this, DetailsActivity::class.java).putExtra("id", pack.id))
             }
         )
         rvRegional.layoutManager = LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false)
         rvRegional.adapter = regionalAdapter
+        
+        // Remove existing helper if any (though usually one instance per RV lifecycle)
+        rvRegional.onFlingListener = null 
+        snapHelper.attachToRecyclerView(rvRegional)
+        
+        rvRegional.addOnScrollListener(object : RecyclerView.OnScrollListener() {
+            override fun onScrollStateChanged(recyclerView: RecyclerView, newState: Int) {
+                super.onScrollStateChanged(recyclerView, newState)
+                if (newState == RecyclerView.SCROLL_STATE_DRAGGING) {
+                    isUserInteractingWithCarousel = true
+                    stopAutoScroll()
+                } else if (newState == RecyclerView.SCROLL_STATE_IDLE) {
+                    isUserInteractingWithCarousel = false
+                    startAutoScroll()
+                }
+            }
+        })
     }
 
     private fun updateRegionalPacks(packs: List<Pack>) {
-        val locale = Locale.getDefault()
-        var country = getString(R.string.category_all) // Fallback
-        
-        try {
-            country = locale.getDisplayCountry(Locale("tr"))
-            if (country.isEmpty()) country = locale.displayCountry
-            if (country.isEmpty()) country = "Türkiye" // Hard fallback for typical users
-        } catch (e: Exception) {}
-
-        regionalPopularTitle.text = "🏆 $country bölgesindeki en popülerler"
+        regionalPopularTitle.text = getString(R.string.popular_stickers)
 
         // En popüler 10 paketi al (özel paketler hariç)
         val regionalTopPacks = packs
@@ -369,21 +421,42 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
+        // Popüler paketlerin önizlemelerini EN YÜKSEK öncelikle preload et
+        StickyGlideModule.preloadPopularPacks(this, regionalTopPacks)
+
         if (currentFilter == FilterType.ALL && currentCategory == "all") {
             regionalPopularContainer.visibility = View.VISIBLE
         } else {
             regionalPopularContainer.visibility = View.GONE
         }
-        
-        // Paketleri ikili grupla
-        val pages = mutableListOf<Pair<Pack, Pack?>>()
-        for (i in regionalTopPacks.indices step 2) {
-            val top = regionalTopPacks[i]
-            val bottom = if (i + 1 < regionalTopPacks.size) regionalTopPacks[i + 1] else null
-            pages.add(top to bottom)
+
+        regionalAdapter?.updateData(regionalTopPacks)
+        startAutoScroll()
+    }
+
+    private fun startAutoScroll() {
+        stopAutoScroll()
+        autoScrollJob = lifecycleScope.launch {
+            while (true) {
+                delay(3000)
+                if (!isUserInteractingWithCarousel && regionalPopularContainer.visibility == View.VISIBLE) {
+                    val layoutManager = rvRegional.layoutManager as? LinearLayoutManager ?: continue
+                    val adapter = regionalAdapter ?: continue
+                    
+                    if (adapter.itemCount > 0) {
+                        val centerView = snapHelper.findSnapView(layoutManager)
+                        val currentPos = if (centerView != null) layoutManager.getPosition(centerView) else 0
+                        val nextPos = if (currentPos < adapter.itemCount - 1) currentPos + 1 else 0
+                        rvRegional.smoothScrollToPosition(nextPos)
+                    }
+                }
+            }
         }
-        
-        regionalAdapter?.updateData(pages)
+    }
+
+    private fun stopAutoScroll() {
+        autoScrollJob?.cancel()
+        autoScrollJob = null
     }
 
 
@@ -553,7 +626,7 @@ class MainActivity : AppCompatActivity() {
         navNotifications.setOnClickListener { drawer.closeDrawers(); showNotificationSettings() }
         navPrivacy.setOnClickListener { drawer.closeDrawers(); showPrivacyDialog() }
         navRestorePurchases.setOnClickListener { drawer.closeDrawers(); restorePurchases() }
-        navRestorePurchases.setOnClickListener { drawer.closeDrawers(); restorePurchases() }
+
     }
 
     private fun setupSearch() {
@@ -639,7 +712,10 @@ class MainActivity : AppCompatActivity() {
         AdManager.preloadMakerNativeAd(this)
 
         // WhatsApp durumunu güncelle
+        // WhatsApp durumunu güncelle
         checkInstallationUpdates()
+        
+        startAutoScroll()
 
         if (::adapter.isInitialized) {
             lifecycleScope.launch {
@@ -656,18 +732,19 @@ class MainActivity : AppCompatActivity() {
 
     override fun onPause() {
         super.onPause()
+        stopAutoScroll()
     }
 
     private fun showNoInternetDialog() {
         AlertDialog.Builder(this)
             .setTitle(R.string.no_internet_title)
-            .setMessage("Internet connection not found. Some features may not work.\n\nLocal sticker packs can be used.")
+            .setMessage(R.string.no_internet_warning)
             .setCancelable(true)
             .setPositiveButton(R.string.retry) { _, _ ->
                 if (NetworkUtils.isOnline(this)) {
                     recreate()
                 } else {
-                    Toast.makeText(this, "Still no internet connection", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, R.string.still_no_internet, Toast.LENGTH_SHORT).show()
                 }
             }
             .setNegativeButton(R.string.ok) { dialog, _ -> dialog.dismiss() }
@@ -681,7 +758,7 @@ class MainActivity : AppCompatActivity() {
 
                 if (loadedPacks.isNotEmpty()) {
                     val firebasePackIds = loadedPacks.filter { it.category != "custom" }.map { it.id }.toSet()
-                    
+
                     // KRITIK: Dosya işlemlerini IO thread'ine taşı (Donmayı önler)
                     withContext(Dispatchers.IO) {
                         StickerRepository.cleanupInvalidCache(this@MainActivity, firebasePackIds)
@@ -694,6 +771,9 @@ class MainActivity : AppCompatActivity() {
                     setupCategoryChips() // Kategorileri güncelle
                     applyFilters()
                     updateRegionalPacks(loadedPacks)
+
+                    // Çıkartma önizlemelerini arka planda önceden yükle (ilk 8 paket, her paketten 4 sticker)
+                    StickyGlideModule.preloadStickerPreviews(this@MainActivity, loadedPacks, packCount = 8, stickersPerPack = 4)
                 }
                 showContent()
             } catch (e: Exception) {
@@ -767,56 +847,39 @@ class MainActivity : AppCompatActivity() {
                 FilterType.CUSTOM -> filtered.filter { (it.category == "custom" || it.id.startsWith("custom_")) && it.stickers.isNotEmpty() }
             }
 
-            // Profesyonel Sıralama Algoritması
-            val currentTime = System.currentTimeMillis()
-            fun rankScore(pack: Pack): Double {
-                val downloads = pack.downloadCount.toDouble()
-                val views = pack.viewCount.toDouble()
-                val favorites = pack.favoriteCount.toDouble()
-                val cvr = if (views > 0) downloads / views else 0.0
-                val engagementScore = downloads + (favorites * 5.0)
-                var freshnessMultiplier = 1.0
-                if (pack.createdAt.isNotEmpty()) {
-                    try {
-                        val format = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
-                        val createdDate = format.parse(pack.createdAt)
-                        if (createdDate != null) {
-                            val diffDays = java.util.concurrent.TimeUnit.MILLISECONDS.toDays(currentTime - createdDate.time)
-                            if (diffDays <= 7) freshnessMultiplier = 3.5
-                        }
-                    } catch (e: Exception) {}
-                }
-                return (engagementScore * (1.0 + cvr)) * freshnessMultiplier
-            }
-
-            // Premium paketleri ayır ve her 2-4 pakette bir araya serpiştir
+            // Profesyonel Kategori Dağıtım Algoritması (Interleaving)
+            
             val sorted = if (currentFilter == FilterType.ALL) {
-                val freePacks = filtered.filter { !it.isPremium }.sortedByDescending { rankScore(it) }
-                val premiumPacks = filtered.filter { it.isPremium }.sortedByDescending { rankScore(it) }.toMutableList()
-                premiumPacks.shuffle() // Her yenilemede farklı sıra
-
-                val merged = mutableListOf<Pack>()
-                var freeIndex = 0
-                var premiumIndex = 0
-                var nextPremiumGap = (2..4).random()
-                var sinceLastPremium = 0
-
-                while (freeIndex < freePacks.size || premiumIndex < premiumPacks.size) {
-                    if (premiumIndex < premiumPacks.size && sinceLastPremium >= nextPremiumGap) {
-                        merged.add(premiumPacks[premiumIndex++])
-                        nextPremiumGap = (2..4).random()
-                        sinceLastPremium = 0
-                    } else if (freeIndex < freePacks.size) {
-                        merged.add(freePacks[freeIndex++])
-                        sinceLastPremium++
-                    } else {
-                        // Kalan premium paketleri ekle
-                        merged.add(premiumPacks[premiumIndex++])
-                    }
-                }
-                merged
+                 // 1. Paketleri kategorilerine göre grupla
+                 // Her grup içinde de puana göre (Premium/Free karışık) sırala
+                 val grouped = filtered.groupBy { normalizeCategoryKey(it.category) }
+                     .mapValues { (_, list) -> 
+                         list.sortedByDescending { getOrCalculateRankScore(it) }.toMutableList() 
+                     }
+                 
+                 // 2. Kategori sırasını belirle (Round Robin için)
+                 val categories = grouped.keys.toList().shuffled(java.util.Random(sessionSeed))
+                 
+                 val merged = mutableListOf<Pack>()
+                 var run = true
+                 
+                 // 3. Round Robin dağıtımı: Her turda her kategoriden 1 tane al
+                 while (run) {
+                     run = false
+                     for (cat in categories) {
+                         val list = grouped[cat]
+                         if (list != null && list.isNotEmpty()) {
+                             merged.add(list.removeAt(0))
+                             run = true // Hala paket var, döngü devam etsin
+                         }
+                     }
+                 }
+                 
+                 // VİTRİN: Çok popüler Premium paketleri biraz daha öne çıkarmak için
+                 // en başta küçük bir manuel düzenleme yapılabilir ama round-robin genelde yeterli olur.
+                 merged
             } else {
-                filtered.sortedByDescending { rankScore(it) }
+                 filtered.sortedByDescending { getOrCalculateRankScore(it) }
             }
 
             // Reklamları listeye enjekte et
@@ -839,14 +902,17 @@ class MainActivity : AppCompatActivity() {
                         }
                     } else itemsWithAds.addAll(sorted)
                 } else {
-                    var nextAdGap = (3..6).random()
+                    // Deterministic Random for Ads
+                    val randomAds = java.util.Random(sessionSeed)
+                    
+                    var nextAdGap = randomAds.nextInt(4) + 3 // 3..6 -> nextInt(6-3+1) + 3
                     var itemsSinceLastAd = 0
                     sorted.forEach { pack ->
                         itemsWithAds.add(pack)
                         itemsSinceLastAd++
                         if (itemsSinceLastAd >= nextAdGap) {
                             itemsWithAds.add("AD_LIST_PLACEHOLDER")
-                            nextAdGap = (3..6).random()
+                            nextAdGap = randomAds.nextInt(4) + 3
                             itemsSinceLastAd = 0
                         }
                     }
@@ -953,7 +1019,7 @@ class MainActivity : AppCompatActivity() {
             when {
                 item.itemId == 999 -> {
                     PreferencesHelper.clearSearchHistory(this)
-                    Toast.makeText(this, "Search history cleared", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, R.string.search_history_cleared, Toast.LENGTH_SHORT).show()
                 }
                 item.itemId >= 0 && item.itemId < history.size -> {
                     searchBox.setText(history[item.itemId])
@@ -1087,6 +1153,7 @@ class MainActivity : AppCompatActivity() {
         super.onDestroy()
         StickerRepository.stopObservingPacks()
         billingManager?.destroy()
+        PreferencesHelper.stopRealtimeSync()
     }
 
     companion object {
@@ -1142,7 +1209,7 @@ class MainActivity : AppCompatActivity() {
             }
 
             if (!wasPackInWhatsAppBeforeDelete) {
-                Toast.makeText(this@MainActivity, "Paket WhatsApp'ta ekli değil. Sadece uygulamadan siliniyor.", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@MainActivity, R.string.pack_not_in_whatsapp_delete_local, Toast.LENGTH_SHORT).show()
                 confirmAndDirectDelete(pack)
                 return@launch
             }
@@ -1160,7 +1227,7 @@ class MainActivity : AppCompatActivity() {
             } catch (e: Exception) {
                 pendingDeletePackId = null
                 waitingForWhatsAppReturn = false
-                Toast.makeText(this@MainActivity, "WhatsApp yüklü değil", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@MainActivity, R.string.whatsapp_not_installed, Toast.LENGTH_SHORT).show()
                 confirmAndDirectDelete(pack)
             }
         }
@@ -1173,7 +1240,7 @@ class MainActivity : AppCompatActivity() {
             .setPositiveButton(R.string.yes) { _, _ ->
                 if (CustomStickerManager.deletePack(this, pack.id)) {
                     PreferencesHelper.removeInstalledPack(this, pack.id)
-                    Toast.makeText(this, "Paket başarıyla silindi", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, R.string.pack_deleted_success, Toast.LENGTH_SHORT).show()
                     refreshPacks()
                 }
             }
@@ -1200,7 +1267,7 @@ class MainActivity : AppCompatActivity() {
                 if (wasInWhatsApp && !isStillInWhatsApp) {
                     if (CustomStickerManager.deletePack(this@MainActivity, packId)) {
                         PreferencesHelper.removeInstalledPack(this@MainActivity, packId)
-                        Toast.makeText(this@MainActivity, "Sticker pack deleted", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(this@MainActivity, R.string.pack_deleted_success, Toast.LENGTH_SHORT).show()
                         refreshPacks()
                     }
                 }

@@ -119,7 +119,6 @@
 
             <include layout="@layout/item_premium_plan_card" android:id="@+id/cardMonthly" />
             <include layout="@layout/item_premium_plan_card" android:id="@+id/cardYearly" />
-            <include layout="@layout/item_premium_plan_card" android:id="@+id/cardLifetime" />
 
         </LinearLayout>
 

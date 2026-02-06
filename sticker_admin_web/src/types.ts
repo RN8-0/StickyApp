@@ -55,4 +55,26 @@ export interface StickerSuggestion {
     time: string;
 }
 
+export interface UserData {
+    id: string;           // Firestore document ID (uid)
+    email: string;
+    is_premium: boolean;
+    premium_type: string; // "subscription" | "lifetime" | "none"
+    premium_expiry: number;
+    favorite_packs: string[];
+    last_sync: any;
+    cancelled_at?: any;
+    cancelled_reason?: string;
+    subscription_source?: 'google_play' | 'admin' | 'none';
+    subscription_history?: SubscriptionHistoryItem[];
+}
 
+export interface SubscriptionHistoryItem {
+    id: string; // unique event id
+    type: 'start' | 'renew' | 'cancel' | 'expire';
+    plan: 'monthly' | 'yearly' | 'none';
+    source: 'google_play' | 'admin' | 'system';
+    timestamp: number;
+    date_str: string;
+    details?: string;
+}

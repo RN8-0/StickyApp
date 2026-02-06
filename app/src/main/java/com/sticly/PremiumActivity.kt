@@ -8,14 +8,18 @@ import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import androidx.appcompat.widget.Toolbar
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.launch
+import com.google.android.material.bottomsheet.BottomSheetDialog
+import com.google.android.material.button.MaterialButton
+import com.google.firebase.auth.FirebaseAuth
+import android.text.SpannableString
+import android.text.Spanned
+import android.text.style.AbsoluteSizeSpan
+import kotlinx.coroutines.*
+import java.text.SimpleDateFormat
+import java.util.*
+import kotlin.coroutines.resumeWithException
 
 class PremiumActivity : AppCompatActivity() {
 
@@ -26,19 +30,17 @@ class PremiumActivity : AppCompatActivity() {
     private var billingManager: BillingManager? = null
     private val activityScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var billingConfig: BillingConfig? = null
+    private var selectedPlan = BillingManager.PREMIUM_MONTHLY // Default: monthly
+
+    private val prefsListener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+        if (key == "is_premium" || key == "premium_type") {
+            runOnUiThread { updateUI() }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_premium)
-
-        val toolbar = findViewById<Toolbar>(R.id.toolbar)
-        setSupportActionBar(toolbar)
-        supportActionBar?.setDisplayHomeAsUpEnabled(true)
-        supportActionBar?.title = ""
-
-        toolbar.setNavigationOnClickListener {
-            onBackPressedDispatcher.onBackPressed()
-        }
 
         // Initialize Billing Manager
         billingManager = BillingManager(
@@ -50,160 +52,216 @@ class PremiumActivity : AppCompatActivity() {
                 }
             },
             onBillingReady = {
-                // Google Play products loaded — refresh prices on UI
                 updatePricesFromGooglePlay()
             }
         )
 
-        setupComparisonRows()
-        setupPlanCards()
+        setupViews()
+        setupFeatures()
         loadBillingConfig()
 
-        findViewById<View>(R.id.btnPrivacyPolicy).setOnClickListener {
-            val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://sticky-privacy-legal.web.app/#privacy"))
-            startActivity(intent)
-        }
-
+        getSharedPreferences("sticky_prefs", MODE_PRIVATE).registerOnSharedPreferenceChangeListener(prefsListener)
+        syncPremiumFromFirebase()
         updateUI()
         setupEdgeToEdge()
     }
 
-    private fun setupComparisonRows() {
-        // Ads Row
-        val rowAds = findViewById<View>(R.id.rowAds)
-        rowAds.findViewById<TextView>(R.id.tvFeatureName).setText(R.string.premium_ads)
-        rowAds.findViewById<TextView>(R.id.tvFreeValue).setText(R.string.var_label)
-        rowAds.findViewById<TextView>(R.id.tvPremiumValue).setText(R.string.yok_label)
-        rowAds.findViewById<ImageView>(R.id.imgPremiumCheck).visibility = View.GONE
-        rowAds.findViewById<TextView>(R.id.tvPremiumValue).visibility = View.VISIBLE
-
-        // Packs Row
-        val rowPacks = findViewById<View>(R.id.rowPacks)
-        rowPacks.findViewById<TextView>(R.id.tvFeatureName).setText(R.string.premium_sticker_packs)
-        rowPacks.findViewById<TextView>(R.id.tvFreeValue).setText(R.string.kilitli_label)
-        rowPacks.findViewById<TextView>(R.id.tvPremiumValue).setText(R.string.acik_label)
-
-        // AI Row
-        val rowAI = findViewById<View>(R.id.rowAI)
-        rowAI.findViewById<TextView>(R.id.tvFeatureName).setText(R.string.premium_ai_removal)
-        rowAI.findViewById<TextView>(R.id.tvFreeValue).setText(R.string.acik_label)
-        rowAI.findViewById<TextView>(R.id.tvPremiumValue).setText(R.string.acik_label)
-
-        // Create Row
-        val rowCreate = findViewById<View>(R.id.rowCreate)
-        rowCreate.findViewById<TextView>(R.id.tvFeatureName).setText(R.string.priority_support)
-        rowCreate.findViewById<TextView>(R.id.tvFreeValue).setText(R.string.acik_label)
-        rowCreate.findViewById<TextView>(R.id.tvPremiumValue).setText(R.string.acik_label)
-    }
-
-    private fun setupPlanCards() {
-        val cardMonthly = findViewById<View>(R.id.cardMonthly)
-        val cardYearly = findViewById<View>(R.id.cardYearly)
-        val cardLifetime = findViewById<View>(R.id.cardLifetime)
-
-        // Aylık Plan
-        setupPlanCard(
-            card = cardMonthly,
-            icon = "📅",
-            name = getString(R.string.plan_monthly).replace("📅 ", ""),
-            subtitle = getString(R.string.plan_monthly_subtitle),
-            badge = "🎁 " + getString(R.string.plan_monthly_trial),
-            priceNote = getString(R.string.plan_monthly_note),
-            showBadge = true,
-            onClick = { billingManager?.launchPurchase(this, BillingManager.PREMIUM_MONTHLY) }
-        )
-
-        // Yıllık Plan
-        setupPlanCard(
-            card = cardYearly,
-            icon = "⭐",
-            name = getString(R.string.plan_yearly).replace("⭐ ", ""),
-            subtitle = getString(R.string.plan_yearly_subtitle),
-            badge = "🏆 " + getString(R.string.save_percentage),
-            priceNote = getString(R.string.plan_yearly_note),
-            showBadge = true,
-            onClick = { billingManager?.launchPurchase(this, BillingManager.PREMIUM_YEARLY) }
-        )
-
-        // Ömür Boyu Plan
-        setupPlanCard(
-            card = cardLifetime,
-            icon = "👑",
-            name = getString(R.string.plan_lifetime).replace("👑 ", ""),
-            subtitle = getString(R.string.plan_lifetime_subtitle),
-            badge = "💎 " + getString(R.string.one_time_billing),
-            priceNote = getString(R.string.plan_lifetime_note),
-            showBadge = true,
-            onClick = { billingManager?.launchPurchase(this, BillingManager.PREMIUM_LIFETIME) }
-        )
-    }
-
-    private fun setupPlanCard(
-        card: View,
-        icon: String,
-        name: String,
-        subtitle: String,
-        badge: String,
-        priceNote: String,
-        showBadge: Boolean,
-        onClick: () -> Unit
-    ) {
-        card.findViewById<TextView>(R.id.tvPlanIcon).text = icon
-        card.findViewById<TextView>(R.id.tvPlanName).text = name
-        card.findViewById<TextView>(R.id.tvPlanPrice).text = getString(R.string.price_loading)
-
-        // Alt açıklama
-        card.findViewById<TextView>(R.id.tvPlanSubtitle)?.text = subtitle
-
-        // Fiyat altı notu
-        card.findViewById<TextView>(R.id.tvPriceNote)?.apply {
-            text = priceNote
-            visibility = if (priceNote.isNotEmpty()) View.VISIBLE else View.GONE
+    private fun setupViews() {
+        // Close button
+        findViewById<View>(R.id.btnClose).setOnClickListener {
+            finish()
+            overridePendingTransition(R.anim.fade_in, R.anim.fade_out)
         }
 
-        val badgeView = card.findViewById<TextView>(R.id.tvBadge)
-        if (showBadge && badge.isNotEmpty()) {
-            badgeView.text = badge
-            badgeView.visibility = View.VISIBLE
-        } else {
-            badgeView.visibility = View.GONE
+        // Subscribe button
+        findViewById<MaterialButton>(R.id.btnSubscribe).setOnClickListener {
+            billingManager?.launchPurchase(this, selectedPlan)
         }
 
-        card.setOnClickListener { onClick() }
+        // View all plans
+        findViewById<TextView>(R.id.tvPlanSwitcher).setOnClickListener {
+            showPlansBottomSheet()
+        }
+
+        // Footer links
+        findViewById<View>(R.id.btnTerms).setOnClickListener {
+            startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://sticky-privacy-legal.web.app/#terms")))
+        }
+
+        findViewById<View>(R.id.btnPrivacyPolicy).setOnClickListener {
+            startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://sticky-privacy-legal.web.app/#privacy")))
+        }
+
+        findViewById<View>(R.id.btnRestore).setOnClickListener {
+            restorePurchases()
+        }
+    }
+
+    private fun setupFeatures() {
+        // Feature 1: Ad-Free
+        setupFeature(
+            R.id.featureAdFree,
+            R.drawable.ic_no_ads,
+            R.string.feature_adfree_title,
+            R.string.feature_adfree_desc
+        )
+
+        // Feature 2: Premium Packs
+        setupFeature(
+            R.id.featurePremiumPacks,
+            R.drawable.ic_premium,
+            R.string.feature_premium_title,
+            R.string.feature_premium_desc
+        )
+
+        // Feature 3: AI Background Removal
+        setupFeature(
+            R.id.featureAIBg,
+            R.drawable.ic_ai_bg,
+            R.string.feature_ai_title,
+            R.string.feature_ai_desc
+        )
+
+        // Feature 4: Sticker Maker
+        setupFeature(
+            R.id.featureStickerMaker,
+            R.drawable.ic_sticker_maker,
+            R.string.feature_maker_title,
+            R.string.feature_maker_desc
+        )
+
+        // Feature 5: Priority Support
+        setupFeature(
+            R.id.featureSupport,
+            R.drawable.ic_support,
+            R.string.feature_support_title,
+            R.string.feature_support_desc
+        )
+    }
+
+    private fun setupFeature(viewId: Int, iconRes: Int, titleRes: Int, descRes: Int) {
+        val featureView = findViewById<View>(viewId)
+        featureView.findViewById<ImageView>(R.id.imgFeatureIcon).setImageResource(iconRes)
+        featureView.findViewById<TextView>(R.id.tvFeatureTitle).setText(titleRes)
+        featureView.findViewById<TextView>(R.id.tvFeatureDesc).setText(descRes)
+    }
+
+    private fun showPlansBottomSheet() {
+        val bottomSheet = BottomSheetDialog(this, R.style.TransparentBottomSheetDialog)
+        val view = layoutInflater.inflate(R.layout.dialog_plans, null)
+        bottomSheet.setContentView(view)
+
+        val monthlyPrice = billingManager?.getFormattedPrice(BillingManager.PREMIUM_MONTHLY) ?: getString(R.string.price_loading)
+        val yearlyPrice = billingManager?.getFormattedPrice(BillingManager.PREMIUM_YEARLY) ?: getString(R.string.price_loading)
+
+        // Update subtitle with monthly price
+        view.findViewById<TextView>(R.id.tvSubtitle).text = getString(R.string.free_trial_subtitle)
+
+        // Yearly plan
+        view.findViewById<TextView>(R.id.tvYearlyPrice).text = "$yearlyPrice/${getString(R.string.period_year)}"
+        view.findViewById<View>(R.id.cardYearly).setOnClickListener {
+            selectedPlan = BillingManager.PREMIUM_YEARLY
+            updateCardSelection(view, true)
+        }
+
+        // Monthly plan
+        view.findViewById<TextView>(R.id.tvMonthlyPrice).text = "$monthlyPrice/${getString(R.string.period_month)}"
+        view.findViewById<View>(R.id.cardMonthly).setOnClickListener {
+            selectedPlan = BillingManager.PREMIUM_MONTHLY
+            updateCardSelection(view, false)
+        }
+
+        // Continue button
+        view.findViewById<View>(R.id.btnContinue).setOnClickListener {
+            bottomSheet.dismiss()
+            billingManager?.launchPurchase(this, selectedPlan)
+        }
+
+        // Footer links
+        view.findViewById<View>(R.id.btnDialogTerms).setOnClickListener {
+            startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://sticky-privacy-legal.web.app/#terms")))
+        }
+        view.findViewById<View>(R.id.btnDialogPrivacy).setOnClickListener {
+            startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://sticky-privacy-legal.web.app/#privacy")))
+        }
+        view.findViewById<View>(R.id.btnDialogRestore).setOnClickListener {
+            bottomSheet.dismiss()
+            restorePurchases()
+        }
+
+        // Default selection is yearly (best value)
+        selectedPlan = BillingManager.PREMIUM_YEARLY
+
+        bottomSheet.show()
+    }
+
+    private fun updateCardSelection(view: View, isYearlySelected: Boolean) {
+        val cardYearly = view.findViewById<View>(R.id.cardYearly).findViewById<View>(android.R.id.content)?.parent as? View
+            ?: view.findViewById<View>(R.id.cardYearly)
+        val cardMonthly = view.findViewById<View>(R.id.cardMonthly).findViewById<View>(android.R.id.content)?.parent as? View
+            ?: view.findViewById<View>(R.id.cardMonthly)
+
+        // Visual feedback - update backgrounds
+        val yearlyInner = (cardYearly as? androidx.cardview.widget.CardView)?.getChildAt(0)
+        val monthlyInner = (cardMonthly as? androidx.cardview.widget.CardView)?.getChildAt(0)
+
+        yearlyInner?.setBackgroundResource(if (isYearlySelected) R.drawable.bg_plan_card_selected else R.drawable.bg_plan_card)
+        monthlyInner?.setBackgroundResource(if (!isYearlySelected) R.drawable.bg_plan_card_selected else R.drawable.bg_plan_card)
     }
 
     private fun updatePricesFromGooglePlay() {
         val monthlyPrice = billingManager?.getFormattedPrice(BillingManager.PREMIUM_MONTHLY)
-        val yearlyPrice = billingManager?.getFormattedPrice(BillingManager.PREMIUM_YEARLY)
-        val lifetimePrice = billingManager?.getFormattedPrice(BillingManager.PREMIUM_LIFETIME)
 
-        val loadingText = getString(R.string.price_loading)
+        // Calculate trial end date (today + 3 days)
+        val calendar = Calendar.getInstance()
+        calendar.add(Calendar.DAY_OF_MONTH, 3)
+        val dateFormat = SimpleDateFormat("d MMM yyyy", Locale.getDefault())
+        val trialEndDate = dateFormat.format(calendar.time)
 
-        // Aylık fiyat - /ay formatında
-        findViewById<View>(R.id.cardMonthly)?.findViewById<TextView>(R.id.tvPlanPrice)?.text =
-            if (monthlyPrice != null) "$monthlyPrice/${getString(R.string.period_month)}" else loadingText
+        // Update main CTA button - Sticker.ly style (large title, small subtitle)
+        val btnSubscribe = findViewById<MaterialButton>(R.id.btnSubscribe)
+        if (monthlyPrice != null) {
+            val title = getString(R.string.free_trial_btn_title)
+            val subtitle = getString(R.string.free_trial_btn_subtitle, monthlyPrice, getString(R.string.period_month))
+            val fullText = "$title\n$subtitle"
 
-        // Yıllık fiyat - /yıl formatında
-        val cardYearly = findViewById<View>(R.id.cardYearly)
-        cardYearly?.findViewById<TextView>(R.id.tvPlanPrice)?.text =
-            if (yearlyPrice != null) "$yearlyPrice/${getString(R.string.period_year)}" else loadingText
-        // Üstü çizili eski fiyat gösterimi kaldırıldı
-        cardYearly?.findViewById<TextView>(R.id.tvOldPrice)?.visibility = View.GONE
+            val spannable = SpannableString(fullText)
+            // Title - large (18sp)
+            spannable.setSpan(AbsoluteSizeSpan(18, true), 0, title.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            // Subtitle - small (12sp)
+            spannable.setSpan(AbsoluteSizeSpan(12, true), title.length + 1, fullText.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
 
-        // Ömür boyu fiyat
-        val cardLifetime = findViewById<View>(R.id.cardLifetime)
-        cardLifetime?.findViewById<TextView>(R.id.tvPlanPrice)?.text = lifetimePrice ?: loadingText
-        // Üstü çizili eski fiyat gösterimi kaldırıldı
-        cardLifetime?.findViewById<TextView>(R.id.tvOldPrice)?.visibility = View.GONE
+            btnSubscribe.text = spannable
+        }
+
+        // Update trial info with dynamic date
+        val tvTrialInfo = findViewById<TextView>(R.id.tvTrialInfo)
+        if (monthlyPrice != null) {
+            tvTrialInfo.text = getString(R.string.trial_info, trialEndDate, monthlyPrice, getString(R.string.period_month))
+        }
     }
 
     private fun setupEdgeToEdge() {
-        val toolbar = findViewById<View>(R.id.toolbar)
         val root = findViewById<View>(R.id.premium_root)
+        val btnClose = findViewById<View>(R.id.btnClose)
+        val bottomCTA = findViewById<View>(R.id.bottomCTA)
 
         ViewCompat.setOnApplyWindowInsetsListener(root) { _, insets ->
             val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            toolbar?.setPadding(toolbar.paddingLeft, systemBars.top, toolbar.paddingRight, toolbar.paddingBottom)
+
+            // Adjust close button margin for status bar
+            val closeParams = btnClose.layoutParams as androidx.coordinatorlayout.widget.CoordinatorLayout.LayoutParams
+            closeParams.topMargin = systemBars.top + 16
+            btnClose.layoutParams = closeParams
+
+            // Adjust bottom CTA for navigation bar
+            bottomCTA.setPadding(
+                bottomCTA.paddingLeft,
+                bottomCTA.paddingTop,
+                bottomCTA.paddingRight,
+                systemBars.bottom + 24
+            )
+
             insets
         }
     }
@@ -212,91 +270,50 @@ class PremiumActivity : AppCompatActivity() {
         val isPremium = PreferencesHelper.isPremium(this)
         val premiumType = PreferencesHelper.getPremiumType(this)
 
-        val plansContainer = findViewById<View>(R.id.plansContainer)
+        val featuresContainer = findViewById<View>(R.id.featuresContainer)
         val premiumActiveContainer = findViewById<View>(R.id.premiumActiveContainer)
-        val cardMonthly = findViewById<View>(R.id.cardMonthly)
-        val cardYearly = findViewById<View>(R.id.cardYearly)
-        val cardLifetime = findViewById<View>(R.id.cardLifetime)
-        val tvHeaderTitle = findViewById<TextView>(R.id.tvHeaderTitle)
-        val tvHeaderDesc = findViewById<TextView>(R.id.tvHeaderDesc)
+        val bottomCTA = findViewById<View>(R.id.bottomCTA)
+        val tvSlogan = findViewById<TextView>(R.id.tvSlogan)
+        val footerLinks = findViewById<View>(R.id.footerLinks)
+        val tvTrialInfo = findViewById<View>(R.id.tvTrialInfo)
 
         if (isPremium) {
-            // Premium kullanıcı için başlığı değiştir
-            tvHeaderTitle?.text = getString(R.string.premium_subscriber_title)
-            tvHeaderDesc?.text = getString(R.string.premium_subscriber_desc)
+            tvSlogan.text = getString(R.string.premium_subscriber_desc)
+            featuresContainer.visibility = View.GONE
+            premiumActiveContainer.visibility = View.VISIBLE
+            bottomCTA.visibility = View.GONE
+            footerLinks.visibility = View.GONE
+            tvTrialInfo.visibility = View.GONE
 
+            // Set premium type text
+            val tvPremiumType = findViewById<TextView>(R.id.tvPremiumType)
             when (premiumType) {
-                "lifetime" -> {
-                    // Ömür boyu premium - tüm planları gizle, premium aktif ekranı göster
-                    plansContainer.visibility = View.GONE
-                    premiumActiveContainer.visibility = View.VISIBLE
-
-                    // Premium tipi göster
-                    findViewById<TextView>(R.id.tvPremiumType)?.text = getString(R.string.premium_lifetime_member)
-
-                    // Taç animasyonu
-                    animateCrown()
-                }
                 "subscription" -> {
-                    // Abonelik aktif - hangi abonelik olduğunu kontrol et
                     val expiry = PreferencesHelper.getPremiumExpiry(this)
-                    val now = System.currentTimeMillis()
-                    val remainingDays = ((expiry - now) / (24 * 60 * 60 * 1000)).toInt()
-
-                    // Yıllık mı aylık mı anlamak için kalan günlere bak
-                    val isYearly = remainingDays > 60 // 60 günden fazla kaldıysa yıllık
-
-                    if (isYearly) {
-                        // Yıllık abone - aylık ve yıllık gizle, sadece ömür boyu göster
-                        plansContainer.visibility = View.VISIBLE
-                        premiumActiveContainer.visibility = View.GONE
-                        cardMonthly.visibility = View.GONE
-                        cardYearly.visibility = View.GONE
-                        cardLifetime.visibility = View.VISIBLE
-
-                        // Başlık güncelle
-                        findViewById<TextView>(R.id.tvSelectPlan)?.text = getString(R.string.upgrade_to_lifetime)
+                    val remainingDays = ((expiry - System.currentTimeMillis()) / (24 * 60 * 60 * 1000)).toInt()
+                    tvPremiumType.text = if (remainingDays > 60) {
+                        getString(R.string.premium_yearly_member)
                     } else {
-                        // Aylık abone - aylık gizle, yıllık ve ömür boyu göster
-                        plansContainer.visibility = View.VISIBLE
-                        premiumActiveContainer.visibility = View.GONE
-                        cardMonthly.visibility = View.GONE
-                        cardYearly.visibility = View.VISIBLE
-                        cardLifetime.visibility = View.VISIBLE
-
-                        // Başlık güncelle
-                        findViewById<TextView>(R.id.tvSelectPlan)?.text = getString(R.string.upgrade_to_yearly)
+                        getString(R.string.premium_monthly_member)
                     }
                 }
-                else -> {
-                    // Premium ama tip belirsiz - güvenli tarafta kal
-                    plansContainer.visibility = View.GONE
-                    premiumActiveContainer.visibility = View.VISIBLE
-                    findViewById<TextView>(R.id.tvPremiumType)?.text = getString(R.string.premium_active)
-                    animateCrown()
-                }
+                else -> tvPremiumType.text = getString(R.string.premium_active)
             }
+
+            animateCrown()
         } else {
-            // Premium değil - normal başlık
-            tvHeaderTitle?.text = getString(R.string.premium_remove_limits)
-            tvHeaderDesc?.text = getString(R.string.premium_remove_limits_desc)
-
-            // Tüm planları göster
-            plansContainer.visibility = View.VISIBLE
+            tvSlogan.text = getString(R.string.premium_slogan)
+            featuresContainer.visibility = View.VISIBLE
             premiumActiveContainer.visibility = View.GONE
-            cardMonthly.visibility = View.VISIBLE
-            cardYearly.visibility = View.VISIBLE
-            cardLifetime.visibility = View.VISIBLE
-
-            // Başlık normal
-            findViewById<TextView>(R.id.tvSelectPlan)?.text = getString(R.string.select_plan)
+            bottomCTA.visibility = View.VISIBLE
+            footerLinks.visibility = View.VISIBLE
+            tvTrialInfo.visibility = View.VISIBLE
         }
     }
 
     private fun animateCrown() {
         val crownView = findViewById<ImageView>(R.id.imgPremiumCrown)
         crownView?.let {
-            // Pulse animasyonu
             val pulseAnim = AnimationUtils.loadAnimation(this, android.R.anim.fade_in)
             pulseAnim.duration = 1000
             pulseAnim.repeatMode = android.view.animation.Animation.REVERSE
@@ -308,23 +325,74 @@ class PremiumActivity : AppCompatActivity() {
     private fun loadBillingConfig() {
         activityScope.launch {
             try {
-                val config = StickerRepository.getBillingConfig()
-                billingConfig = config
-
-                // Trial gün sayısını Firebase'den al
-                val monthlyPlan = config.plans.find { it.id == BillingManager.PREMIUM_MONTHLY }
-                if (monthlyPlan != null && monthlyPlan.trialDays > 0) {
-                    val trialBadge = findViewById<View>(R.id.cardMonthly)?.findViewById<TextView>(R.id.tvBadge)
-                    trialBadge?.text = getString(R.string.trial_days_format, monthlyPlan.trialDays)
-                }
+                billingConfig = StickerRepository.getBillingConfig()
             } catch (e: Exception) {
                 // Firebase unavailable - keep default values
             }
         }
     }
 
+    private fun restorePurchases() {
+        if (billingManager == null) {
+            Toast.makeText(this, R.string.restore_error, Toast.LENGTH_SHORT).show()
+            return
+        }
+        Toast.makeText(this, R.string.restoring, Toast.LENGTH_SHORT).show()
+        billingManager?.restorePurchases { result ->
+            val messageRes = when (result) {
+                BillingManager.RestoreResult.SUCCESS -> {
+                    updateUI()
+                    R.string.restore_success
+                }
+                BillingManager.RestoreResult.NOT_FOUND -> R.string.restore_not_found
+                BillingManager.RestoreResult.ERROR -> R.string.restore_error
+            }
+            Toast.makeText(this, messageRes, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun syncPremiumFromFirebase() {
+        val user = FirebaseAuth.getInstance().currentUser
+        val docId = user?.uid ?: PreferencesHelper.getDeviceId(this)
+
+        if (docId.isEmpty()) return
+
+        activityScope.launch(Dispatchers.IO) {
+            try {
+                val firestore = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                val doc = firestore.collection("users").document(docId).get().await()
+
+                if (doc.exists()) {
+                    val isPremium = doc.getBoolean("is_premium") ?: false
+                    val premiumType = doc.getString("premium_type") ?: "none"
+                    val premiumExpiry = doc.getLong("premium_expiry") ?: 0L
+
+                    if (isPremium) {
+                        PreferencesHelper.updateLocalPremiumStatus(this@PremiumActivity, true, premiumType, premiumExpiry)
+                    } else {
+                        PreferencesHelper.updateLocalPremiumStatus(this@PremiumActivity, false, "none", 0L)
+                    }
+
+                    launch(Dispatchers.Main) {
+                        updateUI()
+                    }
+                }
+            } catch (e: Exception) {
+                // Silent fail
+            }
+        }
+    }
+
+    private suspend fun <T> com.google.android.gms.tasks.Task<T>.await(): T {
+        return kotlinx.coroutines.suspendCancellableCoroutine { cont ->
+            addOnSuccessListener { cont.resume(it, null) }
+            addOnFailureListener { cont.resumeWithException(it) }
+        }
+    }
+
     override fun onDestroy() {
         super.onDestroy()
+        getSharedPreferences("sticky_prefs", MODE_PRIVATE).unregisterOnSharedPreferenceChangeListener(prefsListener)
         activityScope.cancel()
         billingManager?.destroy()
     }

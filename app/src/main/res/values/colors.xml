@@ -65,6 +65,9 @@
     <!-- Custom Button Colors -->
     <color name="background_removal_text_color">@color/accent</color>
 
+    <!-- Premium Feature Colors -->
+    <color name="feature_icon_bg">#F0FFF4</color>
+
     <!-- Onboarding Colors (Always Dark) -->
     <color name="onboarding_background">@color/primary</color>
     <color name="onboarding_text_primary">#FFFFFF</color>

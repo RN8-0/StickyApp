@@ -280,16 +280,18 @@
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnAction"
             android:layout_width="match_parent"
-            android:layout_height="56dp"
+            android:layout_height="48dp"
             android:text="@string/add_to_whatsapp"
             android:textColor="@color/white"
-            android:textSize="16sp"
+            android:textSize="15sp"
             android:textAllCaps="false"
-            app:backgroundTint="@color/accent"
-            app:cornerRadius="28dp"
+            app:backgroundTint="@color/primary"
+            app:cornerRadius="12dp"
             app:icon="@drawable/ic_add"
             app:iconGravity="textStart"
-            app:iconTint="@color/white" />
+            app:iconTint="@color/white"
+            app:iconSize="20dp"
+            app:iconPadding="8dp" />
 
         <!-- Premium Button Container -->
         <LinearLayout

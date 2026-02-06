@@ -52,7 +52,7 @@
 
     <!-- Premium -->
     <string name="premium_title">Premium Membership</string>
-    <string name="premium_description">With a one-time purchase:\n\n• Ad-free experience\n• Premium sticker packs\n• Priority support</string>
+    <string name="premium_description">With Premium subscription:\n\n• Ad-free experience\n• Premium sticker packs\n• Priority support</string>
     <string name="premium_price">$4.99</string>
     <string name="sticker_price">$0.49</string>
     <string name="buy_premium">Buy Now</string>
@@ -83,6 +83,9 @@
     <!-- Internet -->
     <string name="no_internet_title">No Internet Connection</string>
     <string name="no_internet_message">This app requires an internet connection. Please check your connection.</string>
+    <string name="no_internet_warning">Internet connection not found. Some features may not work.\n\nLocal sticker packs can be used.</string>
+    <string name="still_no_internet">Still no internet connection</string>
+    <string name="search_history_cleared">Search history cleared</string>
     <string name="retry">Retry</string>
     <string name="exit">Exit</string>
 
@@ -112,7 +115,7 @@
 
     <!-- Premium Promo Dialog -->
     <string name="premium_promo_title">Ad-Free Experience</string>
-    <string name="premium_promo_message">We know ads can be annoying sometimes.\n\nWe need a small income to improve our app and add new stickers.\n\nYou can get a one-time Premium Membership for ad-free use and all premium stickers 💙</string>
+    <string name="premium_promo_message">We know ads can be annoying sometimes.\n\nWe need a small income to improve our app and add new stickers.\n\nYou can get Premium subscription for ad-free use and all premium stickers 💙</string>
     <string name="get_premium">Get Premium Membership</string>
     <string name="maybe_later">Maybe Later</string>
 
@@ -160,6 +163,7 @@
     <string name="filter_category">Category</string>
     <string name="category_all">✨ All</string>
     <string name="popular_stickers">🔥 Popular Stickers</string>
+    <string name="popular_in_region_format">🏆 Popular in %s</string>
     <string name="all_stickers">💎 All Stickers</string>
     <string name="category_humor">😂 Humor</string>
     <string name="category_love">❤️ Love</string>
@@ -275,7 +279,9 @@
     <string name="empty_state_subtitle">Create your first sticker pack and express yourself!</string>
     <string name="no_favorites_yet">You haven\'t added any favorites yet.</string>
     <string name="pack_deleted_whatsapp_sync">Pack deleted and WhatsApp sync triggered. It may take a few seconds.</string>
+    <string name="pack_not_in_whatsapp_delete_local">Pack is not added to WhatsApp. Removing only from app.</string>
     <string name="pack_delete_failed">Pack could not be deleted</string>
+
     <string name="static_sticker">Static Sticker</string>
     <string name="animated_sticker">Animated Sticker</string>
     <string name="select_video_gif">Select a Video or GIF</string>
@@ -307,15 +313,10 @@
     <string name="ad_free_experience">Reklamsız Deneyim</string>
     <string name="current_plan">Current Plan</string>
     <string name="recommended">⭐ RECOMMENDED</string>
-    <string name="one_time_payment">one-time payment</string>
-    <string name="one_time">one-time</string>
     <string name="all_packs">Free Access</string>
     <string name="all_premium_packs">Free with Premium</string>
     <string name="unlimited_access_detail">Unlimited access to hundreds of specially designed premium sticker packs for free</string>
     <string name="ad_free_detail">Completely ad-free usage.</string>
-    <string name="lifetime_access">Lifetime Access</string>
-    <string name="lifetime_access_detail">Become a premium member forever with a one-time payment</string>
-    <string name="no_subscription_note">💡 One-time payment, no subscription!\nPremium stickers are free with membership.</string>
     <string name="premium_advantages">Premium Advantages</string>
     <string name="how_to_create_sticker">How would you like to create a sticker?</string>
     <string name="sticker_maker_subtitle">✨ Turn your photos into stickers! ✨</string>
@@ -458,13 +459,10 @@
     <string name="plan_weekly">Weekly</string>
     <string name="plan_monthly">📅 Monthly</string>
     <string name="plan_yearly">⭐ Yearly</string>
-    <string name="plan_lifetime">👑 Lifetime</string>
     <string name="plan_weekly_price">Weekly</string>
     <string name="plan_monthly_price">Monthly</string>
     <string name="plan_yearly_price">Yearly</string>
-    <string name="plan_lifetime_price">Lifetime</string>
     <string name="save_percentage">Best Value</string>
-    <string name="one_time_billing">One-time payment</string>
     <string name="restore_purchases_short">Restore</string>
     <string name="privacy_short">Privacy Policy</string>
     <string name="var_label">Yes</string>
@@ -476,13 +474,10 @@
     <string name="plan_monthly_note">🚀 Start now</string>
     <string name="plan_yearly_subtitle">12 months of premium 🎉</string>
     <string name="plan_yearly_note">⭐ Most popular</string>
-    <string name="plan_lifetime_subtitle">Pay once, use forever 💫</string>
-    <string name="plan_lifetime_note">👑 Best deal</string>
     <string name="features_label">Features</string>
 
     <!-- Premium Active State -->
     <string name="premium_active_title">Premium Active</string>
-    <string name="premium_lifetime_member">Lifetime Member</string>
     <string name="premium_yearly_member">Yearly Subscriber</string>
     <string name="premium_monthly_member">Monthly Subscriber</string>
     <string name="premium_benefit_no_ads">Ad-free experience</string>
@@ -490,16 +485,14 @@
     <string name="premium_benefit_priority">Priority support</string>
     <string name="premium_thank_you">Thank you for supporting us!</string>
     <string name="upgrade_to_yearly">Upgrade to Yearly</string>
-    <string name="upgrade_to_lifetime">Upgrade to Lifetime</string>
     <string name="premium_features_title">PREMIUM BENEFITS</string>
     <string name="feature_no_ads">🚫 No More Ads</string>
     <string name="feature_premium_packs">🌟 Unlimited Stickers</string>
     <string name="feature_ai_cutting">🪄 Smart AI Cut</string>
     <string name="feature_unlimited">🎯 Create Everything</string>
-    <string name="feature_ads_desc">Clean and fast experience ⚡</string>
-    <string name="feature_packs_desc">Access to all exclusive content 🌟</string>
-    <string name="feature_ai_desc">Professional background removal 🔥</string>
-    <string name="feature_create_desc">Unlimited packs and stickers 🎨</string>
+    <string name="feature_ads_desc">Clean and fast experience</string>
+    <string name="feature_packs_desc">Access to all exclusive content</string>
+    <string name="feature_create_desc">Unlimited packs and stickers</string>
 
     <!-- Billing / Campaign -->
     <string name="purchase_pending">Your purchase is being processed. You will be notified when it is complete.</string>
@@ -517,4 +510,37 @@
 
     <!-- Auth Config (Replace with your actual IDs) -->
     <string name="default_web_client_id">643314832062-p7vgneda3aqrrk4pf7qngpcdb6bnasgc.apps.googleusercontent.com</string>
+
+    <!-- Premium Page - Sticker.ly Style -->
+    <string name="premium_slogan">Ad-free, unlimited access – Enjoy all the benefits</string>
+    <string name="start_free_trial">Start 3-Day Free Trial</string>
+    <string name="view_all_plans">View all plans</string>
+    <string name="terms_of_use">Terms of Use</string>
+    <string name="restore">Restore</string>
+    <string name="trial_info">Starts %1$s at %2$s/%3$s. Renews unless cancelled 24h before. Cancel anytime, no extra charge.</string>
+    <string name="coming_soon_features">🔥 More Features Coming Soon 🔥</string>
+
+    <!-- Button Text -->
+    <string name="free_trial_btn_title">3 Day Free Trial</string>
+    <string name="free_trial_btn_subtitle">then %1$s/%2$s</string>
+
+    <!-- Plans Dialog -->
+    <string name="free_trial_title">3 DAYS FREE</string>
+    <string name="free_trial_subtitle">Try all premium features</string>
+    <string name="plan_yearly_label">Yearly</string>
+    <string name="plan_monthly_label">Monthly</string>
+    <string name="save_badge">BEST VALUE</string>
+    <string name="continue_btn">CONTINUE</string>
+
+    <!-- Premium Features -->
+    <string name="feature_adfree_title">Ad-Free</string>
+    <string name="feature_adfree_desc">Browse and discover stickers without interruptions.</string>
+    <string name="feature_premium_title">Premium Packs</string>
+    <string name="feature_premium_desc">Access exclusive, specially designed sticker packs for PLUS members.</string>
+    <string name="feature_ai_title">AI Background Removal</string>
+    <string name="feature_ai_desc">Create transparent stickers with high-resolution quality.</string>
+    <string name="feature_maker_title">Sticker Maker</string>
+    <string name="feature_maker_desc">Unlimited sticker creation and pack management.</string>
+    <string name="feature_support_title">Priority Support</string>
+    <string name="feature_support_desc">Get faster responses and dedicated help from our team.</string>
 </resources>

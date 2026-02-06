@@ -24,7 +24,7 @@ class OnboardingAdapter(
     private var premiumHolder: PremiumViewHolder? = null
 
     override fun getItemViewType(position: Int): Int {
-        return if (position < 3) TYPE_INTRO else TYPE_PREMIUM
+        return TYPE_INTRO
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
@@ -55,7 +55,7 @@ class OnboardingAdapter(
         }
     }
 
-    override fun getItemCount(): Int = 4
+    override fun getItemCount(): Int = 3
 
     fun updatePrices() {
         premiumHolder?.updatePrices(getPriceForPlan)
@@ -123,12 +123,6 @@ class OnboardingAdapter(
             // Üstü çizili eski fiyat kaldırıldı
             cardYearly?.findViewById<TextView>(R.id.tvOldPrice)?.visibility = View.GONE
 
-            // Ömür Boyu
-            val cardLifetime = itemView.findViewById<View>(R.id.cardLifetime)
-            cardLifetime?.findViewById<TextView>(R.id.tvPlanPrice)?.text =
-                getPriceForPlan?.invoke(2) ?: loadingText
-            // Üstü çizili eski fiyat kaldırıldı
-            cardLifetime?.findViewById<TextView>(R.id.tvOldPrice)?.visibility = View.GONE
         }
 
         private fun setupComparisonRows() {
@@ -159,7 +153,6 @@ class OnboardingAdapter(
             val context = itemView.context
             val cardMonthly = itemView.findViewById<View>(R.id.cardMonthly)
             val cardYearly = itemView.findViewById<View>(R.id.cardYearly)
-            val cardLifetime = itemView.findViewById<View>(R.id.cardLifetime)
 
             val monthPeriod = context.getString(R.string.period_month)
             val yearPeriod = context.getString(R.string.period_year)
@@ -190,17 +183,6 @@ class OnboardingAdapter(
                 onClick = { onPurchase(1) }
             )
 
-            // Ömür Boyu Plan
-            setupPlanCard(
-                card = cardLifetime,
-                icon = "👑",
-                name = context.getString(R.string.plan_lifetime).replace("👑 ", ""),
-                subtitle = context.getString(R.string.plan_lifetime_subtitle),
-                badge = "💎 " + context.getString(R.string.one_time_billing),
-                priceNote = context.getString(R.string.plan_lifetime_note),
-                price = getPriceForPlan?.invoke(2),
-                onClick = { onPurchase(2) }
-            )
         }
 
         private fun setupPlanCard(

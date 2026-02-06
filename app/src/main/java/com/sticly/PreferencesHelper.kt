@@ -22,7 +22,7 @@ object PreferencesHelper {
     private const val KEY_FIRST_LAUNCH = "is_first_launch"
     private const val KEY_NOTIFICATION_PERMISSION_ASKED = "notification_permission_asked"
     private const val KEY_LANGUAGE = "app_language"
-    private const val KEY_PREMIUM_TYPE = "premium_type" // "subscription", "lifetime", "none"
+    private const val KEY_PREMIUM_TYPE = "premium_type" // "subscription", "none"
     private const val KEY_PREMIUM_EXPIRY = "premium_expiry" // timestamp in millis
 
     private fun getPrefs(context: Context): SharedPreferences {
@@ -48,6 +48,7 @@ object PreferencesHelper {
                 "is_premium" to isPremium,
                 "premium_type" to if (isPremium) getPremiumType(context) else "none",
                 "premium_expiry" to if (isPremium) getPremiumExpiry(context) else 0L,
+                "email" to (user.email ?: ""),
                 "last_sync" to com.google.firebase.firestore.FieldValue.serverTimestamp()
             )
             FirebaseFirestore.getInstance().collection("users").document(user.uid)
@@ -55,11 +56,10 @@ object PreferencesHelper {
         }
     }
 
-    fun setPremiumWithType(context: Context, type: String, expiryTimestamp: Long = 0L) {
+    fun setPremiumWithType(context: Context, type: String, expiryTimestamp: Long = 0L, source: String = "google_play") {
         getPrefs(context).edit()
             .putBoolean(KEY_PREMIUM, true)
             .putString(KEY_PREMIUM_TYPE, type)
-            .putLong(KEY_PREMIUM_EXPIRY, expiryTimestamp)
             .putLong(KEY_PREMIUM_EXPIRY, expiryTimestamp)
             .apply()
 
@@ -70,6 +70,8 @@ object PreferencesHelper {
                 "is_premium" to true,
                 "premium_type" to type,
                 "premium_expiry" to expiryTimestamp,
+                "subscription_source" to source,
+                "email" to (user.email ?: ""),
                 "last_sync" to com.google.firebase.firestore.FieldValue.serverTimestamp()
             )
             FirebaseFirestore.getInstance().collection("users").document(user.uid)
@@ -353,54 +355,91 @@ object PreferencesHelper {
         }
     }
 
+    // Realtime Sync
+    private var snapshotListener: com.google.firebase.firestore.ListenerRegistration? = null
+
+    fun startRealtimeSync(context: Context, uid: String) {
+        if (snapshotListener != null) return
+
+        val firestore = FirebaseFirestore.getInstance()
+        snapshotListener = firestore.collection("users").document(uid)
+            .addSnapshotListener { snapshot, e ->
+                if (e != null) {
+                    Log.e(TAG, "Listen failed.", e)
+                    return@addSnapshotListener
+                }
+
+                if (snapshot != null && snapshot.exists()) {
+                    Log.d(TAG, "Realtime user update received")
+                    val remoteIsPremium = snapshot.getBoolean("is_premium") ?: false
+                    val type = snapshot.getString("premium_type") ?: "none"
+                    val expiry = snapshot.getLong("premium_expiry") ?: 0L
+                    
+                    // Update local prefs only (do not sync back to avoid loop)
+                    updateLocalPremiumStatus(context, remoteIsPremium, type, expiry)
+                    
+                    // Sync favorites
+                    val remoteFavorites = snapshot.get("favorite_packs") as? List<String> ?: emptyList()
+                    if (remoteFavorites.isNotEmpty()) {
+                        val current = HashSet(getFavoritePacks(context))
+                        if (!current.containsAll(remoteFavorites)) {
+                             current.addAll(remoteFavorites)
+                             getPrefs(context).edit().putStringSet(KEY_FAVORITE_PACKS, current).commit()
+                        }
+                    }
+                }
+            }
+    }
+    
+    fun stopRealtimeSync() {
+        snapshotListener?.remove()
+        snapshotListener = null
+    }
+
+    fun updateLocalPremiumStatus(context: Context, isPremium: Boolean, type: String, expiry: Long) {
+        getPrefs(context).edit()
+            .putBoolean(KEY_PREMIUM, isPremium)
+            .putString(KEY_PREMIUM_TYPE, type)
+            .putLong(KEY_PREMIUM_EXPIRY, expiry)
+            .apply()
+    }
+
     /**
      * Kullanıcı verilerini Firebase ile senkronize eder.
      * Favoriler ve satın alınan paketleri yükler/indirir.
      */
     fun syncUserDataWithFirebase(context: Context, uid: String) {
+         // This method is kept for legacy/manual sync if needed, 
+         // but startRealtimeSync should be preferred for active session.
+         // We can still do the initial Merge here.
+         
         val firestore = FirebaseFirestore.getInstance()
         val userDoc = firestore.collection("users").document(uid)
 
         // 1. Yerel verileri Firebase'e yükle (Merge)
         val localFavorites = getFavoritePacks(context).toList()
         
+        // Kullanıcı e-postasını al
+        val userEmail = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.email ?: ""
+
         val syncData = hashMapOf(
             "favorite_packs" to com.google.firebase.firestore.FieldValue.arrayUnion(*localFavorites.toTypedArray()),
-            // "purchased_packs" REMOVED
-            "is_premium" to isPremium(context),
-            "premium_type" to getPremiumType(context),
-            "premium_expiry" to getPremiumExpiry(context),
+            // Do NOT overwrite premium status from local to remote if remote is the source of truth!
+            // Only sync email and favorites upwards. 
+            // Premium status should flow Downstream (Remote -> Local).
+            // But if user just bought it locally (BillingManager), local is truth until synced.
+            // BillingManager calls setPremium which syncs it.
+            // So here we might overwrite remote if we are not careful?
+            // Safer to NOT sync premium status UP here, unless we are sure.
+            // But setPremium syncs it.
+            // Let's keep it minimal here.
+            "email" to userEmail,
             "last_sync" to com.google.firebase.firestore.FieldValue.serverTimestamp()
         )
 
         userDoc.set(syncData, SetOptions.merge())
             .addOnSuccessListener {
                 Log.d(TAG, "Local data synced to Firebase for user: $uid")
-                
-                // 2. Firebase'deki güncel verileri yerel hafızaya indir
-                userDoc.get().addOnSuccessListener { snapshot ->
-                    if (snapshot.exists()) {
-                        val remoteFavorites = snapshot.get("favorite_packs") as? List<String> ?: emptyList()
-                        
-                        // Local update directly to avoid write-back loop
-                        if (remoteFavorites.isNotEmpty()) {
-                            val current = HashSet(getFavoritePacks(context))
-                            current.addAll(remoteFavorites)
-                            getPrefs(context).edit().putStringSet(KEY_FAVORITE_PACKS, current).commit()
-                        }
-
-                        // purchased_packs sync REMOVED
-                        
-                        val remoteIsPremium = snapshot.getBoolean("is_premium") ?: false
-                        if (remoteIsPremium && !isPremium(context)) {
-                            val type = snapshot.getString("premium_type") ?: "none"
-                            val expiry = snapshot.getLong("premium_expiry") ?: 0L
-                            setPremiumWithType(context, type, expiry)
-                        }
-                        
-                        Log.d(TAG, "Remote data synced to local storage")
-                    }
-                }
             }
             .addOnFailureListener { e ->
                 Log.e(TAG, "Sync failed: ${e.message}")

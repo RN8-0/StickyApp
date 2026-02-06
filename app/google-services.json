@@ -12,7 +12,36 @@
           "package_name": "com.sticly"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "643314832062-92d390s20dp0079gcq0apea8am7uulrk.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.sticly",
+            "certificate_hash": "d62d0de4c3a8e23a5e99b1015848889ee8ad93ed"
+          }
+        },
+        {
+          "client_id": "643314832062-hhon1d5c4dmc15luhegno6a6o66qjh0o.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.sticly",
+            "certificate_hash": "6235105ab4e17769379052518d117f39d8188c5b"
+          }
+        },
+        {
+          "client_id": "643314832062-l8vsrfakkpl9qm1qhau9nu551alqf6p6.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.sticly",
+            "certificate_hash": "c29aebddf69ae96e8ae9f2e44a701dc9f6feb125"
+          }
+        },
+        {
+          "client_id": "643314832062-p7vgneda3aqrrk4pf7qngpcdb6bnasgc.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyBQYpPuPxhBJcPFLCMCTE3F2PqlzeFWkzM"
@@ -20,7 +49,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "643314832062-p7vgneda3aqrrk4pf7qngpcdb6bnasgc.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }

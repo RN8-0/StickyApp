@@ -13,8 +13,11 @@ import android.widget.LinearLayout
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
 import androidx.viewpager2.widget.ViewPager2
 import android.widget.Toast
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 class OnboardingActivity : AppCompatActivity() {
 
@@ -48,6 +51,32 @@ class OnboardingActivity : AppCompatActivity() {
         setupBilling()
         setupViewPager()
         setupButtons()
+
+        // Kullanıcı onboarding'de gezinirken arka planda verileri önceden yükle
+        preloadDataInBackground()
+    }
+
+    /**
+     * Onboarding sırasında arka planda Firebase verilerini ve görselleri önceden yükle
+     */
+    private fun preloadDataInBackground() {
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val packs = StickerRepository.loadPacks(this@OnboardingActivity, forceRefresh = false)
+
+                if (packs.isNotEmpty()) {
+                    val popularPacks = packs
+                        .filter { it.isActive && it.category != "custom" }
+                        .sortedByDescending { it.downloadCount }
+                        .take(10)
+
+                    StickyGlideModule.preloadPopularPacks(this@OnboardingActivity, popularPacks)
+                    StickyGlideModule.preloadStickerPreviews(this@OnboardingActivity, packs, packCount = 12, stickersPerPack = 5)
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("OnboardingActivity", "Background preload error: ${e.message}")
+            }
+        }
     }
 
     private fun setupBilling() {
@@ -87,7 +116,6 @@ class OnboardingActivity : AppCompatActivity() {
         return when (planIndex) {
             0 -> billingManager?.getFormattedPrice(BillingManager.PREMIUM_MONTHLY)
             1 -> billingManager?.getFormattedPrice(BillingManager.PREMIUM_YEARLY)
-            2 -> billingManager?.getFormattedPrice(BillingManager.PREMIUM_LIFETIME)
             else -> null
         }
     }
@@ -98,8 +126,7 @@ class OnboardingActivity : AppCompatActivity() {
             onPurchase = { planIndex ->
                 val sku = when(planIndex) {
                     0 -> BillingManager.PREMIUM_MONTHLY
-                    1 -> BillingManager.PREMIUM_YEARLY
-                    else -> BillingManager.PREMIUM_LIFETIME
+                    else -> BillingManager.PREMIUM_YEARLY
                 }
                 billingManager?.launchPurchase(this, sku)
             },
@@ -171,30 +198,27 @@ class OnboardingActivity : AppCompatActivity() {
 
                 if (position == 2) {
                     checkNotificationPermission()
-                }
-
-                val lastPosition = (adapter?.itemCount ?: 1) - 1
-                if (position == lastPosition) {
-                    // Premium page: hide Next, keep Skip visible, hide Indicators
-                    btnNext.visibility = View.GONE
-                    btnSkip.visibility = View.VISIBLE
-                    btnSkip.setTextColor(ContextCompat.getColor(this@OnboardingActivity, R.color.accent))
-                    indicatorContainer.visibility = View.GONE
+                    // Last page
+                    btnNext.setText(R.string.onboarding_start)
                 } else {
-                    btnNext.visibility = View.VISIBLE
-                    btnSkip.visibility = View.VISIBLE
-                    btnSkip.setTextColor(android.graphics.Color.WHITE)
-                    indicatorContainer.visibility = View.VISIBLE
                     btnNext.setText(R.string.onboarding_next)
                 }
+
+                btnNext.visibility = View.VISIBLE
+                btnSkip.visibility = View.VISIBLE
+                btnSkip.setTextColor(android.graphics.Color.WHITE)
+                indicatorContainer.visibility = View.VISIBLE
             }
         })
     }
 
     private fun setupButtons() {
         btnNext.setOnClickListener {
-            if (viewPager.currentItem < (viewPager.adapter?.itemCount ?: 0) - 1) {
+            val itemCount = viewPager.adapter?.itemCount ?: 0
+            if (viewPager.currentItem < itemCount - 1) {
                 viewPager.currentItem += 1
+            } else {
+                onFinish()
             }
         }
 

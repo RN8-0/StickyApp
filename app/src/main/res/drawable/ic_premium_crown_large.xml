@@ -1,0 +1,166 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="200dp"
+    android:height="200dp"
+    android:viewportWidth="200"
+    android:viewportHeight="200">
+
+    <!-- Large sparkle top left -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillAlpha="0.9"
+        android:pathData="M25,35 L28,28 L31,35 L38,38 L31,41 L28,48 L25,41 L18,38 Z" />
+
+    <!-- Large sparkle top right -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillAlpha="0.9"
+        android:pathData="M172,30 L175,23 L178,30 L185,33 L178,36 L175,43 L172,36 L165,33 Z" />
+
+    <!-- Medium sparkle left -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillAlpha="0.7"
+        android:pathData="M15,80 L17,75 L19,80 L24,82 L19,84 L17,89 L15,84 L10,82 Z" />
+
+    <!-- Medium sparkle right -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillAlpha="0.7"
+        android:pathData="M185,75 L187,70 L189,75 L194,77 L189,79 L187,84 L185,79 L180,77 Z" />
+
+    <!-- Small sparkle bottom left -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillAlpha="0.6"
+        android:pathData="M35,120 L36,117 L37,120 L40,121 L37,122 L36,125 L35,122 L32,121 Z" />
+
+    <!-- Small sparkle bottom right -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillAlpha="0.6"
+        android:pathData="M165,115 L166,112 L167,115 L170,116 L167,117 L166,120 L165,117 L162,116 Z" />
+
+    <!-- Tiny sparkles scattered -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillAlpha="0.5"
+        android:pathData="M50,50 L51,48 L52,50 L54,51 L52,52 L51,54 L50,52 L48,51 Z" />
+
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillAlpha="0.5"
+        android:pathData="M150,55 L151,53 L152,55 L154,56 L152,57 L151,59 L150,57 L148,56 Z" />
+
+    <!-- Crown glow/shadow effect -->
+    <path
+        android:fillColor="#006B52"
+        android:fillAlpha="0.2"
+        android:pathData="M38,148 L162,148 L150,78 L130,105 L100,48 L70,105 L50,78 Z" />
+
+    <!-- Crown main body - white -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M35,142 L165,142 L148,75 L128,100 L100,50 L72,100 L52,75 Z" />
+
+    <!-- Crown inner highlight -->
+    <path
+        android:fillColor="#F5F5F5"
+        android:pathData="M48,135 L152,135 L140,82 L123,102 L100,60 L77,102 L60,82 Z" />
+
+    <!-- Crown center gem - large emerald -->
+    <path
+        android:fillColor="#00C896"
+        android:pathData="M100,82 A12,12 0 1,1 100,106 A12,12 0 1,1 100,82 Z" />
+
+    <!-- Gem inner highlight -->
+    <path
+        android:fillColor="#00E8AA"
+        android:fillAlpha="0.6"
+        android:pathData="M96,88 A4,4 0 1,1 96,96 A4,4 0 1,1 96,88 Z" />
+
+    <!-- Crown left gem -->
+    <path
+        android:fillColor="#00A87E"
+        android:pathData="M65,108 A7,7 0 1,1 65,122 A7,7 0 1,1 65,108 Z" />
+
+    <!-- Left gem highlight -->
+    <path
+        android:fillColor="#00C896"
+        android:fillAlpha="0.5"
+        android:pathData="M62,111 A2,2 0 1,1 62,115 A2,2 0 1,1 62,111 Z" />
+
+    <!-- Crown right gem -->
+    <path
+        android:fillColor="#00A87E"
+        android:pathData="M135,108 A7,7 0 1,1 135,122 A7,7 0 1,1 135,108 Z" />
+
+    <!-- Right gem highlight -->
+    <path
+        android:fillColor="#00C896"
+        android:fillAlpha="0.5"
+        android:pathData="M132,111 A2,2 0 1,1 132,115 A2,2 0 1,1 132,111 Z" />
+
+    <!-- Crown top center point - gold ball -->
+    <path
+        android:fillColor="#FFD700"
+        android:pathData="M100,42 A8,8 0 1,1 100,58 A8,8 0 1,1 100,42 Z" />
+
+    <!-- Top center highlight -->
+    <path
+        android:fillColor="#FFEB3B"
+        android:fillAlpha="0.6"
+        android:pathData="M96,46 A3,3 0 1,1 96,52 A3,3 0 1,1 96,46 Z" />
+
+    <!-- Crown left point - gold ball -->
+    <path
+        android:fillColor="#FFD700"
+        android:pathData="M52,68 A7,7 0 1,1 52,82 A7,7 0 1,1 52,68 Z" />
+
+    <!-- Left point highlight -->
+    <path
+        android:fillColor="#FFEB3B"
+        android:fillAlpha="0.6"
+        android:pathData="M49,71 A2,2 0 1,1 49,75 A2,2 0 1,1 49,71 Z" />
+
+    <!-- Crown right point - gold ball -->
+    <path
+        android:fillColor="#FFD700"
+        android:pathData="M148,68 A7,7 0 1,1 148,82 A7,7 0 1,1 148,68 Z" />
+
+    <!-- Right point highlight -->
+    <path
+        android:fillColor="#FFEB3B"
+        android:fillAlpha="0.6"
+        android:pathData="M145,71 A2,2 0 1,1 145,75 A2,2 0 1,1 145,71 Z" />
+
+    <!-- Crown base band - gold -->
+    <path
+        android:fillColor="#FFD700"
+        android:pathData="M35,142 L165,142 L165,155 L35,155 Z" />
+
+    <!-- Band top edge highlight -->
+    <path
+        android:fillColor="#FFEB3B"
+        android:pathData="M35,142 L165,142 L165,146 L35,146 Z" />
+
+    <!-- Band decoration - center diamond -->
+    <path
+        android:fillColor="#FFA000"
+        android:pathData="M100,145 L104,148.5 L100,152 L96,148.5 Z" />
+
+    <!-- Band decoration dots -->
+    <path
+        android:fillColor="#FFA000"
+        android:pathData="M55,145.5 A3.5,3.5 0 1,1 55,152.5 A3.5,3.5 0 1,1 55,145.5 Z" />
+    <path
+        android:fillColor="#FFA000"
+        android:pathData="M75,145.5 A3.5,3.5 0 1,1 75,152.5 A3.5,3.5 0 1,1 75,145.5 Z" />
+    <path
+        android:fillColor="#FFA000"
+        android:pathData="M125,145.5 A3.5,3.5 0 1,1 125,152.5 A3.5,3.5 0 1,1 125,145.5 Z" />
+    <path
+        android:fillColor="#FFA000"
+        android:pathData="M145,145.5 A3.5,3.5 0 1,1 145,152.5 A3.5,3.5 0 1,1 145,145.5 Z" />
+
+</vector>

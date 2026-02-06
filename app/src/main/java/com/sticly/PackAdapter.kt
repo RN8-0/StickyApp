@@ -11,8 +11,15 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
+import com.bumptech.glide.Priority
+import com.bumptech.glide.load.DataSource
 import com.bumptech.glide.load.engine.DiskCacheStrategy
+import com.bumptech.glide.load.engine.GlideException
+import com.bumptech.glide.load.resource.drawable.DrawableTransitionOptions
+import com.bumptech.glide.request.RequestListener
+import com.bumptech.glide.request.target.Target
 import com.bumptech.glide.signature.ObjectKey
+import android.graphics.drawable.Drawable
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -255,17 +262,24 @@ class PackAdapter(
         container.removeAllViews()
 
         val displayMetrics = context.resources.displayMetrics
-        // Çıkartma boyutu (90dp - daha kompakt)
         val stickerSize = (90 * displayMetrics.density).toInt()
         val stickerMargin = (6 * displayMetrics.density).toInt()
-        
-        // Netlik için Glide override boyutunu artırıyoruz
-        val glideOverrideSize = (320 * displayMetrics.density).toInt() 
-        
-        // Sadece ilk 7 çıkartmayı göster
-        val stickersToShow = pack.stickers.take(7)
+        val glideOverrideSize = (120 * displayMetrics.density).toInt()
 
+        val stickersToShow = pack.stickers.take(7)
         if (stickersToShow.isEmpty()) return
+
+        // Resim yüklendiğinde arka planı kaldıran listener
+        val clearBgListener = object : RequestListener<Drawable> {
+            override fun onLoadFailed(e: GlideException?, model: Any?, target: Target<Drawable>, isFirstResource: Boolean): Boolean {
+                return false
+            }
+            override fun onResourceReady(resource: Drawable, model: Any, target: Target<Drawable>, dataSource: DataSource, isFirstResource: Boolean): Boolean {
+                // Yükleme başarılı - arka planı kaldır (şeffaf çıkartmalar için)
+                (target as? com.bumptech.glide.request.target.ImageViewTarget<*>)?.view?.background = null
+                return false
+            }
+        }
 
         stickersToShow.forEachIndexed { index, sticker ->
             val previewView = ImageView(context).apply {
@@ -275,7 +289,8 @@ class PackAdapter(
                 }
                 layoutParams = params
                 scaleType = ImageView.ScaleType.FIT_CENTER
-                setBackgroundResource(R.drawable.sticker_preview_bg)
+                // Yükleme sırasında hafif gri arka plan
+                setBackgroundResource(R.drawable.ic_sticker_placeholder)
                 setOnClickListener { click(pack) }
             }
             container.addView(previewView)
@@ -286,60 +301,56 @@ class PackAdapter(
                     Glide.with(context)
                         .load(stickerFile)
                         .override(glideOverrideSize)
-                        .dontAnimate()
-                        .placeholder(R.drawable.ic_sticker_placeholder)
-                        .error(R.drawable.ic_sticker_placeholder)
+                        .thumbnail(0.25f)
                         .diskCacheStrategy(DiskCacheStrategy.DATA)
+                        .transition(DrawableTransitionOptions.withCrossFade(150))
+                        .listener(clearBgListener)
                         .into(previewView)
-                } else {
-                    previewView.setImageResource(R.drawable.ic_sticker_placeholder)
                 }
             } else {
-                // Determine URL (Firestore packs might miss sticker.url but have storagePath)
                 var urlToLoad = sticker.url
                 if (urlToLoad.isEmpty() && pack.storagePath.isNotEmpty()) {
                     urlToLoad = StickerRepository.getStickerDirectUrl(pack.id, sticker.file, pack.storagePath)
                 }
 
                 if (urlToLoad.isNotEmpty()) {
-                    // Load from URL (Firebase/Web)
                     Glide.with(context)
                         .load(urlToLoad)
                         .override(glideOverrideSize)
-                        // .dontAnimate() REMOVED for animated previews in list
-                        .placeholder(R.drawable.ic_sticker_placeholder)
-                        .error(R.drawable.ic_sticker_placeholder)
-                        .diskCacheStrategy(DiskCacheStrategy.DATA)
+                        .thumbnail(0.25f) // Önce %25 boyutunda hızlı yükle, sonra tam kalite
+                        .priority(Priority.NORMAL)
+                        .diskCacheStrategy(DiskCacheStrategy.DATA) // Hem orijinal hem dönüştürülmüş veriyi cache'le
+                        .transition(DrawableTransitionOptions.withCrossFade(150)) // Yumuşak geçiş
+                        .listener(clearBgListener)
                         .into(previewView)
                 } else {
-                    // Local Cache or Asset Logic
                     val cachedSticker = StickerRepository.getCachedStickerPath(context, pack.id, sticker.file)
                     if (cachedSticker.exists() && cachedSticker.length() > 0) {
-                         Glide.with(context)
+                        Glide.with(context)
                             .load(cachedSticker)
                             .override(glideOverrideSize)
-                            // .dontAnimate() REMOVED
-                            .placeholder(R.drawable.ic_sticker_placeholder)
-                            .error(R.drawable.ic_sticker_placeholder)
-                            .signature(ObjectKey(cachedSticker.lastModified()))
+                            .thumbnail(0.25f)
+                            .priority(Priority.NORMAL)
                             .diskCacheStrategy(DiskCacheStrategy.DATA)
+                            .signature(ObjectKey(cachedSticker.lastModified()))
+                            .transition(DrawableTransitionOptions.withCrossFade(150))
+                            .listener(clearBgListener)
                             .into(previewView)
                     } else {
-                        // Asset Fallback
                         val assetPath = "file:///android_asset/${pack.id}/${sticker.file}"
                         Glide.with(context)
                             .load(android.net.Uri.parse(assetPath))
                             .override(glideOverrideSize)
-                            // .dontAnimate() REMOVED
-                            .placeholder(R.drawable.ic_sticker_placeholder)
-                            .error(R.drawable.ic_sticker_placeholder)
+                            .thumbnail(0.25f)
+                            .priority(Priority.NORMAL)
                             .diskCacheStrategy(DiskCacheStrategy.DATA)
+                            .transition(DrawableTransitionOptions.withCrossFade(150))
+                            .listener(clearBgListener)
                             .into(previewView)
                     }
                 }
             }
         }
-
     }
 
     private fun getTimeAgo(createdAt: String, context: android.content.Context): String {

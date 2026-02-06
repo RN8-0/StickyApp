@@ -58,7 +58,6 @@ class DetailsActivity : AppCompatActivity() {
     private lateinit var btnConfirmDelete: ImageButton
     private lateinit var installedIcon: ImageView
     private var currentPack: Pack? = null
-    private var billingManager: BillingManager? = null
     private var isDeleteMode = false
     private val selectedIndices = mutableSetOf<Int>()
     private var progressDialog: AlertDialog? = null // Profesyonel yükleme dialoğu
@@ -741,21 +740,7 @@ class DetailsActivity : AppCompatActivity() {
     }
 
     private fun launchPremiumPurchase() {
-        if (billingManager == null) {
-            billingManager = BillingManager(
-                context = this,
-                onPurchaseComplete = { isPurchased ->
-                    if (isPurchased) {
-                        currentPack?.let { pack ->
-                            PreferencesHelper.addPurchasedPack(this, pack.id)
-                        }
-                        Toast.makeText(this, R.string.premium_purchased, Toast.LENGTH_SHORT).show()
-                        recreate()
-                    }
-                }
-            )
-        }
-        billingManager?.launchPurchase(this, BillingManager.PREMIUM_LIFETIME)
+        startActivity(Intent(this, PremiumActivity::class.java))
     }
 
 
@@ -869,35 +854,38 @@ class DetailsActivity : AppCompatActivity() {
         if (!::btnAction.isInitialized) return
         btnAction.isEnabled = true // KRITIK: Butonun tıklanabilir olduğundan emin ol
 
+        // Modern, ince buton tasarımı
+        val buttonHeight = (48 * resources.displayMetrics.density).toInt()
+        val cornerRadius = (12 * resources.displayMetrics.density).toInt()
+
         if (isInstalled) {
             btnAction.text = getString(R.string.share_pack)
             btnAction.setIconResource(R.drawable.ic_share)
             btnAction.setTextColor(ContextCompat.getColor(this@DetailsActivity, R.color.white))
             btnAction.setIconTintResource(R.color.white)
-            btnAction.background = ContextCompat.getDrawable(this, R.drawable.bg_gradient_share)
-            btnAction.backgroundTintList = null 
+            btnAction.backgroundTintList = ContextCompat.getColorStateList(this, R.color.primary)
+            btnAction.cornerRadius = cornerRadius
             installedIcon.visibility = View.VISIBLE
         } else {
             btnAction.text = getString(R.string.add_to_whatsapp)
             btnAction.setIconResource(R.drawable.ic_whatsapp_small)
             btnAction.iconTint = ContextCompat.getColorStateList(this, R.color.white)
             btnAction.setTextColor(ContextCompat.getColor(this, R.color.white))
-            
-            // Uygulama yeşili (primary) ve yuvarlak buton tasarımı
+
+            // Uygulama yeşili (primary) ve modern buton tasarımı
             btnAction.backgroundTintList = ContextCompat.getColorStateList(this, R.color.primary)
-            btnAction.cornerRadius = (28 * resources.displayMetrics.density).toInt()
-            
-            btnAction.iconPadding = (8 * resources.displayMetrics.density).toInt()
-            btnAction.iconGravity = com.google.android.material.button.MaterialButton.ICON_GRAVITY_TEXT_START
-            
-            // Boyutları sıfırla (eğer Share butonundan geliyorsa)
-            val params = btnAction.layoutParams
-            params.width = android.view.ViewGroup.LayoutParams.MATCH_PARENT
-            params.height = (56 * resources.displayMetrics.density).toInt()
-            btnAction.layoutParams = params
-            
+            btnAction.cornerRadius = cornerRadius
+
             installedIcon.visibility = View.GONE
         }
+
+        // Boyutları ayarla
+        btnAction.iconPadding = (8 * resources.displayMetrics.density).toInt()
+        btnAction.iconGravity = com.google.android.material.button.MaterialButton.ICON_GRAVITY_TEXT_START
+        val params = btnAction.layoutParams
+        params.width = android.view.ViewGroup.LayoutParams.MATCH_PARENT
+        params.height = buttonHeight
+        btnAction.layoutParams = params
     }
 
     private fun showStickerPreview(sticker: Sticker, isLocked: Boolean = false) {
@@ -1591,7 +1579,6 @@ class DetailsActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        billingManager?.destroy()
     }
 
     companion object {

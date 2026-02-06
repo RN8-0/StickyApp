@@ -51,7 +51,7 @@
 
     <!-- Premium -->
     <string name="premium_title">Premium Üyelik</string>
-    <string name="premium_description">Tek seferlik satın alım ile:\n\n• Reklamsız deneyim\n• Premium sticker paketleri\n• Öncelikli destek</string>
+    <string name="premium_description">Premium abonelik ile:\n\n• Reklamsız deneyim\n• Premium sticker paketleri\n• Öncelikli destek</string>
     <string name="premium_price">49,99 TL</string>
     <string name="sticker_price">4,99 TL</string>
     <string name="buy_premium">Satın Al</string>
@@ -82,6 +82,9 @@
     <!-- Internet -->
     <string name="no_internet_title">İnternet Bağlantısı Yok</string>
     <string name="no_internet_message">Bu uygulama internet bağlantısı gerektirir. Lütfen bağlantınızı kontrol edin.</string>
+    <string name="no_internet_warning">İnternet bağlantısı bulunamadı. Bazı özellikler çalışmayabilir.\n\nYerel çıkartma paketleri kullanılabilir.</string>
+    <string name="still_no_internet">Hâlâ internet bağlantısı yok</string>
+    <string name="search_history_cleared">Arama geçmişi temizlendi</string>
     <string name="retry">Tekrar Dene</string>
     <string name="exit">Çıkış</string>
 
@@ -111,7 +114,7 @@
 
     <!-- Premium Promo Dialog -->
     <string name="premium_promo_title">Reklamsız Deneyim</string>
-    <string name="premium_promo_message">Reklamların bazen can sıkıcı olabildiğinin farkındayız.\n\nUygulamamızı geliştirebilmek ve yeni çıkartmalar ekleyebilmek için küçük de olsa bir gelire ihtiyacımız var.\n\nReklamsız kullanım ve tüm premium çıkartmalar için tek seferlik Premium Üyelik alabilirsin 💙</string>
+    <string name="premium_promo_message">Reklamların bazen can sıkıcı olabildiğinin farkındayız.\n\nUygulamamızı geliştirebilmek ve yeni çıkartmalar ekleyebilmek için küçük de olsa bir gelire ihtiyacımız var.\n\nReklamsız kullanım ve tüm premium çıkartmalar için Premium abonelik alabilirsin 💙</string>
     <string name="get_premium">Premium Üyelik Al</string>
     <string name="maybe_later">Belki Sonra</string>
 
@@ -159,6 +162,7 @@
     <string name="filter_category">Kategori</string>
     <string name="category_all">✨ Tümü</string>
     <string name="popular_stickers">🔥 Popüler Paketler</string>
+    <string name="popular_in_region_format">🏆 %s bölgesindeki en popülerler</string>
     <string name="all_stickers">💎 Tüm Paketler</string>
     <string name="category_humor">😂 Mizah</string>
     <string name="category_love">❤️ Aşk</string>
@@ -268,8 +272,12 @@
     <string name="btn_share_short">Paylaş</string>
     <string name="download_label">indirme</string>
     <string name="no_custom_packs">Henüz hiç çıkartma paketin yok. Hemen oluştur!</string>
+    <string name="empty_state_subtitle">İlk çıkartma paketini oluştur ve kendini ifade et!</string>
+    <string name="no_favorites_yet">Henüz favorilerine bir şey eklemedin.</string>
     <string name="pack_deleted_whatsapp_sync">Paket silindi ve WhatsApp senkronizasyonu tetiklendi. Birkaç saniye sürebilir.</string>
+    <string name="pack_not_in_whatsapp_delete_local">Paket WhatsApp\'ta ekli değil. Sadece uygulamadan siliniyor.</string>
     <string name="pack_delete_failed">Paket silinemedi</string>
+
     <string name="static_sticker">Statik Çıkartma</string>
     <string name="animated_sticker">Hareketli Çıkartma</string>
     <string name="select_video_gif">Bir Video veya GIF seçin</string>
@@ -301,15 +309,10 @@
     <string name="ad_free_experience">Reklamsız Deneyim</string>
     <string name="current_plan">Mevcut Plan</string>
     <string name="recommended">⭐ ÖNERİLEN</string>
-    <string name="one_time_payment">tek seferlik ödeme</string>
-    <string name="one_time">tek seferlik</string>
     <string name="all_packs">Premium ile Ücretsiz</string>
     <string name="all_premium_packs">Premium ile Ücretsiz</string>
     <string name="unlimited_access_detail">Özel tasarlanmış yüzlerce premium çıkartma paketine ücretsiz ve sınırsız erişim</string>
     <string name="ad_free_detail">Tamamen reklamsız kullanım keyfi.</string>
-    <string name="lifetime_access">Ömür Boyu Erişim</string>
-    <string name="lifetime_access_detail">Tek seferlik ödeme ile sonsuza dek premium üye kal</string>
-    <string name="no_subscription_note">💡 Tek seferlik ödeme, abonelik yok!\nPremium çıkartmalar üyelik ile ücretsizdir.</string>
     <string name="premium_advantages">Premium Avantajları</string>
     <string name="how_to_create_sticker">Nasıl bir çıkartma yapmak istersin?</string>
     <string name="sticker_maker_subtitle">✨ Fotoğraflarını çıkartmaya dönüştür! ✨</string>
@@ -448,18 +451,14 @@
     <string name="feature_unlimited">🎯 Sınırsız Oluşturma</string>
     <string name="feature_ads_desc">Temiz ve hızlı uygulama deneyimi ⚡</string>
     <string name="feature_packs_desc">Tüm özel içeriklere tam erişim 🌟</string>
-    <string name="feature_ai_desc">Profesyonel arka plan silme 🔥</string>
     <string name="feature_create_desc">Dilediğin kadar paket ve çıkartma 🎨</string>
     <string name="plan_weekly">Haftalık</string>
     <string name="plan_monthly">📅 Aylık</string>
     <string name="plan_yearly">⭐ Yıllık</string>
-    <string name="plan_lifetime">👑 Ömür Boyu</string>
     <string name="plan_weekly_price">Haftalık</string>
     <string name="plan_monthly_price">Aylık</string>
     <string name="plan_yearly_price">Yıllık</string>
-    <string name="plan_lifetime_price">Ömür Boyu</string>
     <string name="save_percentage">En Avantajlı</string>
-    <string name="one_time_billing">Tek Seferlik Ödeme</string>
     <string name="restore_purchases_short">Geri Yükle</string>
     <string name="privacy_short">Gizlilik Sözleşmesi</string>
     <string name="var_label">Var</string>
@@ -471,14 +470,11 @@
     <string name="plan_monthly_note">🚀 Hemen başla</string>
     <string name="plan_yearly_subtitle">12 ay boyunca premium 🎉</string>
     <string name="plan_yearly_note">⭐ En popüler</string>
-    <string name="plan_lifetime_subtitle">Bir kez öde, sonsuza kadar kullan 💫</string>
-    <string name="plan_lifetime_note">👑 En karlı</string>
     <string name="premium_ai_removal">✂️ AI Arka Plan</string>
     <string name="features_label">Özellikler</string>
 
     <!-- Premium Active State -->
     <string name="premium_active_title">Premium Aktif</string>
-    <string name="premium_lifetime_member">Ömür Boyu Üye</string>
     <string name="premium_yearly_member">Yıllık Abone</string>
     <string name="premium_monthly_member">Aylık Abone</string>
     <string name="premium_benefit_no_ads">Reklamsız deneyim</string>
@@ -486,7 +482,6 @@
     <string name="premium_benefit_priority">Öncelikli destek</string>
     <string name="premium_thank_you">Bizi desteklediğiniz için teşekkürler!</string>
     <string name="upgrade_to_yearly">Yıllığa Yükselt</string>
-    <string name="upgrade_to_lifetime">Ömür Boyuya Yükselt</string>
 
     <!-- Billing Errors -->
     <string name="purchase_pending">Satın alımınız işleniyor. Tamamlandığında bilgilendirileceksiniz.</string>
@@ -498,4 +493,36 @@
     <!-- Price Period Labels -->
     <string name="period_month">ay</string>
     <string name="period_year">yıl</string>
+
+    <!-- Premium Page Redesign -->
+    <string name="premium_slogan">Reklamsız, sınırsız erişim – Tüm avantajların keyfini çıkar</string>
+    <string name="start_free_trial">3 Günlük Ücretsiz Deneme Başlat</string>
+    <string name="view_all_plans">Tüm planları görüntüle</string>
+    <string name="terms_of_use">Kullanım Şartları</string>
+    <string name="restore">Geri Yükle</string>
+    <string name="trial_info">%1$s tarihinde %2$s/%3$s ile başlar. 24 saat önce iptal edilmezse yenilenir. İstediğiniz zaman iptal, ek ücret yok.</string>
+    <string name="coming_soon_features">🔥 Yakında Daha Fazla Özellik 🔥</string>
+
+    <!-- Button Text -->
+    <string name="free_trial_btn_title">3 Gün Ücretsiz Deneyin</string>
+    <string name="free_trial_btn_subtitle">sonra %1$s/%2$s</string>
+
+    <!-- Plans Dialog -->
+    <string name="free_trial_title">3 GÜN ÜCRETSİZ</string>
+    <string name="free_trial_subtitle">Tüm premium özellikleri dene</string>
+    <string name="plan_yearly_label">Yıllık</string>
+    <string name="plan_monthly_label">Aylık</string>
+    <string name="save_badge">EN AVANTAJLI</string>
+    <string name="continue_btn">DEVAM ET</string>
+
+    <string name="feature_adfree_title">Reklamsız</string>
+    <string name="feature_adfree_desc">Çıkartmaları kesintisiz keşfet ve bul.</string>
+    <string name="feature_premium_title">Premium Paketler</string>
+    <string name="feature_premium_desc">PLUS üyelere özel tasarlanmış çıkartma paketlerine eriş.</string>
+    <string name="feature_ai_title">AI Arka Plan Silme</string>
+    <string name="feature_ai_desc">Yüksek kaliteli şeffaf çıkartmalar oluştur.</string>
+    <string name="feature_maker_title">Çıkartma Yapıcı</string>
+    <string name="feature_maker_desc">Sınırsız çıkartma oluşturma ve paket yönetimi.</string>
+    <string name="feature_support_title">Öncelikli Destek</string>
+    <string name="feature_support_desc">Ekibimizden daha hızlı yanıt ve özel yardım al.</string>
 </resources>

@@ -1,4 +1,5 @@
 const { onDocumentCreated } = require('firebase-functions/v2/firestore');
+const { onRequest } = require('firebase-functions/v2/https');
 const { setGlobalOptions } = require('firebase-functions/v2');
 const admin = require('firebase-admin');
 
@@ -6,6 +7,8 @@ admin.initializeApp();
 
 // Global ayarlar (Bölge vb.)
 setGlobalOptions({ region: 'us-central1' });
+
+
 
 /**
  * Manuel olarak gönderilen bildirimleri yakalar
