@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="Sticky - WhatsApp Çıkartma Uygulaması Gizlilik Politikası">
-    <meta name="theme-color" content="#00C896">
+    <meta name="theme-color" content="#0d1117">
     <title>Sticky - Gizlilik Politikası</title>
     <link rel="icon" type="image/png" href="logo.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -15,18 +15,18 @@
             --primary: #00C896;
             --primary-dark: #00A87A;
             --primary-light: #34E0AA;
-            --primary-pale: #E8FBF5;
+            --primary-pale: rgba(0, 200, 150, 0.15);
             --primary-bg: rgba(0, 200, 150, 0.08);
-            --text-primary: #1a1a2e;
-            --text-secondary: #4a5568;
-            --text-muted: #718096;
-            --background: #ffffff;
-            --surface: #f8fafb;
-            --border: #e2e8f0;
-            --border-light: #f1f5f9;
-            --shadow-sm: 0 1px 3px rgba(0,0,0,0.08);
-            --shadow: 0 4px 20px rgba(0,0,0,0.08);
-            --shadow-lg: 0 12px 40px rgba(0,0,0,0.12);
+            --text-primary: #e6edf3;
+            --text-secondary: #9ca3af;
+            --text-muted: #6b7280;
+            --background: #0d1117;
+            --surface: #161b22;
+            --border: #30363d;
+            --border-light: #21262d;
+            --shadow-sm: 0 1px 3px rgba(0,0,0,0.3);
+            --shadow: 0 4px 20px rgba(0,0,0,0.4);
+            --shadow-lg: 0 12px 40px rgba(0,0,0,0.5);
             --radius: 16px;
             --radius-lg: 24px;
             --radius-xl: 32px;
@@ -52,7 +52,7 @@
 
         /* Header */
         .header {
-            background: linear-gradient(135deg, var(--primary-pale) 0%, var(--background) 100%);
+            background: linear-gradient(135deg, var(--surface) 0%, var(--background) 100%);
             padding: 60px 24px 80px;
             text-align: center;
             position: relative;
@@ -125,11 +125,11 @@
 
         /* Content Card */
         .content-card {
-            background: white;
+            background: var(--surface);
             border-radius: var(--radius-xl);
             padding: 56px;
             box-shadow: var(--shadow-lg);
-            border: 1px solid var(--border-light);
+            border: 1px solid var(--border);
         }
 
         /* Update Badge */
@@ -197,8 +197,8 @@
             font-weight: 600;
             border-radius: 12px;
             transition: all 0.2s;
-            background: white;
-            border: 1px solid var(--border-light);
+            background: var(--background);
+            border: 1px solid var(--border);
         }
 
         .toc-grid a:hover {
@@ -301,12 +301,12 @@
         }
 
         .info-box.warning {
-            background: #FFF8E6;
+            background: rgba(245, 158, 11, 0.15);
             border-color: #F59E0B;
         }
 
         .info-box.info {
-            background: #EBF5FF;
+            background: rgba(59, 130, 246, 0.15);
             border-color: #3B82F6;
         }
 
@@ -334,7 +334,7 @@
             align-items: center;
             gap: 10px;
             padding: 14px 24px;
-            background: white;
+            background: var(--background);
             border: 2px solid var(--border);
             border-radius: 100px;
             font-size: 15px;
@@ -785,7 +785,7 @@
                 <h3>Verilerinizi Silme</h3>
                 <ul>
                     <li>Uygulamayi kaldirdiginizda, cihazinizdaki tum yerel veriler otomatik olarak silinir</li>
-                    <li>Sunucu tarafindaki verilerin silinmesini talep etmek icin <strong>arainunger@gmail.com</strong> adresinden bizimle iletisime gecebilirsiniz</li>
+                    <li>Sunucu tarafindaki verilerin silinmesini talep etmek icin <strong>contact@arain.digital</strong> adresinden bizimle iletisime gecebilirsiniz</li>
                     <li>Silme taleplerini 30 gun icinde isleme aliyoruz</li>
                 </ul>
             </section>
@@ -841,7 +841,7 @@
                     </div>
                 </div>
 
-                <p>Bu haklarinizi kullanmak icin <strong>arainunger@gmail.com</strong> adresinden bizimle iletisime gecebilirsiniz.</p>
+                <p>Bu haklarinizi kullanmak icin <strong>contact@arain.digital</strong> adresinden bizimle iletisime gecebilirsiniz.</p>
             </section>
 
             <!-- Section 11 -->
@@ -875,8 +875,8 @@
             <div class="contact-card">
                 <h3>Bizimle Iletisime Gecin</h3>
                 <p>Gizlilik politikamiz veya veri uygulamalarimiz hakkinda sorulariniz icin</p>
-                <a href="mailto:arainunger@gmail.com" class="contact-email">
-                    arainunger@gmail.com
+                <a href="mailto:contact@arain.digital" class="contact-email">
+                    contact@arain.digital
                 </a>
             </div>
         </div>
