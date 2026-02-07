@@ -16,8 +16,38 @@ import time
 import re
 
 # --- CONFIGURATION ---
-GITHUB_TOKEN = "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"
-REPO_URL = f"https://{GITHUB_TOKEN}@github.com/arain-0/StickyApp.git"
+CONFIG_FILE = os.path.expanduser("~/.stickyapp_config.json")
+
+def load_github_token():
+    """Load GitHub token from config file"""
+    if os.path.exists(CONFIG_FILE):
+        try:
+            with open(CONFIG_FILE, 'r') as f:
+                config = json.load(f)
+                return config.get('github_token', '')
+        except:
+            pass
+    return ''
+
+def save_github_token(token):
+    """Save GitHub token to config file"""
+    config = {}
+    if os.path.exists(CONFIG_FILE):
+        try:
+            with open(CONFIG_FILE, 'r') as f:
+                config = json.load(f)
+        except:
+            pass
+    config['github_token'] = token
+    with open(CONFIG_FILE, 'w') as f:
+        json.dump(config, f)
+
+# Initialize token
+GITHUB_TOKEN = load_github_token() or "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"
+save_github_token(GITHUB_TOKEN)  # Save default if not exists
+
+def get_repo_url():
+    return f"https://{GITHUB_TOKEN}@github.com/arain-0/StickyApp.git"
 APP_VERSION = "3.0"
 
 REQUIRED_FILES = {
@@ -312,10 +342,17 @@ def github_pull():
         wait_for_enter()
         return
 
+    # Token kontrolü
+    if not GITHUB_TOKEN or GITHUB_TOKEN == "":
+        print_error("GitHub token tanımlı değil!")
+        print_info("Önce [11] GitHub Token menüsünden token ekleyin")
+        wait_for_enter()
+        return
+
     print_progress("Uzak repo kontrol ediliyor...")
 
     # Set remote URL with token
-    run_command(["git", "remote", "set-url", "origin", REPO_URL])
+    run_command(["git", "remote", "set-url", "origin", get_repo_url()])
 
     # Get current branch
     _, branch, _ = run_command(["git", "branch", "--show-current"])
@@ -335,8 +372,16 @@ def github_pull():
             print_success("Değişiklikler başarıyla alındı!")
             print(f"\n{Colors.GRAY}{out}{Colors.RESET}")
     else:
-        if "conflict" in err.lower():
+        err_lower = (err or "").lower()
+        if "conflict" in err_lower:
             print_error("Merge conflict var! Manuel çözüm gerekli.")
+        elif "authentication" in err_lower or "403" in err_lower or "401" in err_lower or "invalid" in err_lower:
+            print_error("Kimlik doğrulama hatası!")
+            print_info("GitHub token geçersiz veya süresi dolmuş olabilir")
+            print_info("[11] GitHub Token menüsünden yeni token ekleyin")
+        elif "could not resolve" in err_lower or "unable to access" in err_lower:
+            print_error("Bağlantı hatası!")
+            print_info("İnternet bağlantınızı kontrol edin")
         else:
             print_error(f"Hata: {err}")
 
@@ -364,8 +409,15 @@ def github_push():
     print()
     print_progress("İşlem başlatılıyor...")
 
+    # Token kontrolü
+    if not GITHUB_TOKEN or GITHUB_TOKEN == "":
+        print_error("GitHub token tanımlı değil!")
+        print_info("Önce [11] GitHub Token menüsünden token ekleyin")
+        wait_for_enter()
+        return
+
     # Set remote URL
-    run_command(["git", "remote", "set-url", "origin", REPO_URL])
+    run_command(["git", "remote", "set-url", "origin", get_repo_url()])
 
     # Get branch
     _, branch, _ = run_command(["git", "branch", "--show-current"])
@@ -383,12 +435,21 @@ def github_push():
         success, out, err = run_command(cmd)
 
         if not success:
-            if "nothing to commit" in out or "nothing to commit" in err:
+            err_lower = (err or "").lower()
+            out_lower = (out or "").lower()
+            if "nothing to commit" in out_lower or "nothing to commit" in err_lower:
                 print_warning("Değişiklik yok")
                 break
-            elif "rejected" in err:
+            elif "rejected" in err_lower:
                 print_error("Uzak sunucuda değişiklikler var!")
                 print_info("Önce 'Git Pull' yapın")
+            elif "authentication" in err_lower or "403" in err_lower or "401" in err_lower or "invalid" in err_lower:
+                print_error("Kimlik doğrulama hatası!")
+                print_info("GitHub token geçersiz veya süresi dolmuş olabilir")
+                print_info("[11] GitHub Token menüsünden yeni token ekleyin")
+            elif "could not resolve" in err_lower or "unable to access" in err_lower:
+                print_error("Bağlantı hatası!")
+                print_info("İnternet bağlantınızı kontrol edin")
             else:
                 print_error(f"Hata: {err or out}")
             wait_for_enter()
@@ -759,6 +820,45 @@ def firebase_deploy():
     print_success("Deploy tamamlandı!")
     wait_for_enter()
 
+def update_github_token():
+    global GITHUB_TOKEN
+    clear_screen()
+    print_banner()
+    print_menu_header("GITHUB TOKEN EKLE/GÜNCELLE", "🔑")
+
+    current_token = GITHUB_TOKEN
+    if current_token and len(current_token) > 14:
+        masked = current_token[:10] + "..." + current_token[-4:]
+        print_info(f"Mevcut token: {masked}")
+    else:
+        print_warning("Henüz token tanımlı değil!")
+
+    print()
+    print(f"    {Colors.GRAY}Token almak için: GitHub > Settings > Developer settings > Personal access tokens{Colors.RESET}")
+    print()
+
+    new_token = input(f"    {Colors.CYAN}GitHub token girin (İptal için boş bırakın):{Colors.RESET} ").strip()
+
+    if not new_token:
+        print_warning("İptal edildi")
+        wait_for_enter()
+        return
+
+    if not new_token.startswith("ghp_"):
+        print_error("Geçersiz token formatı! Token 'ghp_' ile başlamalı")
+        wait_for_enter()
+        return
+
+    # Save new token
+    GITHUB_TOKEN = new_token
+    save_github_token(new_token)
+
+    print()
+    print_success("GitHub token kaydedildi!")
+    print_info(f"Token: {new_token[:10]}...{new_token[-4:]}")
+
+    wait_for_enter()
+
 def clean_project():
     clear_screen()
     print_banner()
@@ -829,6 +929,7 @@ def main_menu():
         print_menu_item("8", "Git Pull", "Uzak repodan çek")
         print_menu_item("9", "Git Push", "GitHub'a gönder")
         print_menu_item("10", "Firebase Deploy", "Hosting & Functions yayınla")
+        print_menu_item("11", "GitHub Token", "Token ekle/güncelle")
 
         print()
         print(f"    {Colors.RED}▎{Colors.RESET} {Colors.BOLD}DİĞER{Colors.RESET}")
@@ -849,6 +950,7 @@ def main_menu():
         elif choice == "8": github_pull()
         elif choice == "9": github_push()
         elif choice == "10": firebase_deploy()
+        elif choice == "11": update_github_token()
         elif choice == "0": clean_project()
         elif choice == "q": break
         else:

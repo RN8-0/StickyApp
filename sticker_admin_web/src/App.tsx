@@ -86,79 +86,92 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-const CREATIVE_PREFIXES = [
-  "Super", "Mega", "Ultra", "Best of", "Top", "The Real", "Just", "Simply", "Pure", "Daily",
-  "Classic", "Modern", "Retro", "Vintage", "Neon", "Cyber", "Pixel", "Toon", "Chibi", "Kawaii",
-  "Official", "Original", "Prime", "Elite", "Pro", "Master", "Ultimate", "Hyper", "Giga", "Turbo"
-];
+// Alakalı kelime önerileri - her tema için uygun kelimeler
+const RELEVANT_SUGGESTIONS: Record<string, { words: string[], emojis: string[] }> = {
+  // Hayvanlar
+  cat: { words: ["Cute", "Funny", "Meow", "Kitty", "Paws"], emojis: ["🐱", "😻", "🐾", "😸", "😹"] },
+  dog: { words: ["Woof", "Puppy", "Cute", "Funny", "Happy"], emojis: ["🐶", "🐕", "🦮", "🐾", "🐩"] },
+  bird: { words: ["Tweet", "Flying", "Cute", "Chirp", "Happy"], emojis: ["🐦", "🐤", "🦜", "🦅", "🐧"] },
+  animal: { words: ["Wild", "Cute", "Funny", "Safari", "Nature"], emojis: ["🦁", "🐻", "🦊", "🐼", "🐨"] },
+  bear: { words: ["Cute", "Cozy", "Fluffy", "Hugs", "Soft"], emojis: ["🐻", "🧸", "🐻‍❄️", "🤗", "🐾"] },
+  bunny: { words: ["Cute", "Fluffy", "Hop", "Sweet", "Soft"], emojis: ["🐰", "🐇", "💕", "🥕", "✨"] },
+  rabbit: { words: ["Cute", "Fluffy", "Hop", "Sweet", "Soft"], emojis: ["🐰", "🐇", "💕", "🥕", "✨"] },
+  fox: { words: ["Sly", "Cute", "Wild", "Clever", "Orange"], emojis: ["🦊", "🧡", "🍂", "✨", "🌲"] },
 
-const CREATIVE_ADJECTIVES = [
-  "Funny", "Cute", "Sad", "Happy", "Angry", "Crazy", "Sillly", "Weird", "Awkward", "Random",
-  "Savage", "Dank", "Spicy", "Wholesome", "Cursed", "Blessed", "Based", "Toxic", "Dark", "Emo",
-  "Lovely", "Sweet", "Soft", "Hard", "Loud", "Quiet", "Chill", "Cozy", "Comfy", "Lazy",
-  "Hype", "Lit", "Fire", "Icy", "Cool", "Fresh", "Clean", "Messy", "Broken", "Fixed",
-  "Golden", "Silver", "Diamond", "Rainbow", "Colorful", "Pastel", "Gothic", "Punk", "Metal", "Pop"
-];
+  // Duygular
+  love: { words: ["Sweet", "Hearts", "Forever", "Romance", "Kiss"], emojis: ["❤️", "💕", "💖", "😍", "💘"] },
+  happy: { words: ["Joy", "Smile", "Fun", "Cheer", "Bright"], emojis: ["😊", "🎉", "✨", "🌟", "😁"] },
+  sad: { words: ["Tears", "Blue", "Cry", "Moody", "Feels"], emojis: ["😢", "💔", "😭", "🥺", "💙"] },
+  angry: { words: ["Rage", "Fire", "Mad", "Fury", "Hot"], emojis: ["😠", "🔥", "💢", "😤", "⚡"] },
+  funny: { words: ["Lol", "Haha", "Comedy", "Jokes", "Memes"], emojis: ["😂", "🤣", "😆", "😜", "🤡"] },
+  cute: { words: ["Kawaii", "Sweet", "Lovely", "Adorable", "Tiny"], emojis: ["🥰", "💕", "✨", "🎀", "💖"] },
 
-const CREATIVE_SUFFIXES = [
-  "Pack", "Stickers", "Collection", "Edition", "Box", "Bundle", "Set", "Series", "Vol. 1", "Vol. 2",
-  "Vibes", "Mood", "Moments", "Reactions", "Faces", "Expressions", "Emotions", "Feelings", "Thoughts", "Life",
-  "Memes", "Jokes", "Humor", "Comedy", "Drama", "Action", "Style", "Art", "Design", "World",
-  "Zone", "Club", "Squad", "Gang", "Crew", "Family", "Friends", "Lovers", "Haters", "Fans"
-];
+  // Aktiviteler
+  game: { words: ["Play", "Win", "Epic", "Pro", "Level"], emojis: ["🎮", "🕹️", "👾", "🏆", "⚡"] },
+  gaming: { words: ["Play", "Win", "Epic", "Pro", "Level"], emojis: ["🎮", "🕹️", "👾", "🏆", "⚡"] },
+  music: { words: ["Beat", "Vibes", "Dance", "Groove", "Sound"], emojis: ["🎵", "🎶", "🎧", "🎤", "🎸"] },
+  food: { words: ["Yummy", "Tasty", "Delish", "Hungry", "Chef"], emojis: ["🍔", "🍕", "🍩", "😋", "🍳"] },
+  sport: { words: ["Win", "Play", "Goal", "Team", "Champ"], emojis: ["⚽", "🏀", "🏆", "💪", "🎯"] },
+  sports: { words: ["Win", "Play", "Goal", "Team", "Champ"], emojis: ["⚽", "🏀", "🏆", "💪", "🎯"] },
+  movie: { words: ["Cinema", "Scene", "Star", "Film", "Show"], emojis: ["🎬", "🎥", "🍿", "⭐", "🎭"] },
 
-const CREATIVE_EMOJIS = [
-  "🔥", "✨", "🎉", "🚀", "😂", "🤯", "😍", "🥰", "😎", "🤔", "🙄", "😴", "😭", "💀", "👻", "👽", "💩", "🤡", "👹", "😻",
-  "🐶", "🐱", "🐭", "🐹", "🐰", "🦊", "🐻", "🐼", "🐻‍❄️", "🐨", "🐯", "🦁", "🐮", "🐷", "🐸", "🐵", "🐔", "🐧", "🐦", "🐤",
-  "❤️", "🧡", "💛", "💚", "💙", "💜", "🖤", "🤍", "🤎", "💔", "❣️", "💕", "💞", "💓", "💗", "💖", "💘", "💝", "💟", "☮️",
-  "💯", "💢", "💥", "💫", "💦", "💨", "🕳️", "💣", "💬", "👁️‍🗨️", "🗨️", "🗯️", "💭", "💤", "👋", "🤚", "🖐️", "✋", "🖖", "👌",
-  "🎨", "🎬", "🎤", "🎧", "🎼", "🎹", "🥁", "🎷", "🎺", "🎸", "🪕", "🎻", "🎲", "♟️", "🎯", "🎳", "🎮", "🎰", "🧩", "🧸"
-];
+  // Zaman/Günler
+  morning: { words: ["Rise", "Fresh", "Sunny", "Early", "Coffee"], emojis: ["☀️", "🌅", "☕", "🌤️", "🌻"] },
+  night: { words: ["Sleep", "Dream", "Stars", "Moon", "Rest"], emojis: ["🌙", "⭐", "💤", "🌟", "🌛"] },
+  birthday: { words: ["Party", "Cake", "Wish", "Gift", "Cheers"], emojis: ["🎂", "🎉", "🎁", "🎈", "🥳"] },
+
+  // Genel temalar
+  meme: { words: ["Dank", "Epic", "Lol", "Based", "Viral"], emojis: ["😂", "🔥", "💀", "🤣", "👌"] },
+  memes: { words: ["Dank", "Epic", "Lol", "Based", "Viral"], emojis: ["😂", "🔥", "💀", "🤣", "👌"] },
+  emoji: { words: ["Mood", "Vibes", "React", "Express", "Face"], emojis: ["😊", "🤔", "😎", "🥳", "😍"] },
+  reaction: { words: ["Mood", "Vibes", "Express", "Reply", "React"], emojis: ["😮", "👀", "🙌", "👏", "😱"] },
+  text: { words: ["Words", "Quote", "Say", "Write", "Chat"], emojis: ["✍️", "💬", "📝", "💭", "🗨️"] },
+
+  // Özel günler/temalar
+  christmas: { words: ["Santa", "Joy", "Merry", "Snow", "Gift"], emojis: ["🎄", "🎅", "🎁", "❄️", "⛄"] },
+  halloween: { words: ["Spooky", "Boo", "Scary", "Trick", "Treat"], emojis: ["🎃", "👻", "🦇", "💀", "🕷️"] },
+  valentine: { words: ["Hearts", "Kiss", "Love", "Sweet", "Rose"], emojis: ["💕", "💘", "🌹", "💝", "😘"] },
+
+  // Varsayılan
+  default: { words: ["Cool", "Epic", "Vibes", "Fun", "Best"], emojis: ["✨", "🔥", "💯", "⭐", "🎉"] }
+};
 
 const generateCreativeName = (currentName: string) => {
   let cleanName = currentName || "";
 
   // Remove emojis and specific symbols
   cleanName = cleanName.replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F700}-\u{1F77F}\u{1F780}-\u{1F7FF}\u{1F800}-\u{1F8FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '');
-
-  // Remove known words to extract the core subject
-  const allModifiers = [...CREATIVE_PREFIXES, ...CREATIVE_ADJECTIVES, ...CREATIVE_SUFFIXES];
-  for (const word of allModifiers) {
-    const regex = new RegExp(`\\b${word}\\b`, 'gi');
-    cleanName = cleanName.replace(regex, "");
-  }
-
   cleanName = cleanName.trim();
+
   if (!cleanName || cleanName.length < 2) cleanName = "Stickers";
 
-  // Strategy Selection: 1=Prefix+Base, 2=Adj+Base, 3=Base+Suffix, 4=Adj+Base+Suffix
-  const strategy = Math.floor(Math.random() * 4);
-  const randomEmoji1 = CREATIVE_EMOJIS[Math.floor(Math.random() * CREATIVE_EMOJIS.length)];
-  const randomEmoji2 = Math.random() > 0.5 ? CREATIVE_EMOJIS[Math.floor(Math.random() * CREATIVE_EMOJIS.length)] : "";
+  // İlk kelimeyi al (max 2 kelime kuralı için)
+  const words = cleanName.split(/\s+/);
+  const baseWord = words[0];
 
-  let result = "";
+  // Alakalı öneri bul
+  const lowerName = cleanName.toLowerCase();
+  let matchedKey = "default";
 
-  switch (strategy) {
-    case 0: // Prefix + Base (e.g., "Captain Cats")
-      const pref = CREATIVE_PREFIXES[Math.floor(Math.random() * CREATIVE_PREFIXES.length)];
-      result = `${pref} ${cleanName}`;
+  for (const key of Object.keys(RELEVANT_SUGGESTIONS)) {
+    if (key !== "default" && lowerName.includes(key)) {
+      matchedKey = key;
       break;
-    case 1: // Adj + Base (e.g., "Savage Cats")
-      const adj = CREATIVE_ADJECTIVES[Math.floor(Math.random() * CREATIVE_ADJECTIVES.length)];
-      result = `${adj} ${cleanName}`;
-      break;
-    case 2: // Base + Suffix (e.g., "Cats Empire")
-      const suf = CREATIVE_SUFFIXES[Math.floor(Math.random() * CREATIVE_SUFFIXES.length)];
-      result = `${cleanName} ${suf}`;
-      break;
-    case 3: // Adj + Base + Suffix (e.g., "Toxic Cats Squad") - Rare but cool
-      const adj2 = CREATIVE_ADJECTIVES[Math.floor(Math.random() * CREATIVE_ADJECTIVES.length)];
-      const suf2 = CREATIVE_SUFFIXES[Math.floor(Math.random() * CREATIVE_SUFFIXES.length)];
-      result = `${adj2} ${cleanName} ${suf2}`;
-      break;
+    }
   }
 
-  return `${result} ${randomEmoji1}${randomEmoji2}`;
+  const suggestions = RELEVANT_SUGGESTIONS[matchedKey];
+
+  // Rastgele bir öneri kelimesi seç
+  const suggestionWord = suggestions.words[Math.floor(Math.random() * suggestions.words.length)];
+
+  // İki farklı emoji seç
+  const shuffledEmojis = [...suggestions.emojis].sort(() => Math.random() - 0.5);
+  const emoji1 = shuffledEmojis[0];
+  const emoji2 = shuffledEmojis[1] || shuffledEmojis[0];
+
+  // Format: "BaseWord Suggestion 🎉✨"
+  return `${baseWord} ${suggestionWord} ${emoji1}${emoji2}`;
 };
 
 const CATEGORIES = [
