@@ -1,7 +1,6 @@
 import { FFmpeg } from '@ffmpeg/ffmpeg';
 import { fetchFile, toBlobURL } from '@ffmpeg/util';
 import { removeBackground } from '@imgly/background-removal';
-import { parseGIF, decompressFrames } from 'gifuct-js';
 
 export type StickerProgress = {
     message: string;
@@ -10,8 +9,10 @@ export type StickerProgress = {
 
 const STICKER_SIZE = 512;
 const TRAY_SIZE = 512;
-const MAX_DURATION = 3;
-const MAX_FRAMES = 30;
+const MAX_DURATION = 3; // WhatsApp max 3 saniye
+const MIN_FPS = 8; // WhatsApp minimum fps
+const MAX_FPS = 24; // WhatsApp için güvenli maksimum fps
+const DEFAULT_FPS = 15; // Varsayılan fps
 const MAX_STATIC_SIZE = 100 * 1024;
 
 class StickerProcessor {
@@ -92,158 +93,79 @@ class StickerProcessor {
     }
 
     /**
-     * GIF işleme - Frame'leri doğru şekilde çıkar, ffmpeg ile WhatsApp uyumlu WebP oluştur,
-     * sonra ANMF disposal flag'larını patch'le (ghosting önleme)
+     * GIF işleme - FFmpeg ile doğrudan WebP'ye çevir (en güvenilir yöntem)
      */
     private async processGifFrames(file: File, onProgress?: (p: StickerProgress) => void): Promise<Blob> {
         await this.load();
         onProgress?.({ message: 'GIF analiz ediliyor...', percentage: 10 });
 
-        // ImageDecoder API'yi kullan (modern tarayıcılarda mevcut)
-        if ('ImageDecoder' in window) {
-            return this.processGifWithImageDecoder(file, onProgress);
-        }
-
-        // Fallback: gifuct-js ile GIF frame yakalama
-        return this.processGifWithCanvasCapture(file, onProgress);
+        // FFmpeg ile doğrudan dönüştür (en güvenilir)
+        return this.processGifWithFFmpeg(file, onProgress);
     }
 
     /**
-     * Modern ImageDecoder API ile GIF işleme
+     * FFmpeg ile GIF→WebP dönüşümü - EN GÜVENİLİR YÖNTEM
      */
-    private async processGifWithImageDecoder(file: File, onProgress?: (p: StickerProgress) => void): Promise<Blob> {
+    private async processGifWithFFmpeg(file: File, onProgress?: (p: StickerProgress) => void): Promise<Blob> {
         const ffmpeg = this.ffmpeg!;
+        const inputName = `input_${Date.now()}.gif`;
+        const outputName = 'output.webp';
+        const MAX_SIZE = 500 * 1024;
 
-        const decoder = new (window as any).ImageDecoder({
-            data: file.stream(),
-            type: 'image/gif'
-        });
+        onProgress?.({ message: 'GIF yükleniyor...', percentage: 15 });
+        await ffmpeg.writeFile(inputName, await fetchFile(file));
 
-        await decoder.tracks.ready;
-        const totalFrames = decoder.tracks.selectedTrack.frameCount;
-        const frameCount = Math.min(totalFrames, MAX_FRAMES);
+        onProgress?.({ message: 'WebP oluşturuluyor...', percentage: 30 });
 
-        // Minimum frame kontrolü - 3'ten az frame varsa bu GIF gerçekten animasyonlu değil
-        if (totalFrames < 3) {
-            decoder.close();
-            throw new Error(`GIF dosyası yeterli frame içermiyor (${totalFrames} frame). Animasyonlu çıkartmalar için en az 3 frame gerekli. Bu dosya statik bir görsel olabilir.`);
-        }
+        let blob: Blob | null = null;
 
-        onProgress?.({ message: `${frameCount} frame işleniyor...`, percentage: 15 });
+        // Kalite döngüsü
+        for (const q of [80, 70, 60, 50, 40, 30, 20]) {
+            try { await ffmpeg.deleteFile(outputName); } catch { }
 
-        const outCanvas = document.createElement('canvas');
-        outCanvas.width = STICKER_SIZE;
-        outCanvas.height = STICKER_SIZE;
-        const outCtx = outCanvas.getContext('2d', { alpha: true })!;
+            // FFmpeg ile doğrudan GIF→WebP (orijinal fps korunur)
+            await ffmpeg.exec([
+                '-i', inputName,
+                '-t', MAX_DURATION.toString(),
+                '-vf', `scale=${STICKER_SIZE}:${STICKER_SIZE}:force_original_aspect_ratio=decrease,pad=${STICKER_SIZE}:${STICKER_SIZE}:(ow-iw)/2:(oh-ih)/2:color=black@0`,
+                '-c:v', 'libwebp',
+                '-lossless', '0',
+                '-q:v', q.toString(),
+                '-pix_fmt', 'yuva420p',
+                '-compression_level', '4',
+                '-loop', '0',
+                '-an',
+                outputName
+            ]);
 
-        for (let i = 0; i < frameCount; i++) {
-            const result = await decoder.decode({ frameIndex: i });
-            const frame = result.image;
+            let data = await ffmpeg.readFile(outputName) as Uint8Array;
+            data = this.patchWebPDisposalFlags(data);
+            blob = new Blob([new Uint8Array(data)], { type: 'image/webp' });
 
-            const scale = Math.min(STICKER_SIZE / frame.displayWidth, STICKER_SIZE / frame.displayHeight);
-            const scaledW = Math.round(frame.displayWidth * scale);
-            const scaledH = Math.round(frame.displayHeight * scale);
-            const offsetX = Math.round((STICKER_SIZE - scaledW) / 2);
-            const offsetY = Math.round((STICKER_SIZE - scaledH) / 2);
-
-            outCtx.clearRect(0, 0, STICKER_SIZE, STICKER_SIZE);
-            outCtx.drawImage(frame, offsetX, offsetY, scaledW, scaledH);
-
-            const pngBlob = await new Promise<Blob>((res) => outCanvas.toBlob((b) => res(b!), 'image/png'));
-            await ffmpeg.writeFile(`frame_${i.toString().padStart(4, '0')}.png`, await fetchFile(pngBlob));
-
-            frame.close();
-            onProgress?.({ message: `Frame ${i + 1}/${frameCount}...`, percentage: 15 + Math.round((i / frameCount) * 50) });
-        }
-
-        decoder.close();
-        return this.createWebPFromFrames(frameCount, onProgress);
-    }
-
-    /**
-     * Fallback: gifuct-js ile GIF işleme (eski tarayıcılar için)
-     */
-    private async processGifWithCanvasCapture(file: File, onProgress?: (p: StickerProgress) => void): Promise<Blob> {
-        const ffmpeg = this.ffmpeg!;
-
-        const buffer = await file.arrayBuffer();
-        const gif = parseGIF(buffer);
-        const frames = decompressFrames(gif, true);
-
-        // Minimum frame kontrolü - 3'ten az frame varsa bu GIF gerçekten animasyonlu değil
-        if (frames.length < 3) {
-            throw new Error(`GIF dosyası yeterli frame içermiyor (${frames.length} frame). Animasyonlu çıkartmalar için en az 3 frame gerekli. Bu dosya statik bir görsel olabilir.`);
-        }
-
-        const gifWidth = gif.lsd.width;
-        const gifHeight = gif.lsd.height;
-        const frameCount = Math.min(frames.length, MAX_FRAMES);
-
-        const scale = Math.min(STICKER_SIZE / gifWidth, STICKER_SIZE / gifHeight);
-        const scaledW = Math.round(gifWidth * scale);
-        const scaledH = Math.round(gifHeight * scale);
-        const offsetX = Math.round((STICKER_SIZE - scaledW) / 2);
-        const offsetY = Math.round((STICKER_SIZE - scaledH) / 2);
-
-        const compCanvas = document.createElement('canvas');
-        compCanvas.width = gifWidth;
-        compCanvas.height = gifHeight;
-        const compCtx = compCanvas.getContext('2d', { alpha: true })!;
-
-        const outCanvas = document.createElement('canvas');
-        outCanvas.width = STICKER_SIZE;
-        outCanvas.height = STICKER_SIZE;
-        const outCtx = outCanvas.getContext('2d', { alpha: true })!;
-
-        const backupCanvas = document.createElement('canvas');
-        backupCanvas.width = gifWidth;
-        backupCanvas.height = gifHeight;
-        const backupCtx = backupCanvas.getContext('2d', { alpha: true })!;
-
-        onProgress?.({ message: `${frameCount} frame işleniyor...`, percentage: 15 });
-
-        for (let i = 0; i < frameCount; i++) {
-            const frame = frames[i];
-            const { width, height, left, top } = frame.dims;
-
-            if (frame.disposalType === 3) {
-                backupCtx.clearRect(0, 0, gifWidth, gifHeight);
-                backupCtx.drawImage(compCanvas, 0, 0);
+            if (blob.size <= MAX_SIZE) {
+                onProgress?.({ message: `Tamamlandı! (${Math.round(blob.size / 1024)}KB)`, percentage: 100 });
+                break;
             }
 
-            const frameCanvas = document.createElement('canvas');
-            frameCanvas.width = width;
-            frameCanvas.height = height;
-            const frameCtx = frameCanvas.getContext('2d', { alpha: true })!;
-            const imgData = new ImageData(new Uint8ClampedArray(frame.patch), width, height);
-            frameCtx.putImageData(imgData, 0, 0);
-
-            compCtx.drawImage(frameCanvas, left, top);
-
-            outCtx.clearRect(0, 0, STICKER_SIZE, STICKER_SIZE);
-            outCtx.drawImage(compCanvas, 0, 0, gifWidth, gifHeight, offsetX, offsetY, scaledW, scaledH);
-
-            const pngBlob = await new Promise<Blob>((res) => outCanvas.toBlob((b) => res(b!), 'image/png'));
-            await ffmpeg.writeFile(`frame_${i.toString().padStart(4, '0')}.png`, await fetchFile(pngBlob));
-
-            if (frame.disposalType === 2) {
-                compCtx.clearRect(left, top, width, height);
-            } else if (frame.disposalType === 3) {
-                compCtx.clearRect(0, 0, gifWidth, gifHeight);
-                compCtx.drawImage(backupCanvas, 0, 0);
-            }
-
-            onProgress?.({ message: `Frame ${i + 1}/${frameCount}...`, percentage: 15 + Math.round((i / frameCount) * 50) });
+            onProgress?.({ message: `Optimize ediliyor (q:${q})...`, percentage: 50 + Math.round((80 - q) / 60 * 40) });
         }
 
-        return this.createWebPFromFrames(frameCount, onProgress);
+        // Temizlik
+        try { await ffmpeg.deleteFile(inputName); } catch { }
+        try { await ffmpeg.deleteFile(outputName); } catch { }
+
+        if (!blob) {
+            throw new Error('GIF işlenemedi');
+        }
+
+        return blob;
     }
 
     /**
      * ffmpeg ile WhatsApp uyumlu animated WebP oluştur, sonra ghosting'i önlemek için
      * ANMF disposal flag'larını "dispose to background" olarak patch'le
      */
-    private async createWebPFromFrames(frameCount: number, onProgress?: (p: StickerProgress) => void, fps: number = 10): Promise<Blob> {
+    private async createWebPFromFrames(frameCount: number, onProgress?: (p: StickerProgress) => void, fps: number = 15): Promise<Blob> {
         const ffmpeg = this.ffmpeg!;
         const outputName = 'output.webp';
         const MAX_SIZE = 500 * 1024;
@@ -332,7 +254,7 @@ class StickerProcessor {
     }
 
     /**
-     * Video işleme (MP4)
+     * Video işleme (MP4) - ORİJİNAL FPS KORUNUR, max 3 saniye
      */
     private async processVideo(file: File, onProgress?: (p: StickerProgress) => void, removeBg: boolean = false): Promise<Blob> {
         await this.load();
@@ -349,11 +271,11 @@ class StickerProcessor {
         if (removeBg) {
             onProgress?.({ message: 'Frame\'ler çıkarılıyor...', percentage: 20 });
 
-            // 1. Frame'leri çıkar (10 fps, 512px - ULTRA YÜKSEK KALİTE)
+            // 1. Frame'leri çıkar - FPS BELİRTME, orijinal fps'te çıkar
             await ffmpeg.exec([
                 '-i', inputName,
-                '-t', '2.5',
-                '-vf', 'fps=10,scale=512:512:force_original_aspect_ratio=decrease,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=black@0',
+                '-t', MAX_DURATION.toString(),
+                '-vf', 'scale=512:512:force_original_aspect_ratio=decrease,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=black@0',
                 'frame_%04d.png'
             ]);
 
@@ -361,10 +283,13 @@ class StickerProcessor {
             const frames = files.filter(f => f.name.startsWith('frame_') && f.name.endsWith('.png'))
                 .sort((a, b) => a.name.localeCompare(b.name));
 
-            // 2.5 saniye x 10 fps = 25 kare
-            const frameCount = Math.min(frames.length, 25);
+            const frameCount = frames.length;
 
-            onProgress?.({ message: 'Arka Plan Hassas Temizleniyor (Yüksek Kalite)...', percentage: 25 });
+            // Orijinal FPS'i hesapla: frameCount / süre
+            let detectedFps = Math.round(frameCount / MAX_DURATION);
+            detectedFps = Math.max(MIN_FPS, Math.min(MAX_FPS, detectedFps));
+
+            onProgress?.({ message: `Arka Plan Temizleniyor (${detectedFps} fps)...`, percentage: 25 });
 
             // 2. Kareleri PARALEL işle
             const batchSize = 2;
@@ -378,7 +303,7 @@ class StickerProcessor {
 
                     try {
                         const processedBlob = await removeBackground(frameBlob, {
-                            model: 'isnet', // En kaliteli model
+                            model: 'isnet',
                             progress: () => { }
                         });
                         await ffmpeg.writeFile(frameName, await fetchFile(processedBlob));
@@ -395,16 +320,11 @@ class StickerProcessor {
                 await new Promise(resolve => setTimeout(resolve, 20));
             }
 
-            // Fazlalık frame'leri temizle
-            for (let i = frameCount; i < frames.length; i++) {
-                try { await ffmpeg.deleteFile(frames[i].name); } catch { }
-            }
-
-            // 3. WebP oluştur (Yeni FPS: 10)
-            return this.createWebPFromFrames(frameCount, onProgress, 10);
+            // 3. WebP oluştur - tespit edilen fps ile
+            return this.createWebPFromFrames(frameCount, onProgress, detectedFps);
         }
 
-        // Arka plan silinmeyecekse standart hızlı dönüşüm
+        // Arka plan silinmeyecekse - ORİJİNAL FPS KORUNUR
         let blob: Blob | null = null;
 
         for (const q of [75, 60, 50, 40, 30, 20]) {
@@ -412,10 +332,11 @@ class StickerProcessor {
 
             try { await ffmpeg.deleteFile(outputName); } catch { }
 
+            // FPS filtresi YOK - orijinal fps korunur, sadece 3 saniye kesiliyor
             await ffmpeg.exec([
                 '-i', inputName,
                 '-t', MAX_DURATION.toString(),
-                '-vf', 'fps=10,format=rgba,scale=512:512:force_original_aspect_ratio=decrease:flags=lanczos,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=black@0',
+                '-vf', 'format=rgba,scale=512:512:force_original_aspect_ratio=decrease:flags=lanczos,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=black@0',
                 '-c:v', 'libwebp',
                 '-lossless', '0',
                 '-q:v', q.toString(),
@@ -515,10 +436,7 @@ class StickerProcessor {
     }
 
     /**
-     * Animasyonlu WebP işleme - frame'leri çıkar, boyutlandır, WhatsApp uyumlu hale getir
-     */
-    /**
-     * Animasyonlu WebP işleme - ImageDecoder ile frame'leri çıkar, GIF gibi işle
+     * Animasyonlu WebP işleme - TÜM FRAME'LER ALINIR
      */
     async processAnimatedWebP(file: File, onProgress?: (p: StickerProgress) => void): Promise<Blob> {
         await this.load();
@@ -526,7 +444,6 @@ class StickerProcessor {
 
         onProgress?.({ message: 'Animasyonlu WebP analiz ediliyor...', percentage: 10 });
 
-        // ImageDecoder API ile frame'leri çıkar (GIF ile aynı mantık)
         if (!('ImageDecoder' in window)) {
             throw new Error('Tarayıcınız animasyonlu WebP işlemeyi desteklemiyor');
         }
@@ -537,16 +454,28 @@ class StickerProcessor {
         });
 
         await decoder.tracks.ready;
-        const frameCount = Math.min(decoder.tracks.selectedTrack.frameCount, MAX_FRAMES);
+        const totalFrames = decoder.tracks.selectedTrack.frameCount;
 
-        onProgress?.({ message: `${frameCount} frame işleniyor...`, percentage: 15 });
+        // WebP için fps - tüm frame'leri 3 saniyede oynat
+        const estimatedDuration = totalFrames / DEFAULT_FPS;
+        let outputFps: number;
+
+        if (estimatedDuration <= MAX_DURATION) {
+            outputFps = DEFAULT_FPS;
+        } else {
+            // Süre uzunsa fps artır
+            outputFps = Math.ceil(totalFrames / MAX_DURATION);
+            outputFps = Math.max(MIN_FPS, Math.min(MAX_FPS, outputFps));
+        }
+
+        onProgress?.({ message: `${totalFrames} frame işleniyor (${outputFps} fps)...`, percentage: 15 });
 
         const outCanvas = document.createElement('canvas');
         outCanvas.width = STICKER_SIZE;
         outCanvas.height = STICKER_SIZE;
         const outCtx = outCanvas.getContext('2d', { alpha: true })!;
 
-        for (let i = 0; i < frameCount; i++) {
+        for (let i = 0; i < totalFrames; i++) {
             const result = await decoder.decode({ frameIndex: i });
             const frame = result.image;
 
@@ -563,13 +492,11 @@ class StickerProcessor {
             await ffmpeg.writeFile(`frame_${i.toString().padStart(4, '0')}.png`, await fetchFile(pngBlob));
 
             frame.close();
-            onProgress?.({ message: `Frame ${i + 1}/${frameCount}...`, percentage: 15 + Math.round((i / frameCount) * 50) });
+            onProgress?.({ message: `Frame ${i + 1}/${totalFrames}...`, percentage: 15 + Math.round(((i + 1) / totalFrames) * 50) });
         }
 
         decoder.close();
-
-        // GIF ile aynı createWebPFromFrames fonksiyonunu kullan
-        return this.createWebPFromFrames(frameCount, onProgress);
+        return this.createWebPFromFrames(totalFrames, onProgress, outputFps);
     }
 
     /**
