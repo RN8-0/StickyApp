@@ -104,7 +104,7 @@ class StickerProcessor {
     }
 
     /**
-     * FFmpeg ile GIF→WebP dönüşümü - EN GÜVENİLİR YÖNTEM
+     * FFmpeg ile GIF→WebP dönüşümü - HIZLI YÖNTEM
      */
     private async processGifWithFFmpeg(file: File, onProgress?: (p: StickerProgress) => void): Promise<Blob> {
         const ffmpeg = this.ffmpeg!;
@@ -119,20 +119,19 @@ class StickerProcessor {
 
         let blob: Blob | null = null;
 
-        // Kalite döngüsü
-        for (const q of [80, 70, 60, 50, 40, 30, 20]) {
+        // Hızlı kalite döngüsü
+        for (const q of [60, 40, 25, 15]) {
             try { await ffmpeg.deleteFile(outputName); } catch { }
 
-            // FFmpeg ile doğrudan GIF→WebP (orijinal fps korunur)
             await ffmpeg.exec([
                 '-i', inputName,
                 '-t', MAX_DURATION.toString(),
-                '-vf', `scale=${STICKER_SIZE}:${STICKER_SIZE}:force_original_aspect_ratio=decrease,pad=${STICKER_SIZE}:${STICKER_SIZE}:(ow-iw)/2:(oh-ih)/2:color=black@0`,
+                '-vf', `fps=12,scale=${STICKER_SIZE}:${STICKER_SIZE}:force_original_aspect_ratio=decrease,pad=${STICKER_SIZE}:${STICKER_SIZE}:(ow-iw)/2:(oh-ih)/2:color=black@0`,
                 '-c:v', 'libwebp',
                 '-lossless', '0',
                 '-q:v', q.toString(),
                 '-pix_fmt', 'yuva420p',
-                '-compression_level', '4',
+                '-compression_level', '6',
                 '-loop', '0',
                 '-an',
                 outputName
@@ -147,7 +146,7 @@ class StickerProcessor {
                 break;
             }
 
-            onProgress?.({ message: `Optimize ediliyor (q:${q})...`, percentage: 50 + Math.round((80 - q) / 60 * 40) });
+            onProgress?.({ message: `Optimize ediliyor (q:${q})...`, percentage: 50 + Math.round((60 - q) / 45 * 40) });
         }
 
         // Temizlik
@@ -162,8 +161,7 @@ class StickerProcessor {
     }
 
     /**
-     * ffmpeg ile WhatsApp uyumlu animated WebP oluştur, sonra ghosting'i önlemek için
-     * ANMF disposal flag'larını "dispose to background" olarak patch'le
+     * ffmpeg ile WhatsApp uyumlu animated WebP oluştur - HIZLI YÖNTEM
      */
     private async createWebPFromFrames(frameCount: number, onProgress?: (p: StickerProgress) => void, fps: number = 15): Promise<Blob> {
         const ffmpeg = this.ffmpeg!;
@@ -174,12 +172,12 @@ class StickerProcessor {
 
         let blob: Blob | null = null;
 
-        // Lossy mode + yuva420p: WhatsApp uyumlu ve şeffaflık destekli
-        for (const q of [90, 80, 70, 60, 50, 40, 30, 20]) {
+        // Hızlı kalite döngüsü
+        for (const q of [60, 40, 25, 15]) {
             try { await ffmpeg.deleteFile(outputName); } catch { }
 
             await ffmpeg.exec([
-                '-framerate', fps.toString(),
+                '-framerate', Math.min(fps, 12).toString(),
                 '-i', 'frame_%04d.png',
                 '-vf', `scale=${STICKER_SIZE}:${STICKER_SIZE}:force_original_aspect_ratio=decrease,pad=${STICKER_SIZE}:${STICKER_SIZE}:(ow-iw)/2:(oh-ih)/2:color=black@0`,
                 '-t', MAX_DURATION.toString(),
@@ -187,23 +185,19 @@ class StickerProcessor {
                 '-lossless', '0',
                 '-q:v', q.toString(),
                 '-pix_fmt', 'yuva420p',
-                '-compression_level', '4',
+                '-compression_level', '6',
                 '-loop', '0',
                 '-an',
                 outputName
             ]);
 
             let data = await ffmpeg.readFile(outputName) as Uint8Array;
-
-            // Ghosting düzeltme: her ANMF frame'in disposal flag'ını
-            // "dispose to background" olarak ayarla
             data = this.patchWebPDisposalFlags(data);
-
             blob = new Blob([data as any], { type: 'image/webp' });
 
             if (blob.size <= MAX_SIZE) break;
 
-            onProgress?.({ message: `Boyut optimize ediliyor (q:${q})...`, percentage: 85 });
+            onProgress?.({ message: `Optimize ediliyor (q:${q})...`, percentage: 85 });
         }
 
         // Temizlik
@@ -324,19 +318,18 @@ class StickerProcessor {
             return this.createWebPFromFrames(frameCount, onProgress, detectedFps);
         }
 
-        // Arka plan silinmeyecekse - ORİJİNAL FPS KORUNUR
+        // Arka plan silinmeyecekse - HIZLI YÖNTEM
         let blob: Blob | null = null;
 
-        for (const q of [75, 60, 50, 40, 30, 20]) {
+        for (const q of [60, 40, 25, 15]) {
             onProgress?.({ message: `WebP oluşturuluyor (q:${q})...`, percentage: 50 });
 
             try { await ffmpeg.deleteFile(outputName); } catch { }
 
-            // FPS filtresi YOK - orijinal fps korunur, sadece 3 saniye kesiliyor
             await ffmpeg.exec([
                 '-i', inputName,
                 '-t', MAX_DURATION.toString(),
-                '-vf', 'format=rgba,scale=512:512:force_original_aspect_ratio=decrease:flags=lanczos,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=black@0',
+                '-vf', `fps=12,format=rgba,scale=512:512:force_original_aspect_ratio=decrease:flags=lanczos,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=black@0`,
                 '-c:v', 'libwebp',
                 '-lossless', '0',
                 '-q:v', q.toString(),

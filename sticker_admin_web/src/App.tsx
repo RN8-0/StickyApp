@@ -43,6 +43,9 @@ import {
   Info,
   ExternalLink,
   ChevronRight,
+  ChevronUp,
+  ArrowUp,
+  ArrowDown,
   TrendingUp,
   BarChart3,
   DollarSign,
@@ -302,6 +305,10 @@ function App() {
   const [editFormData, setEditFormData] = useState<Partial<StickerPack>>({});
   const [previewSticker, setPreviewSticker] = useState<{ url: string, title?: string } | null>(null);
   const [uploadProgress, setUploadProgress] = useState<{ current: number, total: number, message?: string } | null>(null);
+
+  // Sticker boyut kontrolü (WhatsApp 500KB limiti)
+  const [stickerSizes, setStickerSizes] = useState<Record<string, number>>({});
+  const [checkingSizes, setCheckingSizes] = useState(false);
 
   // Fake Download Base Range
   const [fakeBaseMin, setFakeBaseMin] = useState(3000);
@@ -588,6 +595,64 @@ function App() {
       setLoading(false);
     }
   };
+
+  // ========== STİCKER BOYUT KONTROLÜ (WhatsApp 500KB Limiti) ==========
+  const checkStickerSizes = async (pack: StickerPack) => {
+    if (!pack.stickers || pack.stickers.length === 0) {
+      setStickerSizes({});
+      setCheckingSizes(false);
+      return;
+    }
+
+    setCheckingSizes(true);
+    setStickerSizes({}); // Önceki boyutları temizle
+    const sizes: Record<string, number> = {};
+
+    try {
+      // Her sticker'ın boyutunu kontrol et (paralel, 5'er grup)
+      const batchSize = 5;
+      for (let i = 0; i < pack.stickers.length; i += batchSize) {
+        const batch = pack.stickers.slice(i, i + batchSize);
+
+        await Promise.all(batch.map(async (sticker) => {
+          try {
+            // GET request ile dosyayı çek ve blob boyutunu al
+            const response = await fetch(sticker.url);
+            if (response.ok) {
+              const blob = await response.blob();
+              sizes[sticker.image_file] = blob.size;
+            }
+          } catch (err) {
+            console.warn(`Boyut alınamadı: ${sticker.image_file}`, err);
+          }
+        }));
+
+        // Her batch sonrası state'i güncelle (anlık görüntüleme için)
+        setStickerSizes({ ...sizes });
+      }
+
+      setStickerSizes(sizes);
+    } catch (error) {
+      console.error('Sticker boyut kontrolü hatası:', error);
+    } finally {
+      setCheckingSizes(false);
+    }
+  };
+
+  // Paket seçildiğinde boyutları kontrol et
+  useEffect(() => {
+    if (selectedPack) {
+      checkStickerSizes(selectedPack);
+    } else {
+      setStickerSizes({});
+    }
+  }, [selectedPack?.id]);
+
+  // 500KB'ı aşan sticker sayısını hesapla
+  const oversizedStickersCount = useMemo(() => {
+    const MAX_SIZE = 500 * 1024;
+    return Object.values(stickerSizes).filter(size => size > MAX_SIZE).length;
+  }, [stickerSizes]);
 
   // ========== KULLANICI YÖNETİM FONKSİYONLARI ==========
 
@@ -992,6 +1057,15 @@ function App() {
           continue;
         }
 
+        // WhatsApp 500KB limit kontrolü
+        const MAX_WHATSAPP_SIZE = 500 * 1024;
+        if (processedBlob.size > MAX_WHATSAPP_SIZE) {
+          const sizeMB = (processedBlob.size / 1024).toFixed(0);
+          console.error(`[UPLOAD] ❌ WhatsApp limit aşıldı: ${file.name} = ${sizeMB}KB (max: 500KB)`);
+          alert(`Hata: "${file.name}" WhatsApp 500KB limitini aşıyor (${sizeMB}KB).\n\nBu sticker yüklenemedi. Daha kısa veya daha düşük çözünürlüklü bir dosya deneyin.`);
+          continue;
+        }
+
         processedBlobs.push(processedBlob);
 
         const fileName = `${Date.now()}_${i}.webp`;
@@ -1092,7 +1166,8 @@ function App() {
     const filesList = e.target.files;
     if (!filesList || !selectedPack) return;
 
-    const currentCount = selectedPack.sticker_count || 0;
+    // Güncel sticker sayısını al (stickers array'inden, sticker_count'tan değil)
+    const currentCount = selectedPack.stickers?.length || 0;
     const uploadCount = filesList.length;
     const totalCount = currentCount + uploadCount;
 
@@ -1172,8 +1247,10 @@ function App() {
       const packRef = doc(db, collectionName, pack.id);
 
       const newVersion = Date.now().toString();
+      const newStickerCount = Math.max(0, (pack.stickers?.length || pack.sticker_count) - 1);
       await updateDoc(packRef, {
         stickers: arrayRemove(sticker),
+        sticker_count: newStickerCount,
         image_data_version: newVersion
       });
 
@@ -1196,8 +1273,46 @@ function App() {
 
       setPacks(packs.map(p => p.id === pack.id ? updatedPack : p));
       setSelectedPack(updatedPack);
+
+      // Silinen sticker'ı boyut listesinden kaldır
+      setStickerSizes(prev => {
+        const newSizes = { ...prev };
+        delete newSizes[sticker.image_file];
+        return newSizes;
+      });
     } catch (error) {
       alert("Çıkartma silme hatası: " + error);
+    }
+  };
+
+  // Sticker sıralama fonksiyonu
+  const moveStickerPosition = async (pack: StickerPack, fromIndex: number, toIndex: number) => {
+    if (!pack.stickers || toIndex < 0 || toIndex >= pack.stickers.length) return;
+
+    const newStickers = [...pack.stickers];
+    const [movedSticker] = newStickers.splice(fromIndex, 1);
+    newStickers.splice(toIndex, 0, movedSticker);
+
+    try {
+      const collectionName = pack.is_premium ? 'premium_stickers' : 'stickers';
+      const packRef = doc(db, collectionName, pack.id);
+      const newVersion = Date.now().toString();
+
+      await updateDoc(packRef, {
+        stickers: newStickers,
+        image_data_version: newVersion
+      });
+
+      const updatedPack = {
+        ...pack,
+        stickers: newStickers,
+        image_data_version: newVersion
+      };
+
+      setPacks(packs.map(p => p.id === pack.id ? updatedPack : p));
+      setSelectedPack(updatedPack);
+    } catch (error) {
+      alert("Sıralama hatası: " + error);
     }
   };
 
@@ -1494,11 +1609,17 @@ function App() {
           </div>
 
           <button
-            onClick={fetchPacks}
+            onClick={async () => {
+              await fetchPacks();
+              // Seçili paket varsa boyutları yeniden kontrol et
+              if (selectedPack) {
+                checkStickerSizes(selectedPack);
+              }
+            }}
             className="p-2.5 hover:bg-white/10 rounded-xl transition-all active:scale-90 group relative"
             title="Sistemi Yenile"
           >
-            <RefreshCcw size={18} className={cn("text-textSec group-hover:text-primary transition-colors", loading && 'animate-spin text-primary')} />
+            <RefreshCcw size={18} className={cn("text-textSec group-hover:text-primary transition-colors", (loading || checkingSizes) && 'animate-spin text-primary')} />
           </button>
 
           <div className="w-px h-6 bg-white/10 mx-1 hidden md:block" />
@@ -1907,47 +2028,140 @@ function App() {
                         <Grid className="text-primary" size={24} />
                         Paket İçeriği
                         <span className="bg-white/5 px-2.5 py-1 rounded-lg text-xs font-mono ml-2">{selectedPack.sticker_count} DOSYA</span>
+                        {checkingSizes && (
+                          <span className="text-xs text-textSec animate-pulse">Boyutlar kontrol ediliyor...</span>
+                        )}
                       </h3>
                       <div className="flex items-center gap-4 text-xs text-textSec font-bold uppercase tracking-widest">
                         <span className="flex items-center gap-1.5"><Info size={14} /> Anlık Bulut Önizleme</span>
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7 xl:grid-cols-8 gap-3 md:gap-5">
-                      {selectedPack.stickers?.map((sticker, idx) => (
-                        <div
-                          key={idx}
-                          className="group relative aspect-square bg-card/50 rounded-2xl glass p-4 hover:ring-2 hover:ring-primary/50 transition-all duration-300 shadow-lg hover:shadow-2xl hover:shadow-primary/5 cursor-zoom-in"
-                          onClick={() => setPreviewSticker({ url: sticker.url, title: sticker.image_file })}
-                        >
-                          <div className="w-full h-full flex items-center justify-center pointer-events-none">
-                            <img
-                              src={sticker.url}
-                              alt=""
-                              className="w-full h-full object-contain group-hover:scale-110 transition-transform duration-500"
-                            />
-                          </div>
-                          <div className="absolute inset-0 bg-background/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 rounded-2xl backdrop-blur-[2px]" onClick={(e) => e.stopPropagation()}>
-                            <button
-                              onClick={() => deleteSticker(selectedPack, sticker)}
-                              className="p-2.5 bg-danger hover:bg-danger/80 text-white rounded-xl shadow-lg transition-all hover:scale-110"
-                            >
-                              <Trash2 size={18} />
-                            </button>
-                            <a
-                              href={sticker.url}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="p-2.5 bg-primary hover:bg-primary/80 text-white rounded-xl shadow-lg transition-all hover:scale-110"
-                            >
-                              <ExternalLink size={18} />
-                            </a>
-                          </div>
-                          <div className="absolute bottom-2 left-3 text-[9px] font-black text-textSec group-hover:text-primary transition-colors opacity-0 group-hover:opacity-100 tracking-tighter">
-                            {sticker.image_file.toUpperCase()}
-                          </div>
+                    {/* WhatsApp 500KB Limit Uyarısı */}
+                    {oversizedStickersCount > 0 && !checkingSizes && (
+                      <div className="mb-6 p-4 bg-danger/20 border border-danger/50 rounded-2xl flex items-center gap-3">
+                        <div className="p-2 bg-danger/30 rounded-xl">
+                          <X size={20} className="text-danger" />
                         </div>
-                      ))}
+                        <div>
+                          <p className="text-danger font-bold text-sm">
+                            {oversizedStickersCount} sticker WhatsApp 500KB limitini aşıyor!
+                          </p>
+                          <p className="text-danger/70 text-xs mt-0.5">
+                            Bu stickerlar WhatsApp'a eklenirken hata verecektir. Lütfen silin ve yeniden yükleyin.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7 xl:grid-cols-8 gap-3 md:gap-5">
+                      {selectedPack.stickers?.map((sticker, idx) => {
+                        const stickerSize = stickerSizes[sticker.image_file];
+                        const isOversized = stickerSize && stickerSize > 500 * 1024;
+                        const sizeKB = stickerSize ? Math.round(stickerSize / 1024) : null;
+
+                        return (
+                          <div
+                            key={idx}
+                            className={cn(
+                              "group relative aspect-square bg-card/50 rounded-2xl glass p-4 transition-all duration-300 shadow-lg hover:shadow-2xl cursor-zoom-in",
+                              isOversized
+                                ? "ring-2 ring-danger/70 hover:ring-danger"
+                                : "hover:ring-2 hover:ring-primary/50 hover:shadow-primary/5"
+                            )}
+                            onClick={() => setPreviewSticker({ url: sticker.url, title: sticker.image_file })}
+                          >
+                            {/* Boyut Aşımı İkonu */}
+                            {isOversized && (
+                              <div className="absolute top-2 right-2 z-10 p-1.5 bg-danger rounded-lg shadow-lg" title={`${sizeKB}KB - WhatsApp limiti aşıyor!`}>
+                                <X size={14} className="text-white" />
+                              </div>
+                            )}
+
+                            <div className="w-full h-full flex items-center justify-center pointer-events-none">
+                              <img
+                                src={sticker.url}
+                                alt=""
+                                className="w-full h-full object-contain group-hover:scale-110 transition-transform duration-500"
+                              />
+                            </div>
+                            <div className="absolute inset-0 bg-background/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2 rounded-2xl backdrop-blur-[2px]" onClick={(e) => e.stopPropagation()}>
+                              {/* Sıralama Butonları */}
+                              <div className="flex gap-1.5">
+                                <button
+                                  onClick={() => moveStickerPosition(selectedPack, idx, 0)}
+                                  disabled={idx === 0}
+                                  className="p-1.5 bg-accent/80 hover:bg-accent text-white rounded-lg shadow-lg transition-all hover:scale-110 disabled:opacity-30 disabled:hover:scale-100"
+                                  title="En başa taşı"
+                                >
+                                  <ArrowUp size={14} />
+                                </button>
+                                <button
+                                  onClick={() => moveStickerPosition(selectedPack, idx, idx - 1)}
+                                  disabled={idx === 0}
+                                  className="p-1.5 bg-white/20 hover:bg-white/30 text-white rounded-lg shadow-lg transition-all hover:scale-110 disabled:opacity-30 disabled:hover:scale-100"
+                                  title="Bir üste taşı"
+                                >
+                                  <ChevronUp size={14} />
+                                </button>
+                                <button
+                                  onClick={() => moveStickerPosition(selectedPack, idx, idx + 1)}
+                                  disabled={idx === (selectedPack.stickers?.length || 0) - 1}
+                                  className="p-1.5 bg-white/20 hover:bg-white/30 text-white rounded-lg shadow-lg transition-all hover:scale-110 disabled:opacity-30 disabled:hover:scale-100"
+                                  title="Bir alta taşı"
+                                >
+                                  <ChevronDown size={14} />
+                                </button>
+                                <button
+                                  onClick={() => moveStickerPosition(selectedPack, idx, (selectedPack.stickers?.length || 1) - 1)}
+                                  disabled={idx === (selectedPack.stickers?.length || 0) - 1}
+                                  className="p-1.5 bg-accent/80 hover:bg-accent text-white rounded-lg shadow-lg transition-all hover:scale-110 disabled:opacity-30 disabled:hover:scale-100"
+                                  title="En sona taşı"
+                                >
+                                  <ArrowDown size={14} />
+                                </button>
+                              </div>
+                              {/* Aksiyon Butonları */}
+                              <div className="flex gap-1.5">
+                                <button
+                                  onClick={() => deleteSticker(selectedPack, sticker)}
+                                  className="p-2 bg-danger hover:bg-danger/80 text-white rounded-xl shadow-lg transition-all hover:scale-110"
+                                  title="Sil"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                                <a
+                                  href={sticker.url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="p-2 bg-primary hover:bg-primary/80 text-white rounded-xl shadow-lg transition-all hover:scale-110"
+                                  title="İndir"
+                                >
+                                  <ExternalLink size={16} />
+                                </a>
+                              </div>
+                              {/* Sıra Numarası */}
+                              <span className="text-[10px] font-black text-white/60">#{idx + 1}</span>
+                            </div>
+
+                            {/* Boyut Bilgisi */}
+                            <div className={cn(
+                              "absolute bottom-2 left-2 right-2 flex justify-between items-center text-[9px] font-black transition-colors opacity-0 group-hover:opacity-100 tracking-tighter",
+                              isOversized ? "text-danger" : "text-textSec group-hover:text-primary"
+                            )}>
+                              <span>{sticker.image_file.substring(0, 10).toUpperCase()}</span>
+                              {sizeKB !== null && (
+                                <span className={cn(
+                                  "px-1.5 py-0.5 rounded",
+                                  isOversized ? "bg-danger/30 text-danger" : "bg-white/10"
+                                )}>
+                                  {sizeKB}KB
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 </div>
