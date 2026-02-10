@@ -31,12 +31,7 @@ import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
 import com.google.android.material.button.MaterialButton
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.*
 import java.io.File
 import java.util.concurrent.atomic.AtomicInteger
 import android.animation.ValueAnimator
@@ -227,6 +222,9 @@ class DetailsActivity : AppCompatActivity() {
 
         val rv = findViewById<RecyclerView>(R.id.rv)
         rv.layoutManager = GridLayoutManager(this, 3)
+        rv.setHasFixedSize(true)
+        rv.setItemViewCacheSize(15)
+        rv.itemAnimator = null // Performans: Animasyonları kapat
 
         val hasAccess = PreferencesHelper.hasAccessToPremiumPack(this, pack.id)
         val storagePath = pack.storagePath
@@ -259,6 +257,7 @@ class DetailsActivity : AppCompatActivity() {
             isPackPremium = pack.isPremium,
             hasAccess = hasAccess,
             storagePath = pack.storagePath,
+            isAnimated = pack.isAnimated, // Animated pack için FPS koruması
             selectedPositions = selectedIndices,
             onStickerClick = { sticker, _ ->
                 showStickerPreview(sticker, false)
@@ -921,38 +920,39 @@ class DetailsActivity : AppCompatActivity() {
         unlockHint?.visibility = if (isLocked) View.VISIBLE else View.GONE
 
         val cachedFile = StickerRepository.getCachedStickerPath(this, packId, sticker.file)
+
+        // Animated paket için blur kullanma (animasyonu bozar)
+        val shouldBlur = isLocked && currentPack?.isAnimated != true
+
         when {
             cachedFile.exists() && cachedFile.length() > 0 -> {
-                Glide.with(this)
+                val request = Glide.with(this)
+                    .asDrawable()
                     .load(cachedFile)
                     .signature(com.bumptech.glide.signature.ObjectKey(cachedFile.lastModified()))
-                    //.skipMemoryCache(true)
-                    .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.NONE) // Local file, use memory cache only
-                    .apply(blurTransform)
-                    .into(imageView)
+                    .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.NONE)
+                if (shouldBlur) request.apply(blurTransform)
+                request.into(imageView)
             }
             sticker.url.isNotEmpty() -> {
-                val cacheSignature = com.bumptech.glide.signature.ObjectKey(sticker.url)
-                Glide.with(this)
+                val request = Glide.with(this)
+                    .asDrawable()
                     .load(sticker.url)
-                    .signature(cacheSignature)
-                    .placeholder(R.drawable.transparent_placeholder) // Add placeholder while loading
-                    .error(R.drawable.transparent_placeholder) // Add error placeholder
-                    //.skipMemoryCache(true)
+                    .signature(com.bumptech.glide.signature.ObjectKey(sticker.url))
+                    .placeholder(R.drawable.transparent_placeholder)
+                    .error(R.drawable.transparent_placeholder)
                     .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.DATA)
-                    .apply(blurTransform)
-                    .into(imageView)
+                if (shouldBlur) request.apply(blurTransform)
+                request.into(imageView)
             }
             else -> {
                 try {
-                    val path = "$packId/${sticker.file}"
-                    val stream = assets.open(path)
-                    val bitmap = BitmapFactory.decodeStream(stream)
-                    stream.close()
-                    Glide.with(this)
-                        .load(bitmap)
-                        .apply(blurTransform)
-                        .into(imageView)
+                    val assetPath = "file:///android_asset/$packId/${sticker.file}"
+                    val request = Glide.with(this)
+                        .asDrawable()
+                        .load(android.net.Uri.parse(assetPath))
+                    if (shouldBlur) request.apply(blurTransform)
+                    request.into(imageView)
                 } catch (e: Exception) {
                     imageView.setImageResource(R.drawable.transparent_placeholder)
                 }
@@ -1029,35 +1029,90 @@ class DetailsActivity : AppCompatActivity() {
 
         // Reklam Gösterimi (Eğer Premium değilse)
         if (!PreferencesHelper.isPremium(this)) {
-            // Önce loading göster (reklam hazırlanana kadar)
+            // Önce loading göster
             showLoadingState(true)
             tvOverlayLoadingText.text = getString(R.string.ad_preparing)
 
             lifecycleScope.launch {
-                // Reklam hazır değilse bekle (maksimum 6 saniye)
+                // PARALEL: Reklam beklerken TÜM hazırlıkları yap
+                val prepareJob = async(Dispatchers.IO) {
+                    // 1. Metadata'yı diske kaydet
+                    val currentPacks = StickerRepository.allPacksCache
+                    val packsToSave = if (currentPacks.any { it.id == pack.id }) {
+                        currentPacks
+                    } else {
+                        currentPacks + pack
+                    }
+                    StickerRepository.saveCacheToDisk(this@DetailsActivity, packsToSave)
+
+                    // 2. Sticker'lar cache'de değilse HIZLICA indir
+                    if (!StickerRepository.isPackCached(this@DetailsActivity, pack)) {
+                        Log.d("DetailsActivity", "Caching stickers while ad plays...")
+                        val storagePath = pack.storagePath
+                        // Tray'i indir
+                        try {
+                            StickerRepository.downloadStickerToCache(this@DetailsActivity, pack.id, pack.tray, storagePath)
+                        } catch (_: Exception) {}
+                        // Sticker'ları paralel indir (hızlı olsun)
+                        pack.stickers.chunked(6).forEach { chunk ->
+                            chunk.map { sticker ->
+                                async {
+                                    try {
+                                        StickerRepository.downloadStickerToCache(this@DetailsActivity, pack.id, sticker.file, storagePath)
+                                    } catch (_: Exception) {}
+                                }
+                            }.awaitAll()
+                        }
+                    }
+                    Log.d("DetailsActivity", "All preparations done while ad was showing")
+                }
+
+                // Reklam hazır değilse kısa bekle (maksimum 2 saniye)
                 var waitCount = 0
-                while (!AdManager.isInterstitialReady() && waitCount < 24) {
+                while (!AdManager.isInterstitialReady() && waitCount < 8) {
                     delay(250)
                     waitCount++
-                    // Her 1 saniyede bir yüklemeyi zorla
-                    if (waitCount % 4 == 0 && !AdManager.isInterstitialReady()) {
-                       AdManager.loadInterstitial(this@DetailsActivity)
-                    }
                 }
 
                 if (!AdManager.isInterstitialReady()) {
-                    Log.d("DetailsActivity", "Ad not ready after 6s, proceeding without ad")
+                    Log.d("DetailsActivity", "Ad not ready after 2s, proceeding without ad")
                 }
 
+                showLoadingState(false)
                 AdManager.showInterstitialWithCallback(this@DetailsActivity) {
-                    showLoadingState(false)
-                    // Reklam kapandıktan veya hata verdikten sonra asıl işleme devam et
-                    proceedToAddToWhatsApp(pack)
+                    // Reklam bitmeden hazırlık bitmemişse bekle
+                    lifecycleScope.launch {
+                        prepareJob.await()
+                        // Reklam kapandığı anda WhatsApp'ı HEMEN aç (her şey hazır)
+                        launchWhatsAppIntentImmediately(pack)
+                    }
                 }
             }
         } else {
             // Premium ise direkt devam et
             proceedToAddToWhatsApp(pack)
+        }
+    }
+
+    /**
+     * WhatsApp intent'ini HEMEN başlat (metadata zaten hazırlanmış durumda)
+     */
+    private fun launchWhatsAppIntentImmediately(pack: Pack) {
+        val intent = Intent().apply {
+            action = "com.whatsapp.intent.action.ENABLE_STICKER_PACK"
+            putExtra("sticker_pack_id", pack.id)
+            putExtra("sticker_pack_authority", "${packageName}.stickers")
+            putExtra("sticker_pack_name", pack.localizedName)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+
+        try {
+            Log.d("DetailsActivity", "Launching WhatsApp immediately after ad closed")
+            addPackLauncher.launch(intent)
+        } catch (e: Exception) {
+            Log.e("DetailsActivity", "Intent error: ${e.message}", e)
+            Toast.makeText(this, R.string.whatsapp_not_available_title, Toast.LENGTH_SHORT).show()
+            showWhatsAppNotAvailableDialog()
         }
     }
 
@@ -1395,19 +1450,11 @@ class DetailsActivity : AppCompatActivity() {
     }
 
     private fun sendToWhatsApp(pack: Pack) {
-        // Overlay loading göster (sadece indirme gerekiyorsa veya ilk kezse)
-        showLoadingState(true)
-        tvOverlayLoadingText.text = getString(R.string.preparing_sticker)
+        // Loading overlay'i kapat - WhatsApp hemen açılacak
+        showLoadingState(false)
 
-        lifecycleScope.launch {
-            // Reklam zaten addToWhatsApp başında gösterildi
-            // WhatsApp intent'ini hemen tetikle
-            launchWhatsAppIntent(pack)
-            
-            // Kullanıcı WhatsApp'a geçene kadar loading'i tut (görsel süreklilik için)
-            delay(1500) 
-            showLoadingState(false)
-        }
+        // WhatsApp intent'ini hemen tetikle
+        launchWhatsAppIntent(pack)
     }
 
     private fun launchWhatsAppIntent(pack: Pack) {
@@ -1422,7 +1469,7 @@ class DetailsActivity : AppCompatActivity() {
         lifecycleScope.launch {
             try {
                 Log.d("DetailsActivity", "Preparing to launch WhatsApp intent for pack: ${pack.id}")
-                
+
                 // KRITIK: Provider'ın veriyi bulabilmesi için cache'i diske kaydet
                 // UI'ı dondurmamak için IO thread'inde yap
                 withContext(Dispatchers.IO) {
@@ -1434,11 +1481,8 @@ class DetailsActivity : AppCompatActivity() {
                     }
                     StickerRepository.saveCacheToDisk(this@DetailsActivity, packsToSave)
                 }
-                
-                Log.d("DetailsActivity", "Metadata saved to disk, waiting for transition...")
-                delay(300) // Reklam sonrası sistemin toparlanması için bekleme
-                
-                Log.d("DetailsActivity", "Launching addPackLauncher...")
+
+                Log.d("DetailsActivity", "Launching addPackLauncher immediately...")
                 addPackLauncher.launch(intent)
             } catch (e: Exception) {
                 Log.e("DetailsActivity", "Intent error: ${e.message}", e)

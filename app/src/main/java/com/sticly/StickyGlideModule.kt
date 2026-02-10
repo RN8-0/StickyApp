@@ -12,7 +12,9 @@ import com.bumptech.glide.load.engine.cache.InternalCacheDiskCacheFactory
 import com.bumptech.glide.load.engine.cache.LruResourceCache
 import com.bumptech.glide.module.AppGlideModule
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 
 /**
@@ -80,15 +82,14 @@ class StickyGlideModule : AppGlideModule() {
         }
 
         /**
-         * Ana liste paketlerinin çıkartma önizlemelerini NORMAL öncelikle yükle
-         * Popüler paketler yüklendikten sonra bunlar yüklenecek
+         * Ana liste çıkartmalarını GERÇEKTEN indir ve cache'le
+         * submit() kullanarak indirmeyi ZORUNLU yap
          */
-        fun preloadStickerPreviews(context: Context, packs: List<Pack>, packCount: Int = 8, stickersPerPack: Int = 4) {
+        fun preloadStickerPreviews(context: Context, packs: List<Pack>, packCount: Int = 50, stickersPerPack: Int = 5) {
             CoroutineScope(Dispatchers.IO).launch {
                 try {
-                    val urlsToPreload = mutableListOf<String>()
+                    val urls = mutableListOf<String>()
 
-                    // İlk N paketten ilk M sticker URL'sini topla
                     packs.take(packCount).forEach { pack ->
                         if (pack.category != "custom") {
                             pack.stickers.take(stickersPerPack).forEach { sticker ->
@@ -99,28 +100,34 @@ class StickyGlideModule : AppGlideModule() {
                                 } else ""
 
                                 if (url.isNotEmpty()) {
-                                    urlsToPreload.add(url)
+                                    urls.add(url)
                                 }
                             }
                         }
                     }
 
-                    Log.d(TAG, "Preloading ${urlsToPreload.size} sticker previews with NORMAL priority...")
+                    Log.d(TAG, "Downloading ${urls.size} stickers...")
 
-                    // Arka planda preload et - NORMAL öncelik
-                    urlsToPreload.forEach { url ->
-                        try {
-                            Glide.with(context.applicationContext)
-                                .load(url)
-                                .diskCacheStrategy(DiskCacheStrategy.DATA)
-                                .priority(Priority.NORMAL)
-                                .preload(120, 120)
-                        } catch (e: Exception) { }
+                    // Paralel indirme - 20 adet aynı anda
+                    urls.chunked(20).forEach { batch ->
+                        val jobs = batch.map { url ->
+                            async(Dispatchers.IO) {
+                                try {
+                                    Glide.with(context.applicationContext)
+                                        .asFile()
+                                        .load(url)
+                                        .diskCacheStrategy(DiskCacheStrategy.DATA)
+                                        .submit()
+                                        .get()
+                                } catch (e: Exception) { null }
+                            }
+                        }
+                        jobs.forEach { it.await() }
                     }
 
-                    Log.d(TAG, "Preload completed for ${urlsToPreload.size} stickers")
+                    Log.d(TAG, "All ${urls.size} stickers downloaded!")
                 } catch (e: Exception) {
-                    Log.e(TAG, "Preload error: ${e.message}")
+                    Log.e(TAG, "Download error: ${e.message}")
                 }
             }
         }

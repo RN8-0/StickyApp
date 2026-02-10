@@ -6,19 +6,19 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="vertical"
-    android:paddingHorizontal="8dp"
-    android:paddingTop="8dp"
-    android:paddingBottom="6dp"
-    android:background="?selectableItemBackground">
+    android:paddingHorizontal="16dp"
+    android:paddingTop="12dp"
+    android:paddingBottom="12dp"
+    android:background="@color/white">
 
-    <!-- Üst Bilgi Satırı -->
+    <!-- Üst Satır: Paket Adı + Add Butonu -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:gravity="center_vertical">
 
-        <!-- Paket Adı + Badge'ler -->
+        <!-- Sol: Paket Adı + Emoji/Badge'ler -->
         <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
@@ -26,24 +26,11 @@
             android:orientation="horizontal"
             android:gravity="center_vertical">
 
-            <!-- Rank Number (Regional Popular için) -->
-            <TextView
-                android:id="@+id/rankNumber"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginEnd="12dp"
-                android:textSize="20sp"
-                android:textStyle="bold|italic"
-                android:textColor="@color/text_primary"
-                android:visibility="gone"
-                tools:visibility="visible"
-                tools:text="1" />
-
             <!-- Premium taç -->
             <ImageView
                 android:id="@+id/crownIcon"
-                android:layout_width="18dp"
-                android:layout_height="18dp"
+                android:layout_width="16dp"
+                android:layout_height="16dp"
                 android:layout_marginEnd="4dp"
                 android:src="@drawable/ic_gem"
                 android:visibility="gone" />
@@ -53,12 +40,12 @@
                 android:id="@+id/name"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:textSize="14sp"
+                android:textSize="15sp"
                 android:textStyle="bold"
                 android:textColor="@color/text_primary"
                 android:maxLines="1"
                 android:ellipsize="end"
-                tools:text="Niños 😎" />
+                tools:text="Elon Musk" />
 
             <!-- Yeni Badge -->
             <TextView
@@ -83,6 +70,7 @@
                 android:layout_marginStart="8dp"
                 android:textSize="12sp"
                 android:textColor="@color/text_hint"
+                android:visibility="gone"
                 tools:text="3h" />
 
         </LinearLayout>
@@ -92,158 +80,86 @@
             android:id="@+id/btnFavoriteNew"
             android:layout_width="32dp"
             android:layout_height="32dp"
+            android:layout_marginEnd="4dp"
             android:background="?selectableItemBackgroundBorderless"
             android:src="@drawable/ic_favorite_border"
             android:scaleType="fitCenter"
             android:padding="4dp"
             android:contentDescription="@string/add_to_favorites" />
 
-        <!-- Silme Butonu -->
-        <ImageButton
-            android:id="@+id/btnDelete"
-            android:layout_width="32dp"
-            android:layout_height="32dp"
-            android:layout_marginEnd="8dp"
-            android:background="?selectableItemBackgroundBorderless"
-            android:src="@drawable/ic_delete"
-            app:tint="@color/delete_red"
-            android:scaleType="fitCenter"
-            android:padding="6dp"
-            android:contentDescription="@string/delete_pack"
-            android:visibility="gone" />
-
-        <!-- Ekle Butonu -->
+        <!-- Add Butonu -->
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnAdd"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
             android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
+            android:layout_height="32dp"
             android:minHeight="32dp"
             android:minWidth="0dp"
-            android:paddingHorizontal="10dp"
-            android:paddingVertical="4dp"
+            android:paddingHorizontal="12dp"
             android:insetTop="0dp"
             android:insetBottom="0dp"
             android:text="@string/btn_add_short"
-            android:textSize="11sp"
-            android:textColor="@color/white"
-            app:icon="@drawable/ic_add"
-            app:iconSize="14dp"
-            app:iconTint="@color/white"
+            android:textSize="12sp"
+            android:textColor="@color/accent"
+            app:icon="@drawable/ic_whatsapp_small"
+            app:iconSize="16dp"
+            app:iconTint="@color/accent"
             app:iconPadding="4dp"
-            app:backgroundTint="@color/accent"
-            app:cornerRadius="16dp" />
+            app:strokeColor="@color/accent"
+            app:strokeWidth="1dp"
+            app:cornerRadius="16dp"
+            app:backgroundTint="@android:color/transparent" />
 
     </LinearLayout>
 
     <!-- İkinci Satır: Yayıncı + İndirme sayısı -->
-    <LinearLayout
+    <TextView
+        android:id="@+id/pub"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="1dp"
-        android:orientation="horizontal"
-        android:gravity="center_vertical">
-
-        <!-- Yayıncı -->
-        <TextView
-            android:id="@+id/pub"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:textSize="11sp"
-            android:textColor="@color/text_secondary"
-            android:maxLines="1"
-            android:ellipsize="end"
-            tools:text="anapech82" />
-
-        <!-- Ayraç -->
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginHorizontal="5dp"
-            android:text="•"
-            android:textSize="11sp"
-            android:textColor="@color/text_hint" />
-
-        <!-- İndirme sayısı -->
-        <TextView
-            android:id="@+id/downloadCount"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:textSize="11sp"
-            android:textColor="@color/text_hint"
-            tools:text="13.6K indirme" />
-
-        <!-- Yüklü Badge -->
-        <TextView
-            android:id="@+id/installedBadge"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
-            android:text="@string/installed"
-            android:textSize="10sp"
-            android:textColor="@android:color/white"
-            android:background="@drawable/badge_installed"
-            android:paddingHorizontal="6dp"
-            android:paddingVertical="2dp"
-            android:visibility="gone" />
-
-        <!-- Premium Badge -->
-        <LinearLayout
-            android:id="@+id/premiumContainer"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
-            android:orientation="horizontal"
-            android:gravity="center"
-            android:visibility="gone">
-
-            <TextView
-                android:id="@+id/premiumBadge"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/premium"
-                android:textSize="10sp"
-                android:textColor="@color/premium_text_on_gold"
-                android:textStyle="bold"
-                android:background="@drawable/badge_premium"
-                android:paddingHorizontal="6dp"
-                android:paddingVertical="2dp" />
-
-        </LinearLayout>
-
-        <!-- Yüklü simgesi -->
-        <ImageView
-            android:id="@+id/checkIcon"
-            android:layout_width="16dp"
-            android:layout_height="16dp"
-            android:layout_marginStart="6dp"
-            android:src="@drawable/ic_check"
-            android:visibility="gone" />
-
-    </LinearLayout>
+        android:layout_marginTop="2dp"
+        android:textSize="12sp"
+        android:textColor="@color/text_secondary"
+        android:maxLines="1"
+        android:ellipsize="end"
+        tools:text="Shahir • 17 stickers • 80k downloads" />
 
     <!-- Çıkartma Önizlemeleri -->
-    <HorizontalScrollView
-        android:id="@+id/stickerScrollView"
+    <LinearLayout
+        android:id="@+id/stickerPreviewContainer"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="6dp"
-        android:scrollbars="none"
-        android:clipToPadding="false"
-        android:fillViewport="true"
-        android:overScrollMode="never">
+        android:layout_marginTop="10dp"
+        android:orientation="horizontal"
+        android:gravity="start|center_vertical" />
 
-        <LinearLayout
-            android:id="@+id/stickerPreviewContainer"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:paddingStart="2dp"
-            android:paddingEnd="8dp"
-            android:gravity="start|center_vertical" />
+    <!-- Gizli Elemanlar -->
+    <TextView
+        android:id="@+id/downloadCount"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:visibility="gone" />
 
-    </HorizontalScrollView>
+    <TextView
+        android:id="@+id/installedBadge"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:visibility="gone" />
 
-    <!-- Gizli Elemanlar (mevcut kod uyumluluğu için) -->
+    <LinearLayout
+        android:id="@+id/premiumContainer"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:visibility="gone">
+        <TextView android:id="@+id/premiumBadge" android:layout_width="0dp" android:layout_height="0dp" android:visibility="gone"/>
+    </LinearLayout>
+
+    <ImageView
+        android:id="@+id/checkIcon"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:visibility="gone" />
+
     <ImageView
         android:id="@+id/tray"
         android:layout_width="0dp"
@@ -262,6 +178,16 @@
         android:layout_height="0dp"
         android:visibility="gone" />
 
+    <ImageButton
+        android:id="@+id/btnDelete"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:visibility="gone" />
 
+    <TextView
+        android:id="@+id/rankNumber"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:visibility="gone" />
 
 </LinearLayout>

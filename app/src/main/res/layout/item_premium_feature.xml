@@ -13,7 +13,7 @@
         android:layout_height="56dp"
         app:cardCornerRadius="12dp"
         app:cardElevation="0dp"
-        app:cardBackgroundColor="@color/feature_icon_bg">
+        app:cardBackgroundColor="@color/premium_feature_icon_bg">
 
         <ImageView
             android:id="@+id/imgFeatureIcon"
@@ -21,7 +21,7 @@
             android:layout_height="32dp"
             android:layout_gravity="center"
             android:src="@drawable/ic_premium"
-            app:tint="@color/accent" />
+            app:tint="@color/premium_gold_dark" />
 
     </androidx.cardview.widget.CardView>
 

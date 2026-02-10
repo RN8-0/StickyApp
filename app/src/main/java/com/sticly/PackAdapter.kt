@@ -71,7 +71,6 @@ class PackAdapter(
         val timeAgo: TextView = v.findViewById(R.id.timeAgo)
         val btnAdd: MaterialButton = v.findViewById(R.id.btnAdd)
         val stickerPreviewContainer: LinearLayout = v.findViewById(R.id.stickerPreviewContainer)
-        val stickerScrollView: android.widget.HorizontalScrollView = v.findViewById(R.id.stickerScrollView)
     }
 
     class AdVH(v: View) : RecyclerView.ViewHolder(v) {
@@ -132,7 +131,17 @@ class PackAdapter(
         val context = h.itemView.context
 
         h.name.text = pack.localizedName
-        h.pub.text = pack.pub
+
+        // Yayıncı + çıkartma sayısı + indirme sayısı tek satırda
+        val stickerCount = pack.stickers.size
+        val displayDownloadCount = pack.fakeDownloadBase + pack.downloadCount
+        val pubText = StringBuilder(pack.pub)
+        pubText.append(" • $stickerCount stickers")
+        if (displayDownloadCount > 0) {
+            pubText.append(" • ${formatDownloadCount(displayDownloadCount)} downloads")
+        }
+        h.pub.text = pubText.toString()
+
         h.count.text = context.getString(R.string.sticker_count, pack.stickers.size)
         h.itemView.setOnClickListener { click(pack) }
 
@@ -212,15 +221,8 @@ class PackAdapter(
             }
         }
 
-        // İndirme sayısı
-        val displayDownloadCount = pack.fakeDownloadBase + pack.downloadCount
-        if (displayDownloadCount > 0) {
-            h.downloadCount.visibility = View.VISIBLE
-            h.downloadCount.text = formatDownloadCount(displayDownloadCount) + " " + context.getString(R.string.download_label)
-        } else {
-            h.downloadCount.visibility = View.VISIBLE
-            h.downloadCount.text = context.getString(R.string.sticker_count, pack.stickers.size)
-        }
+        // İndirme sayısı (artık pub içinde gösteriliyor, bu gizli element)
+        h.downloadCount.visibility = View.GONE
 
         // Favori butonu (yeni - üst satırda)
         if (!isCustomPack) {
@@ -259,94 +261,105 @@ class PackAdapter(
     private fun loadStickerPreviews(h: VH, pack: Pack, isCustomPack: Boolean) {
         val context = h.itemView.context
         val container = h.stickerPreviewContainer
-        container.removeAllViews()
 
         val displayMetrics = context.resources.displayMetrics
-        val stickerSize = (90 * displayMetrics.density).toInt()
-        val stickerMargin = (6 * displayMetrics.density).toInt()
-        val glideOverrideSize = (120 * displayMetrics.density).toInt()
+        val stickerSize = (64 * displayMetrics.density).toInt()
+        val margin = (8 * displayMetrics.density).toInt()
+        val glideOverrideSize = 96 // Daha küçük = daha hızlı
 
-        val stickersToShow = pack.stickers.take(7)
-        if (stickersToShow.isEmpty()) return
+        val stickersToShow = pack.stickers.take(5)
+        val currentChildCount = container.childCount
+        val neededCount = stickersToShow.size
 
-        // Resim yüklendiğinde arka planı kaldıran listener
-        val clearBgListener = object : RequestListener<Drawable> {
-            override fun onLoadFailed(e: GlideException?, model: Any?, target: Target<Drawable>, isFirstResource: Boolean): Boolean {
-                return false
+        // View'ları yeniden kullan - sadece gerekirse yeni oluştur
+        if (neededCount > currentChildCount) {
+            for (i in currentChildCount until neededCount) {
+                val previewView = ImageView(context).apply {
+                    val params = LinearLayout.LayoutParams(stickerSize, stickerSize)
+                    params.marginEnd = margin
+                    layoutParams = params
+                    scaleType = ImageView.ScaleType.CENTER_CROP
+                }
+                container.addView(previewView)
             }
-            override fun onResourceReady(resource: Drawable, model: Any, target: Target<Drawable>, dataSource: DataSource, isFirstResource: Boolean): Boolean {
-                // Yükleme başarılı - arka planı kaldır (şeffaf çıkartmalar için)
-                (target as? com.bumptech.glide.request.target.ImageViewTarget<*>)?.view?.background = null
-                return false
-            }
+        } else if (neededCount < currentChildCount) {
+            container.removeViews(neededCount, currentChildCount - neededCount)
         }
 
+        // Son elemanın margin'ini kaldır
+        for (i in 0 until container.childCount) {
+            val child = container.getChildAt(i) as? ImageView ?: continue
+            (child.layoutParams as? LinearLayout.LayoutParams)?.marginEnd =
+                if (i == container.childCount - 1) 0 else margin
+        }
+
+        if (stickersToShow.isEmpty()) {
+            container.visibility = View.GONE
+            return
+        }
+        container.visibility = View.VISIBLE
+
+        // Glide request manager - tek seferde al
+        val glide = Glide.with(context)
+
         stickersToShow.forEachIndexed { index, sticker ->
-            val previewView = ImageView(context).apply {
-                val params = LinearLayout.LayoutParams(stickerSize, stickerSize)
-                if (index < stickersToShow.size - 1) {
-                    params.marginEnd = stickerMargin
+            val previewView = container.getChildAt(index) as? ImageView ?: return@forEachIndexed
+            previewView.setBackgroundResource(R.drawable.ic_sticker_placeholder)
+            previewView.setOnClickListener { click(pack) }
+
+            val clearBgListener = object : RequestListener<Drawable> {
+                override fun onLoadFailed(e: GlideException?, m: Any?, t: Target<Drawable>, f: Boolean) = false
+                override fun onResourceReady(r: Drawable, m: Any, t: Target<Drawable>, d: DataSource, f: Boolean): Boolean {
+                    previewView.background = null
+                    return false
                 }
-                layoutParams = params
-                scaleType = ImageView.ScaleType.FIT_CENTER
-                // Yükleme sırasında hafif gri arka plan
-                setBackgroundResource(R.drawable.ic_sticker_placeholder)
-                setOnClickListener { click(pack) }
             }
-            container.addView(previewView)
 
             if (isCustomPack) {
                 val stickerFile = CustomStickerManager.getStickerFile(context, pack.id, sticker.file)
                 if (stickerFile != null && stickerFile.exists()) {
-                    Glide.with(context)
-                        .load(stickerFile)
-                        .override(glideOverrideSize)
-                        .thumbnail(0.25f)
+                    glide.load(stickerFile)
+                        .priority(Priority.IMMEDIATE)
                         .diskCacheStrategy(DiskCacheStrategy.DATA)
-                        .transition(DrawableTransitionOptions.withCrossFade(150))
+                        .dontAnimate()
                         .listener(clearBgListener)
                         .into(previewView)
                 }
             } else {
+                // URL öncelikli yükleme (RegionalAdapter gibi)
                 var urlToLoad = sticker.url
                 if (urlToLoad.isEmpty() && pack.storagePath.isNotEmpty()) {
                     urlToLoad = StickerRepository.getStickerDirectUrl(pack.id, sticker.file, pack.storagePath)
                 }
 
-                if (urlToLoad.isNotEmpty()) {
-                    Glide.with(context)
-                        .load(urlToLoad)
-                        .override(glideOverrideSize)
-                        .thumbnail(0.25f) // Önce %25 boyutunda hızlı yükle, sonra tam kalite
-                        .priority(Priority.NORMAL)
-                        .diskCacheStrategy(DiskCacheStrategy.DATA) // Hem orijinal hem dönüştürülmüş veriyi cache'le
-                        .transition(DrawableTransitionOptions.withCrossFade(150)) // Yumuşak geçiş
-                        .listener(clearBgListener)
-                        .into(previewView)
-                } else {
-                    val cachedSticker = StickerRepository.getCachedStickerPath(context, pack.id, sticker.file)
-                    if (cachedSticker.exists() && cachedSticker.length() > 0) {
-                        Glide.with(context)
-                            .load(cachedSticker)
-                            .override(glideOverrideSize)
-                            .thumbnail(0.25f)
-                            .priority(Priority.NORMAL)
+                when {
+                    urlToLoad.isNotEmpty() -> {
+                        glide.load(urlToLoad)
+                            .priority(Priority.IMMEDIATE)
                             .diskCacheStrategy(DiskCacheStrategy.DATA)
-                            .signature(ObjectKey(cachedSticker.lastModified()))
-                            .transition(DrawableTransitionOptions.withCrossFade(150))
+                            .dontAnimate()
                             .listener(clearBgListener)
                             .into(previewView)
-                    } else {
-                        val assetPath = "file:///android_asset/${pack.id}/${sticker.file}"
-                        Glide.with(context)
-                            .load(android.net.Uri.parse(assetPath))
-                            .override(glideOverrideSize)
-                            .thumbnail(0.25f)
-                            .priority(Priority.NORMAL)
-                            .diskCacheStrategy(DiskCacheStrategy.DATA)
-                            .transition(DrawableTransitionOptions.withCrossFade(150))
-                            .listener(clearBgListener)
-                            .into(previewView)
+                    }
+                    else -> {
+                        val cachedSticker = StickerRepository.getCachedStickerPath(context, pack.id, sticker.file)
+                        if (cachedSticker.exists() && cachedSticker.length() > 0) {
+                            glide.load(cachedSticker)
+                                .signature(ObjectKey(cachedSticker.lastModified()))
+                                .priority(Priority.IMMEDIATE)
+                                .diskCacheStrategy(DiskCacheStrategy.DATA)
+                                .dontAnimate()
+                                .listener(clearBgListener)
+                                .into(previewView)
+                        } else {
+                            val assetPath = "file:///android_asset/${pack.id}/${sticker.file}"
+                            glide.load(android.net.Uri.parse(assetPath))
+                                .priority(Priority.IMMEDIATE)
+                                .diskCacheStrategy(DiskCacheStrategy.DATA)
+                                .dontAnimate()
+                                .listener(clearBgListener)
+                                .into(previewView)
+                        }
                     }
                 }
             }
@@ -397,6 +410,13 @@ class PackAdapter(
                 return items[oldItemPosition] == newList[newItemPosition]
             }
         })
+        items = newList
+        diffResult.dispatchUpdatesTo(this)
+    }
+
+    fun getItems(): List<Any> = items
+
+    fun updateListWithDiff(newList: List<Any>, diffResult: DiffUtil.DiffResult) {
         items = newList
         diffResult.dispatchUpdatesTo(this)
     }

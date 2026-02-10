@@ -229,20 +229,19 @@
         android:visibility="gone">
 
         <!-- Top Toolbar -->
-        <LinearLayout
+        <FrameLayout
             android:id="@+id/topToolbar"
             android:layout_width="match_parent"
             android:layout_height="56dp"
             android:background="@color/toolbar_bg"
-            android:gravity="center_vertical"
-            android:orientation="horizontal"
-            android:paddingHorizontal="8dp"
             app:layout_constraintTop_toTopOf="parent">
 
             <ImageButton
                 android:id="@+id/btnClose"
                 android:layout_width="48dp"
                 android:layout_height="48dp"
+                android:layout_gravity="start|center_vertical"
+                android:layout_marginStart="8dp"
                 android:background="?selectableItemBackgroundBorderless"
                 android:src="@drawable/ic_close"
                 app:tint="@color/toolbar_icon"
@@ -250,16 +249,15 @@
 
             <TextView
                 android:id="@+id/tvEditorTitle"
-                android:layout_width="0dp"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:gravity="center"
+                android:layout_gravity="center"
                 android:text="@string/edit_sticker"
                 android:textColor="@color/toolbar_text"
-                android:textSize="18sp"
+                android:textSize="16sp"
                 android:textStyle="bold" />
 
-        </LinearLayout>
+        </FrameLayout>
 
         <!-- Floating Undo/Redo Buttons (Right Side) -->
         <LinearLayout

@@ -139,9 +139,9 @@
     <string name="restore_success">Your purchases have been restored!</string>
     <string name="restore_not_found">No purchases found to restore</string>
     <string name="btn_restore_subscription">Restore Purchases</string>
-    <string name="restore_error">Geri yükleme sırasında bir hata oluştu.</string>
-    <string name="subscription_activated">Abonelik aktif edildi.</string>
-    <string name="no_subscription_found">Daha önce mevcut aboneliğiniz bulunmamaktadır.</string>
+    <string name="restore_error">An error occurred while restoring.</string>
+    <string name="subscription_activated">Subscription activated!</string>
+    <string name="no_subscription_found">No previous subscription found.</string>
     <string name="remove_ads">Remove Ads</string>
     <string name="remove_ads_desc">Enjoy an ad-free experience</string>
     <string name="restoring">Restoring…</string>

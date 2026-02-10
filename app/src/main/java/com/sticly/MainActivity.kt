@@ -25,6 +25,7 @@ import androidx.drawerlayout.widget.DrawerLayout
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import androidx.recyclerview.widget.DiffUtil
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import androidx.viewpager2.widget.ViewPager2
 import androidx.core.view.ViewCompat
@@ -257,8 +258,9 @@ class MainActivity : AppCompatActivity() {
         swipeRefresh.isEnabled = false
 
         rv.layoutManager = LinearLayoutManager(this)
-        rv.setItemViewCacheSize(30)
-        rv.setHasFixedSize(true)
+        rv.setItemViewCacheSize(20)
+        rv.itemAnimator = null // Performans: Animasyonları kapat
+        (rv.layoutManager as LinearLayoutManager).initialPrefetchItemCount = 6 // Önden yükle
         adapter = PackAdapter(allPacks, { pack ->
             startActivity(Intent(this, DetailsActivity::class.java).putExtra("id", pack.id))
         }, {
@@ -697,9 +699,7 @@ class MainActivity : AppCompatActivity() {
 
             if (changed) {
                 withContext(Dispatchers.Main) {
-                    if (::adapter.isInitialized) {
-                        adapter.notifyDataSetChanged()
-                    }
+                    applyFilters()
                 }
             }
         }
@@ -719,12 +719,15 @@ class MainActivity : AppCompatActivity() {
 
         if (::adapter.isInitialized) {
             lifecycleScope.launch {
-                val customPacks = CustomStickerManager.getCustomPacks(this@MainActivity).mapNotNull { cp ->
-                    val pack = CustomStickerManager.toWhatsAppPack(this@MainActivity, cp.id)?.copy(category = "custom")
-                    if (pack != null && pack.stickers.isNotEmpty()) pack else null
+                val updatedPacks = withContext(Dispatchers.IO) {
+                    val customPacks = CustomStickerManager.getCustomPacks(this@MainActivity).mapNotNull { cp ->
+                        val pack = CustomStickerManager.toWhatsAppPack(this@MainActivity, cp.id)?.copy(category = "custom")
+                        if (pack != null && pack.stickers.isNotEmpty()) pack else null
+                    }
+                    val firebasePacks = allPacks.filter { it.category != "custom" }
+                    firebasePacks + customPacks
                 }
-                val firebasePacks = allPacks.filter { it.category != "custom" }
-                allPacks = firebasePacks + customPacks
+                allPacks = updatedPacks
                 applyFilters()
             }
         }
@@ -844,42 +847,47 @@ class MainActivity : AppCompatActivity() {
                 FilterType.PREMIUM -> filtered.filter { it.isPremium }
                 FilterType.FAVORITES -> filtered.filter { PreferencesHelper.isPackFavorite(this@MainActivity, it.id) }
                 FilterType.PURCHASED -> filtered.filter { PreferencesHelper.hasAccessToPremiumPack(this@MainActivity, it.id) }
-                FilterType.CUSTOM -> filtered.filter { (it.category == "custom" || it.id.startsWith("custom_")) && it.stickers.isNotEmpty() }
+                FilterType.CUSTOM -> filtered.filter { it.id.startsWith("custom_") && it.stickers.isNotEmpty() }
             }
 
-            // Profesyonel Kategori Dağıtım Algoritması (Interleaving)
-            
-            val sorted = if (currentFilter == FilterType.ALL) {
-                 // 1. Paketleri kategorilerine göre grupla
-                 // Her grup içinde de puana göre (Premium/Free karışık) sırala
-                 val grouped = filtered.groupBy { normalizeCategoryKey(it.category) }
-                     .mapValues { (_, list) -> 
-                         list.sortedByDescending { getOrCalculateRankScore(it) }.toMutableList() 
-                     }
-                 
-                 // 2. Kategori sırasını belirle (Round Robin için)
-                 val categories = grouped.keys.toList().shuffled(java.util.Random(sessionSeed))
-                 
-                 val merged = mutableListOf<Pack>()
-                 var run = true
-                 
-                 // 3. Round Robin dağıtımı: Her turda her kategoriden 1 tane al
-                 while (run) {
-                     run = false
-                     for (cat in categories) {
-                         val list = grouped[cat]
-                         if (list != null && list.isNotEmpty()) {
-                             merged.add(list.removeAt(0))
-                             run = true // Hala paket var, döngü devam etsin
-                         }
-                     }
-                 }
-                 
-                 // VİTRİN: Çok popüler Premium paketleri biraz daha öne çıkarmak için
-                 // en başta küçük bir manuel düzenleme yapılabilir ama round-robin genelde yeterli olur.
-                 merged
-            } else {
-                 filtered.sortedByDescending { getOrCalculateRankScore(it) }
+            // Sıralama: Puana göre sırala ve premium dağılımını optimize et
+            val sorted = filtered.sortedByDescending { getOrCalculateRankScore(it) }.let { list ->
+                if (currentFilter != FilterType.ALL || list.size < 3) {
+                    list
+                } else {
+                    // Premium paketleri dağıt - art arda gelmesinler
+                    val result = mutableListOf<Pack>()
+                    val premiumPacks = list.filter { it.isPremium }.toMutableList()
+                    val freePacks = list.filter { !it.isPremium }.toMutableList()
+
+                    var premiumIndex = 0
+                    var freeIndex = 0
+                    var lastWasPremium = false
+
+                    while (premiumIndex < premiumPacks.size || freeIndex < freePacks.size) {
+                        // Eğer son eklenen premium ise ve free var, free ekle
+                        if (lastWasPremium && freeIndex < freePacks.size) {
+                            result.add(freePacks[freeIndex++])
+                            lastWasPremium = false
+                        }
+                        // Eğer son eklenen free ise veya ilk eleman ve premium var, premium ekle
+                        else if (!lastWasPremium && premiumIndex < premiumPacks.size) {
+                            result.add(premiumPacks[premiumIndex++])
+                            lastWasPremium = true
+                        }
+                        // Kalan free paketleri ekle
+                        else if (freeIndex < freePacks.size) {
+                            result.add(freePacks[freeIndex++])
+                            lastWasPremium = false
+                        }
+                        // Kalan premium paketleri ekle
+                        else if (premiumIndex < premiumPacks.size) {
+                            result.add(premiumPacks[premiumIndex++])
+                            lastWasPremium = true
+                        }
+                    }
+                    result.toList()
+                }
             }
 
             // Reklamları listeye enjekte et
@@ -921,6 +929,24 @@ class MainActivity : AppCompatActivity() {
                 itemsWithAds.addAll(sorted)
             }
 
+            // Calculate Diff on Background
+            val oldList = if (::adapter.isInitialized) adapter.getItems() else emptyList()
+            val newList = itemsWithAds
+            
+            val diffResult = DiffUtil.calculateDiff(object : DiffUtil.Callback() {
+                 override fun getOldListSize() = oldList.size
+                 override fun getNewListSize() = newList.size
+                 override fun areItemsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
+                     val old = oldList[oldItemPosition]
+                     val new = newList[newItemPosition]
+                     if (old is Pack && new is Pack) return old.id == new.id
+                     return old == new
+                 }
+                 override fun areContentsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
+                     return oldList[oldItemPosition] == newList[newItemPosition]
+                 }
+            })
+
             withContext(Dispatchers.Main) {
                 if (sorted.isEmpty()) {
                     if (currentFilter == FilterType.CUSTOM) {
@@ -937,17 +963,17 @@ class MainActivity : AppCompatActivity() {
                         // Installed but empty?
                         rv.visibility = View.VISIBLE
                         emptyStateView.visibility = View.GONE
-                        adapter.updateList(itemsWithAds)
+                        if (::adapter.isInitialized) adapter.updateListWithDiff(newList, diffResult)
                     } else {
                          // Default empty handling
                         rv.visibility = View.VISIBLE
                         emptyStateView.visibility = View.GONE
-                        adapter.updateList(itemsWithAds)
+                        if (::adapter.isInitialized) adapter.updateListWithDiff(newList, diffResult)
                     }
                 } else {
                     rv.visibility = View.VISIBLE
                     emptyStateView.visibility = View.GONE
-                    adapter.updateList(itemsWithAds)
+                    if (::adapter.isInitialized) adapter.updateListWithDiff(newList, diffResult)
                 }
 
                 // Popüler bölümün görünürlüğünü güncelle

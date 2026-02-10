@@ -67,6 +67,10 @@
 
     <!-- Premium Feature Colors -->
     <color name="feature_icon_bg">#F0FFF4</color>
+    <color name="premium_feature_icon_bg">#FFF8E1</color>
+    <color name="premium_gold_dark">#FFA000</color>
+    <color name="premium_gold_light">#FFECB3</color>
+    <color name="premium_button">#FFB300</color>
 
     <!-- Onboarding Colors (Always Dark) -->
     <color name="onboarding_background">@color/primary</color>

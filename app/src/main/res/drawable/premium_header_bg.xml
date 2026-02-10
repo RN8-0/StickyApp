@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Gradient Background -->
+    <!-- Premium Gold Gradient Background -->
     <item>
         <shape android:shape="rectangle">
             <gradient
-                android:startColor="#00C896"
-                android:centerColor="#00A87E"
-                android:endColor="#008B68"
+                android:startColor="#FFD700"
+                android:centerColor="#FFB300"
+                android:endColor="#FF8F00"
                 android:angle="135" />
         </shape>
     </item>

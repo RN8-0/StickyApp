@@ -91,8 +91,8 @@
                         android:background="@drawable/bg_plus_badge"
                         android:paddingHorizontal="10dp"
                         android:paddingVertical="4dp"
-                        android:text="PLUS"
-                        android:textColor="@android:color/white"
+                        android:text="PREMIUM"
+                        android:textColor="@color/premium_text_on_gold"
                         android:textSize="12sp"
                         android:textStyle="bold" />
 
@@ -310,14 +310,14 @@
             android:minHeight="64dp"
             android:paddingVertical="12dp"
             android:text="@string/start_free_trial"
-            android:textColor="@android:color/white"
+            android:textColor="@color/premium_text_on_gold"
             android:textSize="17sp"
             android:textStyle="bold"
             android:textAllCaps="false"
             android:singleLine="false"
             android:lineSpacingMultiplier="1.2"
             android:gravity="center"
-            app:backgroundTint="@color/accent"
+            app:backgroundTint="@color/premium_gold"
             app:cornerRadius="32dp"
             app:elevation="4dp" />
 

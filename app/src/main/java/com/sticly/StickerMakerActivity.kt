@@ -345,14 +345,28 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
     private fun loadAds() {
         android.util.Log.d("StickerMaker", "loadAds called, isPremium: ${PreferencesHelper.isPremium(this)}")
         if (!PreferencesHelper.isPremium(this)) {
-            adContainerMaker.visibility = View.VISIBLE // Başlangıçta görünür yap
-            AdManager.loadNativeAd(this, AdManager.NativeAdType.MAKER) { nativeAd ->
-                android.util.Log.d("StickerMaker", "Native ad loaded, populating view")
+            // Önce preloaded reklamı kontrol et
+            val preloadedAd = AdManager.getPreloadedMakerAd()
+            if (preloadedAd != null) {
+                android.util.Log.d("StickerMaker", "Using preloaded native ad")
                 val adView = layoutInflater.inflate(R.layout.item_ad_native, null) as com.google.android.gms.ads.nativead.NativeAdView
-                AdManager.populateNativeAdView(nativeAd, adView)
+                AdManager.populateNativeAdView(preloadedAd, adView)
                 adContainerMaker.removeAllViews()
                 adContainerMaker.addView(adView)
                 adContainerMaker.visibility = View.VISIBLE
+                // Bir sonraki kullanım için yeni reklam yükle
+                AdManager.preloadMakerNativeAd(this)
+            } else {
+                // Preload yoksa normal yükle
+                adContainerMaker.visibility = View.VISIBLE
+                AdManager.loadNativeAd(this, AdManager.NativeAdType.MAKER) { nativeAd ->
+                    android.util.Log.d("StickerMaker", "Native ad loaded, populating view")
+                    val adView = layoutInflater.inflate(R.layout.item_ad_native, null) as com.google.android.gms.ads.nativead.NativeAdView
+                    AdManager.populateNativeAdView(nativeAd, adView)
+                    adContainerMaker.removeAllViews()
+                    adContainerMaker.addView(adView)
+                    adContainerMaker.visibility = View.VISIBLE
+                }
             }
         } else {
             android.util.Log.d("StickerMaker", "User is premium, hiding ads")

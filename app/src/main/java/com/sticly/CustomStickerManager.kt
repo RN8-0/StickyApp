@@ -138,17 +138,20 @@ object CustomStickerManager {
     fun createPack(context: Context, name: String, isAnimated: Boolean = false): String {
         val packId = "custom_${UUID.randomUUID().toString().take(8)}"
         val packDir = getPackDir(context, packId)
-        
+
         val pack = CustomPack(
             id = packId,
             name = name.ifEmpty { "Paketim" },
             isAnimated = isAnimated
         )
-        
+
         // pack_info.json kaydet
         val infoFile = File(packDir, PACK_INFO_FILE)
         infoFile.writeText(gson.toJson(pack))
-        
+
+        // Firebase'e özel paket sayısını artır
+        PreferencesHelper.incrementCustomPacksCount(context)
+
         return packId
     }
 
@@ -185,7 +188,10 @@ object CustomStickerManager {
         val infoFile = File(packDir, PACK_INFO_FILE)
         infoFile.writeText(gson.toJson(pack))
 
-        // 4. WhatsApp'ı bildir
+        // 4. Firebase'e toplam stiker sayısını artır
+        PreferencesHelper.incrementTotalStickersAdded(context)
+
+        // 5. WhatsApp'ı bildir
         notifyWhatsApp(context, packId)
 
         return true
@@ -262,6 +268,9 @@ object CustomStickerManager {
         val infoFile = File(packDir, PACK_INFO_FILE)
         infoFile.writeText(gson.toJson(pack))
 
+        // Firebase'e toplam stiker sayısını artır
+        PreferencesHelper.incrementTotalStickersAdded(context)
+
         notifyWhatsApp(context, packId)
 
         return true
@@ -307,6 +316,9 @@ object CustomStickerManager {
 
         val infoFile = File(packDir, PACK_INFO_FILE)
         infoFile.writeText(gson.toJson(pack))
+
+        // Firebase'e toplam stiker sayısını artır
+        PreferencesHelper.incrementTotalStickersAdded(context)
 
         notifyWhatsApp(context, packId)
 
@@ -551,11 +563,13 @@ object CustomStickerManager {
     fun deletePack(context: Context, packId: String): Boolean {
         val packDir = getPackDir(context, packId)
         val deleted = packDir.deleteRecursively()
-        
+
         if (deleted) {
+            // Firebase'de özel paket sayısını azalt
+            PreferencesHelper.decrementCustomPacksCount(context)
             notifyWhatsApp(context, packId)
         }
-        
+
         return deleted
     }
 

@@ -15,10 +15,10 @@
         android:id="@+id/toolbarLayout"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:minHeight="56dp"
+        android:minHeight="50dp"
         android:orientation="vertical"
         android:background="@color/toolbar_bg"
-        android:paddingBottom="12dp">
+        android:paddingBottom="4dp">
 
         <!-- Top bar: Back button + App name + Logo -->
         <LinearLayout
@@ -301,21 +301,24 @@
             android:orientation="horizontal"
             android:visibility="gone">
 
-            <!-- Premium Badge Button - Tam genişlik (artık tek buton) -->
+            <!-- Premium Badge Button - Modern ve kompakt -->
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnPremiumBadge"
                 android:layout_width="match_parent"
-                android:layout_height="56dp"
+                android:layout_height="44dp"
                 android:text="@string/get_premium_access"
-                android:textColor="@color/premium_text_on_gold"
-                android:textSize="18sp"
+                android:textColor="@color/white"
+                android:textSize="14sp"
                 android:textStyle="bold"
                 android:textAllCaps="false"
+                android:letterSpacing="0.02"
                 app:backgroundTint="@color/premium_gold"
-                app:cornerRadius="28dp"
+                app:cornerRadius="22dp"
                 app:icon="@drawable/ic_gem"
                 app:iconGravity="textStart"
-                app:iconTint="@color/premium_text_on_gold" />
+                app:iconTint="@color/white"
+                app:iconSize="18dp"
+                app:iconPadding="8dp" />
 
             <!-- Gizli Price Button (kod uyumluluğu için) -->
             <com.google.android.material.button.MaterialButton

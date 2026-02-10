@@ -68,7 +68,9 @@ import {
   Crown,
   Shield,
   Edit3,
-  Wand2
+  Wand2,
+  Calendar,
+  Smartphone
 } from 'lucide-react';
 import { translateTextAllLanguages, TARGET_LANGUAGES } from './utils/translator';
 import {
@@ -263,6 +265,8 @@ function App() {
   const [packs, setPacks] = useState<StickerPack[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedPack, setSelectedPack] = useState<StickerPack | null>(null);
+  const [selectedStickerIds, setSelectedStickerIds] = useState<string[]>([]);
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState<'dashboard' | 'stats' | 'messages' | 'notifications' | 'users'>('dashboard');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'passive' | 'premium' | 'normal' | 'animated' | 'static' | 'new'>('all');
@@ -327,7 +331,7 @@ function App() {
   const [usersData, setUsersData] = useState<UserData[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
   const [userSearch, setUserSearch] = useState('');
-  const [userFilter, setUserFilter] = useState<'all' | 'premium' | 'free' | 'subscription'>('all');
+  const [userFilter, setUserFilter] = useState<'all' | 'premium' | 'free' | 'monthly' | 'yearly'>('all');
   const [selectedUser, setSelectedUser] = useState<UserData | null>(null);
   const [editingSubscription, setEditingSubscription] = useState(false);
   const [subPlan, setSubPlan] = useState('none');
@@ -337,6 +341,11 @@ function App() {
   const [welcomeExit, setWelcomeExit] = useState(false);
   const [showVideoBgModal, setShowVideoBgModal] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+
+  // FFmpeg'i önceden yükle - işlem başladığında hazır olsun
+  useEffect(() => {
+    stickerProcessor.preload().catch(console.error);
+  }, []);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (u) => {
@@ -660,17 +669,35 @@ function App() {
     setUsersLoading(true);
     try {
       const snapshot = await getDocs(collection(db, 'users'));
-      const usersList: UserData[] = snapshot.docs.map(d => ({
-        id: d.id,
-        email: d.data().email || '',
-        is_premium: d.data().is_premium || false,
-        premium_type: d.data().premium_type || 'none',
-        premium_expiry: d.data().premium_expiry || 0,
-        favorite_packs: d.data().favorite_packs || [],
-        last_sync: d.data().last_sync || null,
-        cancelled_at: d.data().cancelled_at || null,
-        cancelled_reason: d.data().cancelled_reason || '',
-      }));
+      const usersList: UserData[] = snapshot.docs.map(d => {
+        const data = d.data();
+        return {
+          id: d.id,
+          email: data.email || '',
+          is_premium: data.is_premium || false,
+          premium_type: data.premium_type || 'none',
+          premium_expiry: data.premium_expiry || 0,
+          favorite_packs: data.favorite_packs || [],
+          last_sync: data.last_sync || null,
+          cancelled_at: data.cancelled_at || null,
+          cancelled_reason: data.cancelled_reason || '',
+          subscription_source: data.subscription_source || 'none',
+          subscription_history: data.subscription_history || [],
+          // New fields
+          created_at: data.created_at || null,
+          display_name: data.display_name || data.displayName || '',
+          photo_url: data.photo_url || data.photoURL || '',
+          device_info: data.device_info || null,
+          total_stickers_added: data.total_stickers_added || 0,
+          custom_packs_count: data.custom_packs_count || 0,
+        };
+      });
+      // Sort by created_at (newest first)
+      usersList.sort((a, b) => {
+        const aTime = a.created_at?.toMillis?.() || a.created_at || 0;
+        const bTime = b.created_at?.toMillis?.() || b.created_at || 0;
+        return bTime - aTime;
+      });
       setUsersData(usersList);
     } catch (error) {
       console.error("Users fetch error:", error);
@@ -687,7 +714,8 @@ function App() {
     }
     if (userFilter === 'premium') filtered = filtered.filter(u => u.is_premium);
     else if (userFilter === 'free') filtered = filtered.filter(u => !u.is_premium);
-    else if (userFilter === 'subscription') filtered = filtered.filter(u => u.premium_type === 'subscription');
+    else if (userFilter === 'monthly') filtered = filtered.filter(u => u.premium_type === 'monthly');
+    else if (userFilter === 'yearly') filtered = filtered.filter(u => u.premium_type === 'yearly');
 
     return filtered;
   }, [usersData, userSearch, userFilter]);
@@ -695,9 +723,10 @@ function App() {
   const userStats = useMemo(() => {
     const total = usersData.length;
     const premium = usersData.filter(u => u.is_premium).length;
-    const subscription = usersData.filter(u => u.premium_type === 'subscription').length;
+    const monthly = usersData.filter(u => u.premium_type === 'monthly').length;
+    const yearly = usersData.filter(u => u.premium_type === 'yearly').length;
     const free = total - premium;
-    return { total, premium, subscription, free };
+    return { total, premium, monthly, yearly, free };
   }, [usersData]);
 
   const handleUpdateSubscription = async (userId: string, plan: string) => {
@@ -716,14 +745,14 @@ function App() {
 
       if (plan === 'monthly') {
         isPremium = true;
-        type = 'subscription';
+        type = 'monthly';
         const d = new Date();
         d.setMonth(d.getMonth() + 1);
         expiry = d.getTime();
         details = 'Admin tarafindan 1 Aylik eklendi';
       } else if (plan === 'yearly') {
         isPremium = true;
-        type = 'subscription';
+        type = 'yearly';
         const d = new Date();
         d.setFullYear(d.getFullYear() + 1);
         expiry = d.getTime();
@@ -1282,6 +1311,85 @@ function App() {
       });
     } catch (error) {
       alert("Çıkartma silme hatası: " + error);
+    }
+  };
+
+  const deleteSelectedStickers = async () => {
+    if (!selectedPack || selectedStickerIds.length === 0) return;
+    if (!window.confirm(`${selectedStickerIds.length} adet çıkartmayı silmek istediğinize emin misiniz?`)) return;
+
+    try {
+      setIsProcessing(true);
+      const collectionName = selectedPack.is_premium ? 'premium_stickers' : 'stickers';
+      const packRef = doc(db, collectionName, selectedPack.id);
+
+      const stickersToDelete = (selectedPack.stickers || []).filter(s => selectedStickerIds.includes(s.url));
+      const remainingStickers = (selectedPack.stickers || []).filter(s => !selectedStickerIds.includes(s.url));
+
+      // 1. Storage'dan dosyaları sil (Parallel)
+      await Promise.all(stickersToDelete.map(async (sticker) => {
+        const storagePath = `stickers/${selectedPack.id}/${sticker.image_file}`;
+        try {
+          await deleteObject(ref(storage, storagePath));
+          console.log('[DELETE] ✅ Storage dosyası silindi:', storagePath);
+        } catch (storageErr: any) {
+          console.error(`[DELETE] ❌ Storage silme hatası (${sticker.image_file}):`, storageErr.message);
+        }
+      }));
+
+      // 2. Firestore güncelle
+      const newVersion = Date.now().toString();
+      const newStickerCount = remainingStickers.length;
+      await updateDoc(packRef, {
+        stickers: remainingStickers,
+        sticker_count: newStickerCount,
+        image_data_version: newVersion,
+        updated_at: serverTimestamp()
+      });
+
+      // 3. State güncelle
+      const updatedPack = {
+        ...selectedPack,
+        stickers: remainingStickers,
+        sticker_count: newStickerCount,
+        image_data_version: newVersion
+      };
+
+      setSelectedPack(updatedPack);
+      setPacks(packs.map(p => p.id === selectedPack.id ? updatedPack : p));
+
+      // Temizlik
+      setStickerSizes(prev => {
+        const newSizes = { ...prev };
+        stickersToDelete.forEach(s => delete newSizes[s.image_file]);
+        return newSizes;
+      });
+
+      alert(`${selectedStickerIds.length} çıkartma başarıyla silindi.`);
+      setSelectedStickerIds([]);
+      setIsSelectionMode(false);
+    } catch (error) {
+      console.error('Toplu silme hatası:', error);
+      alert('Seçili çıkartmalar silinirken bir hata oluştu.');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const toggleStickerSelection = (stickerUrl: string) => {
+    if (selectedStickerIds.includes(stickerUrl)) {
+      setSelectedStickerIds(prev => prev.filter(url => url !== stickerUrl));
+    } else {
+      setSelectedStickerIds(prev => [...prev, stickerUrl]);
+    }
+  };
+
+  const toggleSelectAll = () => {
+    if (!selectedPack?.stickers) return;
+    if (selectedStickerIds.length === selectedPack.stickers.length) {
+      setSelectedStickerIds([]);
+    } else {
+      setSelectedStickerIds(selectedPack.stickers.map(s => s.url));
     }
   };
 
@@ -2033,7 +2141,47 @@ function App() {
                         )}
                       </h3>
                       <div className="flex items-center gap-4 text-xs text-textSec font-bold uppercase tracking-widest">
-                        <span className="flex items-center gap-1.5"><Info size={14} /> Anlık Bulut Önizleme</span>
+                        {isSelectionMode ? (
+                          <div className="flex items-center gap-2 animate-in fade-in slide-in-from-right-4 duration-300">
+                            <span className="text-white bg-white/10 px-2 py-1 rounded-lg">
+                              {selectedStickerIds.length} Seçildi
+                            </span>
+                            <button
+                              onClick={toggleSelectAll}
+                              className="px-3 py-1.5 bg-white/5 hover:bg-white/10 rounded-lg transition-colors border border-white/5"
+                            >
+                              {selectedPack.stickers?.length === selectedStickerIds.length ? 'Seçimi Kaldır' : 'Tümünü Seç'}
+                            </button>
+                            <button
+                              onClick={deleteSelectedStickers}
+                              disabled={selectedStickerIds.length === 0 || isProcessing}
+                              className="px-3 py-1.5 bg-danger/20 hover:bg-danger/30 text-danger border border-danger/20 rounded-lg transition-colors flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              <Trash2 size={14} />
+                              Sil
+                            </button>
+                            <button
+                              onClick={() => {
+                                setIsSelectionMode(false);
+                                setSelectedStickerIds([]);
+                              }}
+                              className="px-3 py-1.5 bg-white/5 hover:bg-white/10 rounded-lg transition-colors border border-white/5"
+                            >
+                              İptal
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-4">
+                            <button
+                              onClick={() => setIsSelectionMode(true)}
+                              className="px-3 py-1.5 bg-white/5 hover:bg-white/10 rounded-lg transition-colors border border-white/5 flex items-center gap-1.5"
+                            >
+                              <Check size={14} />
+                              Çoklu Seçim
+                            </button>
+                            <span className="hidden md:flex items-center gap-1.5"><Info size={14} /> Anlık Bulut Önizleme</span>
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -2082,10 +2230,37 @@ function App() {
                               <img
                                 src={sticker.url}
                                 alt=""
-                                className="w-full h-full object-contain group-hover:scale-110 transition-transform duration-500"
+                                className={cn(
+                                  "w-full h-full object-contain transition-transform duration-500",
+                                  isSelectionMode && selectedStickerIds.includes(sticker.url) ? "scale-75" : "group-hover:scale-110"
+                                )}
                               />
                             </div>
-                            <div className="absolute inset-0 bg-background/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2 rounded-2xl backdrop-blur-[2px]" onClick={(e) => e.stopPropagation()}>
+
+                            {/* Selection Overlay */}
+                            {isSelectionMode && (
+                              <div
+                                className="absolute inset-0 z-20 cursor-pointer flex items-start justify-end p-2"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  toggleStickerSelection(sticker.url);
+                                }}
+                              >
+                                <div className={cn(
+                                  "w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all",
+                                  selectedStickerIds.includes(sticker.url)
+                                    ? "bg-primary border-primary"
+                                    : "bg-black/40 border-white/50 hover:border-white"
+                                )}>
+                                  {selectedStickerIds.includes(sticker.url) && <Check size={14} className="text-white" />}
+                                </div>
+                              </div>
+                            )}
+
+                            <div className={cn(
+                              "absolute inset-0 bg-background/60 transition-opacity flex flex-col items-center justify-center gap-2 rounded-2xl backdrop-blur-[2px]",
+                              isSelectionMode ? "opacity-0 pointer-events-none" : "opacity-0 group-hover:opacity-100"
+                            )} onClick={(e) => e.stopPropagation()}>
                               {/* Sıralama Butonları */}
                               <div className="flex gap-1.5">
                                 <button
@@ -2864,7 +3039,7 @@ function App() {
               </div>
 
               {/* Stats Cards */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 px-4">
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-4 px-4">
                 <div className="bg-card/60 backdrop-blur-sm px-5 py-4 rounded-2xl border border-white/5">
                   <span className="text-[10px] font-bold text-textSec uppercase tracking-widest">Toplam</span>
                   <p className="text-2xl font-black text-white mt-1">{userStats.total.toLocaleString()}</p>
@@ -2874,10 +3049,17 @@ function App() {
                   <p className="text-2xl font-black text-primary mt-1">{userStats.premium.toLocaleString()}</p>
                 </div>
                 <div className="bg-card/60 backdrop-blur-sm px-5 py-4 rounded-2xl border border-accent/10">
-                  <span className="text-[10px] font-bold text-accent uppercase tracking-widest">Abonelik</span>
-                  <p className="text-2xl font-black text-accent mt-1">{userStats.subscription.toLocaleString()}</p>
+                  <span className="text-[10px] font-bold text-accent uppercase tracking-widest">Aylik Abone</span>
+                  <p className="text-2xl font-black text-accent mt-1">{userStats.monthly.toLocaleString()}</p>
                 </div>
-
+                <div className="bg-card/60 backdrop-blur-sm px-5 py-4 rounded-2xl border border-yellow-500/10">
+                  <span className="text-[10px] font-bold text-yellow-500 uppercase tracking-widest">Yillik Abone</span>
+                  <p className="text-2xl font-black text-yellow-500 mt-1">{userStats.yearly.toLocaleString()}</p>
+                </div>
+                <div className="bg-card/60 backdrop-blur-sm px-5 py-4 rounded-2xl border border-white/5">
+                  <span className="text-[10px] font-bold text-textSec uppercase tracking-widest">Ucretsiz</span>
+                  <p className="text-2xl font-black text-textSec mt-1">{userStats.free.toLocaleString()}</p>
+                </div>
               </div>
 
               {/* Search & Filter Bar */}
@@ -2900,7 +3082,8 @@ function App() {
                   <option value="all">Tumunu Goster</option>
                   <option value="premium">Premium</option>
                   <option value="free">Ucretsiz</option>
-                  <option value="subscription">Abonelik</option>
+                  <option value="monthly">Aylik Abone</option>
+                  <option value="yearly">Yillik Abone</option>
                 </select>
               </div>
 
@@ -2919,10 +3102,11 @@ function App() {
                   <div className="flex-1 bg-card/40 backdrop-blur-sm rounded-[32px] border border-white/5 overflow-hidden">
                     {/* Table Header */}
                     <div className="hidden md:grid grid-cols-12 gap-4 px-6 py-4 border-b border-white/5 bg-white/[0.02]">
-                      <span className="col-span-5 text-[10px] font-black text-textSec uppercase tracking-widest">E-posta</span>
+                      <span className="col-span-4 text-[10px] font-black text-textSec uppercase tracking-widest">E-posta</span>
+                      <span className="col-span-2 text-[10px] font-black text-textSec uppercase tracking-widest">Kayit</span>
                       <span className="col-span-2 text-[10px] font-black text-textSec uppercase tracking-widest">Durum</span>
                       <span className="col-span-2 text-[10px] font-black text-textSec uppercase tracking-widest">Tur</span>
-                      <span className="col-span-3 text-[10px] font-black text-textSec uppercase tracking-widest">Bitis</span>
+                      <span className="col-span-2 text-[10px] font-black text-textSec uppercase tracking-widest">Bitis</span>
                     </div>
 
                     {/* Table Body */}
@@ -2947,14 +3131,32 @@ function App() {
                               selectedUser?.id === u.id && "bg-primary/5 border-l-2 border-primary"
                             )}
                           >
-                            <div className="col-span-5 flex items-center gap-3 min-w-0">
+                            <div className="col-span-4 flex items-center gap-3 min-w-0">
                               <div className={cn(
                                 "w-8 h-8 rounded-lg flex items-center justify-center shrink-0",
                                 u.is_premium ? "bg-primary/20 text-primary" : "bg-white/5 text-textSec"
                               )}>
-                                <UserIcon size={16} />
+                                {u.photo_url ? (
+                                  <img src={u.photo_url} alt="" className="w-8 h-8 rounded-lg object-cover" />
+                                ) : (
+                                  <UserIcon size={16} />
+                                )}
                               </div>
-                              <span className="text-sm font-bold text-white truncate">{u.email || u.id}</span>
+                              <div className="min-w-0">
+                                <span className="text-sm font-bold text-white truncate block">{u.display_name || u.email || u.id}</span>
+                                {u.display_name && u.email && (
+                                  <span className="text-[10px] text-textSec truncate block">{u.email}</span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="col-span-2 flex items-center">
+                              <span className="text-[10px] font-bold text-textSec">
+                                {u.created_at?.toDate
+                                  ? u.created_at.toDate().toLocaleDateString('tr-TR')
+                                  : u.created_at
+                                    ? new Date(u.created_at).toLocaleDateString('tr-TR')
+                                    : '-'}
+                              </span>
                             </div>
                             <div className="col-span-2 flex items-center">
                               {u.is_premium ? (
@@ -2969,12 +3171,13 @@ function App() {
                             <div className="col-span-2 flex items-center">
                               <span className={cn(
                                 "text-xs font-bold px-2 py-1 rounded-lg",
-                                u.premium_type === 'subscription' ? "bg-accent/10 text-accent" : "text-textSec"
+                                u.premium_type === 'monthly' ? "bg-accent/10 text-accent" :
+                                u.premium_type === 'yearly' ? "bg-yellow-500/10 text-yellow-500" : "text-textSec"
                               )}>
-                                {u.premium_type === 'subscription' ? 'Abonelik' : '-'}
+                                {u.premium_type === 'monthly' ? 'Aylik' : u.premium_type === 'yearly' ? 'Yillik' : '-'}
                               </span>
                             </div>
-                            <div className="col-span-3 flex items-center">
+                            <div className="col-span-2 flex items-center">
                               <span className="text-xs font-bold text-textSec">
                                 {u.premium_expiry ? new Date(u.premium_expiry).toLocaleDateString('tr-TR') : '-'}
                               </span>
@@ -3007,16 +3210,98 @@ function App() {
                       </div>
 
                       <div className="p-6 space-y-5">
-                        {/* Email */}
-                        <div className="space-y-1">
-                          <span className="text-[10px] font-black text-textSec uppercase tracking-widest">E-posta</span>
-                          <p className="text-sm font-bold text-white break-all">{selectedUser.email || selectedUser.id}</p>
+                        {/* User Profile Header */}
+                        <div className="flex items-center gap-4 pb-4 border-b border-white/5">
+                          {selectedUser.photo_url ? (
+                            <img
+                              src={selectedUser.photo_url}
+                              alt={selectedUser.display_name || 'User'}
+                              className="w-14 h-14 rounded-full object-cover border-2 border-primary/30"
+                            />
+                          ) : (
+                            <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center">
+                              <UserIcon size={24} className="text-primary" />
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-base font-black text-white truncate">
+                              {selectedUser.display_name || 'Isimsiz Kullanici'}
+                            </p>
+                            <p className="text-xs font-medium text-textSec truncate">{selectedUser.email || selectedUser.id}</p>
+                          </div>
+                        </div>
+
+                        {/* Registration Date */}
+                        <div className="space-y-1 bg-accent/5 border border-accent/10 rounded-xl p-3">
+                          <span className="text-[10px] font-black text-accent uppercase tracking-widest flex items-center gap-1">
+                            <Calendar size={10} /> Kayit Tarihi
+                          </span>
+                          <p className="text-sm font-bold text-white">
+                            {selectedUser.created_at?.toDate
+                              ? selectedUser.created_at.toDate().toLocaleString('tr-TR', {
+                                  year: 'numeric', month: 'long', day: 'numeric',
+                                  hour: '2-digit', minute: '2-digit'
+                                })
+                              : selectedUser.created_at
+                                ? new Date(selectedUser.created_at).toLocaleString('tr-TR', {
+                                    year: 'numeric', month: 'long', day: 'numeric',
+                                    hour: '2-digit', minute: '2-digit'
+                                  })
+                                : 'Bilinmiyor'}
+                          </p>
                         </div>
 
                         {/* UID */}
                         <div className="space-y-1">
                           <span className="text-[10px] font-black text-textSec uppercase tracking-widest">UID</span>
-                          <p className="text-xs font-mono text-textSec break-all">{selectedUser.id}</p>
+                          <p className="text-xs font-mono text-textSec break-all bg-black/20 p-2 rounded-lg">{selectedUser.id}</p>
+                        </div>
+
+                        {/* Device Info */}
+                        {selectedUser.device_info && (
+                          <div className="space-y-1">
+                            <span className="text-[10px] font-black text-textSec uppercase tracking-widest flex items-center gap-1">
+                              <Smartphone size={10} /> Cihaz Bilgisi
+                            </span>
+                            <div className="bg-black/20 rounded-xl p-3 grid grid-cols-2 gap-2">
+                              {selectedUser.device_info.model && (
+                                <div>
+                                  <span className="text-[9px] text-textSec">Model</span>
+                                  <p className="text-xs font-bold text-white">{selectedUser.device_info.model}</p>
+                                </div>
+                              )}
+                              {selectedUser.device_info.os_version && (
+                                <div>
+                                  <span className="text-[9px] text-textSec">OS</span>
+                                  <p className="text-xs font-bold text-white">{selectedUser.device_info.os_version}</p>
+                                </div>
+                              )}
+                              {selectedUser.device_info.app_version && (
+                                <div>
+                                  <span className="text-[9px] text-textSec">Uygulama</span>
+                                  <p className="text-xs font-bold text-white">v{selectedUser.device_info.app_version}</p>
+                                </div>
+                              )}
+                              {selectedUser.device_info.language && (
+                                <div>
+                                  <span className="text-[9px] text-textSec">Dil</span>
+                                  <p className="text-xs font-bold text-white">{selectedUser.device_info.language}</p>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* User Stats */}
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="bg-primary/5 border border-primary/10 rounded-xl p-3 text-center">
+                            <p className="text-2xl font-black text-primary">{selectedUser.total_stickers_added || 0}</p>
+                            <span className="text-[9px] font-bold text-textSec uppercase">Eklenen Stiker</span>
+                          </div>
+                          <div className="bg-accent/5 border border-accent/10 rounded-xl p-3 text-center">
+                            <p className="text-2xl font-black text-accent">{selectedUser.custom_packs_count || 0}</p>
+                            <span className="text-[9px] font-bold text-textSec uppercase">Ozel Paket</span>
+                          </div>
                         </div>
 
                         {/* Premium Status */}
@@ -3040,9 +3325,11 @@ function App() {
                           <span className="text-[10px] font-black text-textSec uppercase tracking-widest">Tur</span>
                           <p className={cn(
                             "text-sm font-black",
-                            selectedUser.premium_type === 'subscription' ? "text-accent" : "text-textSec"
+                            selectedUser.premium_type === 'monthly' ? "text-accent" :
+                            selectedUser.premium_type === 'yearly' ? "text-yellow-500" : "text-textSec"
                           )}>
-                            {selectedUser.premium_type === 'subscription' ? 'Abonelik' : 'Yok'}
+                            {selectedUser.premium_type === 'monthly' ? 'Aylik Abone' :
+                             selectedUser.premium_type === 'yearly' ? 'Yillik Abone' : 'Yok'}
                           </p>
                         </div>
 
@@ -3107,47 +3394,39 @@ function App() {
                           {/* Edit Subscription */}
                           {!editingSubscription ? (
                             <div className="flex gap-3">
-                              {/* Admin tarafindan eklenen aboneliklerde düzenleme aktif, Google Play ise pasif */}
+                              {/* Google Play abonelikleri düzenlenemez, diger tum kullanicilar düzenlenebilir */}
                               <button
-                                disabled={selectedUser.subscription_source !== 'admin'}
+                                disabled={selectedUser.subscription_source === 'google_play'}
                                 onClick={() => {
-                                  if (selectedUser.subscription_source !== 'admin') return;
+                                  if (selectedUser.subscription_source === 'google_play') return;
                                   setEditingSubscription(true);
-                                  setSubPlan(selectedUser.premium_type === 'subscription' ? 'monthly' : 'none');
+                                  setSubPlan(selectedUser.premium_type === 'monthly' ? 'monthly' : selectedUser.premium_type === 'yearly' ? 'yearly' : 'none');
                                 }}
                                 className={cn(
                                   "flex-1 h-12 rounded-xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-all",
-                                  selectedUser.subscription_source !== 'admin'
+                                  selectedUser.subscription_source === 'google_play'
                                     ? "bg-white/5 text-textSec cursor-not-allowed opacity-50"
                                     : "bg-primary/10 hover:bg-primary/20 text-primary"
                                 )}
                               >
-                                {selectedUser.subscription_source === 'admin' ? (
+                                {selectedUser.subscription_source === 'google_play' ? (
+                                  <span className="text-[10px]">Play Store Aboneligi</span>
+                                ) : (
                                   <>
                                     <Edit3 size={14} />
                                     Abonelik Duzenle
                                   </>
-                                ) : (
-                                  <span className="text-[8px]">
-                                    {selectedUser.subscription_source === 'google_play' ? 'Play Store' : 'Uygulama İçi'}
-                                  </span>
                                 )}
                               </button>
 
-                              {selectedUser.is_premium && (
+                              {selectedUser.is_premium && selectedUser.subscription_source !== 'google_play' && (
                                 <button
-                                  disabled={selectedUser.subscription_source !== 'admin'}
                                   onClick={() => handleRevokeSubscription(selectedUser.id)}
-                                  className={cn(
-                                    "h-12 px-4 rounded-xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-all",
-                                    selectedUser.subscription_source !== 'admin'
-                                      ? "bg-white/5 text-textSec cursor-not-allowed opacity-50"
-                                      : "bg-danger/10 hover:bg-danger/20 text-danger"
-                                  )}
-                                  title={selectedUser.subscription_source !== 'admin' ? "Sadece Admin tarafından verilen abonelikler iptal edilebilir" : "Iptal Et"}
+                                  className="h-12 px-4 rounded-xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-all bg-danger/10 hover:bg-danger/20 text-danger"
+                                  title="Aboneligi Iptal Et"
                                 >
                                   <X size={14} />
-                                  {selectedUser.subscription_source !== 'admin' ? 'Kilitli' : 'Iptal Et'}
+                                  Iptal Et
                                 </button>
                               )}
                             </div>

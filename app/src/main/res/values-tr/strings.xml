@@ -525,4 +525,17 @@
     <string name="feature_maker_desc">Sınırsız çıkartma oluşturma ve paket yönetimi.</string>
     <string name="feature_support_title">Öncelikli Destek</string>
     <string name="feature_support_desc">Ekibimizden daha hızlı yanıt ve özel yardım al.</string>
+
+    <!-- Missing translations -->
+    <string name="ads_free_value">Reklamsız</string>
+    <string name="ads_limited_value">Sınırlı Reklam</string>
+    <string name="all_access">Ücretsiz Erişim</string>
+    <string name="basic_access">Kilitli</string>
+    <string name="sticker_size_error">⚠️ %1$d çıkartma WhatsApp limitini aşıyor (%2$dKB). En büyük: %3$dKB. Admin panelden yeniden yükleyin.</string>
+    <string name="trial_days_format">%d gün ücretsiz dene</string>
+    <string name="free_plan">Ücretsiz</string>
+    <string name="premium_plan">Premium</string>
+    <string name="unlimited">Sınırsız</string>
+    <string name="campaign_active">Kampanya Aktif</string>
+    <string name="yearly_old_price">Eski Fiyat</string>
 </resources>

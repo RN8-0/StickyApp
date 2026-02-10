@@ -125,7 +125,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="$49.99/yr"
-                    android:textColor="@color/accent"
+                    android:textColor="@color/premium_gold_dark"
                     android:textSize="15sp"
                     android:textStyle="bold" />
 
@@ -183,11 +183,11 @@
         android:layout_marginHorizontal="20dp"
         android:layout_marginTop="16dp"
         android:text="@string/continue_btn"
-        android:textColor="@android:color/white"
+        android:textColor="@color/premium_text_on_gold"
         android:textSize="16sp"
         android:textStyle="bold"
         android:textAllCaps="true"
-        app:backgroundTint="@color/accent"
+        app:backgroundTint="@color/premium_gold"
         app:cornerRadius="28dp" />
 
     <!-- Footer Links -->

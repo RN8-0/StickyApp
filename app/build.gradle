@@ -19,8 +19,8 @@ android {
         applicationId "com.sticly"
         minSdk 24
         targetSdk 35
-        versionCode 19
-        versionName "2.0.9"
+        versionCode 22
+        versionName "2.0.10"
 
         // Sadece ARM mimarileri (MediaPipe x86_64 desteklemiyor)
         ndk {
@@ -79,7 +79,7 @@ dependencies {
     implementation 'com.google.android.gms:play-services-auth:20.7.0'
 
     // AdMob
-    implementation 'com.google.android.gms:play-services-ads:22.6.0'
+    implementation 'com.google.android.gms:play-services-ads:23.6.0'
 
     // Google Play Billing
     implementation 'com.android.billingclient:billing-ktx:7.1.1'

@@ -9,15 +9,18 @@ export type StickerProgress = {
 
 const STICKER_SIZE = 512;
 const TRAY_SIZE = 512;
-const MAX_DURATION = 3; // WhatsApp max 3 saniye
-const MIN_FPS = 8; // WhatsApp minimum fps
-const MAX_FPS = 24; // WhatsApp için güvenli maksimum fps
-const DEFAULT_FPS = 15; // Varsayılan fps
+const MAX_DURATION = 5; // WhatsApp max 5 saniye
+const MIN_FPS = 8; // Minimum fps
+const MAX_FPS = 30; // WhatsApp max desteklenen fps
+const DEFAULT_FPS = 15; // Varsayılan fps (fps belirlenemezse)
 const MAX_STATIC_SIZE = 100 * 1024;
+const MAX_ANIMATED_SIZE = 500 * 1024;
 
 class StickerProcessor {
     private ffmpeg: FFmpeg | null = null;
     private isLoaded = false;
+    private isLoading = false;
+    private loadPromise: Promise<void> | null = null;
 
     /**
      * WebP dosyasının animasyonlu olup olmadığını kontrol et
@@ -67,13 +70,26 @@ class StickerProcessor {
 
     async load() {
         if (this.isLoaded) return;
-        this.ffmpeg = new FFmpeg();
-        const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm';
-        await this.ffmpeg.load({
-            coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
-            wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
-        });
-        this.isLoaded = true;
+        if (this.isLoading && this.loadPromise) return this.loadPromise;
+
+        this.isLoading = true;
+        this.loadPromise = (async () => {
+            this.ffmpeg = new FFmpeg();
+            const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm';
+            await this.ffmpeg.load({
+                coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
+                wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+            });
+            this.isLoaded = true;
+            this.isLoading = false;
+        })();
+
+        return this.loadPromise;
+    }
+
+    // Uygulama açılır açılmaz çağrılacak - FFmpeg'i önceden yükle
+    async preload() {
+        return this.load();
     }
 
     /**
@@ -104,13 +120,13 @@ class StickerProcessor {
     }
 
     /**
-     * FFmpeg ile GIF→WebP dönüşümü - HIZLI YÖNTEM
+     * FFmpeg ile GIF→WebP dönüşümü - ORİJİNAL FPS VE ZAMANLAMA KORUNUR
+     * HIZLI: Büyük dosyalar için düşük kaliteden başla
      */
     private async processGifWithFFmpeg(file: File, onProgress?: (p: StickerProgress) => void): Promise<Blob> {
         const ffmpeg = this.ffmpeg!;
         const inputName = `input_${Date.now()}.gif`;
         const outputName = 'output.webp';
-        const MAX_SIZE = 500 * 1024;
 
         onProgress?.({ message: 'GIF yükleniyor...', percentage: 15 });
         await ffmpeg.writeFile(inputName, await fetchFile(file));
@@ -119,34 +135,49 @@ class StickerProcessor {
 
         let blob: Blob | null = null;
 
-        // Hızlı kalite döngüsü
-        for (const q of [60, 40, 25, 15]) {
+        // Dosya boyutuna göre kalite seçimi - BÜYÜK dosyalar için düşük kaliteden başla
+        const fileSizeKB = file.size / 1024;
+        let qualities: number[];
+
+        if (fileSizeKB > 2000) {
+            qualities = [15, 10, 5];
+        } else if (fileSizeKB > 1000) {
+            qualities = [25, 15, 10, 5];
+        } else if (fileSizeKB > 500) {
+            qualities = [35, 25, 15, 10];
+        } else {
+            qualities = [50, 35, 25, 15];
+        }
+
+        for (const q of qualities) {
             try { await ffmpeg.deleteFile(outputName); } catch { }
 
+            // -vsync 0: Frame timing'i koru
+            // -r 15: Çıkış framerate'i sabitle (Android uyumluluğu için)
             await ffmpeg.exec([
                 '-i', inputName,
                 '-t', MAX_DURATION.toString(),
-                '-vf', `fps=12,scale=${STICKER_SIZE}:${STICKER_SIZE}:force_original_aspect_ratio=decrease,pad=${STICKER_SIZE}:${STICKER_SIZE}:(ow-iw)/2:(oh-ih)/2:color=black@0`,
+                '-vf', `scale=${STICKER_SIZE}:${STICKER_SIZE}:force_original_aspect_ratio=decrease:flags=fast_bilinear,pad=${STICKER_SIZE}:${STICKER_SIZE}:(ow-iw)/2:(oh-ih)/2:color=black@0,fps=15`,
                 '-c:v', 'libwebp',
                 '-lossless', '0',
                 '-q:v', q.toString(),
                 '-pix_fmt', 'yuva420p',
-                '-compression_level', '6',
+                '-compression_level', '4',
                 '-loop', '0',
                 '-an',
                 outputName
             ]);
 
             let data = await ffmpeg.readFile(outputName) as Uint8Array;
-            data = this.patchWebPDisposalFlags(data);
+            data = this.patchWebPFrameDurations(data, 67); // 15fps = 67ms per frame
             blob = new Blob([new Uint8Array(data)], { type: 'image/webp' });
 
-            if (blob.size <= MAX_SIZE) {
+            if (blob.size <= MAX_ANIMATED_SIZE) {
                 onProgress?.({ message: `Tamamlandı! (${Math.round(blob.size / 1024)}KB)`, percentage: 100 });
                 break;
             }
 
-            onProgress?.({ message: `Optimize ediliyor (q:${q})...`, percentage: 50 + Math.round((60 - q) / 45 * 40) });
+            onProgress?.({ message: `Sıkıştırılıyor (q:${q})...`, percentage: 50 + Math.round((50 - q) / 45 * 40) });
         }
 
         // Temizlik
@@ -163,7 +194,7 @@ class StickerProcessor {
     /**
      * ffmpeg ile WhatsApp uyumlu animated WebP oluştur - HIZLI YÖNTEM
      */
-    private async createWebPFromFrames(frameCount: number, onProgress?: (p: StickerProgress) => void, fps: number = 15): Promise<Blob> {
+    private async createWebPFromFrames(frameCount: number, onProgress?: (p: StickerProgress) => void, fps: number = DEFAULT_FPS): Promise<Blob> {
         const ffmpeg = this.ffmpeg!;
         const outputName = 'output.webp';
         const MAX_SIZE = 500 * 1024;
@@ -172,50 +203,57 @@ class StickerProcessor {
 
         let blob: Blob | null = null;
 
-        // Hızlı kalite döngüsü
-        for (const q of [60, 40, 25, 15]) {
+        // Frame sayısına göre başlangıç kalitesi
+        const qualities = frameCount > 50 ? [25, 15, 10, 5] : [40, 25, 15, 10];
+
+        for (const q of qualities) {
             try { await ffmpeg.deleteFile(outputName); } catch { }
 
+            const actualFps = Math.min(fps, MAX_FPS);
+            const frameDurationMs = Math.round(1000 / actualFps);
+
             await ffmpeg.exec([
-                '-framerate', Math.min(fps, 12).toString(),
+                '-framerate', actualFps.toString(),
                 '-i', 'frame_%04d.png',
-                '-vf', `scale=${STICKER_SIZE}:${STICKER_SIZE}:force_original_aspect_ratio=decrease,pad=${STICKER_SIZE}:${STICKER_SIZE}:(ow-iw)/2:(oh-ih)/2:color=black@0`,
+                '-vf', `scale=${STICKER_SIZE}:${STICKER_SIZE}:force_original_aspect_ratio=decrease:flags=fast_bilinear,pad=${STICKER_SIZE}:${STICKER_SIZE}:(ow-iw)/2:(oh-ih)/2:color=black@0`,
                 '-t', MAX_DURATION.toString(),
                 '-c:v', 'libwebp',
                 '-lossless', '0',
                 '-q:v', q.toString(),
                 '-pix_fmt', 'yuva420p',
-                '-compression_level', '6',
+                '-compression_level', '4',
                 '-loop', '0',
                 '-an',
                 outputName
             ]);
 
             let data = await ffmpeg.readFile(outputName) as Uint8Array;
-            data = this.patchWebPDisposalFlags(data);
+            data = this.patchWebPFrameDurations(data, frameDurationMs);
             blob = new Blob([data as any], { type: 'image/webp' });
 
             if (blob.size <= MAX_SIZE) break;
 
-            onProgress?.({ message: `Optimize ediliyor (q:${q})...`, percentage: 85 });
+            onProgress?.({ message: `Sıkıştırılıyor (q:${q})...`, percentage: 85 });
         }
 
-        // Temizlik
+        // Temizlik - paralel olarak yap
+        const cleanupPromises = [];
         for (let i = 0; i < frameCount; i++) {
-            try { await ffmpeg.deleteFile(`frame_${i.toString().padStart(4, '0')}.png`); } catch { }
+            cleanupPromises.push(ffmpeg.deleteFile(`frame_${i.toString().padStart(4, '0')}.png`).catch(() => {}));
         }
-        try { await ffmpeg.deleteFile(outputName); } catch { }
+        cleanupPromises.push(ffmpeg.deleteFile(outputName).catch(() => {}));
+        await Promise.all(cleanupPromises);
 
         onProgress?.({ message: `Tamamlandı! (${Math.round(blob!.size / 1024)}KB)`, percentage: 100 });
         return blob!;
     }
 
     /**
-     * Animated WebP dosyasındaki ANMF frame'lerinin disposal flag'larını patch'le
-     * Ghosting'i önlemek için her frame'e "dispose to background" ayarı yapılır
-     * Dosya boyutu ve yapısı değişmez - sadece 1 bit/frame değiştirilir
+     * Animated WebP dosyasındaki ANMF frame'lerinin süresini ve disposal flag'larını düzelt
+     * ANMF yapısı: x(3) + y(3) + w(3) + h(3) + duration(3) + flags(1) = 16 bytes header
+     * Duration 3 byte little-endian, milisaniye cinsindendir
      */
-    private patchWebPDisposalFlags(webpBytes: Uint8Array): Uint8Array {
+    private patchWebPFrameDurations(webpBytes: Uint8Array, targetDurationMs: number): Uint8Array {
         const result = new Uint8Array(webpBytes);
         let offset = 12; // RIFF header'ı atla
 
@@ -230,13 +268,21 @@ class StickerProcessor {
                 (result[offset + 7] << 24);
 
             if (fourCC === 'ANMF') {
-                // ANMF payload: x(3) + y(3) + w(3) + h(3) + dur(3) + flags(1) = 16 bytes
-                // Flags byte offset: chunk header(8) + 15
-                const flagsOffset = offset + 8 + 15;
+                const payloadOffset = offset + 8;
+
+                // Duration offset: x(3) + y(3) + w(3) + h(3) = 12 bytes
+                const durationOffset = payloadOffset + 12;
+                if (durationOffset + 3 <= result.length) {
+                    // Duration'ı 3 byte little-endian olarak yaz
+                    result[durationOffset] = targetDurationMs & 0xFF;
+                    result[durationOffset + 1] = (targetDurationMs >> 8) & 0xFF;
+                    result[durationOffset + 2] = (targetDurationMs >> 16) & 0xFF;
+                }
+
+                // Flags offset: duration'dan sonra (12 + 3 = 15)
+                const flagsOffset = payloadOffset + 15;
                 if (flagsOffset < result.length) {
-                    // bit 0 = disposal: 1 = dispose to background (şeffaf temizle)
-                    // bit 1 = blending: 0 = alpha blend (varsayılan, en uyumlu)
-                    // Disposal aktif + blending varsayılan = ghosting yok + max uyumluluk
+                    // Disposal: 1 (dispose to background), Blending: 0 (alpha blend)
                     result[flagsOffset] = (result[flagsOffset] & 0xFC) | 0x01;
                 }
             }
@@ -248,15 +294,45 @@ class StickerProcessor {
     }
 
     /**
-     * Video işleme (MP4) - ORİJİNAL FPS KORUNUR, max 3 saniye
+     * Videonun süresini al (saniye cinsinden)
+     */
+    private getVideoDuration(file: File): Promise<number> {
+        return new Promise((resolve, reject) => {
+            const video = document.createElement('video');
+            video.preload = 'metadata';
+            video.onloadedmetadata = () => {
+                URL.revokeObjectURL(video.src);
+                resolve(video.duration);
+            };
+            video.onerror = () => {
+                URL.revokeObjectURL(video.src);
+                reject(new Error('Video süresi alınamadı'));
+            };
+            video.src = URL.createObjectURL(file);
+        });
+    }
+
+    /**
+     * Video işleme (MP4) - ORİJİNAL FPS KORUNUR, max 5 saniye
      */
     private async processVideo(file: File, onProgress?: (p: StickerProgress) => void, removeBg: boolean = false): Promise<Blob> {
         await this.load();
         const ffmpeg = this.ffmpeg!;
         const outputName = 'output.webp';
-        const MAX_SIZE = 500 * 1024;
 
         onProgress?.({ message: 'Video analiz ediliyor...', percentage: 10 });
+
+        // Videonun orijinal süresini al
+        let videoDuration = MAX_DURATION;
+        try {
+            videoDuration = await this.getVideoDuration(file);
+            console.log(`Orijinal video süresi: ${videoDuration}s`);
+        } catch (e) {
+            console.warn('Video süresi alınamadı, varsayılan kullanılıyor:', e);
+        }
+
+        // WhatsApp limiti (5sn) ile sınırla
+        const processingDuration = Math.min(videoDuration, MAX_DURATION);
 
         const inputName = `input_${Date.now()}.mp4`;
         await ffmpeg.writeFile(inputName, await fetchFile(file));
@@ -265,10 +341,14 @@ class StickerProcessor {
         if (removeBg) {
             onProgress?.({ message: 'Frame\'ler çıkarılıyor...', percentage: 20 });
 
-            // 1. Frame'leri çıkar - FPS BELİRTME, orijinal fps'te çıkar
+            // 1. Frame'leri çıkar - ÖNEMLİ: FPS'i baştan düşür (-r 15)
+            // Bu sayede 60fps videodan 4 kat az kare çıkarılır, işlem 4 kat hızlanır.
+            const extractionFps = 15;
+
             await ffmpeg.exec([
                 '-i', inputName,
-                '-t', MAX_DURATION.toString(),
+                '-t', processingDuration.toString(),
+                '-r', extractionFps.toString(), // FPS DÜŞÜRME (HIZ İÇİN)
                 '-vf', 'scale=512:512:force_original_aspect_ratio=decrease,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=black@0',
                 'frame_%04d.png'
             ]);
@@ -279,9 +359,13 @@ class StickerProcessor {
 
             const frameCount = frames.length;
 
-            // Orijinal FPS'i hesapla: frameCount / süre
-            let detectedFps = Math.round(frameCount / MAX_DURATION);
+            // FPS artık extractionFps (15) veya daha düşük (internet hızına/videoya göre drop olabilir)
+            let detectedFps = extractionFps;
+
+            // FPS sınırlarını uygula
             detectedFps = Math.max(MIN_FPS, Math.min(MAX_FPS, detectedFps));
+
+            console.log(`Video işleme: ${frameCount} frame, ${processingDuration}s süre -> Tespit edilen FPS: ${detectedFps}`);
 
             onProgress?.({ message: `Arka Plan Temizleniyor (${detectedFps} fps)...`, percentage: 25 });
 
@@ -321,30 +405,45 @@ class StickerProcessor {
         // Arka plan silinmeyecekse - HIZLI YÖNTEM
         let blob: Blob | null = null;
 
-        for (const q of [60, 40, 25, 15]) {
+        // Dosya boyutuna göre kalite seçimi
+        const fileSizeKB = file.size / 1024;
+        let qualities: number[];
+
+        if (fileSizeKB > 2000) {
+            qualities = [15, 10, 5];
+        } else if (fileSizeKB > 1000) {
+            qualities = [25, 15, 10];
+        } else if (fileSizeKB > 500) {
+            qualities = [35, 25, 15];
+        } else {
+            qualities = [50, 35, 25];
+        }
+
+        for (const q of qualities) {
             onProgress?.({ message: `WebP oluşturuluyor (q:${q})...`, percentage: 50 });
 
             try { await ffmpeg.deleteFile(outputName); } catch { }
 
+            // fps=15 filtresi ile sabit 15fps çıkış
             await ffmpeg.exec([
                 '-i', inputName,
-                '-t', MAX_DURATION.toString(),
-                '-vf', `fps=12,format=rgba,scale=512:512:force_original_aspect_ratio=decrease:flags=lanczos,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=black@0`,
+                '-t', processingDuration.toString(),
+                '-vf', `format=rgba,scale=${STICKER_SIZE}:${STICKER_SIZE}:force_original_aspect_ratio=decrease:flags=fast_bilinear,pad=${STICKER_SIZE}:${STICKER_SIZE}:(ow-iw)/2:(oh-ih)/2:color=black@0,fps=15`,
                 '-c:v', 'libwebp',
                 '-lossless', '0',
                 '-q:v', q.toString(),
                 '-pix_fmt', 'yuva420p',
-                '-compression_level', '6',
+                '-compression_level', '4',
                 '-loop', '0',
                 '-an',
                 outputName
             ]);
 
-            const data = await ffmpeg.readFile(outputName);
-            const arrBuffer = (data as Uint8Array).buffer as ArrayBuffer;
-            blob = new Blob([arrBuffer], { type: 'image/webp' });
+            let data = await ffmpeg.readFile(outputName) as Uint8Array;
+            data = this.patchWebPFrameDurations(data, 67); // 15fps = 67ms
+            blob = new Blob([new Uint8Array(data)], { type: 'image/webp' });
 
-            if (blob.size <= MAX_SIZE) break;
+            if (blob.size <= MAX_ANIMATED_SIZE) break;
         }
 
         try { await ffmpeg.deleteFile(outputName); } catch { }

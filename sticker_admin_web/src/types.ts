@@ -59,7 +59,7 @@ export interface UserData {
     id: string;           // Firestore document ID (uid)
     email: string;
     is_premium: boolean;
-    premium_type: string; // "subscription" | "lifetime" | "none"
+    premium_type: string; // "monthly" | "yearly" | "lifetime" | "none"
     premium_expiry: number;
     favorite_packs: string[];
     last_sync: any;
@@ -67,6 +67,18 @@ export interface UserData {
     cancelled_reason?: string;
     subscription_source?: 'google_play' | 'admin' | 'none';
     subscription_history?: SubscriptionHistoryItem[];
+    // New fields
+    created_at?: any;     // Registration date/time
+    display_name?: string;
+    photo_url?: string;
+    device_info?: {
+        model?: string;
+        os_version?: string;
+        app_version?: string;
+        language?: string;
+    };
+    total_stickers_added?: number;
+    custom_packs_count?: number;
 }
 
 export interface SubscriptionHistoryItem {

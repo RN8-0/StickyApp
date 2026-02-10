@@ -4,11 +4,17 @@ import android.app.Activity
 import android.content.Context
 import android.util.Log
 import android.view.View
-import android.view.ViewGroup
 import android.widget.Button
 import android.widget.ImageView
 import android.widget.TextView
-import com.google.android.gms.ads.*
+import com.google.android.gms.ads.AdError
+import com.google.android.gms.ads.AdListener
+import com.google.android.gms.ads.AdLoader
+import com.google.android.gms.ads.AdRequest
+import com.google.android.gms.ads.FullScreenContentCallback
+import com.google.android.gms.ads.LoadAdError
+import com.google.android.gms.ads.MobileAds
+import com.google.android.gms.ads.VideoOptions
 import com.google.android.gms.ads.interstitial.InterstitialAd
 import com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback
 import com.google.android.gms.ads.nativead.MediaView
@@ -40,13 +46,18 @@ object AdManager {
     fun initialize(context: Context) {
         if (isInitialized) return
         Log.d(TAG, "Initializing AdMob SDK...")
+
+        // SDK'yı arka planda başlat (UI'yı bloklamaz)
         MobileAds.initialize(context) { initStatus ->
             isInitialized = true
             Log.d(TAG, "AdMob SDK initialized. Status: ${initStatus.adapterStatusMap}")
             Log.d(TAG, "User isPremium: ${PreferencesHelper.isPremium(context)}")
-            loadInterstitial(context)
-            // Initial preload
-            preloadMakerNativeAd(context)
+
+            // Reklamları paralel olarak yükle
+            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                loadInterstitial(context)
+                preloadMakerNativeAd(context)
+            }
         }
     }
 
@@ -193,23 +204,6 @@ object AdManager {
 
     fun isInterstitialReady(): Boolean = interstitialAd != null
 
-    fun loadBanner(activity: Activity, adContainer: ViewGroup) {
-        if (PreferencesHelper.isPremium(activity)) {
-            adContainer.visibility = View.GONE
-            return
-        }
-        val adView = AdView(activity)
-        // Senin listende Banner (Afiş) reklamı yok, sadece Native Advanced var. 
-        // Eğer bir yere Banner eklemek istersen FAV_NATIVE_AD_ID'yi veya yeni bir banner ID'yi kullanmalıson.
-        // Şimdilik çökmemesi için FAV_NATIVE_AD_ID'yi veriyorum (Çalışmayabilir, Banner ve Native farklıdır)
-        adView.adUnitId = FAV_NATIVE_AD_ID 
-        adView.setAdSize(AdSize.BANNER)
-        adContainer.removeAllViews()
-        adContainer.addView(adView)
-        adContainer.visibility = View.VISIBLE
-        adView.loadAd(AdRequest.Builder().build())
-    }
-
     enum class NativeAdType {
         LIST, MAKER, FAVORITE, MY_STICKERS
     }
@@ -220,7 +214,16 @@ object AdManager {
             Log.d(TAG, "User is premium, skipping ad load")
             return
         }
-        
+
+        // SDK henüz başlatılmamışsa 1 saniye sonra tekrar dene
+        if (!isInitialized) {
+            Log.d(TAG, "SDK not initialized yet, retrying in 1 second...")
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                loadNativeAd(context, type, onLoaded)
+            }, 1000)
+            return
+        }
+
         // Eğer Maker ekranıysa ve önceden yüklenmiş reklam varsa onu kullan
         if (type == NativeAdType.MAKER) {
             val preloaded = getPreloadedMakerAd()
@@ -236,7 +239,7 @@ object AdManager {
             NativeAdType.MY_STICKERS -> MY_STICKERS_NATIVE_AD_ID
             else -> LIST_NATIVE_AD_ID
         }
-        
+
         Log.d(TAG, "Loading Native Ad with ID: $adUnitId")
         val adLoader = AdLoader.Builder(context, adUnitId)
             .forNativeAd { nativeAd ->

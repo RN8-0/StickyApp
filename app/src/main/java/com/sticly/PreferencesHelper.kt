@@ -2,6 +2,7 @@ package com.sticly
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.os.Build
 import android.util.Log
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
@@ -24,6 +25,9 @@ object PreferencesHelper {
     private const val KEY_LANGUAGE = "app_language"
     private const val KEY_PREMIUM_TYPE = "premium_type" // "subscription", "none"
     private const val KEY_PREMIUM_EXPIRY = "premium_expiry" // timestamp in millis
+    private const val KEY_FAVORITES_SYNCED = "favorites_synced" // İlk favori senkronizasyonu yapıldı mı
+    private const val KEY_CUSTOM_PACKS_COUNT = "custom_packs_count"
+    private const val KEY_TOTAL_STICKERS_ADDED = "total_stickers_added"
 
     private fun getPrefs(context: Context): SharedPreferences {
         return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -210,7 +214,10 @@ object PreferencesHelper {
         val current = HashSet(getFavoritePacks(context))
         current.add(packId)
         getPrefs(context).edit().putStringSet(KEY_FAVORITE_PACKS, current).commit()
-        
+
+        // İlk favori ekleme - senkronizasyonu aktifleştir
+        markFavoritesSynced(context)
+
         // Sync to Firebase
         val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
         if (user != null) {
@@ -244,6 +251,20 @@ object PreferencesHelper {
             addFavoritePack(context, packId)
         }
         return !isFav
+    }
+
+    /**
+     * Yerel favorileri temizler (ilk kurulumda veya sıfırlama için)
+     */
+    fun clearLocalFavorites(context: Context) {
+        getPrefs(context).edit().remove(KEY_FAVORITE_PACKS).apply()
+    }
+
+    /**
+     * Yerel kurulu paketleri temizler (ilk kurulumda veya sıfırlama için)
+     */
+    fun clearLocalInstalledPacks(context: Context) {
+        getPrefs(context).edit().remove(KEY_INSTALLED_PACKS).apply()
     }
 
     // Search History
@@ -374,21 +395,32 @@ object PreferencesHelper {
                     val remoteIsPremium = snapshot.getBoolean("is_premium") ?: false
                     val type = snapshot.getString("premium_type") ?: "none"
                     val expiry = snapshot.getLong("premium_expiry") ?: 0L
-                    
+
                     // Update local prefs only (do not sync back to avoid loop)
                     updateLocalPremiumStatus(context, remoteIsPremium, type, expiry)
-                    
-                    // Sync favorites
-                    val remoteFavorites = snapshot.get("favorite_packs") as? List<String> ?: emptyList()
-                    if (remoteFavorites.isNotEmpty()) {
-                        val current = HashSet(getFavoritePacks(context))
-                        if (!current.containsAll(remoteFavorites)) {
-                             current.addAll(remoteFavorites)
-                             getPrefs(context).edit().putStringSet(KEY_FAVORITE_PACKS, current).commit()
+
+                    // Favorileri senkronize et - SADECE kullanıcı daha önce senkronize edilmişse
+                    // İlk kurulumda eski favorileri çekmeyi engelle
+                    val wasSyncedBefore = getPrefs(context).getBoolean(KEY_FAVORITES_SYNCED, false)
+                    if (wasSyncedBefore) {
+                        val remoteFavorites = snapshot.get("favorite_packs") as? List<String> ?: emptyList()
+                        if (remoteFavorites.isNotEmpty()) {
+                            val current = HashSet(getFavoritePacks(context))
+                            if (!current.containsAll(remoteFavorites)) {
+                                 current.addAll(remoteFavorites)
+                                 getPrefs(context).edit().putStringSet(KEY_FAVORITE_PACKS, current).commit()
+                            }
                         }
                     }
                 }
             }
+    }
+
+    /**
+     * İlk favori ekleme işleminde çağrılır - senkronizasyonu aktifleştirir
+     */
+    fun markFavoritesSynced(context: Context) {
+        getPrefs(context).edit().putBoolean(KEY_FAVORITES_SYNCED, true).apply()
     }
     
     fun stopRealtimeSync() {
@@ -404,46 +436,164 @@ object PreferencesHelper {
             .apply()
     }
 
+    // ========== YENİ: Kullanıcı İstatistikleri ==========
+
+    /**
+     * Cihaz bilgilerini hashmap olarak döndürür
+     */
+    fun getDeviceInfo(context: Context): HashMap<String, Any> {
+        val appVersion = try {
+            context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "unknown"
+        } catch (e: Exception) {
+            "unknown"
+        }
+
+        return hashMapOf(
+            "model" to "${Build.MANUFACTURER} ${Build.MODEL}",
+            "os_version" to "Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})",
+            "app_version" to appVersion,
+            "language" to java.util.Locale.getDefault().language
+        )
+    }
+
+    /**
+     * Toplam eklenen stiker sayısını döndürür
+     */
+    fun getTotalStickersAdded(context: Context): Int {
+        return getPrefs(context).getInt(KEY_TOTAL_STICKERS_ADDED, 0)
+    }
+
+    /**
+     * Toplam eklenen stiker sayısını artırır ve Firebase'e senkronize eder
+     */
+    fun incrementTotalStickersAdded(context: Context): Int {
+        val newCount = getTotalStickersAdded(context) + 1
+        getPrefs(context).edit().putInt(KEY_TOTAL_STICKERS_ADDED, newCount).apply()
+
+        // Firebase'e senkronize et
+        val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+        if (user != null) {
+            FirebaseFirestore.getInstance().collection("users").document(user.uid)
+                .update("total_stickers_added", newCount)
+        }
+        return newCount
+    }
+
+    /**
+     * Özel paket sayısını döndürür
+     */
+    fun getCustomPacksCount(context: Context): Int {
+        return getPrefs(context).getInt(KEY_CUSTOM_PACKS_COUNT, 0)
+    }
+
+    /**
+     * Özel paket sayısını ayarlar ve Firebase'e senkronize eder
+     */
+    fun setCustomPacksCount(context: Context, count: Int) {
+        getPrefs(context).edit().putInt(KEY_CUSTOM_PACKS_COUNT, count).apply()
+
+        // Firebase'e senkronize et
+        val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+        if (user != null) {
+            FirebaseFirestore.getInstance().collection("users").document(user.uid)
+                .update("custom_packs_count", count)
+        }
+    }
+
+    /**
+     * Özel paket sayısını artırır ve Firebase'e senkronize eder
+     */
+    fun incrementCustomPacksCount(context: Context): Int {
+        val newCount = getCustomPacksCount(context) + 1
+        setCustomPacksCount(context, newCount)
+        return newCount
+    }
+
+    /**
+     * Özel paket sayısını azaltır ve Firebase'e senkronize eder
+     */
+    fun decrementCustomPacksCount(context: Context): Int {
+        val newCount = maxOf(0, getCustomPacksCount(context) - 1)
+        setCustomPacksCount(context, newCount)
+        return newCount
+    }
+
     /**
      * Kullanıcı verilerini Firebase ile senkronize eder.
-     * Favoriler ve satın alınan paketleri yükler/indirir.
+     * Kayıt tarihi, profil bilgileri, cihaz bilgisi ve istatistikler dahil.
      */
     fun syncUserDataWithFirebase(context: Context, uid: String) {
-         // This method is kept for legacy/manual sync if needed, 
-         // but startRealtimeSync should be preferred for active session.
-         // We can still do the initial Merge here.
-         
         val firestore = FirebaseFirestore.getInstance()
         val userDoc = firestore.collection("users").document(uid)
+        val currentUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
 
-        // 1. Yerel verileri Firebase'e yükle (Merge)
+        // Kullanıcı bilgilerini al
+        val userEmail = currentUser?.email ?: ""
+        val displayName = currentUser?.displayName ?: ""
+        val photoUrl = currentUser?.photoUrl?.toString() ?: ""
+
+        // Yerel verileri al
         val localFavorites = getFavoritePacks(context).toList()
-        
-        // Kullanıcı e-postasını al
-        val userEmail = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.email ?: ""
+        val totalStickersAdded = getTotalStickersAdded(context)
+        val customPacksCount = getCustomPacksCount(context)
 
-        val syncData = hashMapOf(
-            "favorite_packs" to com.google.firebase.firestore.FieldValue.arrayUnion(*localFavorites.toTypedArray()),
-            // Do NOT overwrite premium status from local to remote if remote is the source of truth!
-            // Only sync email and favorites upwards. 
-            // Premium status should flow Downstream (Remote -> Local).
-            // But if user just bought it locally (BillingManager), local is truth until synced.
-            // BillingManager calls setPremium which syncs it.
-            // So here we might overwrite remote if we are not careful?
-            // Safer to NOT sync premium status UP here, unless we are sure.
-            // But setPremium syncs it.
-            // Let's keep it minimal here.
-            "email" to userEmail,
-            "last_sync" to com.google.firebase.firestore.FieldValue.serverTimestamp()
-        )
+        // Önce mevcut dokümanı kontrol et (created_at için)
+        userDoc.get().addOnSuccessListener { document ->
+            val syncData = hashMapOf<String, Any>(
+                "email" to userEmail,
+                "display_name" to displayName,
+                "photo_url" to photoUrl,
+                "device_info" to getDeviceInfo(context),
+                "total_stickers_added" to totalStickersAdded,
+                "custom_packs_count" to customPacksCount,
+                "last_sync" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+            )
 
-        userDoc.set(syncData, SetOptions.merge())
-            .addOnSuccessListener {
-                Log.d(TAG, "Local data synced to Firebase for user: $uid")
+            // Favorileri ekle (arrayUnion ile)
+            if (localFavorites.isNotEmpty()) {
+                syncData["favorite_packs"] = com.google.firebase.firestore.FieldValue.arrayUnion(*localFavorites.toTypedArray())
             }
-            .addOnFailureListener { e ->
-                Log.e(TAG, "Sync failed: ${e.message}")
+
+            // Eğer doküman yoksa veya created_at yoksa, kayıt tarihini ekle
+            if (!document.exists() || document.get("created_at") == null) {
+                syncData["created_at"] = com.google.firebase.firestore.FieldValue.serverTimestamp()
+                Log.d(TAG, "New user - setting created_at timestamp")
             }
+
+            userDoc.set(syncData, SetOptions.merge())
+                .addOnSuccessListener {
+                    Log.d(TAG, "User data synced to Firebase for user: $uid")
+                }
+                .addOnFailureListener { e ->
+                    Log.e(TAG, "Sync failed: ${e.message}")
+                }
+        }.addOnFailureListener { e ->
+            // Doküman kontrolü başarısız olursa yine de kaydetmeyi dene
+            Log.e(TAG, "Document check failed, trying to sync anyway: ${e.message}")
+
+            val syncData = hashMapOf<String, Any>(
+                "email" to userEmail,
+                "display_name" to displayName,
+                "photo_url" to photoUrl,
+                "device_info" to getDeviceInfo(context),
+                "total_stickers_added" to totalStickersAdded,
+                "custom_packs_count" to customPacksCount,
+                "created_at" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
+                "last_sync" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+            )
+
+            if (localFavorites.isNotEmpty()) {
+                syncData["favorite_packs"] = com.google.firebase.firestore.FieldValue.arrayUnion(*localFavorites.toTypedArray())
+            }
+
+            userDoc.set(syncData, SetOptions.merge())
+                .addOnSuccessListener {
+                    Log.d(TAG, "User data synced to Firebase (fallback) for user: $uid")
+                }
+                .addOnFailureListener { err ->
+                    Log.e(TAG, "Sync failed (fallback): ${err.message}")
+                }
+        }
     }
 }
 

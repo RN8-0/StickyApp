@@ -24,6 +24,7 @@ class StickerAdapter(
     private val isPackPremium: Boolean = false,
     private val hasAccess: Boolean = true,
     private val storagePath: String = "stickers",
+    private val isAnimated: Boolean = false, // Animated sticker pack flag
     var isSelectionMode: Boolean = false,
     val selectedPositions: MutableSet<Int> = mutableSetOf(),
     private val onStickerClick: ((Sticker, Int) -> Unit)? = null,
@@ -104,21 +105,32 @@ class StickerAdapter(
         // Cache'de var mı kontrol et (en hızlı)
         val cachedFile = StickerRepository.getCachedStickerPath(context, packId, sticker.file)
 
-        // Glide request manager
-        val glide = Glide.with(context)
+        // Glide request manager - animated için asDrawable() kullan
+        val glideManager = Glide.with(context)
 
         // Tüm durumlar için progressBar gizle (placeholder yeterli)
         h.progressBar.visibility = View.GONE
+
+        // Listener to clear background to prevent ghosting
+        val clearBgListener = object : RequestListener<Drawable> {
+            override fun onLoadFailed(e: GlideException?, model: Any?, target: Target<Drawable>, isFirstResource: Boolean): Boolean = false
+            override fun onResourceReady(resource: Drawable, model: Any, target: Target<Drawable>, dataSource: DataSource, isFirstResource: Boolean): Boolean {
+                (target as? com.bumptech.glide.request.target.ImageViewTarget<*>)?.view?.background = null
+                return false
+            }
+        }
 
         when {
             // 0. Özel paket kontrolü
             packId.startsWith("custom_") -> {
                 val customFile = CustomStickerManager.getCustomStickerPath(context, packId, sticker.file)
                 if (customFile.exists()) {
-                    glide.load(customFile)
+                    glideManager.asDrawable()
+                        .load(customFile)
                         .signature(ObjectKey(customFile.lastModified()))
                         .placeholder(R.drawable.sticker_placeholder)
                         .error(R.drawable.sticker_placeholder)
+                        .listener(clearBgListener)
                         .into(h.img)
                 } else {
                     h.img.setImageResource(R.drawable.sticker_placeholder)
@@ -126,40 +138,53 @@ class StickerAdapter(
             }
             // 1. Cache'de varsa oradan yükle
             cachedFile.exists() && cachedFile.length() > 0 -> {
-                glide.load(cachedFile)
+                glideManager.asDrawable()
+                    .load(cachedFile)
                     .signature(ObjectKey(cachedFile.lastModified()))
                     .placeholder(R.drawable.sticker_placeholder)
                     .error(R.drawable.sticker_placeholder)
+                    .listener(clearBgListener)
                     .into(h.img)
             }
             // 2. Firebase URL varsa oradan yükle
             sticker.url.isNotEmpty() -> {
-                glide.load(sticker.url)
+                val request = glideManager.asDrawable()
+                    .load(sticker.url)
                     .placeholder(R.drawable.sticker_placeholder)
                     .error(R.drawable.sticker_placeholder)
-                    .diskCacheStrategy(DiskCacheStrategy.DATA) // Match preload strategy & support animations
-                    .override(256, 256)
-                    .into(h.img)
+                    .diskCacheStrategy(DiskCacheStrategy.DATA)
+                    .listener(clearBgListener)
+
+                // Static stickers için boyut optimize et
+                if (!isAnimated) {
+                    request.override(192, 192).dontAnimate()
+                }
+                request.into(h.img)
             }
             // 3. URL yoksa direkt storage URL hesapla ve yükle
             storagePath.isNotEmpty() -> {
                 val directUrl = StickerRepository.getStickerDirectUrl(packId, sticker.file, storagePath)
-                glide.load(directUrl)
+                val request = glideManager.asDrawable()
+                    .load(directUrl)
                     .placeholder(R.drawable.sticker_placeholder)
                     .error(R.drawable.sticker_placeholder)
                     .diskCacheStrategy(DiskCacheStrategy.DATA)
-                    .override(256, 256)
-                    .into(h.img)
+                    .listener(clearBgListener)
+
+                if (!isAnimated) {
+                    request.override(192, 192).dontAnimate()
+                }
+                request.into(h.img)
             }
             // 4. Lokal assets'ten yükle
             else -> {
                 val assetPath = "file:///android_asset/$packId/${sticker.file}"
-                android.util.Log.d("StickerAdapter", "Loading asset: $assetPath")
-                glide.load(android.net.Uri.parse(assetPath))
+                glideManager.asDrawable()
+                    .load(android.net.Uri.parse(assetPath))
                     .placeholder(R.drawable.sticker_placeholder)
                     .error(R.drawable.sticker_placeholder)
-                    // DiskCacheStrategy.DATA keeps the original data (webp), helpful for animations
                     .diskCacheStrategy(DiskCacheStrategy.DATA)
+                    .listener(clearBgListener)
                     .into(h.img)
             }
         }
@@ -168,7 +193,8 @@ class StickerAdapter(
     fun setDeleteMode(enabled: Boolean) {
         this.isSelectionMode = enabled
         if (!enabled) selectedPositions.clear()
-        notifyDataSetChanged()
+        // Tüm listeyi yenilemek yerine sadece görünür öğeleri güncelle
+        notifyItemRangeChanged(0, itemCount, "selection_mode")
     }
 
     override fun getItemCount() = items.size

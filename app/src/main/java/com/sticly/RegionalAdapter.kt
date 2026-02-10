@@ -132,13 +132,12 @@ class RegionalAdapter(
         container.removeAllViews()
 
         val displayMetrics = context.resources.displayMetrics
-        val stickerSize = (64 * displayMetrics.density).toInt()
-        val stickerMargin = (8 * displayMetrics.density).toInt()
-        val glideOverrideSize = (200 * displayMetrics.density).toInt()
+        val stickerSize = (52 * displayMetrics.density).toInt()
+        val stickerMargin = (6 * displayMetrics.density).toInt()
+        val glideOverrideSize = 150
 
         val stickersToShow = pack.stickers.take(5)
 
-        // Resim yüklendiğinde arka planı kaldıran listener
         val clearBgListener = object : RequestListener<Drawable> {
             override fun onLoadFailed(e: GlideException?, model: Any?, target: Target<Drawable>, isFirstResource: Boolean): Boolean = false
             override fun onResourceReady(resource: Drawable, model: Any, target: Target<Drawable>, dataSource: DataSource, isFirstResource: Boolean): Boolean {
@@ -149,17 +148,16 @@ class RegionalAdapter(
 
         stickersToShow.forEachIndexed { index, sticker ->
             val previewView = ImageView(context).apply {
-                val params = LinearLayout.LayoutParams(stickerSize, stickerSize)
+                val params = LinearLayout.LayoutParams(0, stickerSize, 1f)
                 if (index < stickersToShow.size - 1) {
                     params.marginEnd = stickerMargin
                 }
                 layoutParams = params
                 scaleType = ImageView.ScaleType.FIT_CENTER
-                setBackgroundResource(R.drawable.ic_sticker_placeholder)
+                setBackgroundResource(R.drawable.sticker_placeholder)
             }
             container.addView(previewView)
 
-            // URL belirle
             var urlToLoad = sticker.url
             if (urlToLoad.isEmpty() && pack.storagePath.isNotEmpty()) {
                 urlToLoad = StickerRepository.getStickerDirectUrl(pack.id, sticker.file, pack.storagePath)
@@ -170,8 +168,9 @@ class RegionalAdapter(
                     Glide.with(context)
                         .load(urlToLoad)
                         .override(glideOverrideSize)
-                        .priority(Priority.IMMEDIATE) // En yüksek öncelik - popüler paketler önce yüklensin
+                        .priority(Priority.IMMEDIATE)
                         .diskCacheStrategy(DiskCacheStrategy.DATA)
+                        .dontAnimate()
                         .listener(clearBgListener)
                         .into(previewView)
                 }
@@ -184,6 +183,7 @@ class RegionalAdapter(
                             .priority(Priority.IMMEDIATE)
                             .diskCacheStrategy(DiskCacheStrategy.DATA)
                             .signature(ObjectKey(cachedSticker.lastModified()))
+                            .dontAnimate()
                             .listener(clearBgListener)
                             .into(previewView)
                     } else {
@@ -193,6 +193,7 @@ class RegionalAdapter(
                             .override(glideOverrideSize)
                             .priority(Priority.IMMEDIATE)
                             .diskCacheStrategy(DiskCacheStrategy.DATA)
+                            .dontAnimate()
                             .listener(clearBgListener)
                             .into(previewView)
                     }
