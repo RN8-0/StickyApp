@@ -231,9 +231,9 @@
     <string name="error_image_not_ready">Error: Image not ready</string>
     <string name="create_pack">Create Sticker Pack</string>
     <string name="delete_pack">Delete Pack</string>
-    <string name="delete_pack_confirm">Are you sure you want to delete this pack?\n\n(This action will also remove the pack from WhatsApp)</string>
-    <string name="yes">Yes</string>
-    <string name="no">No</string>
+    <string name="delete_pack_confirm">Are you sure you want to delete this pack?</string>
+    <string name="yes">YES</string>
+    <string name="no">NO</string>
     <string name="processing_background">Clearing background…</string>
     <string name="bg_removal_error">Background could not be cleared</string>
     <string name="create_sticker_option">Make Sticker</string>
@@ -346,6 +346,8 @@
     <string name="reset_short">Reset</string>
     <string name="et_sticker_text_hint">Enter your text…</string>
     <string name="btn_add_text_label">Add Text</string>
+    <string name="update_text">Update Text</string>
+    <string name="text_updated">Text updated</string>
     <string name="text_size_label">Text Size</string>
     <string name="emoji_picker_title">Select Emoji</string>
 
@@ -450,6 +452,14 @@
     <string name="emoji_sport">Sports</string>
     <string name="sync_whatsapp_msg">New sticker added, syncing with WhatsApp...</string>
     <string name="selection_count">Selected: %d</string>
+    <string name="stickers_deleted">Stickers deleted</string>
+    <string name="sticker_delete_failed">Sticker could not be deleted</string>
+    <string name="whatsapp_update_failed">WhatsApp could not be updated: %s</string>
+    <string name="whatsapp_open_failed">WhatsApp could not be opened: %s</string>
+    <string name="pack_not_added_to_whatsapp">Sticker pack is not added to WhatsApp</string>
+    <string name="pack_updated_version">Pack updated (v%d)</string>
+    <string name="sync_error">Synchronization error</string>
+    <string name="sticker_deleted_whatsapp_triggered">Sticker deleted and WhatsApp forced update triggered.</string>
     
     <!-- Premium Redesign -->
     <string name="premium_remove_limits">🔓 Remove Limits</string>
@@ -543,4 +553,67 @@
     <string name="feature_maker_desc">Unlimited sticker creation and pack management.</string>
     <string name="feature_support_title">Priority Support</string>
     <string name="feature_support_desc">Get faster responses and dedicated help from our team.</string>
+
+    <!-- Animated Sticker Maker -->
+    <string name="edit_video">Edit Video</string>
+    <string name="save">Save</string>
+    <string name="select_trim_portion">Select the portion you want to trim</string>
+    <string name="crop_none">None</string>
+    <string name="crop_circle">Circle</string>
+    <string name="crop_square">Square</string>
+    <string name="crop_rectangle">Rect</string>
+    <string name="crop_vertical">Vertical</string>
+    <string name="max_5_seconds">Max 5 seconds for WhatsApp</string>
+    <string name="processing_sticker">We\'re doing some magic on your sticker</string>
+    <string name="customize">Customize</string>
+    <string name="decorate">Decorate</string>
+    <string name="text_tool">Text</string>
+    <string name="brush_tool">Brush</string>
+    <string name="save_to">Save to</string>
+    <string name="animated_pack">Animated Pack</string>
+    <string name="save_sticker_btn">SAVE STICKER</string>
+    <string name="add_text_btn">ADD TEXT</string>
+    <string name="editor_btn">EDITOR</string>
+    <string name="video_too_short">Video is too short</string>
+    <string name="video_load_error">Could not load video</string>
+    <string name="conversion_failed">Conversion failed. Please try again.</string>
+    <string name="conversion_success">Animated sticker saved!</string>
+    <string name="select_video">Select a video</string>
+    <string name="trim_hint">Drag handles to trim • Max 5s</string>
+    <string name="trim_info_text">Video must be shorter than 5 seconds for WhatsApp stickers</string>
+    <string name="emoji_tab">EMOJI</string>
+    <string name="decorations_tab">DECORATIONS</string>
+    <string name="enter_text_hint">Enter your text…</string>
+    <string name="text_color">Color</string>
+    <string name="done">Done</string>
+    <string name="animated_sticker_saved">Animated sticker added to pack!</string>
+    <string name="file_too_large">File too large for WhatsApp (max 500KB). Reducing quality…</string>
+    <string name="speed">Speed</string>
+    <string name="normal_speed">1x</string>
+    <string name="crop_shape_title">Select crop shape</string>
+    <string name="add_text_overlay">Add text overlay</string>
+    <string name="select_emoji">Select emoji</string>
+    <string name="trim_tool">Trim</string>
+    <string name="text_added">Text added!</string>
+    <string name="emoji_added">Emoji added!</string>
+    <string name="overlays_count">%d overlay(s) added</string>
+    <string name="text_overlay_note">Text will be burned into the sticker</string>
+    <string name="emoji_overlay_note">Emoji will be burned into the sticker</string>
+    <string name="next">Next</string>
+    <string name="font_size">Size</string>
+    <string name="rotation">Rotation</string>
+    <string name="text_position">Position</string>
+    <string name="position_top">Top</string>
+    <string name="position_center">Center</string>
+    <string name="position_bottom">Bottom</string>
+    <string name="remove_text">Remove</string>
+    <string name="added_texts">Added texts:</string>
+    <string name="create_sticker_title">Create a Sticker</string>
+    <string name="create_sticker_subtitle">Choose your sticker type</string>
+    <string name="normal_sticker">Normal</string>
+    <string name="from_photos">From photos</string>
+    <string name="from_videos">From videos</string>
+    <string name="error_loading_video">Error loading video</string>
+    <string name="trim_failed">Trim failed</string>
+    <string name="trim_instruction">Drag the handles to select the portion to trim</string>
 </resources>

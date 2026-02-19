@@ -56,6 +56,8 @@ class OnboardingActivity : AppCompatActivity() {
         preloadDataInBackground()
     }
 
+    private var isDataPreloaded = false
+
     /**
      * Onboarding sırasında arka planda Firebase verilerini ve görselleri önceden yükle
      */
@@ -71,10 +73,12 @@ class OnboardingActivity : AppCompatActivity() {
                         .take(10)
 
                     StickyGlideModule.preloadPopularPacks(this@OnboardingActivity, popularPacks)
-                    StickyGlideModule.preloadStickerPreviews(this@OnboardingActivity, packs, packCount = 12, stickersPerPack = 5)
+                    StickyGlideModule.preloadStickerPreviews(this@OnboardingActivity, packs, packCount = 30, stickersPerPack = 5)
                 }
+                isDataPreloaded = true
             } catch (e: Exception) {
                 android.util.Log.e("OnboardingActivity", "Background preload error: ${e.message}")
+                isDataPreloaded = true
             }
         }
     }

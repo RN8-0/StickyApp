@@ -36,6 +36,7 @@
 
     <!-- Status Colors -->
     <color name="danger">#E74C3C</color>
+    <color name="error">#E74C3C</color>
     <color name="warning">#F1C40F</color>
     <color name="success">#00A884</color>
 
@@ -64,6 +65,26 @@
     
     <!-- Custom Button Colors -->
     <color name="background_removal_text_color">@color/accent</color>
+
+    <!-- Video Trimmer Library Overrides -->
+    <color name="colorTrimmerPrimary">#00C896</color>
+    <color name="colorTrimmerPrimaryDark">#00A884</color>
+    <color name="background_video_color">#F5F5F5</color>
+    <color name="colorTheme">#00C896</color>
+    <color name="line_color">#FF00C896</color>
+    <color name="progress_color">#00C896</color>
+    <color name="colorAccent">#00C896</color>
+    <color name="colorWhite">#FFFFFF</color>
+    <color name="colorBlack">#1A1A1A</color>
+    <color name="colorTxt">#2C3E50</color>
+    <color name="colorDefaultBg">#F8F9FA</color>
+    <color name="colorHint">#7F8C8D</color>
+    <color name="background_progress_color">#E0E0E0</color>
+    <color name="line_button">#00A884</color>
+    <color name="colorSkyTheme">#00C896</color>
+    <color name="colorWhiteLt">#807F8C8D</color>
+    <color name="colorBlackLt">#40000000</color>
+    <color name="shadow_color">#40000000</color>
 
     <!-- Premium Feature Colors -->
     <color name="feature_icon_bg">#F0FFF4</color>

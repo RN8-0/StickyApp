@@ -299,8 +299,6 @@ class PremiumActivity : AppCompatActivity() {
                 }
                 else -> tvPremiumType.text = getString(R.string.premium_active)
             }
-
-            animateCrown()
         } else {
             tvSlogan.text = getString(R.string.premium_slogan)
             featuresContainer.visibility = View.VISIBLE

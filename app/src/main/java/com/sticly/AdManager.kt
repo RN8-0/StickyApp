@@ -22,6 +22,7 @@ import com.google.android.gms.ads.nativead.NativeAd
 import com.google.android.gms.ads.nativead.NativeAdOptions
 import com.google.android.gms.ads.nativead.NativeAdView
 import androidx.core.content.ContextCompat
+import com.unity3d.ads.UnityAds
 
 object AdManager {
 
@@ -52,6 +53,14 @@ object AdManager {
             isInitialized = true
             Log.d(TAG, "AdMob SDK initialized. Status: ${initStatus.adapterStatusMap}")
             Log.d(TAG, "User isPremium: ${PreferencesHelper.isPremium(context)}")
+
+            // Unity Ads mediation'ı initialize et
+            try {
+                com.unity3d.ads.UnityAds.initialize(context, "6048973", false)
+                Log.d(TAG, "Unity Ads initialized for mediation (Game ID: 6048973)")
+            } catch (e: Exception) {
+                Log.e(TAG, "Unity Ads initialization failed: ${e.message}")
+            }
 
             // Reklamları paralel olarak yükle
             android.os.Handler(android.os.Looper.getMainLooper()).post {

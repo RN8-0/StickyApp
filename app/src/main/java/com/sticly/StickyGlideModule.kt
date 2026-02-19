@@ -85,7 +85,7 @@ class StickyGlideModule : AppGlideModule() {
          * Ana liste çıkartmalarını GERÇEKTEN indir ve cache'le
          * submit() kullanarak indirmeyi ZORUNLU yap
          */
-        fun preloadStickerPreviews(context: Context, packs: List<Pack>, packCount: Int = 50, stickersPerPack: Int = 5) {
+        fun preloadStickerPreviews(context: Context, packs: List<Pack>, packCount: Int = 100, stickersPerPack: Int = 5) {
             CoroutineScope(Dispatchers.IO).launch {
                 try {
                     val urls = mutableListOf<String>()
@@ -108,8 +108,8 @@ class StickyGlideModule : AppGlideModule() {
 
                     Log.d(TAG, "Downloading ${urls.size} stickers...")
 
-                    // Paralel indirme - 20 adet aynı anda
-                    urls.chunked(20).forEach { batch ->
+                    // Paralel indirme - 50 adet aynı anda (agresif)
+                    urls.chunked(50).forEach { batch ->
                         val jobs = batch.map { url ->
                             async(Dispatchers.IO) {
                                 try {

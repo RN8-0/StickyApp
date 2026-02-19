@@ -207,27 +207,30 @@ object StickerRepository {
         try {
             Log.d(TAG, "Loading packs from Firestore using source: ${source.name}...")
 
-            // Normal paketleri yükle (stickers koleksiyonu)
-            try {
-                val stickersSnapshot = firestore.collection("stickers").get(source).await()
-                Log.d(TAG, "Stickers collection: ${stickersSnapshot.documents.size} documents")
-                stickersSnapshot.documents.mapNotNull { doc ->
-                    parsePackDocument(doc, isPremiumOverride = false)
-                }.let { allPacks.addAll(it) }
-            } catch (e: Exception) {
-                Log.e(TAG, "Error loading stickers collection: ${e.message}")
+            // Normal ve Premium paketleri PARALEL yükle (2x hızlı)
+            val stickersDeferred = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).async {
+                try {
+                    val snapshot = firestore.collection("stickers").get(source).await()
+                    Log.d(TAG, "Stickers collection: ${snapshot.documents.size} documents")
+                    snapshot.documents.mapNotNull { doc -> parsePackDocument(doc, isPremiumOverride = false) }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error loading stickers collection: ${e.message}")
+                    emptyList()
+                }
+            }
+            val premiumDeferred = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).async {
+                try {
+                    val snapshot = firestore.collection("premium_stickers").get(source).await()
+                    Log.d(TAG, "Premium_stickers collection: ${snapshot.documents.size} documents")
+                    snapshot.documents.mapNotNull { doc -> parsePackDocument(doc, isPremiumOverride = true) }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error loading premium_stickers collection: ${e.message}")
+                    emptyList()
+                }
             }
 
-            // Premium paketleri yükle (premium_stickers koleksiyonu)
-            try {
-                val premiumSnapshot = firestore.collection("premium_stickers").get(source).await()
-                Log.d(TAG, "Premium_stickers collection: ${premiumSnapshot.documents.size} documents")
-                premiumSnapshot.documents.mapNotNull { doc ->
-                    parsePackDocument(doc, isPremiumOverride = true)
-                }.let { allPacks.addAll(it) }
-            } catch (e: Exception) {
-                Log.e(TAG, "Error loading premium_stickers collection: ${e.message}")
-            }
+            allPacks.addAll(stickersDeferred.await())
+            allPacks.addAll(premiumDeferred.await())
 
             // Eski koleksiyonu da kontrol et (geriye uyumluluk)
             if (allPacks.isEmpty()) {

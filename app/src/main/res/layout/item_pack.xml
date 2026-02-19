@@ -47,6 +47,19 @@
                 android:ellipsize="end"
                 tools:text="Elon Musk" />
 
+            <!-- Animated/Static Badge -->
+            <TextView
+                android:id="@+id/packTypeBadge"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:textSize="9sp"
+                android:textColor="@android:color/white"
+                android:textStyle="bold"
+                android:paddingHorizontal="5dp"
+                android:paddingVertical="1dp"
+                android:visibility="gone" />
+
             <!-- Yeni Badge -->
             <TextView
                 android:id="@+id/newBadge"
@@ -86,6 +99,19 @@
             android:scaleType="fitCenter"
             android:padding="4dp"
             android:contentDescription="@string/add_to_favorites" />
+
+        <!-- Paket Silme Butonu (Custom paketler için) -->
+        <ImageButton
+            android:id="@+id/btnDeletePack"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:layout_marginEnd="4dp"
+            android:background="?selectableItemBackgroundBorderless"
+            android:src="@drawable/ic_delete"
+            android:scaleType="fitCenter"
+            android:padding="4dp"
+            android:visibility="gone"
+            android:contentDescription="@string/delete_mode" />
 
         <!-- Add Butonu -->
         <com.google.android.material.button.MaterialButton

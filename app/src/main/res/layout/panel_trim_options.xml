@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:gravity="center_horizontal">
+
+    <!-- Thumbnail Strip -->
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:layout_marginBottom="8dp">
+
+        <HorizontalScrollView
+            android:id="@+id/thumbnailScroll"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:scrollbars="none"
+            android:clipToPadding="false">
+
+            <LinearLayout
+                android:id="@+id/thumbnailContainer"
+                android:layout_width="wrap_content"
+                android:layout_height="match_parent"
+                android:orientation="horizontal" />
+        </HorizontalScrollView>
+
+        <!-- Selection border overlay -->
+        <View
+            android:id="@+id/trimSelectionOverlay"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@drawable/bg_trim_selection" />
+    </FrameLayout>
+
+    <!-- RangeSlider for trim -->
+    <com.google.android.material.slider.RangeSlider
+        android:id="@+id/trimRangeSlider"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:valueFrom="0"
+        android:valueTo="100"
+        app:values="@array/trim_default_values"
+        app:trackColorActive="@color/primary"
+        app:trackColorInactive="@color/divider"
+        app:thumbColor="@color/primary"
+        app:thumbRadius="8dp"
+        app:trackHeight="4dp"
+        app:labelBehavior="floating"
+        app:labelStyle="@style/Widget.MaterialComponents.Tooltip" />
+
+    <!-- Duration info -->
+    <TextView
+        android:id="@+id/tvTrimInfo"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="0.0s – 5.0s"
+        android:textColor="@color/toolbar_text"
+        android:textSize="13sp"
+        android:textStyle="bold"
+        android:layout_marginTop="4dp" />
+
+</LinearLayout>

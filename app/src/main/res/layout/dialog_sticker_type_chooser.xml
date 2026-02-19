@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="@drawable/bg_bottom_sheet"
+    android:paddingHorizontal="32dp"
+    android:paddingTop="12dp"
+    android:paddingBottom="28dp">
+
+    <!-- Drag Handle -->
+    <View
+        android:layout_width="40dp"
+        android:layout_height="4dp"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginBottom="16dp"
+        android:background="@drawable/bg_drag_handle" />
+
+    <!-- Two Owl Options Side by Side -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center">
+
+        <!-- Normal (Static) Option -->
+        <LinearLayout
+            android:id="@+id/optionNormal"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginEnd="8dp"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:paddingVertical="12dp"
+            android:clickable="true"
+            android:focusable="true"
+            android:foreground="?selectableItemBackground">
+
+            <com.airbnb.lottie.LottieAnimationView
+                android:id="@+id/lottieOwlStatic"
+                android:layout_width="140dp"
+                android:layout_height="140dp"
+                app:lottie_fileName="man_account_icon.json"
+                app:lottie_autoPlay="false"
+                app:lottie_loop="false"
+                app:lottie_progress="0.5" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="Normal"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:textColor="@color/text_primary" />
+
+        </LinearLayout>
+
+        <!-- Animated Option -->
+        <LinearLayout
+            android:id="@+id/optionAnimated"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="8dp"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:paddingVertical="12dp"
+            android:clickable="true"
+            android:focusable="true"
+            android:foreground="?selectableItemBackground">
+
+            <com.airbnb.lottie.LottieAnimationView
+                android:id="@+id/lottieOwlAnimated"
+                android:layout_width="140dp"
+                android:layout_height="140dp"
+                app:lottie_fileName="man_account_icon.json"
+                app:lottie_autoPlay="true"
+                app:lottie_loop="true" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="Animated"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:textColor="@color/text_primary" />
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+</LinearLayout>

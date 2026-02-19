@@ -54,6 +54,7 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
     private lateinit var typeSelectionContainer: View
     private lateinit var editorContainer: View
     private lateinit var photoEditorView: PhotoEditorView
+    private lateinit var photoEditorCard: View
     private lateinit var rvTools: RecyclerView
     private lateinit var toolOptionsPanel: FrameLayout
     private lateinit var loadingOverlay: View
@@ -161,6 +162,12 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
         loadAds()
 
         targetPackId = intent.getStringExtra("packId")
+
+        // Skip type selection and go straight to editor + photo picker
+        if (intent.getBooleanExtra("skipTypeSelection", false)) {
+            showEditor()
+            imagePickerLauncher.launch("image/*")
+        }
     }
 
 
@@ -168,6 +175,7 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
         typeSelectionContainer = findViewById(R.id.typeSelectionContainer)
         editorContainer = findViewById(R.id.editorContainer)
         photoEditorView = findViewById(R.id.photoEditorView)
+        photoEditorCard = findViewById(R.id.photoEditorCard)
         rvTools = findViewById(R.id.rvTools)
         toolOptionsPanel = findViewById(R.id.toolOptionsPanel)
         loadingOverlay = findViewById(R.id.loadingOverlay)
@@ -183,7 +191,8 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
         undoRedoContainer = findViewById(R.id.undoRedoContainer)
 
         // Setup Lottie
-        lottieLoading.setAnimation("sandy_loading.json")
+        lottieLoading.setAnimation("material_wave_loading.json")
+        lottieLoading.loop(true)
 
         // Initialize PhotoEditor
         photoEditor = PhotoEditor.Builder(this, photoEditorView)
@@ -192,6 +201,7 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
         photoEditor.setOnPhotoEditorListener(this)
 
         shapeBuilder = ShapeBuilder()
+        setupMultiTouchGestures()
     }
 
     @SuppressLint("ClickableViewAccessibility")
@@ -320,6 +330,13 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
             showEditor()
         }
 
+        // Animated Sticker
+        findViewById<View>(R.id.cardAnimatedType).setOnClickListener {
+            val intent = Intent(this, AnimatedStickerActivity::class.java)
+            targetPackId?.let { intent.putExtra("packId", it) }
+            startActivity(intent)
+        }
+
         // Editor buttons
         btnClose.setOnClickListener {
             showExitConfirmDialog()
@@ -405,7 +422,7 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
     private fun launchCamera() {
         val photoFile = File(cacheDir, "camera_${System.currentTimeMillis()}.jpg")
         cameraImageUri = FileProvider.getUriForFile(this, "$packageName.provider", photoFile)
-        cameraLauncher.launch(cameraImageUri)
+        cameraLauncher.launch(cameraImageUri!!)
     }
 
     private fun startCropFromUri(uri: Uri) {
@@ -537,11 +554,11 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
         // If image is loaded, hide placeholder and show editor view
         if (currentBitmap != null) {
             emptyStatePlaceholder.visibility = View.GONE
-            photoEditorView.visibility = View.VISIBLE
+            photoEditorCard.visibility = View.VISIBLE
             undoRedoContainer.visibility = View.VISIBLE
         } else {
             emptyStatePlaceholder.visibility = View.VISIBLE
-            photoEditorView.visibility = View.GONE
+            photoEditorCard.visibility = View.GONE
             undoRedoContainer.visibility = View.GONE
             toolOptionsPanel.removeAllViews()
             toolOptionsPanel.visibility = View.GONE
@@ -550,11 +567,18 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
 
     // ==================== Tool Actions ====================
 
+    private var lastToolClickTime = 0L
+
     private fun onToolSelected(tool: EditorTool) {
         if (currentBitmap == null) {
             Toast.makeText(this, getString(R.string.error_select_image_first), Toast.LENGTH_SHORT).show()
             return
         }
+
+        // Debounce: ignore rapid clicks within 500ms
+        val now = System.currentTimeMillis()
+        if (now - lastToolClickTime < 500) return
+        lastToolClickTime = now
 
         currentToolType = tool.type
         
@@ -883,11 +907,10 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
         val inputText = view.findViewById<TextInputEditText>(R.id.etStickerText)
         val btnAdd = view.findViewById<MaterialButton>(R.id.btnAddText)
         val tvPreview = view.findViewById<TextView>(R.id.tvTextPreviewInDialog)
-        val sizeSlider = view.findViewById<Slider>(R.id.textSizeSlider)
         val fontGrid = view.findViewById<GridLayout>(R.id.fontSelectionLayout)
 
         var selectedColor = Color.WHITE
-        var textSize = 28f
+        val fixedTextSize = 28f // Fixed size, no slider
         var selectedColorView: View? = null
         var selectedFontView: View? = null
         var selectedTypeface: Typeface? = null
@@ -934,15 +957,15 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
                 strokeWidth = if (index == 0) 2.dpToPx() else 0
                 strokeColor = ContextCompat.getColor(this@StickerMakerActivity, R.color.accent)
 
-                val textView = TextView(this@StickerMakerActivity).apply {
+                val fontTextView = TextView(this@StickerMakerActivity).apply {
                     text = name
                     typeface?.let { setTypeface(it) }
-                    textSize = 14f
+                    textSize = 12f
                     setTextColor(ContextCompat.getColor(this@StickerMakerActivity, R.color.text_primary))
-                    setPadding(16.dpToPx(), 12.dpToPx(), 16.dpToPx(), 12.dpToPx())
+                    setPadding(10.dpToPx(), 6.dpToPx(), 10.dpToPx(), 6.dpToPx())
                     gravity = android.view.Gravity.CENTER
                 }
-                addView(textView)
+                addView(fontTextView)
 
                 setOnClickListener {
                     selectedFontView?.let { prev ->
@@ -973,20 +996,22 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
                 prevBg?.setStroke(2.dpToPx(), Color.DKGRAY)
             }
             val newBg = newSelected.background as? GradientDrawable
-            newBg?.setStroke(4.dpToPx(), ContextCompat.getColor(this, R.color.accent))
+            newBg?.setStroke(3.dpToPx(), ContextCompat.getColor(this, R.color.accent))
             selectedColorView = newSelected
+            selectedColor = color
+            tvPreview.setTextColor(color)
         }
 
         colors.forEachIndexed { index, color ->
             val colorView = View(this).apply {
-                layoutParams = LinearLayout.LayoutParams(48.dpToPx(), 48.dpToPx()).apply {
-                    marginEnd = 10.dpToPx()
+                layoutParams = LinearLayout.LayoutParams(32.dpToPx(), 32.dpToPx()).apply {
+                    marginEnd = 6.dpToPx()
                 }
                 val bg = GradientDrawable()
                 bg.shape = GradientDrawable.OVAL
                 bg.setColor(color)
                 if (index == 0) {
-                    bg.setStroke(4.dpToPx(), ContextCompat.getColor(this@StickerMakerActivity, R.color.accent))
+                    bg.setStroke(3.dpToPx(), ContextCompat.getColor(this@StickerMakerActivity, R.color.accent))
                 } else {
                     bg.setStroke(2.dpToPx(), Color.DKGRAY)
                 }
@@ -994,8 +1019,6 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
                 elevation = 4f
                 setOnClickListener {
                     updateColorSelection(this, color)
-                    selectedColor = color
-                    tvPreview.setTextColor(color)
                 }
             }
             if (index == 0) {
@@ -1004,11 +1027,8 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
             colorContainer.addView(colorView)
         }
 
-        // Size slider
-        sizeSlider.addOnChangeListener { _, value, _ ->
-            textSize = value
-            tvPreview.textSize = value
-        }
+        // Set preview text size to fixed value
+        tvPreview.textSize = fixedTextSize
 
         // Live preview
         inputText.addTextChangedListener(object : android.text.TextWatcher {
@@ -1024,7 +1044,7 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
             if (text.isNotEmpty()) {
                 val textStyleBuilder = TextStyleBuilder()
                 textStyleBuilder.withTextColor(selectedColor)
-                textStyleBuilder.withTextSize(textSize)
+                textStyleBuilder.withTextSize(fixedTextSize)
                 selectedTypeface?.let { textStyleBuilder.withTextFont(it) }
                 photoEditor.addText(text, textStyleBuilder)
                 dialog.dismiss()
@@ -1215,15 +1235,15 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
         )
         colors.forEachIndexed { index, color ->
             val colorView = View(this).apply {
-                layoutParams = LinearLayout.LayoutParams(48.dpToPx(), 48.dpToPx()).apply {
-                    marginEnd = 10.dpToPx()
+                layoutParams = LinearLayout.LayoutParams(32.dpToPx(), 32.dpToPx()).apply {
+                    marginEnd = 6.dpToPx()
                 }
                 val bg = GradientDrawable()
                 bg.shape = GradientDrawable.OVAL
                 bg.setColor(color)
                 // First color (white) is selected by default
                 if (index == 0) {
-                    bg.setStroke(4.dpToPx(), ContextCompat.getColor(this@StickerMakerActivity, R.color.accent))
+                    bg.setStroke(3.dpToPx(), ContextCompat.getColor(this@StickerMakerActivity, R.color.accent))
                 } else {
                     bg.setStroke(2.dpToPx(), Color.DKGRAY)
                 }
@@ -1395,15 +1415,24 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
     }
 
     private fun showExitConfirmDialog() {
-        AlertDialog.Builder(this, R.style.MaterialAlertDialogTheme)
-            .setTitle(getString(R.string.discard_changes))
-            .setMessage(getString(R.string.discard_changes_message))
-            .setPositiveButton(getString(R.string.discard)) { _, _ ->
-                resetEditor()
-                finish()
-            }
-            .setNegativeButton(getString(R.string.cancel), null)
-            .show()
+        val dialog = android.app.Dialog(this)
+        dialog.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE)
+        dialog.setContentView(R.layout.dialog_discard_changes)
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        dialog.window?.setLayout(
+            (resources.displayMetrics.widthPixels * 0.85).toInt(),
+            android.view.WindowManager.LayoutParams.WRAP_CONTENT
+        )
+
+        dialog.findViewById<android.widget.Button>(R.id.btnDiscardCancel).setOnClickListener {
+            dialog.dismiss()
+        }
+        dialog.findViewById<android.widget.Button>(R.id.btnDiscardConfirm).setOnClickListener {
+            dialog.dismiss()
+            resetEditor()
+            finish()
+        }
+        dialog.show()
     }
 
     private fun resetEditor() {
@@ -1434,9 +1463,323 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
     */
     
     // Empty implementations for the interface if required
-    override fun onEditTextChangeListener(rootView: View?, text: String?, colorCode: Int) {}
+    override fun onEditTextChangeListener(rootView: View?, text: String?, colorCode: Int) {
+        // When user clicks on existing text, show edit dialog
+        if (rootView != null && text != null) {
+            showEditTextDialog(rootView, text, colorCode)
+        }
+    }
     override fun onAddViewListener(viewType: ViewType?, numberOfAddedViews: Int) {
         updateUndoRedoState()
+        
+        // Add rotation support to text and emoji views
+        if (viewType == ViewType.TEXT || viewType == ViewType.EMOJI) {
+            // Find the last added view (PhotoEditor adds views to a container)
+            photoEditorView.post {
+                findAndEnhanceLastAddedView()
+            }
+        }
+    }
+    
+    private var gestureTargetView: View? = null
+    private var gestureStartDist = 0f
+    private var gestureStartScale = 1f
+    private var gestureStartAngle = 0f
+    private var gestureStartRotation = 0f
+    private var isMultiTouchActive = false
+
+    private fun findAndEnhanceLastAddedView() {
+        val drawingView = findDrawingView(photoEditorView)
+        if (drawingView != null && drawingView is ViewGroup) {
+            // Disable clipping so expanded touch areas work
+            drawingView.clipChildren = false
+            drawingView.clipToPadding = false
+            
+            val childCount = drawingView.childCount
+            if (childCount > 0) {
+                val lastView = drawingView.getChildAt(childCount - 1)
+                if (lastView is ViewGroup) {
+                    // Expand touch target with large padding
+                    val extraPadding = (60 * resources.displayMetrics.density).toInt()
+                    lastView.setPadding(extraPadding, extraPadding, extraPadding, extraPadding)
+                    lastView.clipChildren = false
+                    lastView.clipToPadding = false
+                }
+            }
+        }
+    }
+
+    @SuppressLint("ClickableViewAccessibility")
+    private fun setupMultiTouchGestures() {
+        photoEditorView.setOnTouchListener { _, event ->
+            when (event.actionMasked) {
+                MotionEvent.ACTION_POINTER_DOWN -> {
+                    if (event.pointerCount >= 2) {
+                        val midX = (event.getX(0) + event.getX(1)) / 2f
+                        val midY = (event.getY(0) + event.getY(1)) / 2f
+                        gestureTargetView = findNearestOverlayView(midX, midY)
+                        if (gestureTargetView != null) {
+                            isMultiTouchActive = true
+                            gestureStartDist = getSpacing(event)
+                            gestureStartScale = gestureTargetView!!.scaleX
+                            gestureStartAngle = getAngle(event)
+                            gestureStartRotation = gestureTargetView!!.rotation
+                            photoEditorView.parent?.requestDisallowInterceptTouchEvent(true)
+                        }
+                    }
+                    isMultiTouchActive
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    if (isMultiTouchActive && event.pointerCount >= 2 && gestureTargetView != null) {
+                        val v = gestureTargetView!!
+                        // Pinch to scale
+                        val newDist = getSpacing(event)
+                        if (gestureStartDist > 10f) {
+                            val scale = (gestureStartScale * newDist / gestureStartDist).coerceIn(0.2f, 5f)
+                            v.scaleX = scale
+                            v.scaleY = scale
+                        }
+                        // Rotate
+                        val newAngle = getAngle(event)
+                        v.rotation = gestureStartRotation + (newAngle - gestureStartAngle)
+                    }
+                    isMultiTouchActive
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP, MotionEvent.ACTION_CANCEL -> {
+                    if (event.pointerCount <= 2) {
+                        isMultiTouchActive = false
+                        gestureTargetView = null
+                        photoEditorView.parent?.requestDisallowInterceptTouchEvent(false)
+                    }
+                    false
+                }
+                else -> false
+            }
+        }
+    }
+
+    private fun findNearestOverlayView(touchX: Float, touchY: Float): View? {
+        val drawingView = findDrawingView(photoEditorView) as? ViewGroup ?: return null
+        var nearest: View? = null
+        var minDist = Float.MAX_VALUE
+        val hitRadius = 150 * resources.displayMetrics.density // very generous hit area
+
+        for (i in 0 until drawingView.childCount) {
+            val child = drawingView.getChildAt(i)
+            if (child.visibility != View.VISIBLE) continue
+            
+            // Get center of the child view in photoEditorView coordinates
+            val loc = IntArray(2)
+            child.getLocationInWindow(loc)
+            val parentLoc = IntArray(2)
+            photoEditorView.getLocationInWindow(parentLoc)
+            
+            val cx = loc[0] - parentLoc[0] + child.width / 2f
+            val cy = loc[1] - parentLoc[1] + child.height / 2f
+            
+            val dx = touchX - cx
+            val dy = touchY - cy
+            val dist = kotlin.math.sqrt((dx * dx + dy * dy).toDouble()).toFloat()
+            
+            if (dist < minDist && dist < hitRadius) {
+                minDist = dist
+                nearest = child
+            }
+        }
+        return nearest
+    }
+    
+    private fun findDrawingView(parent: View): View? {
+        if (parent is ViewGroup) {
+            for (i in 0 until parent.childCount) {
+                val child = parent.getChildAt(i)
+                if (child.javaClass.simpleName.contains("Drawing") || 
+                    child.javaClass.simpleName.contains("drawing")) {
+                    return child
+                }
+                val result = findDrawingView(child)
+                if (result != null) return result
+            }
+        }
+        return null
+    }
+    
+    private fun getSpacing(event: MotionEvent): Float {
+        if (event.pointerCount < 2) return 0f
+        val dx = event.getX(0) - event.getX(1)
+        val dy = event.getY(0) - event.getY(1)
+        return kotlin.math.sqrt((dx * dx + dy * dy).toDouble()).toFloat()
+    }
+    
+    private fun getAngle(event: MotionEvent): Float {
+        if (event.pointerCount < 2) return 0f
+        val dx = (event.getX(1) - event.getX(0)).toDouble()
+        val dy = (event.getY(1) - event.getY(0)).toDouble()
+        return Math.toDegrees(kotlin.math.atan2(dy, dx)).toFloat()
+    }
+    
+    private fun showEditTextDialog(textView: View, currentText: String, currentColor: Int) {
+        val dialog = BottomSheetDialog(this)
+        val view = layoutInflater.inflate(R.layout.dialog_add_text, null)
+        dialog.setContentView(view)
+
+        val inputText = view.findViewById<TextInputEditText>(R.id.etStickerText)
+        val btnAdd = view.findViewById<MaterialButton>(R.id.btnAddText)
+        val tvPreview = view.findViewById<TextView>(R.id.tvTextPreviewInDialog)
+        val fontGrid = view.findViewById<GridLayout>(R.id.fontSelectionLayout)
+
+        // Set current values
+        inputText.setText(currentText)
+        var selectedColor = currentColor
+        var fixedTextSize = 28f
+        var selectedColorView: View? = null
+        var selectedFontView: View? = null
+        var selectedTypeface: Typeface? = null
+        
+        // Try to get current text size from view
+        if (textView is TextView) {
+            fixedTextSize = textView.textSize / resources.displayMetrics.scaledDensity
+            selectedTypeface = textView.typeface
+        }
+
+        btnAdd.text = getString(R.string.update_text)
+
+        // Font list with display names
+        val fonts = listOf(
+            "Default" to Typeface.DEFAULT,
+            "Bold" to Typeface.DEFAULT_BOLD,
+            "Serif" to Typeface.SERIF,
+            "Sans Serif" to Typeface.SANS_SERIF,
+            "Monospace" to Typeface.MONOSPACE,
+            "Serif Bold" to Typeface.create(Typeface.SERIF, Typeface.BOLD),
+            "Sans Bold" to Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD),
+            "Mono Bold" to Typeface.create(Typeface.MONOSPACE, Typeface.BOLD),
+            "Serif Italic" to Typeface.create(Typeface.SERIF, Typeface.ITALIC),
+            "Sans Italic" to Typeface.create(Typeface.SANS_SERIF, Typeface.ITALIC),
+            "Bold Italic" to Typeface.create(Typeface.DEFAULT, Typeface.BOLD_ITALIC),
+            "Serif B.Italic" to Typeface.create(Typeface.SERIF, Typeface.BOLD_ITALIC),
+            "Condensed" to Typeface.create("sans-serif-condensed", Typeface.NORMAL),
+            "Condensed Bold" to Typeface.create("sans-serif-condensed", Typeface.BOLD),
+            "Light" to Typeface.create("sans-serif-light", Typeface.NORMAL),
+            "Thin" to Typeface.create("sans-serif-thin", Typeface.NORMAL),
+            "Medium" to Typeface.create("sans-serif-medium", Typeface.NORMAL),
+            "Black" to Typeface.create("sans-serif-black", Typeface.NORMAL),
+            "Casual" to Typeface.create("casual", Typeface.NORMAL),
+            "Cursive" to Typeface.create("cursive", Typeface.NORMAL),
+            "Serif Medium" to Typeface.create("serif", Typeface.NORMAL),
+            "Small Caps" to Typeface.create("sans-serif-smallcaps", Typeface.NORMAL)
+        )
+
+        // Setup font grid
+        fontGrid.columnCount = 2
+        fonts.forEachIndexed { _, (name, typeface) ->
+            val fontCard = MaterialCardView(this).apply {
+                layoutParams = GridLayout.LayoutParams().apply {
+                    width = 0
+                    height = GridLayout.LayoutParams.WRAP_CONTENT
+                    columnSpec = GridLayout.spec(GridLayout.UNDEFINED, 1f)
+                    setMargins(4.dpToPx(), 4.dpToPx(), 4.dpToPx(), 4.dpToPx())
+                }
+                radius = 12.dpToPx().toFloat()
+                cardElevation = 2.dpToPx().toFloat()
+                setCardBackgroundColor(ContextCompat.getColor(this@StickerMakerActivity, R.color.card_bg))
+                strokeWidth = if (typeface == selectedTypeface) 2.dpToPx() else 0
+                strokeColor = ContextCompat.getColor(this@StickerMakerActivity, R.color.accent)
+
+                val fontTextView = TextView(this@StickerMakerActivity).apply {
+                    text = name
+                    typeface?.let { setTypeface(it) }
+                    textSize = 12f
+                    setTextColor(ContextCompat.getColor(this@StickerMakerActivity, R.color.text_primary))
+                    setPadding(10.dpToPx(), 6.dpToPx(), 10.dpToPx(), 6.dpToPx())
+                    gravity = android.view.Gravity.CENTER
+                }
+                addView(fontTextView)
+
+                setOnClickListener {
+                    selectedFontView?.let { prev ->
+                        (prev as MaterialCardView).strokeWidth = 0
+                    }
+                    strokeWidth = 2.dpToPx()
+                    selectedFontView = this
+                    selectedTypeface = typeface
+                    tvPreview.typeface = typeface
+                }
+
+                if (typeface == selectedTypeface) {
+                    selectedFontView = this
+                }
+            }
+            fontGrid.addView(fontCard)
+        }
+
+        // Color picker
+        val colors = listOf(Color.WHITE, Color.BLACK, Color.RED, Color.BLUE, Color.GREEN, Color.YELLOW,
+            Color.MAGENTA, Color.CYAN, 0xFFFF5722.toInt(), 0xFF9C27B0.toInt())
+        val colorContainer = view.findViewById<LinearLayout>(R.id.colorSelectionLayout)
+
+        fun updateColorSelection(newSelected: View, color: Int) {
+            selectedColorView?.let { prev ->
+                val prevBg = prev.background as? GradientDrawable
+                prevBg?.setStroke(2.dpToPx(), Color.DKGRAY)
+            }
+            val newBg = newSelected.background as? GradientDrawable
+            newBg?.setStroke(3.dpToPx(), ContextCompat.getColor(this, R.color.accent))
+            selectedColorView = newSelected
+            selectedColor = color
+            tvPreview.setTextColor(color)
+        }
+
+        colors.forEachIndexed { _, color ->
+            val colorView = View(this).apply {
+                layoutParams = LinearLayout.LayoutParams(32.dpToPx(), 32.dpToPx()).apply {
+                    marginEnd = 6.dpToPx()
+                }
+                val bg = GradientDrawable()
+                bg.shape = GradientDrawable.OVAL
+                bg.setColor(color)
+                if (color == selectedColor) {
+                    bg.setStroke(3.dpToPx(), ContextCompat.getColor(this@StickerMakerActivity, R.color.accent))
+                    selectedColorView = this
+                } else {
+                    bg.setStroke(2.dpToPx(), Color.DKGRAY)
+                }
+                background = bg
+                elevation = 4f
+                setOnClickListener {
+                    updateColorSelection(this, color)
+                }
+            }
+            colorContainer.addView(colorView)
+        }
+
+        // Live preview
+        tvPreview.text = currentText
+        tvPreview.setTextColor(selectedColor)
+        tvPreview.textSize = fixedTextSize
+        tvPreview.typeface = selectedTypeface
+        
+        inputText.addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                tvPreview.text = s?.toString() ?: "Preview"
+            }
+            override fun afterTextChanged(s: android.text.Editable?) {}
+        })
+
+        btnAdd.setOnClickListener {
+            val text = inputText.text?.toString() ?: ""
+            if (text.isNotEmpty()) {
+                val textStyleBuilder = TextStyleBuilder()
+                textStyleBuilder.withTextColor(selectedColor)
+                textStyleBuilder.withTextSize(fixedTextSize)
+                selectedTypeface?.let { textStyleBuilder.withTextFont(it) }
+                photoEditor.editText(textView, text, textStyleBuilder)
+                dialog.dismiss()
+            }
+        }
+
+        dialog.show()
     }
     override fun onRemoveViewListener(viewType: ViewType?, numberOfAddedViews: Int) {
         updateUndoRedoState()

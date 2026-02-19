@@ -4,6 +4,7 @@
     android:id="@+id/premium_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:fitsSystemWindows="true"
     android:background="@color/background">
 
     <!-- Header Image with Crown -->
@@ -231,12 +232,13 @@
                             android:gravity="center"
                             android:padding="24dp">
 
-                            <ImageView
+                            <com.airbnb.lottie.LottieAnimationView
                                 android:id="@+id/imgPremiumCrown"
-                                android:layout_width="60dp"
-                                android:layout_height="60dp"
-                                android:src="@drawable/ic_premium"
-                                app:tint="@color/premium_text_on_gold" />
+                                android:layout_width="80dp"
+                                android:layout_height="80dp"
+                                app:lottie_fileName="crown.json"
+                                app:lottie_autoPlay="true"
+                                app:lottie_loop="true" />
 
                             <TextView
                                 android:layout_width="wrap_content"

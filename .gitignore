@@ -46,3 +46,9 @@ stickers_convert/cache.json
 stickers_convert/token.pickle
 stickers_convert/credentials.json
 stickers_convert/client_secret*.json
+
+# Environment variables (API keys)
+.env
+.env.local
+.env.*.local
+sticker_admin_web/.env

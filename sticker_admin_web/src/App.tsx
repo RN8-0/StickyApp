@@ -70,7 +70,9 @@ import {
   Edit3,
   Wand2,
   Calendar,
-  Smartphone
+  Smartphone,
+  Zap,
+  List
 } from 'lucide-react';
 import { translateTextAllLanguages, TARGET_LANGUAGES } from './utils/translator';
 import {
@@ -86,6 +88,9 @@ import type { StickerPack, Sticker, ContactMessage, StickerSuggestion, UserData,
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { stickerProcessor } from './utils/stickerProcessor';
+import { importStickers, type StickerImportProgress } from './utils/stickerImporter';
+import { generateBatchPacks, type BatchProgress, type BatchSource } from './utils/batchPackGenerator';
+import { deepseekService } from './utils/deepseekService';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -141,7 +146,7 @@ const RELEVANT_SUGGESTIONS: Record<string, { words: string[], emojis: string[] }
   default: { words: ["Cool", "Epic", "Vibes", "Fun", "Best"], emojis: ["✨", "🔥", "💯", "⭐", "🎉"] }
 };
 
-const generateCreativeName = (currentName: string) => {
+const generateCreativeNameLocal = (currentName: string) => {
   let cleanName = currentName || "";
 
   // Remove emojis and specific symbols
@@ -177,6 +182,21 @@ const generateCreativeName = (currentName: string) => {
 
   // Format: "BaseWord Suggestion 🎉✨"
   return `${baseWord} ${suggestionWord} ${emoji1}${emoji2}`;
+};
+
+// DeepSeek destekli akıllı isim üretici (AI varsa AI kullanır, yoksa local fallback)
+const generateCreativeName = async (currentName: string): Promise<string> => {
+  if (deepseekService.isConfigured()) {
+    try {
+      const names = await deepseekService.generatePackNames(currentName || 'stickers', 1);
+      if (names.length > 0) {
+        return `${names[0].name} ${names[0].emoji}`;
+      }
+    } catch (e) {
+      console.warn('[AI Name] DeepSeek hatası, local fallback kullanılıyor:', e);
+    }
+  }
+  return generateCreativeNameLocal(currentName);
 };
 
 const CATEGORIES = [
@@ -268,7 +288,7 @@ function App() {
   const [selectedStickerIds, setSelectedStickerIds] = useState<string[]>([]);
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'stats' | 'messages' | 'notifications' | 'users'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'packs' | 'stats' | 'messages' | 'notifications' | 'users' | 'batch'>('dashboard');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'passive' | 'premium' | 'normal' | 'animated' | 'static' | 'new'>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [statsFilter, setStatsFilter] = useState<'all' | 'active' | 'passive' | 'premium' | 'normal'>('all');
@@ -341,6 +361,25 @@ function App() {
   const [welcomeExit, setWelcomeExit] = useState(false);
   const [showVideoBgModal, setShowVideoBgModal] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  
+  const [showImportModal, setShowImportModal] = useState(false);
+
+  // Batch Generator States
+  const [batchTermsInput, setBatchTermsInput] = useState('');
+  const [batchContentType, setBatchContentType] = useState<'gifs' | 'stickers'>('stickers');
+  const [batchStickersPerPack, setBatchStickersPerPack] = useState(20);
+  const [batchMaxPacks, setBatchMaxPacks] = useState(10);
+  const [batchSource, setBatchSource] = useState<BatchSource>('both');
+  const [batchUseAiNaming, setBatchUseAiNaming] = useState(true);
+  const [batchUseAiTranslation, setBatchUseAiTranslation] = useState(true);
+  const [isBatchRunning, setIsBatchRunning] = useState(false);
+  const [batchProgress, setBatchProgress] = useState<BatchProgress | null>(null);
+  const [batchAiGenerating, setBatchAiGenerating] = useState(false);
+  const [importContentType, setImportContentType] = useState<'gifs' | 'stickers'>('stickers');
+  const [importCount, setImportCount] = useState(20);
+  const [customSearchText, setCustomSearchText] = useState('');
+  const [isImporting, setIsImporting] = useState(false);
+  const [importProgress, setImportProgress] = useState<{ current: number, total: number, message: string, preview?: string } | null>(null);
 
   // FFmpeg'i önceden yükle - işlem başladığında hazır olsun
   useEffect(() => {
@@ -885,11 +924,30 @@ function App() {
       };
 
       // Tüm name_ ile başlayan alanları kopyala (Çeviriler)
+      const hasTranslations = Object.keys(newPackData).some(key => key.startsWith('name_') && key !== 'name_en' && (newPackData as any)[key]);
       Object.keys(newPackData).forEach(key => {
         if (key.startsWith('name_')) {
           packData[key] = (newPackData as any)[key] || '';
         }
       });
+
+      // Otomatik çeviri: Eğer çeviriler boşsa ve isim varsa, DeepSeek veya Google Translate ile çevir
+      if (!hasTranslations && newPackData.name) {
+        try {
+          let translations: Record<string, string>;
+          if (deepseekService.isConfigured()) {
+            translations = await deepseekService.translatePackName(newPackData.name);
+          } else {
+            translations = await translateTextAllLanguages(newPackData.name);
+          }
+          Object.entries(translations).forEach(([key, value]) => {
+            packData[key] = value;
+          });
+          console.log('[AUTO-TRANSLATE] Paket oluşturulurken otomatik çeviri yapıldı');
+        } catch (translateErr) {
+          console.warn('[AUTO-TRANSLATE] Otomatik çeviri hatası:', translateErr);
+        }
+      }
 
       await setDoc(doc(db, collectionName, packId), packData);
 
@@ -1188,6 +1246,83 @@ function App() {
     if (pendingFiles.length > 0) {
       uploadStickersBatch(pendingFiles, removeBg);
       setPendingFiles([]);
+    }
+  };
+
+  const handleImportStickers = async () => {
+    if (!selectedPack) {
+      alert('Lütfen önce bir paket seçin!');
+      return;
+    }
+
+    const query = customSearchText.trim() || 'trending';
+
+    const currentCount = selectedPack.stickers?.length || 0;
+    const totalCount = currentCount + importCount;
+
+    if (totalCount > 30) {
+      alert(`Hata: Bir pakette en fazla 30 sticker olabilir. (Mevcut: ${currentCount}, Eklenecek: ${importCount}, Toplam: ${totalCount})`);
+      return;
+    }
+
+    const contentTypeName = importContentType === 'gifs' ? 'GIFs' : 'Stickers';
+    if (!window.confirm(`Giphy'dan "${query}" için ${importCount} ${contentTypeName} eklenecek. Onaylıyor musunuz?`)) {
+      return;
+    }
+
+    setIsImporting(true);
+    setImportProgress({ current: 0, total: importCount, message: 'Başlıyor...' });
+
+    try {
+      const importedStickers = await importStickers({
+        source: 'giphy',
+        contentType: importContentType,
+        query: query,
+        count: importCount,
+        packId: selectedPack.id,
+        onProgress: (progress: StickerImportProgress) => {
+          setImportProgress({
+            current: progress.current,
+            total: progress.total,
+            message: progress.message,
+            preview: progress.currentSticker
+          });
+        }
+      });
+
+      if (importedStickers.length === 0) {
+        alert('Hiçbir sticker eklenemedi. Lütfen farklı bir arama deneyin.');
+        return;
+      }
+
+      const collectionName = selectedPack.is_premium ? 'premium_stickers' : 'stickers';
+      const packRef = doc(db, collectionName, selectedPack.id);
+      
+      const newVersion = Date.now().toString();
+      const updatedData = {
+        stickers: [...(selectedPack.stickers || []), ...importedStickers],
+        sticker_count: Math.max(0, (selectedPack.sticker_count || 0) + importedStickers.length),
+        image_data_version: newVersion
+      };
+
+      await updateDoc(packRef, updatedData);
+
+      const updated = {
+        ...selectedPack,
+        ...updatedData
+      };
+
+      setPacks(packs.map(p => p.id === selectedPack.id ? updated : p));
+      setSelectedPack(updated);
+      setShowImportModal(false);
+      
+      alert(`Import başarılı! ${importedStickers.length} sticker eklendi.\n\nKaynak: Giphy\nEklenen: ${importedStickers.length}`);
+    } catch (error: any) {
+      console.error('Import error:', error);
+      alert(`Hata: ${error.message}`);
+    } finally {
+      setIsImporting(false);
+      setImportProgress(null);
     }
   };
 
@@ -1819,7 +1954,8 @@ function App() {
               { id: 'stats', icon: BarChart3, label: 'Veriler' },
               { id: 'messages', icon: Mail, label: 'Mesajlar', count: messages.filter(m => m.status === 'unread').length },
               { id: 'notifications', icon: Bell, label: 'Bildirim' },
-              { id: 'users', icon: Users, label: 'Kullanicilar' }
+              { id: 'users', icon: Users, label: 'Kullanicilar' },
+              { id: 'batch', icon: Zap, label: 'Toplu Üretici' }
             ].map(item => (
               <button
                 key={item.id}
@@ -1852,13 +1988,13 @@ function App() {
         <div className="hidden md:block w-24 shrink-0" />
 
         {activeTab === 'dashboard' ? (
-          <>
+          <div className="flex flex-1 h-[calc(100vh)] overflow-hidden">
             {/* Sidebar / Pack List */}
             <div className={cn(
-              "border-r border-white/5 flex-col bg-card/30 transition-all duration-500",
-              selectedPack ? "md:w-[400px] w-full hidden md:flex" : "w-full flex"
+              "border-r border-white/5 flex-col bg-card/30 transition-all duration-500 h-full shrink-0",
+              selectedPack ? "md:w-[320px] w-full hidden md:flex" : "w-full flex"
             )}>
-              <div className="p-5 space-y-4">
+              <div className="p-4 space-y-3 shrink-0">
                 <div className="flex items-center justify-between">
                   <div className="flex flex-col">
                     <span className="text-[10px] font-bold uppercase tracking-widest text-textSec">Sticker Paketleri</span>
@@ -1980,32 +2116,34 @@ function App() {
                 </div>
               </div>
 
-              <div className="flex-1 overflow-y-auto px-4 pb-20 space-y-2.5 flex flex-col custom-scrollbar">
+              <div className="flex-1 overflow-y-auto px-3 pb-20 space-y-2 flex flex-col custom-scrollbar">
                 <button
                   onClick={() => setShowNewPackModal(true)}
-                  className="w-full flex items-center justify-center gap-2 p-4 border-2 border-dashed border-white/10 hover:border-primary/50 hover:bg-primary/5 rounded-2xl group transition-all mb-4"
+                  className="w-full flex items-center justify-center gap-2 p-3 border-2 border-dashed border-white/10 hover:border-primary/50 hover:bg-primary/5 rounded-2xl group transition-all mb-3"
                 >
-                  <Plus className="text-textSec group-hover:text-primary transition-colors" size={20} />
+                  <Plus className="text-textSec group-hover:text-primary transition-colors" size={18} />
                   <span className="text-sm font-bold text-textSec group-hover:text-primary">Yeni Paket Oluştur</span>
                 </button>
 
                 {filteredPacks.map(pack => (
                   <div
                     key={pack.id}
-                    onClick={() => setSelectedPack(pack)}
+                    onClick={() => {
+                      setSelectedPack(pack);
+                    }}
                     className={cn(
-                      "group relative cursor-pointer p-3.5 rounded-2xl transition-all duration-300 border",
+                      "group relative cursor-pointer p-3 rounded-2xl transition-all duration-300 border",
                       selectedPack?.id === pack.id
                         ? 'bg-primary/10 border-primary/50 shadow-xl shadow-primary/5 scale-[1.02]'
                         : 'bg-card border-white/5 hover:border-white/20 hover:bg-hover active:scale-[0.98]'
                     )}
                   >
-                    <div className="flex items-center gap-4">
-                      <div className="relative w-14 h-14 bg-hover rounded-2xl overflow-hidden glass flex-shrink-0 flex items-center justify-center group-hover:scale-105 transition-transform">
+                    <div className="flex items-center gap-3">
+                      <div className="relative w-12 h-12 bg-hover rounded-2xl overflow-hidden glass flex-shrink-0 flex items-center justify-center group-hover:scale-105 transition-transform">
                         {pack.tray_url ? (
-                          <img src={pack.tray_url} alt="" className="w-10 h-10 object-contain" />
+                          <img src={pack.tray_url} alt="" className="w-9 h-9 object-contain" />
                         ) : (
-                          <Package className="w-6 h-6 text-textSec" />
+                          <Package className="w-5 h-5 text-textSec" />
                         )}
                         {pack.is_premium && (
                           <div className="absolute top-0 right-0 w-4 h-4 bg-warning flex items-center justify-center rounded-bl-xl shadow-sm">
@@ -2019,13 +2157,10 @@ function App() {
                         )}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <h3 className="font-bold text-sm truncate text-white">
+                        <h3 className="font-bold text-[13px] truncate text-white">
                           {pack.name}
-                          {pack.name_tr && pack.name_tr !== pack.name && (
-                            <span className="text-textSec font-normal ml-2">({pack.name_tr})</span>
-                          )}
                         </h3>
-                        <div className="flex items-center gap-2 mt-1.5">
+                        <div className="flex items-center gap-2 mt-1">
                           <span className="text-[10px] bg-white/5 px-2 py-0.5 rounded-full text-textSec font-semibold">
                             {pack.sticker_count} Sticker
                           </span>
@@ -2040,11 +2175,10 @@ function App() {
                       <div className="flex flex-col items-end opacity-0 group-hover:opacity-100 transition-opacity">
                         <button
                           onClick={(e) => { e.stopPropagation(); deletePack(pack); }}
-                          className="p-2 hover:text-danger hover:bg-danger/10 rounded-xl transition-all active:scale-90"
+                          className="p-1.5 hover:text-danger hover:bg-danger/10 rounded-xl transition-all active:scale-90"
                         >
-                          <Trash2 size={16} />
+                          <Trash2 size={14} />
                         </button>
-                        <ChevronRight size={16} className="text-textSec mr-1" />
                       </div>
                     </div>
                   </div>
@@ -2054,65 +2188,77 @@ function App() {
 
             {/* Details Panel */}
             {selectedPack ? (
-              <div className="flex-1 flex flex-col bg-background/80 overflow-hidden animate-in fade-in slide-in-from-right-10 duration-500">
-                {/* Detail Header */}
-                <div className="p-4 md:p-8 border-b border-white/5 bg-card/20 backdrop-blur-xl">
-                  <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-start justify-between gap-6">
-                    {/* Mobile Back Button */}
-                    <button
-                      onClick={() => setSelectedPack(null)}
-                      className="md:hidden flex items-center gap-2 text-textSec hover:text-white mb-2"
-                    >
-                      <ChevronRight className="rotate-180" size={20} />
-                      <span className="text-sm font-bold">Listeye Dön</span>
-                    </button>
-                    <div className="flex flex-col md:flex-row gap-4 md:gap-8 items-center md:items-start text-center md:text-left w-full md:w-auto">
-                      <div className="w-32 h-32 bg-card rounded-3xl overflow-hidden glass flex items-center justify-center p-4 shadow-2xl relative group">
-                        {selectedPack.tray_url ? (
-                          <img src={selectedPack.tray_url} alt="" className="w-full h-full object-contain group-hover:scale-110 transition-transform duration-500" />
-                        ) : (
-                          <Package className="w-16 h-16 text-textSec/20" />
+              <div className="flex-1 flex flex-col bg-background/80 overflow-hidden h-full animate-in fade-in slide-in-from-right-10 duration-500">
+                {/* Compact Detail Header */}
+                <div className="shrink-0 px-5 py-4 border-b border-white/5 bg-card/20 backdrop-blur-xl">
+                  {/* Mobile Back Button */}
+                  <button
+                    onClick={() => setSelectedPack(null)}
+                    className="md:hidden flex items-center gap-2 text-textSec hover:text-white mb-3"
+                  >
+                    <ChevronRight className="rotate-180" size={20} />
+                    <span className="text-sm font-bold">Listeye Dön</span>
+                  </button>
+
+                  <div className="flex items-center gap-4 flex-wrap">
+                    {/* Tray Image */}
+                    <div className="w-14 h-14 bg-card rounded-2xl overflow-hidden glass flex items-center justify-center p-2 shadow-lg shrink-0">
+                      {selectedPack.tray_url ? (
+                        <img src={selectedPack.tray_url} alt="" className="w-full h-full object-contain" />
+                      ) : (
+                        <Package className="w-8 h-8 text-textSec/20" />
+                      )}
+                    </div>
+
+                    {/* Pack Info */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h2 className="text-xl font-black tracking-tight text-white truncate">{selectedPack.name}</h2>
+                        <span className={cn(
+                          "px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest shrink-0",
+                          selectedPack.is_premium ? 'bg-warning text-background' : 'bg-primary text-white'
+                        )}>
+                          {selectedPack.is_premium ? 'Premium' : 'Standard'}
+                        </span>
+                        {selectedPack.is_active === false && (
+                          <span className="px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest bg-danger text-white shrink-0">PASİF</span>
                         )}
-
                       </div>
-                      <div className="space-y-4">
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-3">
-                            <h2 className="text-4xl font-black tracking-tight text-white">{selectedPack.name}</h2>
-                            <span className={cn(
-                              "px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg",
-                              selectedPack.is_premium ? 'bg-warning text-background' : 'bg-primary text-white'
-                            )}>
-                              {selectedPack.is_premium ? 'Premium Pack' : 'Standard Pack'}
-                            </span>
-                          </div>
-                          <p className="text-textSec text-lg flex items-center gap-2">
-                            <UserIcon size={16} />
-                            {selectedPack.publisher}
-                            <span className="w-1 h-1 bg-white/20 rounded-full" />
-                            <span className="text-primary font-bold uppercase tracking-tighter">{selectedPack.category}</span>
-                          </p>
-                        </div>
-
-                        <div className="flex items-center gap-4">
-                          <StatCard label="İndirme" value={selectedPack.download_count} color="primary" />
-                          <StatCard label="Görüntülenme" value={selectedPack.view_count} color="accent" />
-                          <button
-                            onClick={() => resetStats(selectedPack)}
-                            className="p-3 bg-white/5 hover:bg-white/10 rounded-2xl transition-all text-textSec hover:text-white"
-                            title="İstatistikleri Sıfırla"
-                          >
-                            <RefreshCcw size={20} />
-                          </button>
-                        </div>
+                      <div className="flex items-center gap-3 mt-1 text-xs text-textSec">
+                        <span className="flex items-center gap-1"><UserIcon size={12} /> {selectedPack.publisher}</span>
+                        <span className="w-1 h-1 bg-white/20 rounded-full" />
+                        <span className="text-primary font-bold uppercase tracking-tighter">{selectedPack.category}</span>
+                        <span className="w-1 h-1 bg-white/20 rounded-full" />
+                        <span>{selectedPack.sticker_count} Sticker</span>
                       </div>
                     </div>
 
-                    <div className="flex flex-col gap-3">
-                      <label className="relative flex items-center gap-2 px-6 py-3.5 bg-primary hover:bg-primary/90 text-white rounded-2xl text-sm font-black shadow-xl shadow-primary/20 transition-all hover:translate-y-[-2px] active:translate-y-0 cursor-pointer">
-                        <Plus size={20} className="stroke-[3]" /> Sticker Ekle
+                    {/* Stats */}
+                    <div className="flex items-center gap-3 shrink-0">
+                      <StatCard label="İndirme" value={selectedPack.download_count} color="primary" />
+                      <StatCard label="Görüntülenme" value={selectedPack.view_count} color="accent" />
+                      <button
+                        onClick={() => resetStats(selectedPack)}
+                        className="p-2 bg-white/5 hover:bg-white/10 rounded-xl transition-all text-textSec hover:text-white"
+                        title="İstatistikleri Sıfırla"
+                      >
+                        <RefreshCcw size={16} />
+                      </button>
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="flex items-center gap-2 shrink-0">
+                      <label className="relative flex items-center gap-1.5 px-4 py-2.5 bg-primary hover:bg-primary/90 text-white rounded-xl text-xs font-black shadow-lg shadow-primary/20 transition-all hover:translate-y-[-1px] active:translate-y-0 cursor-pointer">
+                        <Plus size={16} className="stroke-[3]" /> Sticker Ekle
                         <input type="file" multiple className="hidden" onChange={handleAddSticker} disabled={isProcessing} />
                       </label>
+                      <button
+                        onClick={() => setShowImportModal(true)}
+                        disabled={isProcessing || isImporting}
+                        className="flex items-center gap-1.5 px-4 py-2.5 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white rounded-xl text-xs font-black shadow-lg shadow-purple-500/20 transition-all hover:translate-y-[-1px] active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <Sparkles size={16} className="stroke-[3]" /> Otomatik Ekle
+                      </button>
                       <button
                         onClick={() => {
                           setEditFormData({
@@ -2120,224 +2266,222 @@ function App() {
                           });
                           setShowEditPackModal(true);
                         }}
-                        className="flex items-center gap-2 px-6 py-3.5 bg-card hover:bg-hover border border-white/5 rounded-2xl text-sm font-bold transition-all text-textSec hover:text-textMain"
+                        className="flex items-center gap-1.5 px-4 py-2.5 bg-card hover:bg-hover border border-white/5 rounded-xl text-xs font-bold transition-all text-textSec hover:text-textMain"
                       >
-                        <Settings size={20} /> Paket Bilgileri
+                        <Settings size={16} /> Düzenle
                       </button>
                     </div>
                   </div>
                 </div>
 
                 {/* Sticker Grid */}
-                <div className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar pb-24 md:pb-8">
-                  <div className="max-w-7xl mx-auto">
-                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
-                      <h3 className="text-xl font-bold flex items-center gap-3">
-                        <Grid className="text-primary" size={24} />
-                        Paket İçeriği
-                        <span className="bg-white/5 px-2.5 py-1 rounded-lg text-xs font-mono ml-2">{selectedPack.sticker_count} DOSYA</span>
-                        {checkingSizes && (
-                          <span className="text-xs text-textSec animate-pulse">Boyutlar kontrol ediliyor...</span>
-                        )}
-                      </h3>
-                      <div className="flex items-center gap-4 text-xs text-textSec font-bold uppercase tracking-widest">
-                        {isSelectionMode ? (
-                          <div className="flex items-center gap-2 animate-in fade-in slide-in-from-right-4 duration-300">
-                            <span className="text-white bg-white/10 px-2 py-1 rounded-lg">
-                              {selectedStickerIds.length} Seçildi
-                            </span>
-                            <button
-                              onClick={toggleSelectAll}
-                              className="px-3 py-1.5 bg-white/5 hover:bg-white/10 rounded-lg transition-colors border border-white/5"
-                            >
-                              {selectedPack.stickers?.length === selectedStickerIds.length ? 'Seçimi Kaldır' : 'Tümünü Seç'}
-                            </button>
-                            <button
-                              onClick={deleteSelectedStickers}
-                              disabled={selectedStickerIds.length === 0 || isProcessing}
-                              className="px-3 py-1.5 bg-danger/20 hover:bg-danger/30 text-danger border border-danger/20 rounded-lg transition-colors flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                              <Trash2 size={14} />
-                              Sil
-                            </button>
-                            <button
-                              onClick={() => {
-                                setIsSelectionMode(false);
-                                setSelectedStickerIds([]);
-                              }}
-                              className="px-3 py-1.5 bg-white/5 hover:bg-white/10 rounded-lg transition-colors border border-white/5"
-                            >
-                              İptal
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-4">
-                            <button
-                              onClick={() => setIsSelectionMode(true)}
-                              className="px-3 py-1.5 bg-white/5 hover:bg-white/10 rounded-lg transition-colors border border-white/5 flex items-center gap-1.5"
-                            >
-                              <Check size={14} />
-                              Çoklu Seçim
-                            </button>
-                            <span className="hidden md:flex items-center gap-1.5"><Info size={14} /> Anlık Bulut Önizleme</span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* WhatsApp 500KB Limit Uyarısı */}
-                    {oversizedStickersCount > 0 && !checkingSizes && (
-                      <div className="mb-6 p-4 bg-danger/20 border border-danger/50 rounded-2xl flex items-center gap-3">
-                        <div className="p-2 bg-danger/30 rounded-xl">
-                          <X size={20} className="text-danger" />
-                        </div>
-                        <div>
-                          <p className="text-danger font-bold text-sm">
-                            {oversizedStickersCount} sticker WhatsApp 500KB limitini aşıyor!
-                          </p>
-                          <p className="text-danger/70 text-xs mt-0.5">
-                            Bu stickerlar WhatsApp'a eklenirken hata verecektir. Lütfen silin ve yeniden yükleyin.
-                          </p>
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7 xl:grid-cols-8 gap-3 md:gap-5">
-                      {selectedPack.stickers?.map((sticker, idx) => {
-                        const stickerSize = stickerSizes[sticker.image_file];
-                        const isOversized = stickerSize && stickerSize > 500 * 1024;
-                        const sizeKB = stickerSize ? Math.round(stickerSize / 1024) : null;
-
-                        return (
-                          <div
-                            key={idx}
-                            className={cn(
-                              "group relative aspect-square bg-card/50 rounded-2xl glass p-4 transition-all duration-300 shadow-lg hover:shadow-2xl cursor-zoom-in",
-                              isOversized
-                                ? "ring-2 ring-danger/70 hover:ring-danger"
-                                : "hover:ring-2 hover:ring-primary/50 hover:shadow-primary/5"
-                            )}
-                            onClick={() => setPreviewSticker({ url: sticker.url, title: sticker.image_file })}
+                <div className="flex-1 overflow-y-auto p-4 md:p-6 custom-scrollbar pb-24 md:pb-6">
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-5">
+                    <h3 className="text-base font-bold flex items-center gap-2">
+                      <Grid className="text-primary" size={20} />
+                      Paket İçeriği
+                      <span className="bg-white/5 px-2 py-0.5 rounded-lg text-[10px] font-mono">{selectedPack.sticker_count} DOSYA</span>
+                      {checkingSizes && (
+                        <span className="text-xs text-textSec animate-pulse">Boyutlar kontrol ediliyor...</span>
+                      )}
+                    </h3>
+                    <div className="flex items-center gap-3 text-xs text-textSec font-bold uppercase tracking-widest">
+                      {isSelectionMode ? (
+                        <div className="flex items-center gap-2 animate-in fade-in slide-in-from-right-4 duration-300">
+                          <span className="text-white bg-white/10 px-2 py-1 rounded-lg">
+                            {selectedStickerIds.length} Seçildi
+                          </span>
+                          <button
+                            onClick={toggleSelectAll}
+                            className="px-3 py-1.5 bg-white/5 hover:bg-white/10 rounded-lg transition-colors border border-white/5"
                           >
-                            {/* Boyut Aşımı İkonu */}
-                            {isOversized && (
-                              <div className="absolute top-2 right-2 z-10 p-1.5 bg-danger rounded-lg shadow-lg" title={`${sizeKB}KB - WhatsApp limiti aşıyor!`}>
-                                <X size={14} className="text-white" />
-                              </div>
-                            )}
-
-                            <div className="w-full h-full flex items-center justify-center pointer-events-none">
-                              <img
-                                src={sticker.url}
-                                alt=""
-                                className={cn(
-                                  "w-full h-full object-contain transition-transform duration-500",
-                                  isSelectionMode && selectedStickerIds.includes(sticker.url) ? "scale-75" : "group-hover:scale-110"
-                                )}
-                              />
-                            </div>
-
-                            {/* Selection Overlay */}
-                            {isSelectionMode && (
-                              <div
-                                className="absolute inset-0 z-20 cursor-pointer flex items-start justify-end p-2"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  toggleStickerSelection(sticker.url);
-                                }}
-                              >
-                                <div className={cn(
-                                  "w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all",
-                                  selectedStickerIds.includes(sticker.url)
-                                    ? "bg-primary border-primary"
-                                    : "bg-black/40 border-white/50 hover:border-white"
-                                )}>
-                                  {selectedStickerIds.includes(sticker.url) && <Check size={14} className="text-white" />}
-                                </div>
-                              </div>
-                            )}
-
-                            <div className={cn(
-                              "absolute inset-0 bg-background/60 transition-opacity flex flex-col items-center justify-center gap-2 rounded-2xl backdrop-blur-[2px]",
-                              isSelectionMode ? "opacity-0 pointer-events-none" : "opacity-0 group-hover:opacity-100"
-                            )} onClick={(e) => e.stopPropagation()}>
-                              {/* Sıralama Butonları */}
-                              <div className="flex gap-1.5">
-                                <button
-                                  onClick={() => moveStickerPosition(selectedPack, idx, 0)}
-                                  disabled={idx === 0}
-                                  className="p-1.5 bg-accent/80 hover:bg-accent text-white rounded-lg shadow-lg transition-all hover:scale-110 disabled:opacity-30 disabled:hover:scale-100"
-                                  title="En başa taşı"
-                                >
-                                  <ArrowUp size={14} />
-                                </button>
-                                <button
-                                  onClick={() => moveStickerPosition(selectedPack, idx, idx - 1)}
-                                  disabled={idx === 0}
-                                  className="p-1.5 bg-white/20 hover:bg-white/30 text-white rounded-lg shadow-lg transition-all hover:scale-110 disabled:opacity-30 disabled:hover:scale-100"
-                                  title="Bir üste taşı"
-                                >
-                                  <ChevronUp size={14} />
-                                </button>
-                                <button
-                                  onClick={() => moveStickerPosition(selectedPack, idx, idx + 1)}
-                                  disabled={idx === (selectedPack.stickers?.length || 0) - 1}
-                                  className="p-1.5 bg-white/20 hover:bg-white/30 text-white rounded-lg shadow-lg transition-all hover:scale-110 disabled:opacity-30 disabled:hover:scale-100"
-                                  title="Bir alta taşı"
-                                >
-                                  <ChevronDown size={14} />
-                                </button>
-                                <button
-                                  onClick={() => moveStickerPosition(selectedPack, idx, (selectedPack.stickers?.length || 1) - 1)}
-                                  disabled={idx === (selectedPack.stickers?.length || 0) - 1}
-                                  className="p-1.5 bg-accent/80 hover:bg-accent text-white rounded-lg shadow-lg transition-all hover:scale-110 disabled:opacity-30 disabled:hover:scale-100"
-                                  title="En sona taşı"
-                                >
-                                  <ArrowDown size={14} />
-                                </button>
-                              </div>
-                              {/* Aksiyon Butonları */}
-                              <div className="flex gap-1.5">
-                                <button
-                                  onClick={() => deleteSticker(selectedPack, sticker)}
-                                  className="p-2 bg-danger hover:bg-danger/80 text-white rounded-xl shadow-lg transition-all hover:scale-110"
-                                  title="Sil"
-                                >
-                                  <Trash2 size={16} />
-                                </button>
-                                <a
-                                  href={sticker.url}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="p-2 bg-primary hover:bg-primary/80 text-white rounded-xl shadow-lg transition-all hover:scale-110"
-                                  title="İndir"
-                                >
-                                  <ExternalLink size={16} />
-                                </a>
-                              </div>
-                              {/* Sıra Numarası */}
-                              <span className="text-[10px] font-black text-white/60">#{idx + 1}</span>
-                            </div>
-
-                            {/* Boyut Bilgisi */}
-                            <div className={cn(
-                              "absolute bottom-2 left-2 right-2 flex justify-between items-center text-[9px] font-black transition-colors opacity-0 group-hover:opacity-100 tracking-tighter",
-                              isOversized ? "text-danger" : "text-textSec group-hover:text-primary"
-                            )}>
-                              <span>{sticker.image_file.substring(0, 10).toUpperCase()}</span>
-                              {sizeKB !== null && (
-                                <span className={cn(
-                                  "px-1.5 py-0.5 rounded",
-                                  isOversized ? "bg-danger/30 text-danger" : "bg-white/10"
-                                )}>
-                                  {sizeKB}KB
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
+                            {selectedPack.stickers?.length === selectedStickerIds.length ? 'Seçimi Kaldır' : 'Tümünü Seç'}
+                          </button>
+                          <button
+                            onClick={deleteSelectedStickers}
+                            disabled={selectedStickerIds.length === 0 || isProcessing}
+                            className="px-3 py-1.5 bg-danger/20 hover:bg-danger/30 text-danger border border-danger/20 rounded-lg transition-colors flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            <Trash2 size={14} />
+                            Sil
+                          </button>
+                          <button
+                            onClick={() => {
+                              setIsSelectionMode(false);
+                              setSelectedStickerIds([]);
+                            }}
+                            className="px-3 py-1.5 bg-white/5 hover:bg-white/10 rounded-lg transition-colors border border-white/5"
+                          >
+                            İptal
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-4">
+                          <button
+                            onClick={() => setIsSelectionMode(true)}
+                            className="px-3 py-1.5 bg-white/5 hover:bg-white/10 rounded-lg transition-colors border border-white/5 flex items-center gap-1.5"
+                          >
+                            <Check size={14} />
+                            Çoklu Seçim
+                          </button>
+                          <span className="hidden md:flex items-center gap-1.5"><Info size={14} /> Anlık Bulut Önizleme</span>
+                        </div>
+                      )}
                     </div>
+                  </div>
+
+                  {/* WhatsApp 500KB Limit Uyarısı */}
+                  {oversizedStickersCount > 0 && !checkingSizes && (
+                    <div className="mb-5 p-3 bg-danger/20 border border-danger/50 rounded-2xl flex items-center gap-3">
+                      <div className="p-2 bg-danger/30 rounded-xl">
+                        <X size={18} className="text-danger" />
+                      </div>
+                      <div>
+                        <p className="text-danger font-bold text-sm">
+                          {oversizedStickersCount} sticker WhatsApp 500KB limitini aşıyor!
+                        </p>
+                        <p className="text-danger/70 text-xs mt-0.5">
+                          Bu stickerlar WhatsApp'a eklenirken hata verecektir. Lütfen silin ve yeniden yükleyin.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8 gap-3 md:gap-4">
+                    {selectedPack.stickers?.map((sticker, idx) => {
+                      const stickerSize = stickerSizes[sticker.image_file];
+                      const isOversized = stickerSize && stickerSize > 500 * 1024;
+                      const sizeKB = stickerSize ? Math.round(stickerSize / 1024) : null;
+
+                      return (
+                        <div
+                          key={idx}
+                          className={cn(
+                            "group relative aspect-square bg-card/50 rounded-2xl glass p-4 transition-all duration-300 shadow-lg hover:shadow-2xl cursor-zoom-in",
+                            isOversized
+                              ? "ring-2 ring-danger/70 hover:ring-danger"
+                              : "hover:ring-2 hover:ring-primary/50 hover:shadow-primary/5"
+                          )}
+                          onClick={() => setPreviewSticker({ url: sticker.url, title: sticker.image_file })}
+                        >
+                          {/* Boyut Aşımı İkonu */}
+                          {isOversized && (
+                            <div className="absolute top-2 right-2 z-10 p-1.5 bg-danger rounded-lg shadow-lg" title={`${sizeKB}KB - WhatsApp limiti aşıyor!`}>
+                              <X size={14} className="text-white" />
+                            </div>
+                          )}
+
+                          <div className="w-full h-full flex items-center justify-center pointer-events-none">
+                            <img
+                              src={sticker.url}
+                              alt=""
+                              className={cn(
+                                "w-full h-full object-contain transition-transform duration-500",
+                                isSelectionMode && selectedStickerIds.includes(sticker.url) ? "scale-75" : "group-hover:scale-110"
+                              )}
+                            />
+                          </div>
+
+                          {/* Selection Overlay */}
+                          {isSelectionMode && (
+                            <div
+                              className="absolute inset-0 z-20 cursor-pointer flex items-start justify-end p-2"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleStickerSelection(sticker.url);
+                              }}
+                            >
+                              <div className={cn(
+                                "w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all",
+                                selectedStickerIds.includes(sticker.url)
+                                  ? "bg-primary border-primary"
+                                  : "bg-black/40 border-white/50 hover:border-white"
+                              )}>
+                                {selectedStickerIds.includes(sticker.url) && <Check size={14} className="text-white" />}
+                              </div>
+                            </div>
+                          )}
+
+                          <div className={cn(
+                            "absolute inset-0 bg-background/60 transition-opacity flex flex-col items-center justify-center gap-2 rounded-2xl backdrop-blur-[2px]",
+                            isSelectionMode ? "opacity-0 pointer-events-none" : "opacity-0 group-hover:opacity-100"
+                          )} onClick={(e) => e.stopPropagation()}>
+                            {/* Sıralama Butonları */}
+                            <div className="flex gap-1.5">
+                              <button
+                                onClick={() => moveStickerPosition(selectedPack, idx, 0)}
+                                disabled={idx === 0}
+                                className="p-1.5 bg-accent/80 hover:bg-accent text-white rounded-lg shadow-lg transition-all hover:scale-110 disabled:opacity-30 disabled:hover:scale-100"
+                                title="En başa taşı"
+                              >
+                                <ArrowUp size={14} />
+                              </button>
+                              <button
+                                onClick={() => moveStickerPosition(selectedPack, idx, idx - 1)}
+                                disabled={idx === 0}
+                                className="p-1.5 bg-white/20 hover:bg-white/30 text-white rounded-lg shadow-lg transition-all hover:scale-110 disabled:opacity-30 disabled:hover:scale-100"
+                                title="Bir üste taşı"
+                              >
+                                <ChevronUp size={14} />
+                              </button>
+                              <button
+                                onClick={() => moveStickerPosition(selectedPack, idx, idx + 1)}
+                                disabled={idx === (selectedPack.stickers?.length || 0) - 1}
+                                className="p-1.5 bg-white/20 hover:bg-white/30 text-white rounded-lg shadow-lg transition-all hover:scale-110 disabled:opacity-30 disabled:hover:scale-100"
+                                title="Bir alta taşı"
+                              >
+                                <ChevronDown size={14} />
+                              </button>
+                              <button
+                                onClick={() => moveStickerPosition(selectedPack, idx, (selectedPack.stickers?.length || 1) - 1)}
+                                disabled={idx === (selectedPack.stickers?.length || 0) - 1}
+                                className="p-1.5 bg-accent/80 hover:bg-accent text-white rounded-lg shadow-lg transition-all hover:scale-110 disabled:opacity-30 disabled:hover:scale-100"
+                                title="En sona taşı"
+                              >
+                                <ArrowDown size={14} />
+                              </button>
+                            </div>
+                            {/* Aksiyon Butonları */}
+                            <div className="flex gap-1.5">
+                              <button
+                                onClick={() => deleteSticker(selectedPack, sticker)}
+                                className="p-2 bg-danger hover:bg-danger/80 text-white rounded-xl shadow-lg transition-all hover:scale-110"
+                                title="Sil"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                              <a
+                                href={sticker.url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="p-2 bg-primary hover:bg-primary/80 text-white rounded-xl shadow-lg transition-all hover:scale-110"
+                                title="İndir"
+                              >
+                                <ExternalLink size={16} />
+                              </a>
+                            </div>
+                            {/* Sıra Numarası */}
+                            <span className="text-[10px] font-black text-white/60">#{idx + 1}</span>
+                          </div>
+
+                          {/* Boyut Bilgisi */}
+                          <div className={cn(
+                            "absolute bottom-2 left-2 right-2 flex justify-between items-center text-[9px] font-black transition-colors opacity-0 group-hover:opacity-100 tracking-tighter",
+                            isOversized ? "text-danger" : "text-textSec group-hover:text-primary"
+                          )}>
+                            <span>{sticker.image_file.substring(0, 10).toUpperCase()}</span>
+                            {sizeKB !== null && (
+                              <span className={cn(
+                                "px-1.5 py-0.5 rounded",
+                                isOversized ? "bg-danger/30 text-danger" : "bg-white/10"
+                              )}>
+                                {sizeKB}KB
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               </div>
@@ -2346,7 +2490,7 @@ function App() {
                 {/* Boş Durum - Temizlendi */}
               </div>
             )}
-          </>
+          </div>
         ) : activeTab === 'stats' ? (
           <div className="flex-1 overflow-y-auto p-4 md:p-12 custom-scrollbar bg-background">
             <div className="max-w-6xl mx-auto space-y-8 md:space-y-12 animate-in fade-in duration-500">
@@ -2461,7 +2605,7 @@ function App() {
               </div>
 
               {/* Advanced Metrics Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-6">
                 {((): any => {
                   const sPacks = packs.filter(p => {
                     if (statsFilter === 'all') return true;
@@ -2475,6 +2619,7 @@ function App() {
                   const totalDL = sPacks.reduce((acc, p) => acc + (p.download_count || 0), 0);
                   const totalViews = sPacks.reduce((acc, p) => acc + (p.view_count || 0), 0);
                   const totalStickers = sPacks.reduce((acc, p) => acc + (p.sticker_count || 0), 0);
+                  const totalFavorites = sPacks.reduce((acc, p) => acc + (p.favorite_count || 0), 0);
                   const avgCVR = totalViews > 0 ? (totalDL / totalViews) * 100 : 0;
 
                   return (
@@ -2532,6 +2677,33 @@ function App() {
                           <h4 className="text-xs font-bold text-textSec uppercase tracking-widest">Toplam Sticker</h4>
                           <div className="text-4xl font-black text-white">{totalStickers.toLocaleString()}</div>
                           <p className="text-[10px] font-bold text-textSec">{sPacks.length} Paket İçerisinde</p>
+                        </div>
+                      </div>
+
+                      <div className="glass p-8 rounded-[2.5rem] bg-gradient-to-br from-pink-500/10 to-transparent border border-white/5 shadow-xl group hover:scale-[1.02] transition-all duration-500">
+                        <div className="flex items-center justify-between mb-6">
+                          <div className="bg-pink-500/20 p-3 rounded-2xl text-pink-400 transform group-hover:rotate-12 transition-transform">
+                            <Crown size={24} />
+                          </div>
+                          <span className="text-[10px] font-black text-pink-400/60 bg-pink-500/5 px-2 py-1 rounded-lg">FAVORİ</span>
+                        </div>
+                        <div className="space-y-1">
+                          <h4 className="text-xs font-bold text-textSec uppercase tracking-widest">Toplam Favori</h4>
+                          <div className="text-4xl font-black text-white">{totalFavorites.toLocaleString()}</div>
+                        </div>
+                      </div>
+
+                      <div className="glass p-8 rounded-[2.5rem] bg-gradient-to-br from-cyan-500/10 to-transparent border border-white/5 shadow-xl group hover:scale-[1.02] transition-all duration-500">
+                        <div className="flex items-center justify-between mb-6">
+                          <div className="bg-cyan-500/20 p-3 rounded-2xl text-cyan-400 transform group-hover:rotate-12 transition-transform">
+                            <Users size={24} />
+                          </div>
+                          <span className="text-[10px] font-black text-cyan-400/60 bg-cyan-500/5 px-2 py-1 rounded-lg">KULLANICI</span>
+                        </div>
+                        <div className="space-y-1">
+                          <h4 className="text-xs font-bold text-textSec uppercase tracking-widest">Toplam Kullanıcı</h4>
+                          <div className="text-4xl font-black text-white">{usersData.length.toLocaleString()}</div>
+                          <p className="text-[10px] font-bold text-textSec">{userStats.premium} Premium</p>
                         </div>
                       </div>
                     </>
@@ -2747,110 +2919,236 @@ function App() {
           </div>
 
         ) : activeTab === 'notifications' ? (
-          <div className="flex-1 overflow-y-auto p-4 md:p-12 custom-scrollbar bg-background">
-            <div className="max-w-3xl mx-auto space-y-12 animate-in fade-in duration-500">
-              <div>
-                <div className="flex flex-col md:flex-row md:items-center gap-4 mb-2">
-                  <Bell className="text-primary w-6 h-6 md:w-8 md:h-8" />
-                  <h2 className="text-2xl md:text-4xl font-black text-white uppercase tracking-tighter">BİLDİRİM GÖNDER</h2>
+          <div className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar bg-background">
+            <div className="max-w-7xl mx-auto animate-in fade-in duration-500">
+              {/* Header */}
+              <div className="flex items-center justify-between mb-8">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-gradient-to-br from-primary to-accent rounded-2xl flex items-center justify-center shadow-lg shadow-primary/20">
+                    <Bell className="text-white" size={22} />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-black text-white tracking-tight">Push Notifications</h2>
+                    <p className="text-textSec text-xs mt-0.5">Send instant notifications to all Sticky users</p>
+                  </div>
                 </div>
-                <p className="text-textSec text-xs md:text-lg">Sticky uygulamasını kullanan tüm cihazlara anlık bildirim gönderin.</p>
+                <div className="hidden md:flex items-center gap-2 text-[10px] text-textSec font-bold uppercase tracking-widest">
+                  <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                  FCM Active
+                </div>
               </div>
 
-              <form onSubmit={handleSendNotification} className="space-y-6 md:space-y-8">
-                <div className="glass p-5 md:p-10 rounded-[2rem] md:rounded-[2.5rem] bg-gradient-to-br from-primary/5 to-transparent border border-white/5 shadow-2xl space-y-6 md:space-y-8">
-                  <div className="space-y-3">
-                    <label className="text-xs font-bold text-textSec uppercase tracking-widest flex items-center gap-2">
-                      <Info size={14} className="text-primary" /> BİLDİRİM BAŞLIĞI
-                    </label>
-                    <input
-                      type="text"
-                      value={notifTitle}
-                      onChange={(e) => setNotifTitle(e.target.value)}
-                      placeholder="Sticky"
-                      className="w-full bg-card/60 border border-white/10 rounded-xl md:rounded-2xl px-4 md:px-5 py-3 md:py-4 text-white text-sm md:text-base font-bold outline-none focus:ring-2 focus:ring-primary focus:bg-background transition-all"
-                    />
-                    <p className="text-[9px] md:text-[10px] text-textSec font-medium pl-1">Bildirimde görünecek kalın başlık. Boş bırakılırsa "Sticky" yazısı görünecektir.</p>
+              <div className="flex flex-col lg:flex-row gap-6">
+                {/* Left: Templates */}
+                <div className="lg:w-[340px] shrink-0 space-y-4">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Sparkles size={16} className="text-accent" />
+                    <h3 className="text-sm font-black text-white uppercase tracking-wider">Quick Templates</h3>
                   </div>
 
-                  <div className="space-y-4">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                      <label className="text-xs font-bold text-textSec uppercase tracking-widest flex items-center gap-2">
-                        <MessageSquare size={14} className="text-accent" /> BİLDİRİM MESAJI
-                      </label>
-
-                      {/* Emojis Grid */}
-                      <div className="flex flex-wrap gap-1 md:gap-1.5 max-w-full sm:max-w-[400px] justify-start sm:justify-end">
-                        {['😊', '😂', '❤️', '🔥', '✨', '🚀', '🎉', '🌟', '💫', '🎁', '💎', '📱', '🌈', '🎭', '🐱', '🧿', '👑', '⚡', '🔔', '💯'].map(emoji => (
+                  <div className="space-y-2.5 max-h-[calc(100vh-220px)] overflow-y-auto custom-scrollbar pr-1">
+                    {[
+                      { cat: '🆕 New Content', color: 'from-emerald-500/20 to-emerald-500/5', border: 'border-emerald-500/20 hover:border-emerald-500/40', templates: [
+                        { title: 'Sticky', body: '🎨 Fresh stickers just dropped! Express yourself like never before ✨' },
+                        { title: 'Sticky', body: '🔥 New sticker pack alert! Be the first to check it out 👀💫' },
+                        { title: 'Sticky', body: '✨ Your chats are about to get a whole lot cooler! New stickers inside 🚀' },
+                        { title: 'Sticky', body: '🎁 Surprise! We just added amazing new stickers you\'ll love 💖' },
+                      ]},
+                      { cat: '💎 Premium', color: 'from-amber-500/20 to-amber-500/5', border: 'border-amber-500/20 hover:border-amber-500/40', templates: [
+                        { title: 'Sticky Premium', body: '👑 Unlock exclusive premium stickers & make your chats legendary ✨💎' },
+                        { title: 'Sticky Premium', body: '🌟 Premium members get early access to our newest collection! Upgrade now 🚀' },
+                        { title: 'Sticky', body: '💎 Go Premium today and get 100+ exclusive stickers! Limited time offer 🔥' },
+                      ]},
+                      { cat: '🎉 Engagement', color: 'from-pink-500/20 to-pink-500/5', border: 'border-pink-500/20 hover:border-pink-500/40', templates: [
+                        { title: 'Sticky', body: '😍 Your friends are already using the trending stickers! Don\'t miss out 🔥' },
+                        { title: 'Sticky', body: '🎭 Over 1000+ stickers waiting for you! Find your perfect match 💫' },
+                        { title: 'Sticky', body: '💬 Make every conversation unforgettable with Sticky stickers! Open now ✨' },
+                        { title: 'Sticky', body: '🌈 Bored of plain texts? Spice up your chats with our stickers! 🎨🔥' },
+                      ]},
+                      { cat: '📢 Updates', color: 'from-blue-500/20 to-blue-500/5', border: 'border-blue-500/20 hover:border-blue-500/40', templates: [
+                        { title: 'Sticky', body: '🚀 Big update! Faster loading, smoother experience & new stickers inside ⚡' },
+                        { title: 'Sticky', body: '✅ We listened to your feedback! Check out what\'s new in Sticky 🎉' },
+                        { title: 'Sticky', body: '⚡ Sticky just got better! Update now for the best sticker experience 💪' },
+                      ]},
+                      { cat: '🐱 Fun & Seasonal', color: 'from-purple-500/20 to-purple-500/5', border: 'border-purple-500/20 hover:border-purple-500/40', templates: [
+                        { title: 'Sticky', body: '🎄 Holiday stickers are here! Spread the festive vibes in your chats 🎅✨' },
+                        { title: 'Sticky', body: '😂 Need a laugh? Our funniest sticker pack ever just landed! Check it out 🤣' },
+                        { title: 'Sticky', body: '🐶🐱 Animal lovers unite! Adorable pet stickers are waiting for you 💕' },
+                        { title: 'Sticky', body: '🌙 Good vibes only! Send some love with our wholesome sticker collection 💖✨' },
+                      ]},
+                    ].map((group, gi) => (
+                      <div key={gi} className="space-y-1.5">
+                        <p className="text-[10px] font-black text-textSec uppercase tracking-widest px-1 pt-2">{group.cat}</p>
+                        {group.templates.map((t, ti) => (
                           <button
-                            key={emoji}
+                            key={ti}
                             type="button"
-                            onClick={() => setNotifBody(prev => prev + emoji)}
-                            className="w-7 h-7 md:w-8 md:h-8 flex items-center justify-center bg-card/40 hover:bg-accent/20 border border-white/5 rounded-lg text-xs md:text-sm transition-all hover:scale-110 active:scale-95"
+                            onClick={() => { setNotifTitle(t.title); setNotifBody(t.body); }}
+                            className={cn(
+                              "w-full text-left p-3 rounded-xl border transition-all duration-200 group/tpl",
+                              group.border,
+                              "bg-gradient-to-r",
+                              group.color,
+                              notifBody === t.body ? "ring-2 ring-primary scale-[1.02] shadow-lg" : "hover:scale-[1.01]"
+                            )}
                           >
-                            {emoji}
+                            <p className="text-[11px] text-white/90 font-medium leading-relaxed line-clamp-2 group-hover/tpl:text-white transition-colors">{t.body}</p>
                           </button>
                         ))}
                       </div>
-                    </div>
-
-                    <textarea
-                      required
-                      value={notifBody}
-                      onChange={(e) => setNotifBody(e.target.value)}
-                      placeholder="Sana özel harika yeni çıkartmalar geldi! Hemen göz at..."
-                      rows={4}
-                      className="w-full bg-card/60 border border-white/10 rounded-2xl px-5 py-4 text-white font-medium outline-none focus:ring-2 focus:ring-accent focus:bg-background transition-all resize-none shadow-inner"
-                    />
-                    <div className="flex items-center justify-between px-1">
-                      <p className="text-[10px] text-textSec font-medium">Kullanıcıların göreceği ana mesaj metni.</p>
-                      <p className="text-[10px] font-mono text-accent/60 font-bold">{notifBody.length} karakter</p>
-                    </div>
-                  </div>
-
-                  <div className="space-y-3">
-                    <label className="text-xs font-bold text-textSec uppercase tracking-widest flex items-center gap-2">
-                      <Package size={14} className="text-warning" /> RESİM URL (OPSİYONEL)
-                    </label>
-                    <input
-                      type="url"
-                      value={notifImageUrl}
-                      onChange={(e) => setNotifImageUrl(e.target.value)}
-                      placeholder="https://example.com/image.webp"
-                      className="w-full bg-card/60 border border-white/10 rounded-2xl px-5 py-4 text-white font-mono text-sm outline-none focus:ring-2 focus:ring-warning focus:bg-background transition-all"
-                    />
-                    <p className="text-[10px] text-textSec font-medium pl-1">Bildirimde görünecek büyük görsel bağlantısı.</p>
-                  </div>
-
-                  <div className="pt-4">
-                    <button
-                      type="submit"
-                      disabled={isSendingNotif || !notifBody}
-                      className={cn(
-                        "w-full py-5 rounded-2xl font-black shadow-xl transition-all flex items-center justify-center gap-3 disabled:opacity-50 text-white",
-                        isSendingNotif ? "bg-hover" : "bg-primary shadow-primary/20 hover:scale-[1.02] active:scale-[0.98]"
-                      )}
-                    >
-                      <Send size={22} className={cn(isSendingNotif && "animate-pulse")} />
-                      {isSendingNotif ? 'GÖNDERİLİYOR...' : 'ŞİMDİ GÖNDER'}
-                    </button>
+                    ))}
                   </div>
                 </div>
 
-                <div className="bg-warning/5 border border-warning/20 p-8 rounded-[2rem] flex items-start gap-5">
-                  <div className="bg-warning/20 p-4 rounded-xl">
-                    <Info className="text-warning" size={24} />
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-black text-warning uppercase tracking-tight">Dikkat & İpucu</h4>
-                    <ul className="text-xs text-textSec leading-relaxed mt-2 space-y-1 list-disc pl-4">
-                      <li>Bu bildirim uygulamada "stickers" kanalına abone olan tüm kullanıcılara gider.</li>
-                      <li>Sistemi gereksiz yere meşgul etmemek için günde en fazla 2-3 kez bildirim göndermeniz önerilir.</li>
-                      <li>Mesajın sonuna ilgi çekici emojiler eklemek kullanıcı etkileşimini %20 artırır! 🚀</li>
-                    </ul>
+                {/* Center: Form */}
+                <div className="flex-1 min-w-0">
+                  <form onSubmit={handleSendNotification} className="space-y-5">
+                    <div className="glass p-6 rounded-2xl bg-gradient-to-br from-white/[0.03] to-transparent border border-white/5 shadow-2xl space-y-5">
+                      {/* Title Input */}
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-textSec uppercase tracking-widest flex items-center gap-2">
+                          <div className="w-5 h-5 bg-primary/20 rounded-md flex items-center justify-center"><Bell size={10} className="text-primary" /></div>
+                          TITLE
+                        </label>
+                        <input
+                          type="text"
+                          value={notifTitle}
+                          onChange={(e) => setNotifTitle(e.target.value)}
+                          placeholder="Sticky"
+                          className="w-full bg-card/60 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:ring-2 focus:ring-primary focus:border-primary/50 transition-all"
+                        />
+                      </div>
+
+                      {/* Message Input */}
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <label className="text-[10px] font-black text-textSec uppercase tracking-widest flex items-center gap-2">
+                            <div className="w-5 h-5 bg-accent/20 rounded-md flex items-center justify-center"><MessageSquare size={10} className="text-accent" /></div>
+                            MESSAGE
+                          </label>
+                          <span className="text-[10px] font-mono text-accent/60 font-bold">{notifBody.length} chars</span>
+                        </div>
+                        <textarea
+                          required
+                          value={notifBody}
+                          onChange={(e) => setNotifBody(e.target.value)}
+                          placeholder="Type your notification message..."
+                          rows={3}
+                          className="w-full bg-card/60 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-medium outline-none focus:ring-2 focus:ring-accent focus:border-accent/50 transition-all resize-none"
+                        />
+                        {/* Quick Emojis */}
+                        <div className="flex flex-wrap gap-1">
+                          {['😊','😂','❤️','🔥','✨','🚀','🎉','🌟','💫','🎁','💎','📱','🌈','🎭','🐱','👑','⚡','🔔','💯','😍','🎨','💪','👀','💖','🤩'].map(emoji => (
+                            <button
+                              key={emoji}
+                              type="button"
+                              onClick={() => setNotifBody(prev => prev + emoji)}
+                              className="w-7 h-7 flex items-center justify-center bg-white/5 hover:bg-accent/20 rounded-lg text-xs transition-all hover:scale-125 active:scale-95"
+                            >
+                              {emoji}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Image URL */}
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-textSec uppercase tracking-widest flex items-center gap-2">
+                          <div className="w-5 h-5 bg-warning/20 rounded-md flex items-center justify-center"><ImageIcon size={10} className="text-warning" /></div>
+                          IMAGE URL <span className="text-textSec/50 font-normal normal-case">(optional)</span>
+                        </label>
+                        <input
+                          type="url"
+                          value={notifImageUrl}
+                          onChange={(e) => setNotifImageUrl(e.target.value)}
+                          placeholder="https://example.com/image.webp"
+                          className="w-full bg-card/60 border border-white/10 rounded-xl px-4 py-3 text-white font-mono text-xs outline-none focus:ring-2 focus:ring-warning focus:border-warning/50 transition-all"
+                        />
+                      </div>
+
+                      {/* Send Button */}
+                      <button
+                        type="submit"
+                        disabled={isSendingNotif || !notifBody}
+                        className={cn(
+                          "w-full py-4 rounded-xl font-black text-sm shadow-xl transition-all flex items-center justify-center gap-2.5 disabled:opacity-40 text-white uppercase tracking-wider",
+                          isSendingNotif ? "bg-hover" : "bg-gradient-to-r from-primary to-accent shadow-primary/20 hover:shadow-2xl hover:shadow-primary/30 hover:scale-[1.01] active:scale-[0.99]"
+                        )}
+                      >
+                        <Send size={18} className={cn(isSendingNotif && "animate-spin")} />
+                        {isSendingNotif ? 'Sending...' : 'Send to All Users'}
+                      </button>
+                    </div>
+
+                    {/* Info Card */}
+                    <div className="flex items-start gap-3 p-4 bg-white/[0.02] border border-white/5 rounded-xl">
+                      <Info size={16} className="text-textSec shrink-0 mt-0.5" />
+                      <div className="space-y-1">
+                        <p className="text-[10px] text-textSec leading-relaxed">Notifications are sent to all devices subscribed to the <span className="text-primary font-bold">"stickers"</span> topic via FCM. Recommended: max 2-3 per day.</p>
+                      </div>
+                    </div>
+                  </form>
+                </div>
+
+                {/* Right: Phone Preview */}
+                <div className="hidden xl:flex flex-col items-center gap-3 shrink-0">
+                  <p className="text-[10px] font-black text-textSec uppercase tracking-widest">Live Preview</p>
+                  <div className="w-[280px] bg-gradient-to-b from-gray-900 to-gray-950 rounded-[2.5rem] p-3 shadow-2xl border border-white/10">
+                    <div className="bg-black rounded-[2rem] overflow-hidden">
+                      {/* Phone Status Bar */}
+                      <div className="flex items-center justify-between px-6 pt-3 pb-2">
+                        <span className="text-[10px] text-white/60 font-semibold">9:41</span>
+                        <div className="w-20 h-5 bg-white/10 rounded-full" />
+                        <div className="flex items-center gap-1">
+                          <div className="w-4 h-2 bg-white/40 rounded-sm" />
+                        </div>
+                      </div>
+
+                      {/* Notification Area */}
+                      <div className="px-4 pt-6 pb-8 min-h-[380px] flex flex-col">
+                        {/* Wallpaper placeholder */}
+                        <div className="flex-1 flex items-start justify-center pt-8">
+                          <div className="text-center space-y-2">
+                            <div className="text-4xl">🔒</div>
+                            <p className="text-white/30 text-xs font-medium">Lock Screen</p>
+                          </div>
+                        </div>
+
+                        {/* Notification Card */}
+                        <div className={cn(
+                          "bg-white/10 backdrop-blur-xl rounded-2xl p-3.5 border border-white/10 transition-all duration-500",
+                          notifBody ? "opacity-100 translate-y-0" : "opacity-30 translate-y-2"
+                        )}>
+                          <div className="flex items-start gap-2.5">
+                            <div className="w-8 h-8 bg-gradient-to-br from-primary to-accent rounded-lg flex items-center justify-center shrink-0 shadow-lg">
+                              <span className="text-[10px] font-black text-white">S</span>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between">
+                                <p className="text-[11px] font-bold text-white">{notifTitle || 'Sticky'}</p>
+                                <p className="text-[9px] text-white/40">now</p>
+                              </div>
+                              <p className="text-[11px] text-white/70 mt-0.5 leading-relaxed line-clamp-3">
+                                {notifBody || 'Your notification message will appear here...'}
+                              </p>
+                              {notifImageUrl && (
+                                <div className="mt-2 w-full h-24 bg-white/5 rounded-lg overflow-hidden">
+                                  <img src={notifImageUrl} alt="" className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Home Indicator */}
+                      <div className="flex justify-center pb-2">
+                        <div className="w-28 h-1 bg-white/20 rounded-full" />
+                      </div>
+                    </div>
                   </div>
                 </div>
-              </form>
+              </div>
             </div>
           </div>
         ) : activeTab === 'messages' ? (
@@ -3109,8 +3407,8 @@ function App() {
                       <span className="col-span-2 text-[10px] font-black text-textSec uppercase tracking-widest">Bitis</span>
                     </div>
 
-                    {/* Table Body */}
-                    <div className="max-h-[600px] overflow-y-auto custom-scrollbar divide-y divide-white/5">
+                    {/* Table Body - Sonsuz liste, kullanıcı eklendikçe dinamik uzar */}
+                    <div className="divide-y divide-white/5">
                       {filteredUsers.length === 0 ? (
                         <div className="flex flex-col items-center justify-center py-20 text-center space-y-4">
                           <div className="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center text-textSec/20">
@@ -3470,6 +3768,430 @@ function App() {
               )}
             </div>
           </div >
+        ) : activeTab === 'batch' ? (
+          <div className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar bg-background">
+            <div className="max-w-7xl mx-auto animate-in fade-in duration-500">
+              {/* Header */}
+              <div className="flex items-center justify-between mb-8">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-gradient-to-br from-yellow-500 to-orange-600 rounded-2xl flex items-center justify-center shadow-lg shadow-orange-500/20">
+                    <Zap className="text-white" size={22} />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-black text-white tracking-tight">Batch Generator V2</h2>
+                    <p className="text-textSec text-xs mt-0.5">Multi-source AI-powered sticker pack factory</p>
+                  </div>
+                </div>
+                <div className="hidden md:flex items-center gap-3">
+                  <span className={cn(
+                    "text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 px-3 py-1.5 rounded-lg border",
+                    deepseekService.isConfigured()
+                      ? "text-green-500 bg-green-500/5 border-green-500/10"
+                      : "text-danger bg-danger/5 border-danger/10"
+                  )}>
+                    <span className={cn("w-1.5 h-1.5 rounded-full", deepseekService.isConfigured() ? "bg-green-500 animate-pulse" : "bg-danger")} />
+                    {deepseekService.isConfigured() ? 'DeepSeek AI' : 'AI Offline'}
+                  </span>
+                  <span className="text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-blue-400 bg-blue-400/5 border-blue-400/10">
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
+                    Giphy + Klipy
+                  </span>
+                </div>
+              </div>
+
+              {!isBatchRunning ? (
+                <div className="flex flex-col xl:flex-row gap-6">
+                  {/* Left Column: Search Terms + Settings */}
+                  <div className="flex-1 min-w-0 space-y-5">
+                    {/* Search Terms */}
+                    <div className="glass rounded-2xl p-5 border border-white/5 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <label className="text-[10px] font-black text-textSec uppercase tracking-widest flex items-center gap-2">
+                          <div className="w-5 h-5 bg-primary/20 rounded-md flex items-center justify-center"><List size={10} className="text-primary" /></div>
+                          Search Terms
+                        </label>
+                        <button
+                          onClick={async () => {
+                            if (!deepseekService.isConfigured()) {
+                              alert('DeepSeek API key bulunamadı!');
+                              return;
+                            }
+                            setBatchAiGenerating(true);
+                            try {
+                              const existingTerms = batchTermsInput.split(',').map(t => t.trim()).filter(Boolean);
+                              const suggestions = await deepseekService.generateSearchTerms(batchMaxPacks, existingTerms);
+                              const newTerms = suggestions.map(s => s.searchTerm).join(', ');
+                              setBatchTermsInput(prev => prev ? prev + ', ' + newTerms : newTerms);
+                            } catch (e: any) {
+                              alert('AI tema üretim hatası: ' + e.message);
+                            } finally {
+                              setBatchAiGenerating(false);
+                            }
+                          }}
+                          disabled={batchAiGenerating}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white rounded-lg text-[10px] font-black transition-all disabled:opacity-50"
+                        >
+                          {batchAiGenerating ? <RefreshCcw size={12} className="animate-spin" /> : <Sparkles size={12} />}
+                          {batchAiGenerating ? 'Generating...' : `AI Generate ${batchMaxPacks} Topics`}
+                        </button>
+                      </div>
+                      <textarea
+                        value={batchTermsInput}
+                        onChange={(e) => setBatchTermsInput(e.target.value)}
+                        placeholder="Enter search terms separated by commas...&#10;e.g: cute cats, angry reactions, good morning, birthday party, anime kawaii, love hearts, funny memes..."
+                        rows={5}
+                        className="w-full bg-card/60 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-medium outline-none focus:ring-2 focus:ring-primary focus:border-primary/50 transition-all resize-none placeholder:text-white/15"
+                      />
+                      <div className="flex items-center justify-between text-[10px] text-textSec font-bold">
+                        <span className="flex items-center gap-1.5">
+                          <span className="w-5 h-5 bg-primary/20 text-primary rounded flex items-center justify-center text-[10px] font-black">{batchTermsInput.split(',').filter(t => t.trim()).length}</span>
+                          terms entered
+                        </span>
+                        <span className="text-textSec/50">1 term = 1 pack</span>
+                      </div>
+                    </div>
+
+                    {/* Settings Grid */}
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                      {/* Source */}
+                      <div className="glass rounded-xl p-4 border border-white/5 space-y-3">
+                        <label className="text-[10px] font-black text-textSec uppercase tracking-widest">Source</label>
+                        <div className="space-y-1.5">
+                          {([
+                            { id: 'both' as BatchSource, label: 'Giphy + Klipy', desc: 'Maximum results', color: 'from-blue-500 to-purple-500' },
+                            { id: 'giphy' as BatchSource, label: 'Giphy Only', desc: 'Stickers & GIFs', color: 'from-green-500 to-emerald-500' },
+                            { id: 'klipy' as BatchSource, label: 'Klipy Only', desc: 'Tenor alternative', color: 'from-orange-500 to-red-500' },
+                          ]).map(s => (
+                            <button
+                              key={s.id}
+                              onClick={() => setBatchSource(s.id)}
+                              className={cn(
+                                "w-full flex items-center gap-2 p-2 rounded-lg border text-left transition-all",
+                                batchSource === s.id
+                                  ? "bg-white/10 border-white/20 text-white"
+                                  : "bg-transparent border-white/5 text-textSec hover:border-white/10"
+                              )}
+                            >
+                              <div className={cn("w-3 h-3 rounded-full shrink-0", batchSource === s.id ? `bg-gradient-to-r ${s.color}` : "bg-white/10")} />
+                              <div>
+                                <span className="text-[11px] font-bold block">{s.label}</span>
+                                <span className="text-[9px] text-textSec">{s.desc}</span>
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Content Type */}
+                      <div className="glass rounded-xl p-4 border border-white/5 space-y-3">
+                        <label className="text-[10px] font-black text-textSec uppercase tracking-widest">Content Type</label>
+                        <div className="space-y-1.5">
+                          <button
+                            onClick={() => setBatchContentType('stickers')}
+                            className={cn(
+                              "w-full flex items-center gap-2 p-2.5 rounded-lg border transition-all",
+                              batchContentType === 'stickers'
+                                ? "bg-primary/10 border-primary/30 text-white"
+                                : "bg-transparent border-white/5 text-textSec hover:border-white/10"
+                            )}
+                          >
+                            <div className={cn("w-5 h-5 rounded flex items-center justify-center", batchContentType === 'stickers' ? "bg-primary" : "bg-white/10")}>
+                              {batchContentType === 'stickers' && <Check size={12} className="text-white" />}
+                            </div>
+                            <div>
+                              <span className="text-[11px] font-bold block">Stickers</span>
+                              <span className="text-[9px] text-textSec">Cartoon/Graphic</span>
+                            </div>
+                          </button>
+                          <button
+                            onClick={() => setBatchContentType('gifs')}
+                            className={cn(
+                              "w-full flex items-center gap-2 p-2.5 rounded-lg border transition-all",
+                              batchContentType === 'gifs'
+                                ? "bg-primary/10 border-primary/30 text-white"
+                                : "bg-transparent border-white/5 text-textSec hover:border-white/10"
+                            )}
+                          >
+                            <div className={cn("w-5 h-5 rounded flex items-center justify-center", batchContentType === 'gifs' ? "bg-primary" : "bg-white/10")}>
+                              {batchContentType === 'gifs' && <Check size={12} className="text-white" />}
+                            </div>
+                            <div>
+                              <span className="text-[11px] font-bold block">GIFs</span>
+                              <span className="text-[9px] text-textSec">Real video/photo</span>
+                            </div>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Max Packs */}
+                      <div className="glass rounded-xl p-4 border border-white/5 space-y-3">
+                        <label className="text-[10px] font-black text-textSec uppercase tracking-widest">Max Packs</label>
+                        <div className="text-center">
+                          <span className="text-3xl font-black text-white">{batchMaxPacks}</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="1"
+                          max="50"
+                          step="1"
+                          value={batchMaxPacks}
+                          onChange={(e) => setBatchMaxPacks(Number(e.target.value))}
+                          className="w-full h-1.5 bg-hover rounded-lg appearance-none cursor-pointer accent-primary"
+                        />
+                        <div className="flex justify-between text-[9px] text-textSec font-bold">
+                          <span>1</span><span>25</span><span>50</span>
+                        </div>
+                      </div>
+
+                      {/* Stickers Per Pack */}
+                      <div className="glass rounded-xl p-4 border border-white/5 space-y-3">
+                        <label className="text-[10px] font-black text-textSec uppercase tracking-widest">Per Pack</label>
+                        <div className="text-center">
+                          <span className="text-3xl font-black text-white">{batchStickersPerPack}</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="5"
+                          max="30"
+                          step="5"
+                          value={batchStickersPerPack}
+                          onChange={(e) => setBatchStickersPerPack(Number(e.target.value))}
+                          className="w-full h-1.5 bg-hover rounded-lg appearance-none cursor-pointer accent-accent"
+                        />
+                        <div className="flex justify-between text-[9px] text-textSec font-bold">
+                          <span>5</span><span>15</span><span>30</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* AI Features */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <button
+                        onClick={() => setBatchUseAiNaming(!batchUseAiNaming)}
+                        className={cn(
+                          "flex items-center gap-3 p-4 rounded-xl border transition-all text-left",
+                          batchUseAiNaming
+                            ? "bg-purple-600/10 border-purple-500/30 text-white"
+                            : "bg-card/30 border-white/5 text-textSec"
+                        )}
+                      >
+                        <div className={cn("w-5 h-5 rounded-md flex items-center justify-center shrink-0", batchUseAiNaming ? "bg-purple-600" : "bg-white/10")}>
+                          {batchUseAiNaming && <Check size={12} className="text-white" />}
+                        </div>
+                        <div>
+                          <span className="text-xs font-bold block">AI Naming</span>
+                          <span className="text-[10px] text-textSec">Creative pack names via DeepSeek</span>
+                        </div>
+                      </button>
+                      <button
+                        onClick={() => setBatchUseAiTranslation(!batchUseAiTranslation)}
+                        className={cn(
+                          "flex items-center gap-3 p-4 rounded-xl border transition-all text-left",
+                          batchUseAiTranslation
+                            ? "bg-purple-600/10 border-purple-500/30 text-white"
+                            : "bg-card/30 border-white/5 text-textSec"
+                        )}
+                      >
+                        <div className={cn("w-5 h-5 rounded-md flex items-center justify-center shrink-0", batchUseAiTranslation ? "bg-purple-600" : "bg-white/10")}>
+                          {batchUseAiTranslation && <Check size={12} className="text-white" />}
+                        </div>
+                        <div>
+                          <span className="text-xs font-bold block">AI Translation</span>
+                          <span className="text-[10px] text-textSec">33 languages via DeepSeek</span>
+                        </div>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Right Column: Summary + Launch */}
+                  <div className="xl:w-[320px] shrink-0 space-y-5">
+                    {/* Summary Card */}
+                    <div className="glass rounded-2xl p-5 border border-white/5 space-y-4">
+                      <h3 className="text-sm font-black text-white uppercase tracking-wider flex items-center gap-2">
+                        <Info size={14} className="text-primary" /> Summary
+                      </h3>
+                      <div className="space-y-2.5">
+                        {[
+                          { label: 'Terms', value: String(batchTermsInput.split(',').filter(t => t.trim()).length), color: 'text-primary' },
+                          { label: 'Packs to create', value: String(Math.min(batchTermsInput.split(',').filter(t => t.trim()).length, batchMaxPacks)), color: 'text-accent' },
+                          { label: 'Source', value: batchSource === 'both' ? 'Giphy + Klipy' : batchSource === 'giphy' ? 'Giphy' : 'Klipy', color: 'text-blue-400' },
+                          { label: 'Content', value: batchContentType === 'gifs' ? 'GIFs' : 'Stickers', color: 'text-white' },
+                          { label: 'Per pack', value: `${batchStickersPerPack} stickers`, color: 'text-white' },
+                          { label: 'AI Naming', value: batchUseAiNaming ? 'On' : 'Off', color: batchUseAiNaming ? 'text-green-400' : 'text-textSec' },
+                          { label: 'AI Translation', value: batchUseAiTranslation ? '33 langs' : 'Off', color: batchUseAiTranslation ? 'text-green-400' : 'text-textSec' },
+                        ].map((item, idx) => (
+                          <div key={idx} className="flex items-center justify-between">
+                            <span className="text-[10px] text-textSec font-bold uppercase tracking-wider">{item.label}</span>
+                            <span className={cn("text-xs font-black", item.color)}>{item.value}</span>
+                          </div>
+                        ))}
+                        <div className="border-t border-white/5 pt-2 mt-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] text-textSec font-bold uppercase tracking-wider">Est. Total</span>
+                            <span className="text-lg font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-orange-500">
+                              ~{Math.min(batchTermsInput.split(',').filter(t => t.trim()).length, batchMaxPacks) * batchStickersPerPack}
+                            </span>
+                          </div>
+                          <p className="text-[9px] text-textSec text-right">stickers total</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* V2 Engine Info */}
+                    <div className="glass rounded-2xl p-4 border border-emerald-500/10 bg-gradient-to-br from-emerald-500/5 to-transparent space-y-2">
+                      <h4 className="text-[10px] font-black text-emerald-400 uppercase tracking-widest flex items-center gap-1.5">
+                        <Zap size={12} /> V2 Engine
+                      </h4>
+                      <ul className="text-[10px] text-textSec space-y-1 leading-relaxed">
+                        <li className="flex items-start gap-1.5"><Check size={10} className="text-emerald-400 mt-0.5 shrink-0" /> Multi-page Giphy pagination (3x more results)</li>
+                        <li className="flex items-start gap-1.5"><Check size={10} className="text-emerald-400 mt-0.5 shrink-0" /> Klipy integration via Cloud Function proxy</li>
+                        <li className="flex items-start gap-1.5"><Check size={10} className="text-emerald-400 mt-0.5 shrink-0" /> Smart query variations (5-7 per term)</li>
+                        <li className="flex items-start gap-1.5"><Check size={10} className="text-emerald-400 mt-0.5 shrink-0" /> Deduplication across all sources</li>
+                        <li className="flex items-start gap-1.5"><Check size={10} className="text-emerald-400 mt-0.5 shrink-0" /> 3x over-fetch for 500KB filter losses</li>
+                      </ul>
+                    </div>
+
+                    {/* Launch Button */}
+                    <button
+                      onClick={async () => {
+                        const terms = batchTermsInput.split(',').map(t => t.trim()).filter(Boolean);
+                        if (terms.length === 0) {
+                          alert('Lütfen en az bir arama terimi girin!');
+                          return;
+                        }
+
+                        // Paket sayısı limitini uygula
+                        const limitedTerms = terms.slice(0, batchMaxPacks);
+                        const actualCount = limitedTerms.length;
+
+                        if (!window.confirm(`${actualCount} paket oluşturulacak (Limit: ${batchMaxPacks}). Bu işlem uzun sürebilir. Devam etmek istiyor musunuz?`)) return;
+
+                        setIsBatchRunning(true);
+                        setBatchProgress(null);
+
+                        try {
+                          // Kullanıcıyı paketler tab'ına yönlendir
+                          setActiveTab('packs');
+                          
+                          const completedPacks = await generateBatchPacks({
+                            searchTerms: limitedTerms,
+                            source: batchSource,
+                            stickersPerPack: batchStickersPerPack,
+                            useAiNaming: batchUseAiNaming,
+                            useAiTranslation: batchUseAiTranslation,
+                            existingPackNames: packs.map(p => p.name.toLowerCase()),
+                            contentType: batchContentType,
+                            onProgress: (progress) => {
+                              setBatchProgress(progress);
+                            }
+                          });
+
+                          // Paketleri yeniden yükle (batch generator zaten Firestore'a kaydetti)
+                          await fetchPacks();
+                          
+                          alert(`✅ ${completedPacks.length} paket başarıyla oluşturuldu!`);
+                        } catch (error: any) {
+                          console.error('Batch generation error:', error);
+                          alert(`Hata: ${error.message}`);
+                        } finally {
+                          setIsBatchRunning(false);
+                        }
+                      }}
+                      disabled={batchTermsInput.split(',').filter(t => t.trim()).length === 0}
+                      className="w-full py-4 bg-gradient-to-r from-yellow-500 via-orange-500 to-red-500 hover:from-yellow-600 hover:via-orange-600 hover:to-red-600 text-white rounded-2xl font-black text-sm shadow-xl shadow-orange-500/20 transition-all hover:translate-y-[-2px] active:translate-y-0 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-3"
+                    >
+                      <Zap size={20} />
+                      TOPLU ÜRETİMİ BAŞLAT
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                /* Batch Progress UI */
+                <div className="space-y-6">
+                  <div className="glass rounded-[2rem] p-8 border border-white/5 space-y-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="text-xl font-black text-white">
+                          {batchProgress?.status === 'done' ? 'Üretim Tamamlandı!' : 'Üretim Devam Ediyor...'}
+                        </h3>
+                        <p className="text-sm text-textSec mt-1">
+                          Paket {batchProgress?.currentPack || 0} / {batchProgress?.totalPacks || 0}
+                        </p>
+                      </div>
+                      {batchProgress?.status === 'done' && (
+                        <button
+                          onClick={() => {
+                            setIsBatchRunning(false);
+                            setBatchProgress(null);
+                          }}
+                          className="px-6 py-3 bg-primary text-white rounded-xl font-black text-xs uppercase tracking-widest"
+                        >
+                          Yeni Üretim
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Progress Bar */}
+                    <div className="space-y-2">
+                      <div className="w-full bg-white/5 h-3 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-gradient-to-r from-yellow-500 via-orange-500 to-red-500 transition-all duration-500 rounded-full"
+                          style={{ width: `${batchProgress?.totalPacks ? (batchProgress.currentPack / batchProgress.totalPacks) * 100 : 0}%` }}
+                        />
+                      </div>
+                      <div className="flex justify-between text-[10px] font-bold text-textSec">
+                        <span>{Math.round(batchProgress?.totalPacks ? (batchProgress.currentPack / batchProgress.totalPacks) * 100 : 0)}%</span>
+                        <span>{batchProgress?.currentPack || 0} / {batchProgress?.totalPacks || 0} paket</span>
+                      </div>
+                    </div>
+
+                    {/* Current Step */}
+                    <div className="bg-primary/5 border border-primary/20 px-5 py-3 rounded-xl">
+                      <p className="text-xs text-primary font-bold">{batchProgress?.currentStep || 'Başlatılıyor...'}</p>
+                    </div>
+
+                    {/* Sticker Progress (if available) */}
+                    {batchProgress?.stickerProgress && (
+                      <div className="space-y-1">
+                        <div className="flex justify-between text-[10px] font-bold text-textSec">
+                          <span>Sticker: {batchProgress.stickerProgress.current} / {batchProgress.stickerProgress.total}</span>
+                          <span>{batchProgress.packName}</span>
+                        </div>
+                        <div className="w-full bg-white/5 h-1.5 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-accent transition-all duration-300 rounded-full"
+                            style={{ width: `${(batchProgress.stickerProgress.current / batchProgress.stickerProgress.total) * 100}%` }}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Completed Packs List */}
+                  {batchProgress?.completedPacks && batchProgress.completedPacks.length > 0 && (
+                    <div className="glass rounded-[2rem] p-6 border border-white/5 space-y-4">
+                      <h4 className="text-sm font-black text-white uppercase tracking-widest flex items-center gap-2">
+                        <Check size={16} className="text-green-500" />
+                        Oluşturulan Paketler ({batchProgress.completedPacks.length})
+                      </h4>
+                      <div className="space-y-2 max-h-[300px] overflow-y-auto custom-scrollbar">
+                        {batchProgress.completedPacks.map((pack, idx) => (
+                          <div key={pack.id} className="flex items-center gap-3 p-3 bg-white/[0.02] rounded-xl border border-white/5">
+                            <span className="w-7 h-7 rounded-lg bg-green-500/20 text-green-500 flex items-center justify-center text-[10px] font-black">{idx + 1}</span>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-bold text-white truncate">{pack.name}</p>
+                              <p className="text-[10px] text-textSec">{pack.stickerCount} sticker • {pack.searchTerm}</p>
+                            </div>
+                            <span className="text-[9px] font-bold text-textSec uppercase bg-white/5 px-2 py-1 rounded">{pack.source}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
         ) : null
         }
       </main >
@@ -3537,8 +4259,8 @@ function App() {
                     />
                     <button
                       type="button"
-                      onClick={() => {
-                        const newName = generateCreativeName(newPackData.name);
+                      onClick={async () => {
+                        const newName = await generateCreativeName(newPackData.name);
                         setNewPackData({ ...newPackData, name: newName, name_en: newName });
                       }}
                       className="px-4 bg-accent/10 border-2 border-accent/20 hover:bg-accent/20 hover:border-accent/50 text-accent rounded-xl transition-all flex items-center justify-center active:scale-95 group"
@@ -3716,8 +4438,8 @@ function App() {
                       />
                       <button
                         type="button"
-                        onClick={() => {
-                          const newName = generateCreativeName(editFormData.name || "");
+                        onClick={async () => {
+                          const newName = await generateCreativeName(editFormData.name || "");
                           setEditFormData({ ...editFormData, name: newName, name_en: newName });
                         }}
                         className="px-4 bg-accent/10 border-2 border-accent/20 hover:bg-accent/20 hover:border-accent/50 text-accent rounded-xl transition-all flex items-center justify-center active:scale-95 group"
@@ -4047,6 +4769,173 @@ function App() {
           <p className="text-[10px] text-center text-textSec opacity-60">
             Not: Arka plan silme işlemi dosyanın uzunluğuna göre biraz zaman alabilir.
           </p>
+        </div>
+      </Modal>
+
+      {/* Sticker Import Modal - Serbest Arama + Kaynak Seçimi */}
+      <Modal show={showImportModal} onClose={() => !isImporting && setShowImportModal(false)} title="🚀 Sticker İçe Aktarma">
+        <div className="space-y-6">
+          <div className="bg-gradient-to-r from-purple-600/10 to-pink-600/10 border border-purple-500/20 p-6 rounded-2xl flex items-center gap-4">
+            <div className="bg-gradient-to-r from-purple-600 to-pink-600 p-3 rounded-xl">
+              <Sparkles className="text-white" size={28} />
+            </div>
+            <div>
+              <h3 className="text-lg font-black text-white">Sticker İçe Aktarma</h3>
+              <p className="text-textSec text-xs mt-1">Giphy'den serbest arama ile sticker ekleyin.</p>
+            </div>
+          </div>
+
+          {!isImporting ? (
+            <>
+              <div className="space-y-4">
+                {/* Kaynak - Sadece Giphy (Klipy API key geçersiz) */}
+                <div>
+                  <label className="text-[10px] font-black text-textSec uppercase tracking-[0.2em] px-1 mb-2 block">Kaynak</label>
+                  <div className="bg-gradient-to-r from-purple-600 to-pink-600 rounded-xl p-3 text-center">
+                    <span className="text-white text-sm font-black">Giphy</span>
+                  </div>
+                </div>
+
+                {/* Serbest Arama */}
+                <div>
+                  <label className="text-[10px] font-black text-textSec uppercase tracking-[0.2em] px-1 mb-2 block">Arama Terimi</label>
+                  <div className="relative">
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-textSec" size={16} />
+                    <input
+                      type="text"
+                      value={customSearchText}
+                      onChange={(e) => setCustomSearchText(e.target.value)}
+                      placeholder="Herhangi bir şey arayın... (ör: cute cats, anime reactions, neon text)"
+                      className="w-full bg-card/60 border border-white/10 rounded-xl pl-11 pr-4 py-3 text-white text-sm font-medium outline-none focus:ring-2 focus:ring-purple-500 transition-all"
+                    />
+                  </div>
+                </div>
+
+                {/* İçerik Tipi */}
+                <div>
+                  <label className="text-[10px] font-black text-textSec uppercase tracking-[0.2em] px-1 mb-2 block">İçerik Tipi</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      onClick={() => setImportContentType('stickers')}
+                      className={cn(
+                        "flex flex-col items-center gap-2 p-3 rounded-xl border transition-all",
+                        importContentType === 'stickers'
+                          ? "bg-purple-600/10 border-purple-500/30 text-white"
+                          : "bg-card border-white/5 text-textSec hover:border-white/10"
+                      )}
+                    >
+                      <div className={cn("w-6 h-6 rounded-lg flex items-center justify-center text-xs", importContentType === 'stickers' ? "bg-purple-600" : "bg-white/10")}>
+                        {importContentType === 'stickers' && '✓'}
+                      </div>
+                      <div className="text-center">
+                        <span className="text-xs font-bold block">Stickers</span>
+                        <span className="text-[9px] text-textSec">Çizgi film/Grafik</span>
+                      </div>
+                    </button>
+                    <button
+                      onClick={() => setImportContentType('gifs')}
+                      className={cn(
+                        "flex flex-col items-center gap-2 p-3 rounded-xl border transition-all",
+                        importContentType === 'gifs'
+                          ? "bg-purple-600/10 border-purple-500/30 text-white"
+                          : "bg-card border-white/5 text-textSec hover:border-white/10"
+                      )}
+                    >
+                      <div className={cn("w-6 h-6 rounded-lg flex items-center justify-center text-xs", importContentType === 'gifs' ? "bg-purple-600" : "bg-white/10")}>
+                        {importContentType === 'gifs' && '✓'}
+                      </div>
+                      <div className="text-center">
+                        <span className="text-xs font-bold block">GIFs</span>
+                        <span className="text-[9px] text-textSec">Gerçek video/foto</span>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Sticker Sayısı */}
+                <div>
+                  <label className="text-[10px] font-black text-textSec uppercase tracking-[0.2em] px-1 mb-2 block">
+                    Kaç Sticker Eklensin? ({importCount})
+                  </label>
+                  <input
+                    type="range"
+                    min="5"
+                    max="30"
+                    step="5"
+                    value={importCount}
+                    onChange={(e) => setImportCount(Number(e.target.value))}
+                    className="w-full h-2 bg-hover rounded-lg appearance-none cursor-pointer accent-purple-600"
+                  />
+                  <div className="flex justify-between text-xs text-textSec mt-1 px-1">
+                    <span>5</span><span>15</span><span>30</span>
+                  </div>
+                </div>
+
+                {/* Özet */}
+                <div className="bg-white/5 p-4 rounded-xl text-xs text-textSec space-y-1">
+                  <p>📦 <strong className="text-white">Paket:</strong> {selectedPack?.name}</p>
+                  <p>📊 <strong className="text-white">Mevcut:</strong> {selectedPack?.sticker_count || 0}</p>
+                  <p>🔍 <strong className="text-white">Arama:</strong> {customSearchText || 'trending'}</p>
+                  <p>🌐 <strong className="text-white">Kaynak:</strong> Giphy</p>
+                  <p>🎬 <strong className="text-white">Tip:</strong> {importContentType === 'gifs' ? 'GIFs' : 'Stickers'}</p>
+                  <p>➕ <strong className="text-white">Eklenecek:</strong> {importCount}</p>
+                  <p>🎯 <strong className="text-white">Toplam:</strong> {(selectedPack?.sticker_count || 0) + importCount} / 30</p>
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowImportModal(false)}
+                  className="flex-1 px-6 py-3.5 bg-card hover:bg-hover border border-white/5 rounded-2xl text-sm font-bold transition-all text-textSec hover:text-white"
+                >
+                  İptal
+                </button>
+                <button
+                  onClick={handleImportStickers}
+                  disabled={!selectedPack}
+                  className="flex-1 px-6 py-3.5 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white rounded-2xl text-sm font-black shadow-xl shadow-purple-500/20 transition-all hover:translate-y-[-2px] active:translate-y-0 disabled:opacity-50"
+                >
+                  🚀 Başlat
+                </button>
+              </div>
+            </>
+          ) : (
+            <div className="space-y-4">
+              <div className="bg-card p-6 rounded-2xl space-y-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-bold text-white">
+                    {importProgress?.current || 0} / {importProgress?.total || 0}
+                  </span>
+                  <span className="text-xs text-textSec">
+                    {Math.round((importProgress?.current || 0) / (importProgress?.total || 1) * 100)}%
+                  </span>
+                </div>
+                
+                <div className="w-full bg-white/5 h-2 rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-gradient-to-r from-purple-600 to-pink-600 transition-all duration-300"
+                    style={{ width: `${(importProgress?.current || 0) / (importProgress?.total || 1) * 100}%` }}
+                  />
+                </div>
+
+                <p className="text-xs text-textSec text-center">{importProgress?.message}</p>
+
+                {importProgress?.preview && (
+                  <div className="flex justify-center">
+                    <img 
+                      src={importProgress.preview} 
+                      alt="Preview" 
+                      className="w-32 h-32 object-contain rounded-xl border border-white/10"
+                    />
+                  </div>
+                )}
+              </div>
+
+              <p className="text-[10px] text-center text-textSec opacity-60 animate-pulse">
+                ⏳ Lütfen bekleyin, sticker'lar işleniyor...
+              </p>
+            </div>
+          )}
         </div>
       </Modal>
 

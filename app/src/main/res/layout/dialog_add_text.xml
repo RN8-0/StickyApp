@@ -4,7 +4,7 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="vertical"
-    android:padding="24dp"
+    android:padding="14dp"
     android:background="@drawable/bg_editor_container">
 
     <TextView
@@ -12,16 +12,16 @@
         android:layout_height="wrap_content"
         android:text="@string/btn_add_text_label"
         android:textColor="@color/text_primary"
-        android:textSize="20sp"
+        android:textSize="15sp"
         android:textStyle="bold"
-        android:layout_marginBottom="20dp" />
+        android:layout_marginBottom="8dp" />
 
     <!-- PREVIEW AREA -->
     <FrameLayout
         android:id="@+id/previewContainer"
         android:layout_width="match_parent"
-        android:layout_height="140dp"
-        android:layout_marginBottom="24dp"
+        android:layout_height="50dp"
+        android:layout_marginBottom="8dp"
         android:background="#10000000"
         android:backgroundTint="@color/surface_variant">
         
@@ -39,7 +39,8 @@
             android:layout_gravity="center"
             android:text="Sticker Preview"
             android:gravity="center"
-            android:padding="16dp" />
+            android:textSize="16sp"
+            android:padding="8dp" />
     </FrameLayout>
 
     <com.google.android.material.textfield.TextInputLayout
@@ -67,33 +68,12 @@
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="@string/text_size_label"
-        android:textColor="@color/text_primary"
-        android:textSize="13sp"
-        android:textStyle="bold"
-        android:layout_marginTop="24dp"
-        android:layout_marginBottom="8dp" />
-
-    <com.google.android.material.slider.Slider
-        android:id="@+id/textSizeSlider"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:valueFrom="12"
-        android:valueTo="64"
-        android:value="28"
-        app:thumbColor="@color/accent"
-        app:trackColorActive="@color/accent"
-        app:trackColorInactive="@color/divider" />
-
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
         android:text="@string/select_color"
         android:textColor="@color/text_primary"
-        android:textSize="13sp"
+        android:textSize="11sp"
         android:textStyle="bold"
-        android:layout_marginTop="24dp"
-        android:layout_marginBottom="8dp" />
+        android:layout_marginTop="10dp"
+        android:layout_marginBottom="4dp" />
 
     <HorizontalScrollView
         android:layout_width="match_parent"
@@ -112,16 +92,17 @@
         android:layout_height="wrap_content"
         android:text="@string/select_font"
         android:textColor="@color/text_primary"
-        android:textSize="13sp"
+        android:textSize="11sp"
         android:textStyle="bold"
-        android:layout_marginTop="24dp"
-        android:layout_marginBottom="8dp" />
+        android:layout_marginTop="10dp"
+        android:layout_marginBottom="4dp" />
 
-    <ScrollView
+    <androidx.core.widget.NestedScrollView
         android:layout_width="match_parent"
-        android:layout_height="160dp"
+        android:layout_height="120dp"
         android:scrollbars="vertical"
-        android:layout_marginTop="4dp">
+        android:fillViewport="false"
+        android:layout_marginTop="2dp">
         
         <GridLayout
             android:id="@+id/fontSelectionLayout"
@@ -129,13 +110,13 @@
             android:layout_height="wrap_content"
             android:columnCount="2" />
             
-    </ScrollView>
+    </androidx.core.widget.NestedScrollView>
 
     <com.google.android.material.button.MaterialButton
         android:id="@+id/btnAddText"
         android:layout_width="match_parent"
-        android:layout_height="64dp"
-        android:layout_marginTop="24dp"
+        android:layout_height="48dp"
+        android:layout_marginTop="10dp"
         android:text="@string/btn_add_text_label"
         android:textColor="@color/white"
         android:textAllCaps="true"

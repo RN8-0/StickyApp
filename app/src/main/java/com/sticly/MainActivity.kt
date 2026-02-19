@@ -53,6 +53,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var drawer: DrawerLayout
     private lateinit var rv: RecyclerView
     private lateinit var loadingOverlay: View
+    private lateinit var loadingAnimation: com.airbnb.lottie.LottieAnimationView
     private lateinit var swipeRefresh: SwipeRefreshLayout
     private lateinit var mainContent: View
     private lateinit var adapter: PackAdapter
@@ -197,10 +198,13 @@ class MainActivity : AppCompatActivity() {
         StickerRepository.startObservingPacks(this)
         observePacksUpdateFlow()
         checkAndRequestNotificationPermission()
-        setupEdgeToEdge()
 
         // İlk açılışta ve her girişte WhatsApp durumunu doğrula
         checkInstallationUpdates()
+
+        // Özel paketleri favorilerden temizle (custom paketler favorilerde görünmemeli)
+        val favs = PreferencesHelper.getFavoritePacks(this)
+        favs.filter { it.startsWith("custom_") }.forEach { PreferencesHelper.removeFavoritePack(this, it) }
     }
 
     private fun setupEdgeToEdge() {
@@ -221,6 +225,8 @@ class MainActivity : AppCompatActivity() {
         drawer = findViewById(R.id.drawer)
         rv = findViewById(R.id.rv)
         loadingOverlay = findViewById(R.id.loadingOverlay)
+        loadingAnimation = findViewById(R.id.loadingAnimation)
+        // Animasyon veri gelene kadar sonsuz döngüde oynar
         swipeRefresh = findViewById(R.id.swipeRefresh)
         menuBtn = findViewById(R.id.menuBtn)
         toolbarTitle = findViewById(R.id.toolbarTitle)
@@ -232,9 +238,7 @@ class MainActivity : AppCompatActivity() {
         btnAddStickerHeader = findViewById(R.id.btnAddStickerHeader)
         
         btnAddStickerHeader.setOnClickListener {
-            @Suppress("DEPRECATION")
-            startActivityForResult(Intent(this, StickerMakerActivity::class.java), REQUEST_STICKER_MAKER)
-            overridePendingTransition(R.anim.fade_in, R.anim.fade_out)
+            showStickerTypeChooser()
         }
 
         categoryChipGroup = findViewById(R.id.categoryChipGroup)
@@ -277,16 +281,14 @@ class MainActivity : AppCompatActivity() {
 
         btnFilter.setOnClickListener { showFilterMenu(it) }
 
-        val btnPremiumHeader = findViewById<ImageButton>(R.id.btnPremiumHeader)
+        val btnPremiumHeader = findViewById<View>(R.id.btnPremiumHeader)
         btnPremiumHeader.setOnClickListener {
             startActivity(Intent(this, PremiumActivity::class.java))
             overridePendingTransition(R.anim.fade_in, R.anim.fade_out)
         }
 
         btnCreateFirstSticker.setOnClickListener {
-            @Suppress("DEPRECATION")
-            startActivityForResult(Intent(this, StickerMakerActivity::class.java), REQUEST_STICKER_MAKER)
-            overridePendingTransition(R.anim.fade_in, R.anim.fade_out)
+            showStickerTypeChooser()
         }
     }
 
@@ -754,51 +756,61 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
+    private fun displayPacks(packs: List<Pack>) {
+        allPacks = packs
+        setupCategoryChips()
+        applyFilters()
+        updateRegionalPacks(packs)
+        showContent()
+        StickyGlideModule.preloadStickerPreviews(this@MainActivity, packs)
+    }
+
     private fun loadPacksFromFirebase(forceRefresh: Boolean = false) {
         lifecycleScope.launch {
             try {
+                // 1. Disk cache veya memory cache'ten hızlıca göster (varsa)
+                val quickPacks = withContext(Dispatchers.IO) {
+                    if (StickerRepository.allPacksCache.isNotEmpty()) {
+                        StickerRepository.allPacksCache
+                    } else {
+                        StickerRepository.loadCacheFromDisk(this@MainActivity)
+                    }
+                }
+                if (quickPacks.isNotEmpty()) {
+                    displayPacks(quickPacks)
+                }
+
+                // 2. Firebase'den güncel veriyi çek (arka planda)
                 val loadedPacks = StickerRepository.loadPacks(this@MainActivity, forceRefresh)
 
                 if (loadedPacks.isNotEmpty()) {
-                    val firebasePackIds = loadedPacks.filter { it.category != "custom" }.map { it.id }.toSet()
+                    displayPacks(loadedPacks)
 
-                    // KRITIK: Dosya işlemlerini IO thread'ine taşı (Donmayı önler)
-                    withContext(Dispatchers.IO) {
+                    // Ağır IO işlemlerini arka planda yap
+                    lifecycleScope.launch(Dispatchers.IO) {
+                        val firebasePackIds = loadedPacks.filter { it.category != "custom" }.map { it.id }.toSet()
                         StickerRepository.cleanupInvalidCache(this@MainActivity, firebasePackIds)
                         loadedPacks.filter { it.category != "custom" }.forEach { pack ->
                             StickerRepository.updatePackCache(this@MainActivity, pack)
                         }
                     }
-
-                    allPacks = loadedPacks
-                    setupCategoryChips() // Kategorileri güncelle
-                    applyFilters()
-                    updateRegionalPacks(loadedPacks)
-
-                    // Çıkartma önizlemelerini arka planda önceden yükle (ilk 8 paket, her paketten 4 sticker)
-                    StickyGlideModule.preloadStickerPreviews(this@MainActivity, loadedPacks, packCount = 8, stickersPerPack = 4)
                 }
-                showContent()
             } catch (e: Exception) {
                 e.printStackTrace()
-                showContent()
             }
         }
     }
 
+    private var contentShown = false
+
     private fun showContent() {
-        loadingOverlay.animate()
-            .alpha(0f)
-            .setDuration(300)
-            .withEndAction {
-                loadingOverlay.visibility = View.GONE
-                mainContent.visibility = View.VISIBLE
-                mainContent.alpha = 0f
-                mainContent.animate().alpha(1f).setDuration(200).start()
-                
-                swipeRefresh.visibility = View.VISIBLE
-            }
-            .start()
+        if (contentShown) return
+        contentShown = true
+        loadingAnimation.cancelAnimation()
+        loadingOverlay.visibility = View.GONE
+        mainContent.visibility = View.VISIBLE
+        mainContent.alpha = 1f
+        swipeRefresh.visibility = View.VISIBLE
     }
 
     private fun observePacksUpdateFlow() {
@@ -1182,23 +1194,43 @@ class MainActivity : AppCompatActivity() {
         PreferencesHelper.stopRealtimeSync()
     }
 
+    private fun showStickerTypeChooser() {
+        val dialog = com.google.android.material.bottomsheet.BottomSheetDialog(this, R.style.TransparentBottomSheetDialog)
+        val view = layoutInflater.inflate(R.layout.dialog_sticker_type_chooser, null)
+        dialog.setContentView(view)
+
+        // Normal (Static) → StickerMakerActivity with photo picker
+        view.findViewById<View>(R.id.optionNormal).setOnClickListener {
+            dialog.dismiss()
+            @Suppress("DEPRECATION")
+            startActivityForResult(
+                Intent(this, StickerMakerActivity::class.java).putExtra("skipTypeSelection", true),
+                REQUEST_STICKER_MAKER
+            )
+            overridePendingTransition(R.anim.fade_in, R.anim.fade_out)
+        }
+
+        // Animated → AnimatedStickerActivity (video picker)
+        view.findViewById<View>(R.id.optionAnimated).setOnClickListener {
+            dialog.dismiss()
+            @Suppress("DEPRECATION")
+            startActivityForResult(
+                Intent(this, AnimatedStickerActivity::class.java),
+                REQUEST_STICKER_MAKER
+            )
+            overridePendingTransition(R.anim.fade_in, R.anim.fade_out)
+        }
+
+        dialog.show()
+    }
+
     companion object {
         private const val REQUEST_DELETE_PACK = 2001
         private const val REQUEST_STICKER_MAKER = 2002
     }
 
     private fun deleteCustomPack(pack: Pack) {
-        lifecycleScope.launch {
-            val isWhitelisted = withContext(Dispatchers.IO) {
-                WhitelistCheck.isWhitelisted(this@MainActivity, pack.id)
-            }
-
-            if (isWhitelisted) {
-                showDeleteOptionsDialog(pack)
-            } else {
-                confirmAndDirectDelete(pack)
-            }
-        }
+        confirmAndDirectDelete(pack)
     }
 
     private fun showDeleteOptionsDialog(pack: Pack) {
@@ -1211,11 +1243,6 @@ class MainActivity : AppCompatActivity() {
         view.findViewById<View>(R.id.cardDeleteLocal).setOnClickListener {
             dialog.dismiss()
             confirmAndDirectDelete(pack)
-        }
-        
-        view.findViewById<View>(R.id.cardDeleteWhatsApp).setOnClickListener {
-            dialog.dismiss()
-            triggerWhatsAppRemove(pack)
         }
         
         view.findViewById<Button>(R.id.btnCancel).setOnClickListener {
@@ -1260,18 +1287,27 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun confirmAndDirectDelete(pack: Pack) {
-        com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
-            .setTitle(R.string.delete_pack)
-            .setMessage(R.string.delete_pack_confirm)
-            .setPositiveButton(R.string.yes) { _, _ ->
-                if (CustomStickerManager.deletePack(this, pack.id)) {
-                    PreferencesHelper.removeInstalledPack(this, pack.id)
-                    Toast.makeText(this, R.string.pack_deleted_success, Toast.LENGTH_SHORT).show()
-                    refreshPacks()
-                }
+        val dialog = android.app.Dialog(this)
+        dialog.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE)
+        dialog.setContentView(R.layout.dialog_delete_pack)
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        dialog.window?.setLayout(
+            (resources.displayMetrics.widthPixels * 0.85).toInt(),
+            android.view.WindowManager.LayoutParams.WRAP_CONTENT
+        )
+
+        dialog.findViewById<android.widget.Button>(R.id.btnDeleteCancel).setOnClickListener {
+            dialog.dismiss()
+        }
+        dialog.findViewById<android.widget.Button>(R.id.btnDeleteConfirm).setOnClickListener {
+            dialog.dismiss()
+            if (CustomStickerManager.deletePack(this, pack.id)) {
+                PreferencesHelper.removeInstalledPack(this, pack.id)
+                Toast.makeText(this, R.string.pack_deleted_success, Toast.LENGTH_SHORT).show()
+                refreshPacks()
             }
-            .setNegativeButton(R.string.no, null)
-            .show()
+        }
+        dialog.show()
     }
 
     @Suppress("DEPRECATION")

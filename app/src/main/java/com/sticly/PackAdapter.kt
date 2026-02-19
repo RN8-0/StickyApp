@@ -63,10 +63,12 @@ class PackAdapter(
         val crownIcon: ImageView = v.findViewById(R.id.crownIcon)
         val installedBadge: TextView = v.findViewById(R.id.installedBadge)
         val premiumContainer: View = v.findViewById(R.id.premiumContainer)
+        val packTypeBadge: TextView = v.findViewById(R.id.packTypeBadge)
         val newBadge: TextView = v.findViewById(R.id.newBadge)
         val btnFavorite: ImageButton = v.findViewById(R.id.btnFavorite)
         val btnFavoriteNew: ImageButton = v.findViewById(R.id.btnFavoriteNew)
         val btnDelete: ImageButton = v.findViewById(R.id.btnDelete)
+        val btnDeletePack: ImageButton = v.findViewById(R.id.btnDeletePack)
         val downloadCount: TextView = v.findViewById(R.id.downloadCount)
         val timeAgo: TextView = v.findViewById(R.id.timeAgo)
         val btnAdd: MaterialButton = v.findViewById(R.id.btnAdd)
@@ -156,11 +158,14 @@ class PackAdapter(
         val isCustomPack = pack.category == "custom"
         if (isCustomPack) {
             h.btnFavorite.visibility = View.GONE
-            h.btnDelete.visibility = View.VISIBLE
-            h.btnDelete.setOnClickListener { onDeleteClick?.invoke(pack) }
+            h.btnDelete.visibility = View.GONE
+            h.btnDeletePack.visibility = View.VISIBLE
+            h.btnDeletePack.setColorFilter(android.graphics.Color.parseColor("#FF6B6B"))
+            h.btnDeletePack.setOnClickListener { onDeleteClick?.invoke(pack) }
         } else {
             h.btnFavorite.visibility = View.VISIBLE
             h.btnDelete.visibility = View.GONE
+            h.btnDeletePack.visibility = View.GONE
         }
 
         // Premium badge ve taç
@@ -169,6 +174,20 @@ class PackAdapter(
 
         h.crownIcon.visibility = if (isPremiumPack) View.VISIBLE else View.GONE
         h.premiumContainer.visibility = if (isPremiumPack && !hasAccess && !isInstalled) View.VISIBLE else View.GONE
+
+        // Pack type badge (Animated/Static)
+        if (isCustomPack) {
+            h.packTypeBadge.visibility = View.VISIBLE
+            if (pack.isAnimated) {
+                h.packTypeBadge.text = "ANIMATED"
+                h.packTypeBadge.setBackgroundColor(android.graphics.Color.parseColor("#FF6B35"))
+            } else {
+                h.packTypeBadge.text = "STATIC"
+                h.packTypeBadge.setBackgroundColor(android.graphics.Color.parseColor("#4ECDC4"))
+            }
+        } else {
+            h.packTypeBadge.visibility = View.GONE
+        }
 
         // Yeni badge
         val isNew = isPackNew(pack.createdAt)

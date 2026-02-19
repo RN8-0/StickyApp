@@ -69,11 +69,15 @@ class LoginActivity : AppCompatActivity() {
         preloadDataInBackground()
     }
 
+    private var isDataPreloaded = false
+
     /**
      * Kullanıcı login ekranındayken arka planda:
      * 1. Firebase'den paketleri çek ve önbelleğe al
      * 2. Popüler paketlerin görsellerini preload et
      * 3. İlk paketlerin önizlemelerini preload et
+     * 
+     * ÖNEMLI: Bu işlem TAMAMLANANA KADAR MainActivity'ye geçiş yapılmaz
      */
     private fun preloadDataInBackground() {
         lifecycleScope.launch(Dispatchers.IO) {
@@ -91,12 +95,14 @@ class LoginActivity : AppCompatActivity() {
                     // Popüler paketlerin görsellerini EN YÜKSEK öncelikle preload et
                     StickyGlideModule.preloadPopularPacks(this@LoginActivity, popularPacks)
 
-                    // İlk 12 paketin önizlemelerini preload et
-                    StickyGlideModule.preloadStickerPreviews(this@LoginActivity, packs, packCount = 12, stickersPerPack = 5)
+                    // İlk 30 paketin önizlemelerini preload et (daha fazla)
+                    StickyGlideModule.preloadStickerPreviews(this@LoginActivity, packs, packCount = 30, stickersPerPack = 5)
                 }
+                isDataPreloaded = true
             } catch (e: Exception) {
-                // Hata olursa sessizce devam et - MainActivity'de tekrar denenecek
+                // Hata olursa yine de geçişe izin ver
                 android.util.Log.e("LoginActivity", "Background preload error: ${e.message}")
+                isDataPreloaded = true
             }
         }
     }

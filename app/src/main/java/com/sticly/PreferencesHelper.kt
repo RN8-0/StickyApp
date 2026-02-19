@@ -136,7 +136,10 @@ object PreferencesHelper {
         getPrefs(context).edit().putStringSet(KEY_INSTALLED_PACKS, current).commit()
         
         // WhatsApp'a eklenen paket aynı zamanda favorilere eklenir ve Firebase'e senkronize edilir
-        addFavoritePack(context, packId)
+        // Özel (custom) paketler favorilere eklenmez - sadece My Stickers'da görünür
+        if (!packId.startsWith("custom_")) {
+            addFavoritePack(context, packId)
+        }
     }
 
     fun removeInstalledPack(context: Context, packId: String) {

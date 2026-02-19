@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@drawable/bg_dialog_rounded"
+    android:orientation="vertical"
+    android:paddingTop="28dp"
+    android:paddingBottom="12dp"
+    android:paddingStart="24dp"
+    android:paddingEnd="24dp">
+
+    <!-- Icon -->
+    <ImageView
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginBottom="16dp"
+        android:src="@drawable/ic_delete"
+        android:importantForAccessibility="no"
+        app:tint="#E74C3C" />
+
+    <!-- Title -->
+    <TextView
+        android:id="@+id/tvDeleteTitle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/delete_pack"
+        android:textSize="20sp"
+        android:textStyle="bold"
+        android:textColor="@color/text_primary"
+        android:gravity="center"
+        android:layout_marginBottom="12dp" />
+
+    <!-- Message -->
+    <TextView
+        android:id="@+id/tvDeleteMessage"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/delete_pack_confirm"
+        android:textSize="14sp"
+        android:textColor="@color/text_secondary"
+        android:gravity="center"
+        android:lineSpacingExtra="4dp"
+        android:layout_marginBottom="24dp" />
+
+    <!-- Buttons -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center">
+
+        <!-- Cancel Button -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnDeleteCancel"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="1"
+            android:layout_marginEnd="8dp"
+            android:text="@string/cancel"
+            android:textColor="@color/text_secondary"
+            android:textAllCaps="false"
+            android:textSize="14sp"
+            app:cornerRadius="24dp"
+            app:strokeColor="@color/divider"
+            app:strokeWidth="1dp" />
+
+        <!-- Delete Button -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnDeleteConfirm"
+            style="@style/Widget.MaterialComponents.Button"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="1"
+            android:layout_marginStart="8dp"
+            android:text="@string/delete_pack"
+            android:textAllCaps="false"
+            android:textSize="14sp"
+            android:textColor="@color/white"
+            app:cornerRadius="24dp"
+            app:backgroundTint="#E74C3C" />
+
+    </LinearLayout>
+
+</LinearLayout>

@@ -35,14 +35,10 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="6dp"
         android:text="Tool"
-        android:textColor="@color/text_primary"
+        android:textColor="@color/toolbar_text"
         android:textSize="11sp"
         android:textStyle="bold"
         android:textAllCaps="true"
-        android:letterSpacing="0.05"
-        android:shadowColor="#40000000"
-        android:shadowDx="1"
-        android:shadowDy="1"
-        android:shadowRadius="1" />
+        android:letterSpacing="0.05" />
 
 </LinearLayout>

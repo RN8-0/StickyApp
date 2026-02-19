@@ -88,7 +88,29 @@
 -keep class com.android.vending.billing.** { *; }
 -keep class com.android.billingclient.** { *; }
 
+# FFmpegKit
+-keep class com.arthenica.ffmpegkit.** { *; }
+-dontwarn com.arthenica.ffmpegkit.**
+
+# Media3 / ExoPlayer
+-keep class androidx.media3.** { *; }
+-dontwarn androidx.media3.**
+
 # Suppress warnings for missing JDK/AutoValue classes
 -dontwarn javax.lang.model.**
 -dontwarn com.google.auto.value.**
 -dontwarn autovalue.shaded.com.squareup.javapoet.**
+
+# gRPC / OkHttp (Firebase BOM 33.x)
+-dontwarn com.squareup.okhttp.**
+-dontwarn io.grpc.okhttp.**
+-keep class io.grpc.** { *; }
+-dontwarn io.grpc.**
+
+# Java reflection (Guava)
+-dontwarn java.lang.reflect.AnnotatedType
+-dontwarn com.google.common.reflect.**
+
+# Unity Ads
+-keep class com.unity3d.ads.** { *; }
+-dontwarn com.unity3d.ads.**
