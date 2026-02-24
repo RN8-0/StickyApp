@@ -73,11 +73,31 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
     private lateinit var photoEditor: PhotoEditor
 
     // ML Kit for background removal
-    private val subjectSegmenter by lazy {
+    private lateinit var subjectSegmenter: com.google.mlkit.vision.segmentation.subject.SubjectSegmenter
+    private var isSegmenterReady = false
+
+    private fun initSegmenter() {
         val options = SubjectSegmenterOptions.Builder()
             .enableForegroundBitmap()
             .build()
-        SubjectSegmentation.getClient(options)
+        subjectSegmenter = SubjectSegmentation.getClient(options)
+
+        // Pre-warm: ML Kit model indirilmesini tetikle
+        // Küçük bir dummy bitmap ile modeli önceden hazırla
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val warmupBitmap = Bitmap.createBitmap(64, 64, Bitmap.Config.ARGB_8888)
+                val warmupImage = InputImage.fromBitmap(warmupBitmap, 0)
+                Tasks.await(subjectSegmenter.process(warmupImage))
+                warmupBitmap.recycle()
+                isSegmenterReady = true
+                android.util.Log.d("StickerMaker", "ML Kit model pre-warmed successfully")
+            } catch (e: Exception) {
+                // Model henüz indirilmemiş olabilir, ilk gerçek kullanımda tekrar denenecek
+                android.util.Log.w("StickerMaker", "ML Kit warmup attempt: ${e.message}")
+                isSegmenterReady = true // İlk kullanımda retry mekanizması devreye girecek
+            }
+        }
     }
 
     // State
@@ -154,7 +174,8 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_sticker_maker)
 
-        // MediaPipe lazy initialization - sadece gerektiğinde başlatılacak
+        // ML Kit Subject Segmentation modelini önceden başlat
+        initSegmenter()
         initViews()
         setupToolsRecyclerView()
         setupClickListeners()
@@ -623,6 +644,9 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
 
     // ==================== Remove Background (ML Kit) ====================
 
+    private var bgRemovalRetryCount = 0
+    private val MAX_BG_RETRY = 3
+
     private fun removeBackground() {
         if (backgroundRemoved) {
             // Restore original
@@ -639,11 +663,16 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
             return
         }
 
+        bgRemovalRetryCount = 0
+        attemptRemoveBackground(bitmap)
+    }
+
+    private fun attemptRemoveBackground(bitmap: Bitmap) {
         showLoading()
 
         lifecycleScope.launch(Dispatchers.IO) {
             try {
-                android.util.Log.d("StickerMaker", "Starting ML Kit background removal, bitmap: ${bitmap.width}x${bitmap.height}")
+                android.util.Log.d("StickerMaker", "Starting ML Kit background removal (attempt ${bgRemovalRetryCount + 1}/$MAX_BG_RETRY), bitmap: ${bitmap.width}x${bitmap.height}")
 
                 // Bitmap'i ARGB_8888 formatına çevir
                 val processedBitmap = if (bitmap.config != Bitmap.Config.ARGB_8888) {
@@ -669,17 +698,26 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
                 val finalBitmap = addContour(foregroundBitmap, 4, Color.WHITE)
 
                 withContext(Dispatchers.Main) {
+                    bgRemovalRetryCount = 0
                     saveBitmapToHistory()
                     setEditorImage(finalBitmap)
                     backgroundRemoved = true
                     hideLoading()
                 }
             } catch (e: Exception) {
-                android.util.Log.e("StickerMaker", "ML Kit background removal error: ${e.message}", e)
-                e.printStackTrace()
-                withContext(Dispatchers.Main) {
-                    hideLoading()
-                    Toast.makeText(this@StickerMakerActivity, getString(R.string.bg_removal_error), Toast.LENGTH_SHORT).show()
+                android.util.Log.e("StickerMaker", "ML Kit background removal error (attempt ${bgRemovalRetryCount + 1}): ${e.message}", e)
+                bgRemovalRetryCount++
+
+                if (bgRemovalRetryCount < MAX_BG_RETRY) {
+                    // Model henüz hazır olmayabilir, 1 saniye bekle ve tekrar dene
+                    android.util.Log.d("StickerMaker", "Retrying background removal in 1 second... (attempt ${bgRemovalRetryCount + 1})")
+                    delay(1000L)
+                    attemptRemoveBackground(bitmap)
+                } else {
+                    withContext(Dispatchers.Main) {
+                        hideLoading()
+                        Toast.makeText(this@StickerMakerActivity, getString(R.string.bg_removal_error), Toast.LENGTH_SHORT).show()
+                    }
                 }
             }
         }

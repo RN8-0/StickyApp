@@ -44,6 +44,11 @@ service cloud.firestore {
       allow read, write: if request.auth != null;
     }
 
+    // Batch Generator Taslakları - sadece auth (Admin) okuyabilir ve yönetebilir
+    match /draft_stickers/{document=**} {
+      allow read, write: if request.auth != null;
+    }
+
     // Admin Listesi - Giriş kontrolü için herkes (veya auth) okuyabilmeli
     match /admins/{email} {
       allow read: if true;

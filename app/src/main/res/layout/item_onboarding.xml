@@ -24,6 +24,15 @@
             android:layout_gravity="center"
             android:scaleType="fitCenter" />
 
+        <com.airbnb.lottie.LottieAnimationView
+            android:id="@+id/lottieOnboarding"
+            android:layout_width="220dp"
+            android:layout_height="220dp"
+            android:layout_gravity="center"
+            android:visibility="gone"
+            app:lottie_autoPlay="true"
+            app:lottie_loop="false" />
+
         <!-- 3D STICKY BRANDING OVERLAY (First page only) -->
         <FrameLayout
             android:id="@+id/stickyBrandContainer"

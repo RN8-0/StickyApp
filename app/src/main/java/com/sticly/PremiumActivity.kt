@@ -1,6 +1,7 @@
 package com.sticly
 
 import android.content.Intent
+import android.graphics.Color
 import android.os.Bundle
 import android.view.View
 import android.view.animation.AnimationUtils
@@ -64,6 +65,11 @@ class PremiumActivity : AppCompatActivity() {
         syncPremiumFromFirebase()
         updateUI()
         setupEdgeToEdge()
+
+        // Set status bar to transparent to draw edge-to-edge
+        androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, false)
+        window.statusBarColor = Color.TRANSPARENT
+        window.navigationBarColor = Color.BLACK
     }
 
     private fun setupViews() {

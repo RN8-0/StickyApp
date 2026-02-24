@@ -113,7 +113,7 @@
     <string name="pack_load_failed">Paket yüklenemedi</string>
 
     <!-- Premium Promo Dialog -->
-    <string name="premium_promo_title">Reklamsız Deneyim</string>
+    <string name="premium_promo_title">Reklamlar için üzgünüz</string>
     <string name="premium_promo_message">Reklamların bazen can sıkıcı olabildiğinin farkındayız.\n\nUygulamamızı geliştirebilmek ve yeni çıkartmalar ekleyebilmek için küçük de olsa bir gelire ihtiyacımız var.\n\nReklamsız kullanım ve tüm premium çıkartmalar için Premium abonelik alabilirsin 💙</string>
     <string name="get_premium">Premium Üyelik Al</string>
     <string name="maybe_later">Belki Sonra</string>

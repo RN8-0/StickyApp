@@ -51,13 +51,20 @@ interface RawGif {
     url: string;
     previewUrl: string;
     source: string;
+    width: number;
+    height: number;
+    size: number;
+    rating: string;
+    apiRank: number;
+    queryMatch: 'exact' | 'variation';
+    qualityScore?: number;
 }
 
 const GIPHY_PROXY = 'https://us-central1-sticky-dcd20.cloudfunctions.net/giphyProxy';
 const KLIPY_PROXY = 'https://us-central1-sticky-dcd20.cloudfunctions.net/klipyProxy';
 const PAGE_SIZE = 50; // Max per request
 
-async function fetchGiphyPage(query: string, limit: number, offset: number, contentType: 'gifs' | 'stickers'): Promise<RawGif[]> {
+async function fetchGiphyPage(query: string, limit: number, offset: number, contentType: 'gifs' | 'stickers', queryMatch: 'exact' | 'variation' = 'exact'): Promise<RawGif[]> {
     try {
         const endpoint = query === 'trending' ? 'trending' : 'search';
         const proxyUrl = `${GIPHY_PROXY}?endpoint=${endpoint}&type=${contentType}&limit=${limit}&offset=${offset}${query !== 'trending' ? `&query=${encodeURIComponent(query)}` : ''}`;
@@ -68,20 +75,32 @@ async function fetchGiphyPage(query: string, limit: number, offset: number, cont
         const data = await response.json();
         if (!data.data || data.data.length === 0) return [];
 
-        return data.data.map((gif: any) => ({
-            id: String(gif.id),
-            title: gif.title || 'Sticker',
-            url: gif.images?.original?.url || gif.images?.fixed_height?.url || gif.images?.downsized_medium?.url || '',
-            previewUrl: gif.images?.downsized_medium?.url || gif.images?.fixed_height_small?.url || '',
-            source: 'giphy'
-        })).filter((g: RawGif) => g.url);
+        return data.data.map((gif: any, idx: number) => {
+            const original = gif.images?.original;
+            const w = Number(original?.width || gif.images?.fixed_height?.width || 0);
+            const h = Number(original?.height || gif.images?.fixed_height?.height || 0);
+            const s = Number(original?.size || gif.images?.downsized_medium?.size || 0);
+            return {
+                id: String(gif.id),
+                title: gif.title || 'Sticker',
+                url: original?.url || gif.images?.fixed_height?.url || gif.images?.downsized_medium?.url || '',
+                previewUrl: gif.images?.downsized_medium?.url || gif.images?.fixed_height_small?.url || '',
+                source: 'giphy',
+                width: w,
+                height: h,
+                size: s,
+                rating: gif.rating || 'g',
+                apiRank: offset + idx,
+                queryMatch
+            };
+        }).filter((g: RawGif) => g.url);
     } catch (error: any) {
         console.error(`[BATCH] Giphy page fetch error (${query}, offset=${offset}):`, error);
         return [];
     }
 }
 
-async function fetchKlipyPage(query: string, limit: number, contentType: 'gifs' | 'stickers' = 'stickers'): Promise<RawGif[]> {
+async function fetchKlipyPage(query: string, limit: number, contentType: 'gifs' | 'stickers' = 'stickers', queryMatch: 'exact' | 'variation' = 'exact'): Promise<RawGif[]> {
     try {
         const endpoint = query === 'trending' ? 'trending' : 'search';
         const proxyUrl = `${KLIPY_PROXY}?endpoint=${endpoint}&type=${contentType}&limit=${limit}${query !== 'trending' ? `&query=${encodeURIComponent(query)}` : ''}`;
@@ -92,8 +111,12 @@ async function fetchKlipyPage(query: string, limit: number, contentType: 'gifs' 
         const data = await response.json();
         if (!data.data || data.data.length === 0) return [];
 
-        return data.data.map((item: any) => {
-            const url = item.images?.original?.url || item.images?.fixed_height?.url || item.images?.downsized?.url
+        return data.data.map((item: any, idx: number) => {
+            const original = item.images?.original;
+            const w = Number(original?.width || item.images?.fixed_height?.width || 0);
+            const h = Number(original?.height || item.images?.fixed_height?.height || 0);
+            const s = Number(original?.size || 0);
+            const url = original?.url || item.images?.fixed_height?.url || item.images?.downsized?.url
                 || item.media_formats?.gif?.url || item.media_formats?.mediumgif?.url
                 || item.url || item.gif_url || item.sticker_url || '';
             const preview = item.images?.preview_gif?.url || item.images?.fixed_height_small?.url || item.images?.downsized?.url
@@ -104,7 +127,13 @@ async function fetchKlipyPage(query: string, limit: number, contentType: 'gifs' 
                 title: item.title || item.content_description || 'Sticker',
                 url,
                 previewUrl: preview,
-                source: 'klipy'
+                source: 'klipy',
+                width: w,
+                height: h,
+                size: s,
+                rating: item.rating || 'g',
+                apiRank: idx,
+                queryMatch
             };
         }).filter((g: RawGif) => g.url);
     } catch (error: any) {
@@ -113,31 +142,87 @@ async function fetchKlipyPage(query: string, limit: number, contentType: 'gifs' 
     }
 }
 
-function generateQueryVariations(baseQuery: string): string[] {
-    const variations = [baseQuery];
-    const words = baseQuery.toLowerCase().split(/\s+/);
+function generateQueryVariations(baseQuery: string): { query: string; match: 'exact' | 'variation' }[] {
+    const variations: { query: string; match: 'exact' | 'variation' }[] = [
+        { query: baseQuery, match: 'exact' }
+    ];
 
-    // Add singular/plural and adjective variations
-    const adjectives = ['cute', 'funny', 'happy', 'cool', 'awesome', 'adorable', 'hilarious', 'sweet'];
-    const randomAdj = adjectives[Math.floor(Math.random() * adjectives.length)];
-    variations.push(`${randomAdj} ${baseQuery}`);
-
-    // Add "sticker" suffix
+    // Only add "sticker" suffix — this is the most relevant variation
     if (!baseQuery.toLowerCase().includes('sticker')) {
-        variations.push(`${baseQuery} sticker`);
+        variations.push({ query: `${baseQuery} sticker`, match: 'exact' });
     }
 
-    // Add emoji/reaction context
-    variations.push(`${baseQuery} reaction`);
-    variations.push(`${baseQuery} emoji`);
-
-    // If multi-word, try individual words
-    if (words.length > 1) {
-        variations.push(words[0]);
-        variations.push(words[words.length - 1]);
+    // Add "gif" suffix for GIF content
+    if (!baseQuery.toLowerCase().includes('gif')) {
+        variations.push({ query: `${baseQuery} gif`, match: 'exact' });
     }
+
+    // NO random adjectives, NO "reaction", NO "emoji" — these dilute relevance
+    // NO individual word splits — they return completely unrelated results
 
     return variations;
+}
+
+// ========== QUALITY SCORING ==========
+
+function calculateQualityScore(gif: RawGif, searchTerm: string): number {
+    let score = 0;
+
+    // 1. API Rank bonus (top results from API are most relevant) — max 40 points
+    // First 10 results get highest bonus, drops off quickly
+    if (gif.apiRank < 5) score += 40;
+    else if (gif.apiRank < 10) score += 35;
+    else if (gif.apiRank < 20) score += 25;
+    else if (gif.apiRank < 30) score += 15;
+    else score += 5;
+
+    // 2. Query match type — exact queries are more relevant (+15)
+    if (gif.queryMatch === 'exact') score += 15;
+
+    // 3. Dimension quality — prefer reasonable sizes, not too small (+20 max)
+    const w = gif.width;
+    const h = gif.height;
+    if (w >= 200 && h >= 200) score += 20;
+    else if (w >= 100 && h >= 100) score += 10;
+    else if (w > 0 && h > 0) score += 2;
+    // If no dimension data, give neutral score
+    else score += 8;
+
+    // 4. Aspect ratio — prefer roughly square or reasonable ratios (+10 max)
+    if (w > 0 && h > 0) {
+        const ratio = Math.max(w, h) / Math.min(w, h);
+        if (ratio <= 1.5) score += 10;       // Nearly square — ideal for stickers
+        else if (ratio <= 2.0) score += 6;   // Acceptable
+        else if (ratio <= 3.0) score += 2;   // Wide/tall — less ideal
+        // ratio > 3 = very stretched, no bonus
+    } else {
+        score += 5; // neutral
+    }
+
+    // 5. Title relevance — does the title contain the search term? (+15 max)
+    const titleLower = (gif.title || '').toLowerCase();
+    const termLower = searchTerm.toLowerCase();
+    const termWords = termLower.split(/\s+/);
+    if (titleLower.includes(termLower)) {
+        score += 15; // Full match
+    } else {
+        // Partial word match
+        const matchedWords = termWords.filter(w => w.length > 2 && titleLower.includes(w));
+        score += Math.min(10, matchedWords.length * 5);
+    }
+
+    // 6. Penalize very generic/empty titles
+    if (!gif.title || gif.title === 'Sticker' || gif.title.trim().length < 3) {
+        score -= 5;
+    }
+
+    // 7. File size penalty — very large files often fail WebP conversion
+    if (gif.size > 0) {
+        if (gif.size > 8 * 1024 * 1024) score -= 10;      // >8MB — likely to fail
+        else if (gif.size > 5 * 1024 * 1024) score -= 5;  // >5MB — risky
+    }
+
+    return Math.max(0, score);
 }
 
 async function fetchStickersAggregated(
@@ -149,27 +234,27 @@ async function fetchStickersAggregated(
 ): Promise<RawGif[]> {
     const seenIds = new Set<string>();
     const allResults: RawGif[] = [];
-    const neededTotal = targetCount * 3; // Fetch 3x to account for failures
+    const neededTotal = targetCount * 5; // Fetch 5x to ensure enough stickers survive sizing limits
 
     const queries = generateQueryVariations(query);
     onStatus?.(`Searching with ${queries.length} query variations...`);
 
-    for (const q of queries) {
+    for (const { query: q, match } of queries) {
         if (allResults.length >= neededTotal) break;
 
-        // === GIPHY (paginated) ===
+        // === GIPHY (paginated — only 2 pages for exact, 1 for variation) ===
         if (source === 'giphy' || source === 'both') {
             let offset = 0;
-            const maxPages = 3;
+            const maxPages = match === 'exact' ? 2 : 1;
             for (let page = 0; page < maxPages; page++) {
                 if (allResults.length >= neededTotal) break;
                 const remaining = neededTotal - allResults.length;
                 const fetchCount = Math.min(PAGE_SIZE, remaining);
 
                 onStatus?.(`Giphy: "${q}" (page ${page + 1})...`);
-                const results = await fetchGiphyPage(q, fetchCount, offset, contentType);
+                const results = await fetchGiphyPage(q, fetchCount, offset, contentType, match);
 
-                if (results.length === 0) break; // No more results
+                if (results.length === 0) break;
 
                 for (const r of results) {
                     if (!seenIds.has(r.id)) {
@@ -179,7 +264,7 @@ async function fetchStickersAggregated(
                 }
 
                 offset += results.length;
-                if (results.length < fetchCount) break; // Last page
+                if (results.length < fetchCount) break;
             }
         }
 
@@ -187,7 +272,7 @@ async function fetchStickersAggregated(
         if (source === 'klipy' || source === 'both') {
             if (allResults.length < neededTotal) {
                 onStatus?.(`Klipy: "${q}"...`);
-                const klipyResults = await fetchKlipyPage(q, Math.min(50, neededTotal - allResults.length), contentType);
+                const klipyResults = await fetchKlipyPage(q, Math.min(50, neededTotal - allResults.length), contentType, match);
                 for (const r of klipyResults) {
                     const dedupKey = `klipy_${r.id}`;
                     if (!seenIds.has(dedupKey)) {
@@ -199,8 +284,29 @@ async function fetchStickersAggregated(
         }
     }
 
-    console.log(`[BATCH] Aggregated ${allResults.length} unique results for "${query}" (target: ${targetCount})`);
-    return allResults;
+    // === QUALITY SCORING & SORTING ===
+    onStatus?.(`Scoring ${allResults.length} results for quality...`);
+    for (const gif of allResults) {
+        gif.qualityScore = calculateQualityScore(gif, query);
+    }
+
+    // Sort by quality score (highest first)
+    allResults.sort((a, b) => (b.qualityScore || 0) - (a.qualityScore || 0));
+
+    // Log top and bottom scores for debugging
+    if (allResults.length > 0) {
+        const top5 = allResults.slice(0, 5).map(g => `${g.title.substring(0, 30)}(${g.qualityScore})`);
+        const bot5 = allResults.slice(-5).map(g => `${g.title.substring(0, 30)}(${g.qualityScore})`);
+        console.log(`[BATCH] Quality scores for "${query}": TOP=${top5.join(', ')} | BOTTOM=${bot5.join(', ')}`);
+    }
+
+    // Filter out extremely low quality (below 5 points) so we don't drop viable 
+    // stickers when the user requested a large amount and APIs return limited results.
+    const minScore = 5;
+    const filtered = allResults.filter(g => (g.qualityScore || 0) >= minScore);
+    console.log(`[BATCH] Aggregated ${allResults.length} → filtered to ${filtered.length} quality results for "${query}" (target: ${targetCount})`);
+
+    return filtered;
 }
 
 // ========== GIF DOWNLOAD & PROCESS ==========
@@ -272,7 +378,7 @@ async function createTrayImage(stickers: Sticker[], packId: string): Promise<{ t
         const tempFile = new File([blob], 'auto_tray.webp', { type: 'image/webp' });
 
         // Tray olarak işle
-        const trayBlob = await stickerProcessor.processTray(tempFile, () => {});
+        const trayBlob = await stickerProcessor.processTray(tempFile, () => { });
 
         const trayFileName = `tray_${Date.now()}.png`;
         const trayStorageRef = ref(storage, `stickers/${packId}/${trayFileName}`);
@@ -348,7 +454,7 @@ export async function generateBatchPacks(config: BatchPackConfig): Promise<Compl
             });
 
             let { name: packName } = await generatePackName(searchTerm, useAiNaming);
-            
+
             // Duplicate kontrolü - aynı isimli paket varsa atla
             if (existingPackNames.some(existing => existing === packName.toLowerCase())) {
                 console.warn(`[BATCH] "${packName}" zaten mevcut, atlanıyor.`);
@@ -514,7 +620,7 @@ export async function generateBatchPacks(config: BatchPackConfig): Promise<Compl
                 batch_source: source
             };
 
-            await setDoc(doc(db, 'stickers', packId), packData);
+            await setDoc(doc(db, 'draft_stickers', packId), packData);
 
             const completed: CompletedPack = {
                 id: packId,

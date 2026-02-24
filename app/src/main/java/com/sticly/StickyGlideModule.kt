@@ -24,11 +24,11 @@ import kotlinx.coroutines.launch
 class StickyGlideModule : AppGlideModule() {
 
     override fun applyOptions(context: Context, builder: GlideBuilder) {
-        // Bellek önbelleği - varsayılanın 1.5 katı (daha fazla resmi bellekte tut)
-        val memoryCacheSize = Runtime.getRuntime().maxMemory() / 4 // Max memory'nin 1/4'ü
+        // Bellek önbelleği - GC baskısını azaltmak için 1/6 oranında tut
+        val memoryCacheSize = Runtime.getRuntime().maxMemory() / 6
         builder.setMemoryCache(LruResourceCache(memoryCacheSize))
 
-        // Disk önbelleği - 150MB (sticker önizlemeleri için daha fazla alan)
+        // Disk önbelleği - 150MB (sticker önizlemeleri için)
         builder.setDiskCache(InternalCacheDiskCacheFactory(context, "glide_cache", 150 * 1024 * 1024))
     }
 
@@ -50,11 +50,11 @@ class StickyGlideModule : AppGlideModule() {
 
             CoroutineScope(Dispatchers.IO).launch {
                 try {
-                    Log.d(TAG, "Preloading ${popularPacks.size} popular packs with IMMEDIATE priority...")
+                    Log.d(TAG, "Preloading ${popularPacks.size} popular packs...")
 
                     popularPacks.forEach { pack ->
                         if (pack.category != "custom") {
-                            pack.stickers.take(5).forEach { sticker ->
+                            pack.stickers.take(3).forEach { sticker ->
                                 val url = if (sticker.url.isNotEmpty()) {
                                     sticker.url
                                 } else if (pack.storagePath.isNotEmpty()) {
@@ -66,8 +66,9 @@ class StickyGlideModule : AppGlideModule() {
                                         Glide.with(context.applicationContext)
                                             .load(url)
                                             .diskCacheStrategy(DiskCacheStrategy.DATA)
-                                            .priority(Priority.IMMEDIATE)
-                                            .preload(200, 200)
+                                            .priority(Priority.HIGH)
+                                            .override(150)
+                                            .preload(150, 150)
                                     } catch (e: Exception) { }
                                 }
                             }
@@ -82,10 +83,10 @@ class StickyGlideModule : AppGlideModule() {
         }
 
         /**
-         * Ana liste çıkartmalarını GERÇEKTEN indir ve cache'le
-         * submit() kullanarak indirmeyi ZORUNLU yap
+         * İlk ekranda görünecek paketlerin önizlemelerini preload et.
+         * Sadece ilk 20 paket × 3 sticker = maks 60 istek (ağı boğmadan).
          */
-        fun preloadStickerPreviews(context: Context, packs: List<Pack>, packCount: Int = 100, stickersPerPack: Int = 5) {
+        fun preloadStickerPreviews(context: Context, packs: List<Pack>, packCount: Int = 20, stickersPerPack: Int = 3) {
             CoroutineScope(Dispatchers.IO).launch {
                 try {
                     val urls = mutableListOf<String>()
@@ -106,10 +107,10 @@ class StickyGlideModule : AppGlideModule() {
                         }
                     }
 
-                    Log.d(TAG, "Downloading ${urls.size} stickers...")
+                    Log.d(TAG, "Downloading ${urls.size} stickers for preload...")
 
-                    // Paralel indirme - 50 adet aynı anda (agresif)
-                    urls.chunked(50).forEach { batch ->
+                    // Paralel indirme - 4 adet aynı anda (IO thread'leri boğmadan)
+                    urls.chunked(4).forEach { batch ->
                         val jobs = batch.map { url ->
                             async(Dispatchers.IO) {
                                 try {
@@ -125,7 +126,7 @@ class StickyGlideModule : AppGlideModule() {
                         jobs.forEach { it.await() }
                     }
 
-                    Log.d(TAG, "All ${urls.size} stickers downloaded!")
+                    Log.d(TAG, "Preload completed: ${urls.size} stickers")
                 } catch (e: Exception) {
                     Log.e(TAG, "Download error: ${e.message}")
                 }

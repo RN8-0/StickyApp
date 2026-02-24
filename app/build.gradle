@@ -19,8 +19,8 @@ android {
         applicationId "com.sticly"
         minSdk 24
         targetSdk 35
-        versionCode 27
-        versionName "3.1.2"
+        versionCode 30
+        versionName "3.1.5"
 
         // Sadece ARM mimarileri (MediaPipe x86_64 desteklemiyor)
         ndk {
@@ -39,8 +39,8 @@ android {
 
     buildTypes {
         release {
-            minifyEnabled true
-            shrinkResources true
+            minifyEnabled false
+            shrinkResources false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
             signingConfig signingConfigs.release
             // Native debug symbols dahil et (Play Console için)
@@ -71,7 +71,8 @@ android {
 
     packagingOptions {
         jniLibs {
-            useLegacyPackaging = true
+            // Android 15 (16KB alignment) ve daha iyi performans için false olmalı
+            useLegacyPackaging = false
         }
     }
 }
@@ -115,6 +116,7 @@ dependencies {
     // Coroutines
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3'
     implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.8.7'
+    implementation 'androidx.lifecycle:lifecycle-process:2.8.7'
 
     // SwipeRefreshLayout (CircularProgressDrawable için)
     implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.1.0'

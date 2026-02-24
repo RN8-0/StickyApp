@@ -18,7 +18,7 @@
         android:layout_height="wrap_content"
         android:minHeight="50dp"
         android:orientation="vertical"
-        android:background="@color/toolbar_bg"
+        android:background="@color/primary"
         android:paddingBottom="4dp">
 
         <!-- Top bar: Back button + App name + Logo -->
@@ -148,42 +148,7 @@
             android:orientation="vertical"
             android:visibility="gone">
 
-            <!-- Row 1 -->
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center">
 
-                <!-- Add to WhatsApp -->
-                <LinearLayout
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:orientation="vertical"
-                    android:gravity="center"
-                    android:padding="8dp">
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btnGridAdd"
-                        style="@style/CircleButton"
-                        android:layout_width="64dp"
-                        android:layout_height="64dp"
-                        app:icon="@drawable/ic_check"
-                        app:iconSize="32dp"
-                        app:iconGravity="textStart"
-                        app:iconPadding="0dp"
-                        app:backgroundTint="@color/whatsapp_green" />
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="4dp"
-                        android:text="@string/add_to_whatsapp"
-                        android:textSize="12sp"
-                        android:gravity="center" />
-                </LinearLayout>
-
-
-            </LinearLayout>
 
             <!-- Row 2 -->
             <LinearLayout
@@ -268,52 +233,63 @@
             app:iconSize="20dp"
             app:iconPadding="8dp" />
 
-        <!-- Premium Button Container -->
+        <!-- Premium Button Container - Yan yana butonlar -->
         <LinearLayout
             android:id="@+id/premiumButtonsContainer"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:visibility="gone">
+            android:visibility="gone"
+            android:layout_marginTop="8dp">
 
-            <!-- Premium Badge Button - Modern ve kompakt -->
+            <!-- Watch Ad Button (Uygulama Yeşili) -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnWatchAd"
+                android:layout_width="0dp"
+                android:layout_height="48dp"
+                android:layout_weight="1"
+                android:layout_marginEnd="8dp"
+                android:text="@string/watch_ad_button"
+                android:textColor="@color/white"
+                android:textSize="14sp"
+                android:textAllCaps="false"
+                app:backgroundTint="@color/primary"
+                app:cornerRadius="12dp"
+                app:icon="@drawable/ic_play_circle"
+                app:iconGravity="textStart"
+                app:iconTint="@color/white"
+                app:iconSize="20dp"
+                app:iconPadding="8dp" />
+
+            <!-- Get Premium Button (Altın Sarısı) -->
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnPremiumBadge"
-                android:layout_width="match_parent"
-                android:layout_height="44dp"
+                android:layout_width="0dp"
+                android:layout_height="48dp"
+                android:layout_weight="1"
                 android:text="@string/get_premium_access"
                 android:textColor="@color/white"
                 android:textSize="14sp"
-                android:textStyle="bold"
                 android:textAllCaps="false"
-                android:letterSpacing="0.02"
                 app:backgroundTint="@color/premium_gold"
-                app:cornerRadius="22dp"
+                app:cornerRadius="12dp"
                 app:icon="@drawable/ic_gem"
                 app:iconGravity="textStart"
                 app:iconTint="@color/white"
-                app:iconSize="18dp"
-                app:iconPadding="8dp" />
+                app:iconSize="18dp" />
 
-            <!-- Gizli Price Button (kod uyumluluğu için) -->
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnPrice"
-                android:layout_width="0dp"
-                android:layout_height="0dp"
-                android:visibility="gone" />
+        </LinearLayout>
 
     </LinearLayout>
 
     </LinearLayout>
 
-    </LinearLayout>
-
-    <!-- Professional Loading Overlay -->
+    <!-- Simplified Loading Overlay -->
     <FrameLayout
         android:id="@+id/professionalLoadingOverlay"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:background="#99000000"
+        android:background="#D9000000"
         android:clickable="true"
         android:focusable="true"
         android:elevation="99dp"
@@ -323,29 +299,38 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="center"
-            android:background="@drawable/bg_rounded_button"
-            android:padding="28dp"
-            android:elevation="100dp"
             android:orientation="vertical"
             android:gravity="center">
 
-            <com.airbnb.lottie.LottieAnimationView
-                android:id="@+id/loadingAnimation"
-                android:layout_width="80dp"
-                android:layout_height="80dp"
-                app:lottie_rawRes="@raw/loading_animation"
-                app:lottie_autoPlay="true"
-                app:lottie_loop="true" />
+            <com.google.android.material.progressindicator.CircularProgressIndicator
+                android:id="@+id/circularProgress"
+                android:layout_width="64dp"
+                android:layout_height="64dp"
+                app:indicatorColor="@color/primary"
+                app:trackColor="#20FFFFFF"
+                app:trackThickness="6dp"
+                app:indicatorSize="64dp"
+                app:trackCornerRadius="0dp"
+                android:max="100"
+                android:progress="0" />
 
             <TextView
                 android:id="@+id/tvOverlayLoadingText"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
-                android:text="@string/stickers_loading"
-                android:textColor="@color/text_primary"
-                android:textSize="16sp"
-                android:textStyle="bold" />
+                android:text="0%"
+                android:textColor="#FFFFFF"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:fontFamily="sans-serif-medium" />
+
+            <!-- Hidden but kept for logic consistency if needed -->
+            <TextView
+                android:id="@+id/tvDynamicStatus"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:visibility="gone" />
 
         </LinearLayout>
 

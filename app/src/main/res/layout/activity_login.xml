@@ -13,16 +13,18 @@
         android:orientation="vertical"
         android:padding="32dp">
 
-        <ImageView
-            android:layout_width="120dp"
-            android:layout_height="120dp"
-            android:src="@mipmap/logo" />
+        <com.airbnb.lottie.LottieAnimationView
+            android:layout_width="150dp"
+            android:layout_height="150dp"
+            app:lottie_fileName="login_robot.json"
+            app:lottie_autoPlay="true"
+            app:lottie_loop="true" />
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="24dp"
-            android:text="Sticky'ye Hoşgeldiniz"
+            android:text="Welcome to Sticky"
             android:textColor="@color/white"
             android:textSize="28sp"
             android:textStyle="bold" />
@@ -32,7 +34,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
             android:gravity="center"
-            android:text="Çıkartmalarını bulut ile senkronize et\nve her yerden eriş!"
+            android:text="Sync your stickers to the cloud\nand access them anywhere!"
             android:textColor="#CCFFFFFF"
             android:textSize="16sp" />
 
@@ -43,7 +45,7 @@
             android:layout_height="56dp"
             android:layout_marginTop="48dp"
             android:backgroundTint="@color/white"
-            android:text="Google ile Bağlan"
+            android:text="Sign in with Google"
             android:textAllCaps="false"
             android:textColor="@color/black"
             android:textSize="16sp"
@@ -60,7 +62,7 @@
             android:layout_marginTop="32dp"
             android:background="?selectableItemBackground"
             android:padding="8dp"
-            android:text="Şimdi Değil, Atla"
+            android:text="Skip for now"
             android:textColor="#CCFFFFFF"
             android:textSize="14sp"
             android:textStyle="bold" />

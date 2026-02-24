@@ -43,12 +43,8 @@ import {
   Info,
   ExternalLink,
   ChevronRight,
-  ChevronUp,
-  ArrowUp,
-  ArrowDown,
   TrendingUp,
   BarChart3,
-  DollarSign,
   Globe,
 
   Mail,
@@ -287,11 +283,13 @@ function App() {
   const [selectedPack, setSelectedPack] = useState<StickerPack | null>(null);
   const [selectedStickerIds, setSelectedStickerIds] = useState<string[]>([]);
   const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [panelDragIdx, setPanelDragIdx] = useState<number | null>(null);
+  const [panelDragOverIdx, setPanelDragOverIdx] = useState<number | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState<'dashboard' | 'packs' | 'stats' | 'messages' | 'notifications' | 'users' | 'batch'>('dashboard');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'passive' | 'premium' | 'normal' | 'animated' | 'static' | 'new'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'passive' | 'animated' | 'static' | 'new'>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
-  const [statsFilter, setStatsFilter] = useState<'all' | 'active' | 'passive' | 'premium' | 'normal'>('all');
+  const [statsFilter, setStatsFilter] = useState<'all' | 'active' | 'passive'>('all');
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
@@ -361,7 +359,7 @@ function App() {
   const [welcomeExit, setWelcomeExit] = useState(false);
   const [showVideoBgModal, setShowVideoBgModal] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
-  
+
   const [showImportModal, setShowImportModal] = useState(false);
 
   // Batch Generator States
@@ -375,11 +373,26 @@ function App() {
   const [isBatchRunning, setIsBatchRunning] = useState(false);
   const [batchProgress, setBatchProgress] = useState<BatchProgress | null>(null);
   const [batchAiGenerating, setBatchAiGenerating] = useState(false);
+  const [batchSelectedCategories, setBatchSelectedCategories] = useState<string[]>([]);
   const [importContentType, setImportContentType] = useState<'gifs' | 'stickers'>('stickers');
   const [importCount, setImportCount] = useState(20);
   const [customSearchText, setCustomSearchText] = useState('');
   const [isImporting, setIsImporting] = useState(false);
   const [importProgress, setImportProgress] = useState<{ current: number, total: number, message: string, preview?: string } | null>(null);
+
+  // Draft States
+  const [batchSubTab, setBatchSubTab] = useState<'generator' | 'drafts'>('generator');
+  const [draftPacks, setDraftPacks] = useState<StickerPack[]>([]);
+  const [draftLoading, setDraftLoading] = useState(false);
+  const [selectedDraft, setSelectedDraft] = useState<StickerPack | null>(null);
+  const [showDraftEditModal, setShowDraftEditModal] = useState(false);
+  const [draftEditData, setDraftEditData] = useState<Partial<StickerPack>>({});
+  const [draftPublishing, setDraftPublishing] = useState<string | null>(null);
+  const [draftDeleting, setDraftDeleting] = useState<string | null>(null);
+  const [draftPreviewSticker, setDraftPreviewSticker] = useState<{ url: string, title?: string } | null>(null);
+  const [draftDragIdx, setDraftDragIdx] = useState<number | null>(null);
+  const [draftDragOverIdx, setDraftDragOverIdx] = useState<number | null>(null);
+  const [draftDragPackId, setDraftDragPackId] = useState<string | null>(null);
 
   // FFmpeg'i önceden yükle - işlem başladığında hazır olsun
   useEffect(() => {
@@ -643,6 +656,163 @@ function App() {
       setLoading(false);
     }
   };
+
+  // ========== DRAFT MANAGEMENT ==========
+  const fetchDrafts = async () => {
+    setDraftLoading(true);
+    try {
+      const draftDocs = await getDocs(collection(db, 'draft_stickers'));
+      const drafts: StickerPack[] = draftDocs.docs.map(d => {
+        const data = d.data();
+        return {
+          id: d.id,
+          ...data,
+          is_premium: data.is_premium ?? false,
+          is_animated: data.is_animated ?? true,
+          download_count: 0,
+          fake_download_base: Number(data.fake_download_base || 0),
+          view_count: 0,
+          favorite_count: 0,
+          sticker_count: Number(data.sticker_count || data.stickers?.length || 0),
+        } as StickerPack;
+      });
+      setDraftPacks(drafts.sort((a, b) => (a.name || '').localeCompare(b.name || '')));
+    } catch (error: any) {
+      console.error("Draft fetch error:", error);
+    } finally {
+      setDraftLoading(false);
+    }
+  };
+
+  const publishDraft = async (draft: StickerPack) => {
+    if (!window.confirm(`"${draft.name}" paketini yayınlamak istediğinize emin misiniz?`)) return;
+    setDraftPublishing(draft.id);
+    try {
+      const targetCollection = draft.is_premium ? 'premium_stickers' : 'stickers';
+      const { id, ...packDataWithoutId } = draft as any;
+      await setDoc(doc(db, targetCollection, draft.id), {
+        ...packDataWithoutId,
+        is_active: true,
+        published_at: serverTimestamp(),
+      });
+      await deleteDoc(doc(db, 'draft_stickers', draft.id));
+      setDraftPacks(prev => prev.filter(p => p.id !== draft.id));
+      if (selectedDraft?.id === draft.id) setSelectedDraft(null);
+      await fetchPacks();
+      alert(`✅ "${draft.name}" başarıyla yayınlandı!`);
+    } catch (error: any) {
+      console.error("Publish error:", error);
+      alert(`Yayınlama hatası: ${error.message}`);
+    } finally {
+      setDraftPublishing(null);
+    }
+  };
+
+  const publishAllDrafts = async () => {
+    if (draftPacks.length === 0) return;
+    if (!window.confirm(`${draftPacks.length} taslak paketi yayınlamak istediğinize emin misiniz?`)) return;
+    let published = 0;
+    for (const draft of draftPacks) {
+      setDraftPublishing(draft.id);
+      try {
+        const targetCollection = draft.is_premium ? 'premium_stickers' : 'stickers';
+        const { id, ...packDataWithoutId } = draft as any;
+        await setDoc(doc(db, targetCollection, draft.id), {
+          ...packDataWithoutId,
+          is_active: true,
+          published_at: serverTimestamp(),
+        });
+        await deleteDoc(doc(db, 'draft_stickers', draft.id));
+        published++;
+      } catch (error: any) {
+        console.error(`Publish error (${draft.name}):`, error);
+      }
+    }
+    setDraftPublishing(null);
+    setDraftPacks([]);
+    setSelectedDraft(null);
+    await fetchPacks();
+    alert(`✅ ${published}/${draftPacks.length} paket yayınlandı!`);
+  };
+
+  const deleteDraftPack = async (draft: StickerPack) => {
+    if (!window.confirm(`"${draft.name}" taslağını silmek istediğinize emin misiniz? Bu işlem geri alınamaz!`)) return;
+    setDraftDeleting(draft.id);
+    try {
+      // Storage'dan sticker dosyalarını sil
+      try {
+        const folderRef = ref(storage, `stickers/${draft.id}`);
+        const fileList = await listAll(folderRef);
+        for (const item of fileList.items) {
+          await deleteObject(item);
+        }
+      } catch (e) { console.log('Storage silme (draft):', e); }
+      await deleteDoc(doc(db, 'draft_stickers', draft.id));
+      setDraftPacks(prev => prev.filter(p => p.id !== draft.id));
+      if (selectedDraft?.id === draft.id) setSelectedDraft(null);
+    } catch (error: any) {
+      console.error("Draft delete error:", error);
+      alert(`Silme hatası: ${error.message}`);
+    } finally {
+      setDraftDeleting(null);
+    }
+  };
+
+  const updateDraftPack = async () => {
+    if (!selectedDraft || !draftEditData) return;
+    try {
+      const updatedData: any = { ...draftEditData };
+      updatedData.image_data_version = Date.now().toString();
+      await updateDoc(doc(db, 'draft_stickers', selectedDraft.id), updatedData);
+      const updated = { ...selectedDraft, ...updatedData } as StickerPack;
+      setDraftPacks(prev => prev.map(p => p.id === selectedDraft.id ? updated : p));
+      setSelectedDraft(updated);
+      setShowDraftEditModal(false);
+      alert("Taslak başarıyla güncellendi.");
+    } catch (error: any) {
+      console.error("Draft update error:", error);
+      alert(`Güncelleme hatası: ${error.message}`);
+    }
+  };
+
+  const reorderDraftStickers = async (draft: StickerPack, fromIdx: number, toIdx: number) => {
+    if (fromIdx === toIdx) return;
+    try {
+      const stickers = [...draft.stickers];
+      const [moved] = stickers.splice(fromIdx, 1);
+      stickers.splice(toIdx, 0, moved);
+      await updateDoc(doc(db, 'draft_stickers', draft.id), { stickers });
+      const updated = { ...draft, stickers } as StickerPack;
+      setDraftPacks(prev => prev.map(p => p.id === draft.id ? updated : p));
+    } catch (error: any) {
+      console.error("Reorder error:", error);
+      alert(`Sıralama hatası: ${error.message}`);
+    }
+  };
+
+  const removeStickerFromDraft = async (draft: StickerPack, stickerIndex: number) => {
+    if (!window.confirm('Bu sticker\'ı taslaktan kaldırmak istediğinize emin misiniz?')) return;
+    try {
+      const updatedStickers = draft.stickers.filter((_, idx) => idx !== stickerIndex);
+      await updateDoc(doc(db, 'draft_stickers', draft.id), {
+        stickers: updatedStickers,
+        sticker_count: updatedStickers.length,
+      });
+      const updated = { ...draft, stickers: updatedStickers, sticker_count: updatedStickers.length } as StickerPack;
+      setDraftPacks(prev => prev.map(p => p.id === draft.id ? updated : p));
+      if (selectedDraft?.id === draft.id) setSelectedDraft(updated);
+    } catch (error: any) {
+      console.error("Remove sticker error:", error);
+      alert(`Sticker kaldırma hatası: ${error.message}`);
+    }
+  };
+
+  // Fetch drafts when batch tab is active
+  useEffect(() => {
+    if (activeTab === 'batch' && batchSubTab === 'drafts') {
+      fetchDrafts();
+    }
+  }, [activeTab, batchSubTab]);
 
   // ========== STİCKER BOYUT KONTROLÜ (WhatsApp 500KB Limiti) ==========
   const checkStickerSizes = async (pack: StickerPack) => {
@@ -917,7 +1087,8 @@ function App() {
         sticker_count: 0,
         image_data_version: "1",
         is_active: newPackData.is_active,
-        ...(newPackData.is_premium ? { price_try: "4,99 TL", price_usd: "$0.99", price_eur: "€0.99" } : {}),
+        // Fiyatlandirma kaldirildi - Tüm paketler ücretsiz/reklamli
+        price_try: "", price_usd: "", price_eur: "",
         stickers: [],
         tray_url: "",
         created_at: serverTimestamp()
@@ -1045,7 +1216,7 @@ function App() {
         setSelectedPack(updated);
         setShowEditPackModal(false);
 
-        alert(`Paket başarıyla ${updatedData.is_premium ? 'Premium' : 'Normal'} olarak güncellendi.`);
+        alert(`Paket başarıyla güncellendi.`);
       } else {
         // Sadece bilgi güncelleme (tip değişikliği yok)
         await updateDoc(doc(db, oldCollection, selectedPack.id), updatedData);
@@ -1297,7 +1468,7 @@ function App() {
 
       const collectionName = selectedPack.is_premium ? 'premium_stickers' : 'stickers';
       const packRef = doc(db, collectionName, selectedPack.id);
-      
+
       const newVersion = Date.now().toString();
       const updatedData = {
         stickers: [...(selectedPack.stickers || []), ...importedStickers],
@@ -1315,7 +1486,7 @@ function App() {
       setPacks(packs.map(p => p.id === selectedPack.id ? updated : p));
       setSelectedPack(updated);
       setShowImportModal(false);
-      
+
       alert(`Import başarılı! ${importedStickers.length} sticker eklendi.\n\nKaynak: Giphy\nEklenen: ${importedStickers.length}`);
     } catch (error: any) {
       console.error('Import error:', error);
@@ -1446,6 +1617,72 @@ function App() {
       });
     } catch (error) {
       alert("Çıkartma silme hatası: " + error);
+    }
+  };
+
+  const setAsTray = async (pack: StickerPack, sticker: Sticker) => {
+    if (!pack || !sticker || isProcessing) return;
+
+    if (!window.confirm("Bu sticker'ı paket kapağı yapmak istediğinize emin misiniz?")) return;
+
+    setIsProcessing(true);
+    setUploadProgress({ current: 0, total: 1, message: 'Kapak resmi hazırlanıyor...' });
+
+    try {
+      // Sticker'ı blob olarak çek
+      const response = await fetch(sticker.url);
+      const blob = await response.blob();
+
+      // Blob -> File dönüşümü (stickerProcessor.processTray için)
+      // Orijinal dosya adını koruyarak tray_ öneki ekleyelim
+      const file = new File([blob], `tray_${sticker.image_file}`, { type: 'image/webp' });
+
+      // Tray resmi olarak işle (PNG & Resize)
+      const trayProcessedBlob = await stickerProcessor.processTray(file, (p) => {
+        setUploadProgress(prev => prev ? { ...prev, message: `Kapak: ${p.message}` } : null);
+      });
+
+      // Storage'a yükle
+      const trayFileName = `tray_${Date.now()}.png`;
+      const trayStorageRef = ref(storage, `stickers/${pack.id}/${trayFileName}`);
+
+      await uploadBytes(trayStorageRef, trayProcessedBlob);
+      const trayUrl = await getDownloadURL(trayStorageRef);
+
+      // Varsa eski kapağı sil
+      if (pack.tray_image_file) {
+        const oldTrayPath = `stickers/${pack.id}/${pack.tray_image_file}`;
+        try { await deleteObject(ref(storage, oldTrayPath)); } catch (e) {
+          // tray.png ise ve silinemezse normal, bazı eski paketlerde tray.png statik olabilir
+          console.warn("Old tray delete fail", e);
+        }
+      }
+
+      // Firestore güncelle
+      const collectionName = pack.is_premium ? 'premium_stickers' : 'stickers';
+      const packRef = doc(db, collectionName, pack.id);
+
+      const newVersion = Date.now().toString();
+      const updateData = {
+        tray_url: trayUrl,
+        tray_image_file: trayFileName,
+        image_data_version: newVersion
+      };
+
+      await updateDoc(packRef, updateData);
+
+      // Local state güncelle
+      const updatedPack = { ...pack, ...updateData };
+      setPacks(packs.map(p => p.id === pack.id ? updatedPack : p));
+      setSelectedPack(updatedPack);
+
+      alert("Kapak resmi başarıyla güncellendi.");
+    } catch (error: any) {
+      console.error(error);
+      alert("Kapak yapma hatası: " + error.message);
+    } finally {
+      setIsProcessing(false);
+      setUploadProgress(null);
     }
   };
 
@@ -1777,8 +2014,7 @@ function App() {
     if (statusFilter === 'all') return true;
     if (statusFilter === 'active') return p.is_active !== false;
     if (statusFilter === 'passive') return p.is_active === false;
-    if (statusFilter === 'premium') return p.is_premium === true;
-    if (statusFilter === 'normal') return p.is_premium === false;
+
     if (statusFilter === 'animated') return p.is_animated === true;
     if (statusFilter === 'static') return p.is_animated !== true;
     if (statusFilter === 'new') return isNew(p);
@@ -2030,8 +2266,6 @@ function App() {
                               { id: 'all', label: 'Tümü', icon: Grid },
                               { id: 'active', label: 'Aktif Paketler', icon: Check },
                               { id: 'passive', label: 'Pasif Paketler', icon: X },
-                              { id: 'premium', label: 'Premium Paketler', icon: DollarSign },
-                              { id: 'normal', label: 'Normal Paketler', icon: Package },
                               { id: 'animated', label: 'Hareketli Paketler', icon: RefreshCcw },
                               { id: 'static', label: 'Statik Paketler', icon: ImageIcon },
                               { id: 'new', label: 'Yeni Eklenenler', icon: Clock }
@@ -2145,11 +2379,7 @@ function App() {
                         ) : (
                           <Package className="w-5 h-5 text-textSec" />
                         )}
-                        {pack.is_premium && (
-                          <div className="absolute top-0 right-0 w-4 h-4 bg-warning flex items-center justify-center rounded-bl-xl shadow-sm">
-                            <span className="text-[8px] text-background font-black">P</span>
-                          </div>
-                        )}
+                        {/* Pack Type Icon Kaldirildi */}
                         {pack.is_active === false && (
                           <div className="absolute bottom-0 left-0 right-0 bg-danger/80 py-0.5 flex items-center justify-center">
                             <span className="text-[7px] text-white font-black tracking-widest">PASİF</span>
@@ -2214,12 +2444,7 @@ function App() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <h2 className="text-xl font-black tracking-tight text-white truncate">{selectedPack.name}</h2>
-                        <span className={cn(
-                          "px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest shrink-0",
-                          selectedPack.is_premium ? 'bg-warning text-background' : 'bg-primary text-white'
-                        )}>
-                          {selectedPack.is_premium ? 'Premium' : 'Standard'}
-                        </span>
+                        {/* Tip Badge Kaldirildi */}
                         {selectedPack.is_active === false && (
                           <span className="px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest bg-danger text-white shrink-0">PASİF</span>
                         )}
@@ -2356,13 +2581,39 @@ function App() {
                       return (
                         <div
                           key={idx}
+                          draggable={!isSelectionMode}
+                          onDragStart={(e) => {
+                            if (isSelectionMode) { e.preventDefault(); return; }
+                            setPanelDragIdx(idx);
+                            e.dataTransfer.effectAllowed = 'move';
+                            e.currentTarget.style.opacity = '0.4';
+                          }}
+                          onDragEnd={(e) => {
+                            e.currentTarget.style.opacity = '1';
+                            if (panelDragIdx !== null && panelDragOverIdx !== null && panelDragIdx !== panelDragOverIdx && selectedPack) {
+                              moveStickerPosition(selectedPack, panelDragIdx, panelDragOverIdx);
+                            }
+                            setPanelDragIdx(null);
+                            setPanelDragOverIdx(null);
+                          }}
+                          onDragOver={(e) => {
+                            e.preventDefault();
+                            e.dataTransfer.dropEffect = 'move';
+                            setPanelDragOverIdx(idx);
+                          }}
+                          onDragLeave={() => {
+                            if (panelDragOverIdx === idx) setPanelDragOverIdx(null);
+                          }}
                           className={cn(
-                            "group relative aspect-square bg-card/50 rounded-2xl glass p-4 transition-all duration-300 shadow-lg hover:shadow-2xl cursor-zoom-in",
-                            isOversized
-                              ? "ring-2 ring-danger/70 hover:ring-danger"
-                              : "hover:ring-2 hover:ring-primary/50 hover:shadow-primary/5"
+                            "group relative aspect-square bg-card/50 rounded-2xl glass p-4 transition-all duration-300 shadow-lg hover:shadow-2xl",
+                            isSelectionMode ? "cursor-pointer" : "cursor-grab active:cursor-grabbing",
+                            panelDragOverIdx === idx && panelDragIdx !== null
+                              ? "ring-2 ring-primary/60 bg-primary/10 scale-105 shadow-primary/20"
+                              : isOversized
+                                ? "ring-2 ring-danger/70 hover:ring-danger"
+                                : "hover:ring-2 hover:ring-primary/50 hover:shadow-primary/5"
                           )}
-                          onClick={() => setPreviewSticker({ url: sticker.url, title: sticker.image_file })}
+                          onClick={() => !isSelectionMode && setPreviewSticker({ url: sticker.url, title: sticker.image_file })}
                         >
                           {/* Boyut Aşımı İkonu */}
                           {isOversized && (
@@ -2406,41 +2657,6 @@ function App() {
                             "absolute inset-0 bg-background/60 transition-opacity flex flex-col items-center justify-center gap-2 rounded-2xl backdrop-blur-[2px]",
                             isSelectionMode ? "opacity-0 pointer-events-none" : "opacity-0 group-hover:opacity-100"
                           )} onClick={(e) => e.stopPropagation()}>
-                            {/* Sıralama Butonları */}
-                            <div className="flex gap-1.5">
-                              <button
-                                onClick={() => moveStickerPosition(selectedPack, idx, 0)}
-                                disabled={idx === 0}
-                                className="p-1.5 bg-accent/80 hover:bg-accent text-white rounded-lg shadow-lg transition-all hover:scale-110 disabled:opacity-30 disabled:hover:scale-100"
-                                title="En başa taşı"
-                              >
-                                <ArrowUp size={14} />
-                              </button>
-                              <button
-                                onClick={() => moveStickerPosition(selectedPack, idx, idx - 1)}
-                                disabled={idx === 0}
-                                className="p-1.5 bg-white/20 hover:bg-white/30 text-white rounded-lg shadow-lg transition-all hover:scale-110 disabled:opacity-30 disabled:hover:scale-100"
-                                title="Bir üste taşı"
-                              >
-                                <ChevronUp size={14} />
-                              </button>
-                              <button
-                                onClick={() => moveStickerPosition(selectedPack, idx, idx + 1)}
-                                disabled={idx === (selectedPack.stickers?.length || 0) - 1}
-                                className="p-1.5 bg-white/20 hover:bg-white/30 text-white rounded-lg shadow-lg transition-all hover:scale-110 disabled:opacity-30 disabled:hover:scale-100"
-                                title="Bir alta taşı"
-                              >
-                                <ChevronDown size={14} />
-                              </button>
-                              <button
-                                onClick={() => moveStickerPosition(selectedPack, idx, (selectedPack.stickers?.length || 1) - 1)}
-                                disabled={idx === (selectedPack.stickers?.length || 0) - 1}
-                                className="p-1.5 bg-accent/80 hover:bg-accent text-white rounded-lg shadow-lg transition-all hover:scale-110 disabled:opacity-30 disabled:hover:scale-100"
-                                title="En sona taşı"
-                              >
-                                <ArrowDown size={14} />
-                              </button>
-                            </div>
                             {/* Aksiyon Butonları */}
                             <div className="flex gap-1.5">
                               <button
@@ -2449,6 +2665,13 @@ function App() {
                                 title="Sil"
                               >
                                 <Trash2 size={16} />
+                              </button>
+                              <button
+                                onClick={() => setAsTray(selectedPack, sticker)}
+                                className="p-2 bg-accent hover:bg-accent/80 text-white rounded-xl shadow-lg transition-all hover:scale-110"
+                                title="Kapak Yap"
+                              >
+                                <ImageIcon size={16} />
                               </button>
                               <a
                                 href={sticker.url}
@@ -2493,110 +2716,112 @@ function App() {
           </div>
         ) : activeTab === 'stats' ? (
           <div className="flex-1 overflow-y-auto p-4 md:p-12 custom-scrollbar bg-background">
-            <div className="max-w-6xl mx-auto space-y-8 md:space-y-12 animate-in fade-in duration-500">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-                <div>
-                  <div className="flex items-center gap-3 mb-1">
-                    <BarChart3 className="text-primary" size={24} />
-                    <h2 className="text-2xl md:text-4xl font-black text-white uppercase tracking-tighter">Performans Analizi</h2>
+            <div className="max-w-7xl mx-auto space-y-6 md:space-y-8 animate-in fade-in duration-500">
+              {/* Header Card */}
+              <div className="glass rounded-2xl p-5 md:p-6 border border-white/5">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div className="flex items-center gap-4">
+                    <div className="w-14 h-14 bg-gradient-to-br from-emerald-500/20 to-teal-500/20 rounded-2xl flex items-center justify-center border border-emerald-500/10 shadow-lg shadow-emerald-500/5">
+                      <BarChart3 size={26} className="text-emerald-400" />
+                    </div>
+                    <div>
+                      <h2 className="text-2xl font-black text-white tracking-tight">Performans Analizi</h2>
+                      <p className="text-xs text-textSec mt-0.5">Uygulama genelindeki etkileşim ve verimlilik raporu</p>
+                    </div>
                   </div>
-                  <p className="text-textSec text-xs md:text-base font-medium">Uygulama genelindeki etkileşim ve verimlilik raporu</p>
-                </div>
+                  <div className="flex items-center gap-2">
+                    {/* Stats Filter */}
+                    <div className="relative">
+                      <button
+                        onClick={() => setShowFilterDropdown(!showFilterDropdown)}
+                        className={cn(
+                          "flex items-center gap-2 px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border",
+                          statsFilter !== 'all'
+                            ? "bg-primary/10 border-primary/20 text-primary"
+                            : "bg-white/5 border-white/5 text-textSec hover:bg-white/10"
+                        )}
+                      >
+                        <Filter size={13} />
+                        {statsFilter === 'all' ? 'Filtrele' : statsFilter.toUpperCase()}
+                        <ChevronDown size={13} className={cn("transition-transform duration-300", showFilterDropdown && "rotate-180")} />
+                      </button>
 
-                <div className="flex items-center gap-4">
-                  {/* Stats Filter */}
-                  <div className="relative group">
-                    <button
-                      onClick={() => setShowFilterDropdown(!showFilterDropdown)}
-                      className={cn(
-                        "flex items-center gap-3 px-6 py-3 rounded-2xl text-xs font-black uppercase tracking-widest transition-all border shadow-xl",
-                        statsFilter !== 'all'
-                          ? "bg-primary/20 border-primary text-primary shadow-primary/10"
-                          : "bg-white/5 border-white/10 text-textSec hover:bg-hover active:scale-95"
-                      )}
-                    >
-                      <Filter size={16} />
-                      {statsFilter === 'all' ? 'Veri Filtrele' : `${statsFilter.toUpperCase()} VERİLER`}
-                      <ChevronDown size={16} className={cn("transition-transform duration-300", showFilterDropdown && "rotate-180")} />
-                    </button>
-
-                    {showFilterDropdown && (
-                      <>
-                        <div className="fixed inset-0 z-30" onClick={() => setShowFilterDropdown(false)} />
-                        <div className="absolute right-0 top-full mt-3 w-56 glass rounded-[2rem] border border-white/10 shadow-2xl py-3 z-40 animate-in fade-in zoom-in-95 duration-300 ring-1 ring-white/5">
-                          <div className="px-5 py-2 mb-2 border-b border-white/5">
-                            <span className="text-[10px] font-black text-textSec uppercase tracking-widest">Görünüm Ayarı</span>
+                      {showFilterDropdown && (
+                        <>
+                          <div className="fixed inset-0 z-30" onClick={() => setShowFilterDropdown(false)} />
+                          <div className="absolute right-0 top-full mt-2 w-52 glass rounded-2xl border border-white/10 shadow-2xl py-2 z-40 animate-in fade-in zoom-in-95 duration-200">
+                            <div className="px-4 py-2 mb-1 border-b border-white/5">
+                              <span className="text-[9px] font-black text-textSec uppercase tracking-widest">Görünüm</span>
+                            </div>
+                            {[
+                              { id: 'all', label: 'Tüm Paketler', icon: Grid, color: 'text-white' },
+                              { id: 'active', label: 'Aktif Olanlar', icon: Check, color: 'text-primary' },
+                              { id: 'passive', label: 'Pasif Olanlar', icon: X, color: 'text-danger' }
+                            ].map(f => (
+                              <button
+                                key={f.id}
+                                onClick={() => {
+                                  setStatsFilter(f.id as any);
+                                  setShowFilterDropdown(false);
+                                }}
+                                className={cn(
+                                  "w-full flex items-center gap-3 px-4 py-2.5 text-xs font-bold transition-all",
+                                  statsFilter === f.id ? "bg-white/10 text-white" : "text-textSec hover:text-white hover:bg-white/5"
+                                )}
+                              >
+                                <f.icon size={14} className={f.color} />
+                                {f.label}
+                              </button>
+                            ))}
                           </div>
-                          {[
-                            { id: 'all', label: 'Tüm Paketler', icon: Grid, color: 'text-white' },
-                            { id: 'active', label: 'Aktif Olanlar', icon: Check, color: 'text-primary' },
-                            { id: 'passive', label: 'Pasif Olanlar', icon: X, color: 'text-danger' },
-                            { id: 'premium', label: 'Sadece Premium', icon: DollarSign, color: 'text-warning' },
-                            { id: 'normal', label: 'Sadece Normal', icon: Package, color: 'text-accent' }
-                          ].map(f => (
-                            <button
-                              key={f.id}
-                              onClick={() => {
-                                setStatsFilter(f.id as any);
-                                setShowFilterDropdown(false);
-                              }}
-                              className={cn(
-                                "w-full flex items-center gap-4 px-5 py-3.5 text-xs font-bold transition-all",
-                                statsFilter === f.id ? "bg-white/10 text-white" : "text-textSec hover:text-white hover:bg-white/5"
-                              )}
-                            >
-                              <f.icon size={16} className={f.color} />
-                              {f.label}
-                            </button>
-                          ))}
-                        </div>
-                      </>
-                    )}
-                  </div>
+                        </>
+                      )}
+                    </div>
 
-                  <button
-                    onClick={fetchPacks}
-                    className="p-3.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl text-textSec transition-all active:scale-90"
-                    title="Verileri Güncelle"
-                  >
-                    <RefreshCcw size={20} className={loading ? 'animate-spin text-primary' : ''} />
-                  </button>
+                    <button
+                      onClick={fetchPacks}
+                      className="p-2.5 bg-white/5 hover:bg-white/10 border border-white/5 rounded-xl text-textSec transition-all"
+                      title="Verileri Güncelle"
+                    >
+                      <RefreshCcw size={14} className={loading ? 'animate-spin text-primary' : ''} />
+                    </button>
+                  </div>
                 </div>
               </div>
 
               {/* Fake Base Controls */}
-              <div className="glass rounded-[2rem] p-4 md:p-6 mb-6 border border-white/10">
-                <div className="flex flex-wrap items-center gap-4">
-                  <span className="text-xs font-black text-textSec uppercase tracking-widest shrink-0">Fake İndirme Aralığı:</span>
+              <div className="glass rounded-2xl p-4 border border-white/5">
+                <div className="flex flex-wrap items-center gap-3">
+                  <span className="text-[10px] font-black text-textSec uppercase tracking-widest shrink-0">Fake İndirme Aralığı:</span>
                   <div className="flex items-center gap-2">
                     <input
                       type="number"
                       value={fakeBaseMin}
                       onChange={(e) => setFakeBaseMin(Number(e.target.value))}
-                      className="w-24 md:w-28 px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-white text-sm outline-none focus:border-primary/50 transition-all"
+                      className="w-24 px-3 py-2 bg-white/[0.03] border border-white/5 rounded-xl text-white text-sm outline-none focus:border-primary/50 transition-all"
                       placeholder="Min"
                     />
-                    <span className="text-textSec">-</span>
+                    <span className="text-textSec/40">—</span>
                     <input
                       type="number"
                       value={fakeBaseMax}
                       onChange={(e) => setFakeBaseMax(Number(e.target.value))}
-                      className="w-24 md:w-28 px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-white text-sm outline-none focus:border-primary/50 transition-all"
+                      className="w-24 px-3 py-2 bg-white/[0.03] border border-white/5 rounded-xl text-white text-sm outline-none focus:border-primary/50 transition-all"
                       placeholder="Max"
                     />
                   </div>
-                  <div className="flex items-center gap-2 flex-1 md:flex-none justify-end md:justify-start">
+                  <div className="flex items-center gap-2">
                     <button
                       onClick={() => updateAllPacksWithFakeBase(false)}
                       disabled={isProcessing}
-                      className="flex-1 md:flex-none px-4 py-2 bg-primary/20 hover:bg-primary/30 border border-primary/30 rounded-xl text-primary text-[10px] font-black uppercase tracking-tight transition-all active:scale-90 disabled:opacity-50"
+                      className="px-4 py-2 bg-primary/10 hover:bg-primary/20 border border-primary/10 rounded-xl text-primary text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-50"
                     >
                       {isProcessing ? '..' : 'Eksiklere'}
                     </button>
                     <button
                       onClick={() => updateAllPacksWithFakeBase(true)}
                       disabled={isProcessing}
-                      className="flex-1 md:flex-none px-4 py-2 bg-warning/20 hover:bg-warning/30 border border-warning/30 rounded-xl text-warning text-[10px] font-black uppercase tracking-tight transition-all active:scale-90 disabled:opacity-50"
+                      className="px-4 py-2 bg-yellow-500/10 hover:bg-yellow-500/20 border border-yellow-500/10 rounded-xl text-yellow-400 text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-50"
                     >
                       {isProcessing ? '..' : 'Tümünü'}
                     </button>
@@ -2604,8 +2829,8 @@ function App() {
                 </div>
               </div>
 
-              {/* Advanced Metrics Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-6">
+              {/* Metrics Grid */}
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
                 {((): any => {
                   const sPacks = packs.filter(p => {
                     if (statsFilter === 'all') return true;
@@ -2624,87 +2849,69 @@ function App() {
 
                   return (
                     <>
-                      <div className="glass p-8 rounded-[2.5rem] bg-gradient-to-br from-primary/10 to-transparent border border-white/5 shadow-xl group hover:scale-[1.02] transition-all duration-500">
-                        <div className="flex items-center justify-between mb-6">
-                          <div className="bg-primary/20 p-3 rounded-2xl text-primary transform group-hover:rotate-12 transition-transform">
-                            <TrendingUp size={24} />
+                      <div className="glass rounded-xl p-4 border border-primary/10 group hover:border-primary/30 transition-all">
+                        <div className="flex items-center gap-3 mb-3">
+                          <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center">
+                            <TrendingUp size={18} className="text-primary" />
                           </div>
-                          <span className="text-[10px] font-black text-primary/60 bg-primary/5 px-2 py-1 rounded-lg">ETKİLEŞİM</span>
+                          <span className="text-[8px] font-black text-primary/60 bg-primary/5 px-1.5 py-0.5 rounded uppercase tracking-widest">İndirme</span>
                         </div>
-                        <div className="space-y-1">
-                          <h4 className="text-xs font-bold text-textSec uppercase tracking-widest">Toplam İndirme</h4>
-                          <div className="text-4xl font-black text-white">{totalDL.toLocaleString()}</div>
+                        <p className="text-2xl font-black text-white">{totalDL.toLocaleString()}</p>
+                      </div>
+
+                      <div className="glass rounded-xl p-4 border border-accent/10 group hover:border-accent/30 transition-all">
+                        <div className="flex items-center gap-3 mb-3">
+                          <div className="w-10 h-10 bg-accent/10 rounded-xl flex items-center justify-center">
+                            <BarChart3 size={18} className="text-accent" />
+                          </div>
+                          <span className="text-[8px] font-black text-accent/60 bg-accent/5 px-1.5 py-0.5 rounded uppercase tracking-widest">Görüntüleme</span>
+                        </div>
+                        <p className="text-2xl font-black text-white">{totalViews.toLocaleString()}</p>
+                      </div>
+
+                      <div className="glass rounded-xl p-4 border border-yellow-500/10 group hover:border-yellow-500/30 transition-all">
+                        <div className="flex items-center gap-3 mb-3">
+                          <div className="w-10 h-10 bg-yellow-500/10 rounded-xl flex items-center justify-center">
+                            <Lightbulb size={18} className="text-yellow-400" />
+                          </div>
+                          <span className="text-[8px] font-black text-yellow-400/60 bg-yellow-500/5 px-1.5 py-0.5 rounded uppercase tracking-widest">CVR</span>
+                        </div>
+                        <p className="text-2xl font-black text-white">%{avgCVR.toFixed(1)}</p>
+                        <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden mt-2">
+                          <div className="h-full bg-yellow-400 rounded-full" style={{ width: `${Math.min(100, avgCVR)}%` }} />
                         </div>
                       </div>
 
-                      <div className="glass p-8 rounded-[2.5rem] bg-gradient-to-br from-accent/10 to-transparent border border-white/5 shadow-xl group hover:scale-[1.02] transition-all duration-500">
-                        <div className="flex items-center justify-between mb-6">
-                          <div className="bg-accent/20 p-3 rounded-2xl text-accent transform group-hover:rotate-12 transition-transform">
-                            <BarChart3 size={24} />
+                      <div className="glass rounded-xl p-4 border border-purple-500/10 group hover:border-purple-500/30 transition-all">
+                        <div className="flex items-center gap-3 mb-3">
+                          <div className="w-10 h-10 bg-purple-500/10 rounded-xl flex items-center justify-center">
+                            <Grid size={18} className="text-purple-400" />
                           </div>
-                          <span className="text-[10px] font-black text-accent/60 bg-accent/5 px-2 py-1 rounded-lg">ERİŞİM</span>
+                          <span className="text-[8px] font-black text-purple-400/60 bg-purple-500/5 px-1.5 py-0.5 rounded uppercase tracking-widest">Sticker</span>
                         </div>
-                        <div className="space-y-1">
-                          <h4 className="text-xs font-bold text-textSec uppercase tracking-widest">Görüntülenme</h4>
-                          <div className="text-4xl font-black text-white">{totalViews.toLocaleString()}</div>
-                        </div>
+                        <p className="text-2xl font-black text-white">{totalStickers.toLocaleString()}</p>
+                        <p className="text-[9px] font-bold text-textSec/50 mt-0.5">{sPacks.length} paket</p>
                       </div>
 
-                      <div className="glass p-8 rounded-[2.5rem] bg-gradient-to-br from-warning/10 to-transparent border border-white/5 shadow-xl group hover:scale-[1.02] transition-all duration-500">
-                        <div className="flex items-center justify-between mb-6">
-                          <div className="bg-warning/20 p-3 rounded-2xl text-warning transform group-hover:rotate-12 transition-transform">
-                            <Lightbulb size={24} />
+                      <div className="glass rounded-xl p-4 border border-pink-500/10 group hover:border-pink-500/30 transition-all">
+                        <div className="flex items-center gap-3 mb-3">
+                          <div className="w-10 h-10 bg-pink-500/10 rounded-xl flex items-center justify-center">
+                            <Crown size={18} className="text-pink-400" />
                           </div>
-                          <span className="text-[10px] font-black text-warning/60 bg-warning/5 px-2 py-1 rounded-lg">VERİMLİLİK</span>
+                          <span className="text-[8px] font-black text-pink-400/60 bg-pink-500/5 px-1.5 py-0.5 rounded uppercase tracking-widest">Favori</span>
                         </div>
-                        <div className="space-y-1">
-                          <h4 className="text-xs font-bold text-textSec uppercase tracking-widest">Dönüşüm (CVR)</h4>
-                          <div className="text-4xl font-black text-white">%{avgCVR.toFixed(1)}</div>
-                          <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden mt-2">
-                            <div className="h-full bg-warning" style={{ width: `${Math.min(100, avgCVR)}%` }} />
-                          </div>
-                        </div>
+                        <p className="text-2xl font-black text-white">{totalFavorites.toLocaleString()}</p>
                       </div>
 
-                      <div className="glass p-8 rounded-[2.5rem] bg-gradient-to-br from-purple-500/10 to-transparent border border-white/5 shadow-xl group hover:scale-[1.02] transition-all duration-500">
-                        <div className="flex items-center justify-between mb-6">
-                          <div className="bg-purple-500/20 p-3 rounded-2xl text-purple-400 transform group-hover:rotate-12 transition-transform">
-                            <Grid size={24} />
+                      <div className="glass rounded-xl p-4 border border-cyan-500/10 group hover:border-cyan-500/30 transition-all">
+                        <div className="flex items-center gap-3 mb-3">
+                          <div className="w-10 h-10 bg-cyan-500/10 rounded-xl flex items-center justify-center">
+                            <Users size={18} className="text-cyan-400" />
                           </div>
-                          <span className="text-[10px] font-black text-purple-400/60 bg-purple-500/5 px-2 py-1 rounded-lg">KÜTÜPHANE</span>
+                          <span className="text-[8px] font-black text-cyan-400/60 bg-cyan-500/5 px-1.5 py-0.5 rounded uppercase tracking-widest">Kullanıcı</span>
                         </div>
-                        <div className="space-y-1">
-                          <h4 className="text-xs font-bold text-textSec uppercase tracking-widest">Toplam Sticker</h4>
-                          <div className="text-4xl font-black text-white">{totalStickers.toLocaleString()}</div>
-                          <p className="text-[10px] font-bold text-textSec">{sPacks.length} Paket İçerisinde</p>
-                        </div>
-                      </div>
-
-                      <div className="glass p-8 rounded-[2.5rem] bg-gradient-to-br from-pink-500/10 to-transparent border border-white/5 shadow-xl group hover:scale-[1.02] transition-all duration-500">
-                        <div className="flex items-center justify-between mb-6">
-                          <div className="bg-pink-500/20 p-3 rounded-2xl text-pink-400 transform group-hover:rotate-12 transition-transform">
-                            <Crown size={24} />
-                          </div>
-                          <span className="text-[10px] font-black text-pink-400/60 bg-pink-500/5 px-2 py-1 rounded-lg">FAVORİ</span>
-                        </div>
-                        <div className="space-y-1">
-                          <h4 className="text-xs font-bold text-textSec uppercase tracking-widest">Toplam Favori</h4>
-                          <div className="text-4xl font-black text-white">{totalFavorites.toLocaleString()}</div>
-                        </div>
-                      </div>
-
-                      <div className="glass p-8 rounded-[2.5rem] bg-gradient-to-br from-cyan-500/10 to-transparent border border-white/5 shadow-xl group hover:scale-[1.02] transition-all duration-500">
-                        <div className="flex items-center justify-between mb-6">
-                          <div className="bg-cyan-500/20 p-3 rounded-2xl text-cyan-400 transform group-hover:rotate-12 transition-transform">
-                            <Users size={24} />
-                          </div>
-                          <span className="text-[10px] font-black text-cyan-400/60 bg-cyan-500/5 px-2 py-1 rounded-lg">KULLANICI</span>
-                        </div>
-                        <div className="space-y-1">
-                          <h4 className="text-xs font-bold text-textSec uppercase tracking-widest">Toplam Kullanıcı</h4>
-                          <div className="text-4xl font-black text-white">{usersData.length.toLocaleString()}</div>
-                          <p className="text-[10px] font-bold text-textSec">{userStats.premium} Premium</p>
-                        </div>
+                        <p className="text-2xl font-black text-white">{usersData.length.toLocaleString()}</p>
+                        <p className="text-[9px] font-bold text-textSec/50 mt-0.5">{userStats.premium} premium</p>
                       </div>
                     </>
                   );
@@ -2712,27 +2919,27 @@ function App() {
               </div>
 
               {/* Chart & Ranking Section */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Visual Analysis */}
-                <div className="lg:col-span-2 glass p-10 rounded-[3rem] border border-white/5 bg-card/20 shadow-2xl relative overflow-hidden">
-                  <div className="flex items-center justify-between mb-10 relative z-10">
-                    <div className="space-y-1">
-                      <h3 className="text-xl md:text-2xl font-black text-white tracking-tight">Eğilim Analizi</h3>
-                      <p className="text-textSec text-[10px] md:text-sm">En popüler 10 paketin performans karşılaştırması</p>
+                <div className="lg:col-span-2 glass rounded-2xl p-6 md:p-8 border border-white/5 overflow-hidden">
+                  <div className="flex items-center justify-between mb-6">
+                    <div>
+                      <h3 className="text-lg font-black text-white tracking-tight">Eğilim Analizi</h3>
+                      <p className="text-[10px] text-textSec mt-0.5">En popüler 10 paketin performans karşılaştırması</p>
                     </div>
                     <div className="flex items-center gap-4">
-                      <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 rounded-full bg-primary shadow-[0_0_10px_rgba(0,168,132,0.4)]" />
-                        <span className="text-[10px] font-black text-textSec uppercase tracking-tighter">İndirme</span>
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-2.5 h-2.5 rounded-full bg-primary" />
+                        <span className="text-[9px] font-bold text-textSec">İndirme</span>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 rounded-full bg-accent shadow-[0_0_10px_rgba(52,183,241,0.4)]" />
-                        <span className="text-[10px] font-black text-textSec uppercase tracking-tighter">Görüntüleme</span>
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-2.5 h-2.5 rounded-full bg-accent" />
+                        <span className="text-[9px] font-bold text-textSec">Görüntüleme</span>
                       </div>
                     </div>
                   </div>
 
-                  <div className="h-[400px] w-full relative z-10">
+                  <div className="h-[350px] w-full">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart
                         data={packs
@@ -2755,7 +2962,7 @@ function App() {
                             };
                           })}
                         margin={{ top: 10, right: 10, left: 0, bottom: 20 }}
-                        barGap={12}
+                        barGap={8}
                       >
                         <defs>
                           <linearGradient id="gPrimary" x1="0" y1="0" x2="0" y2="1">
@@ -2768,27 +2975,27 @@ function App() {
                           </linearGradient>
                         </defs>
                         <CartesianGrid strokeDasharray="5 5" stroke="rgba(255,255,255,0.03)" vertical={false} />
-                        <XAxis dataKey="name" stroke="rgba(255,255,255,0.3)" fontSize={11} fontWeight="800" axisLine={false} tickLine={false} dy={15} />
-                        <YAxis stroke="rgba(255,255,255,0.3)" fontSize={11} fontWeight="800" axisLine={false} tickLine={false} tickFormatter={(v) => v >= 1000 ? `${v / 1000}k` : v} />
+                        <XAxis dataKey="name" stroke="rgba(255,255,255,0.2)" fontSize={10} fontWeight="700" axisLine={false} tickLine={false} dy={12} />
+                        <YAxis stroke="rgba(255,255,255,0.2)" fontSize={10} fontWeight="700" axisLine={false} tickLine={false} tickFormatter={(v) => v >= 1000 ? `${v / 1000}k` : v} />
                         <Tooltip
-                          contentStyle={{ backgroundColor: '#1A1D21', border: 'none', borderRadius: '16px', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)', padding: '16px' }}
+                          contentStyle={{ backgroundColor: '#1A1D21', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)', padding: '12px' }}
                           cursor={{ fill: 'rgba(255,255,255,0.02)' }}
-                          itemStyle={{ fontWeight: '900', fontSize: '13px' }}
+                          itemStyle={{ fontWeight: '800', fontSize: '12px' }}
                         />
-                        <Bar dataKey="downloads" fill="url(#gPrimary)" radius={[8, 8, 2, 2]} name="İndirme" barSize={24} />
-                        <Bar dataKey="views" fill="url(#gAccent)" radius={[8, 8, 2, 2]} name="Görüntüleme" barSize={24} />
+                        <Bar dataKey="downloads" fill="url(#gPrimary)" radius={[6, 6, 2, 2]} name="İndirme" barSize={20} />
+                        <Bar dataKey="views" fill="url(#gAccent)" radius={[6, 6, 2, 2]} name="Görüntüleme" barSize={20} />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
                 </div>
 
-                {/* Best Performers Mini Table */}
-                <div className="glass p-8 rounded-[3rem] border border-white/5 bg-card/20 shadow-2xl flex flex-col">
-                  <div className="mb-6 md:mb-8">
-                    <h3 className="text-lg md:text-xl font-black text-white mb-1 uppercase tracking-tighter">🏆 Lider Tablosu</h3>
-                    <p className="text-[9px] md:text-[10px] font-bold text-textSec uppercase tracking-widest">En çok indirilen ilk 5</p>
+                {/* Leaderboard */}
+                <div className="glass rounded-2xl border border-white/5 flex flex-col overflow-hidden">
+                  <div className="p-5 border-b border-white/5 bg-white/[0.02]">
+                    <h3 className="text-sm font-black text-white uppercase tracking-wider">🏆 Lider Tablosu</h3>
+                    <p className="text-[9px] font-bold text-textSec mt-0.5">En çok indirilen ilk 5</p>
                   </div>
-                  <div className="flex-1 space-y-4">
+                  <div className="flex-1 p-4 space-y-2.5">
                     {packs
                       .filter(p => {
                         if (statsFilter === 'all') return true;
@@ -2801,57 +3008,56 @@ function App() {
                       .sort((a, b) => (b.download_count || 0) - (a.download_count || 0))
                       .slice(0, 5)
                       .map((p, i) => (
-                        <div key={p.id} className="flex items-center gap-4 p-3.5 rounded-2xl bg-white/2 border border-white/5 hover:bg-white/5 transition-all group">
+                        <div key={p.id} className="flex items-center gap-3 p-3 rounded-xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.05] hover:border-white/10 transition-all group">
                           <div className={cn(
-                            "w-8 h-8 rounded-xl flex items-center justify-center font-black text-xs shrink-0 shadow-lg",
-                            i === 0 ? "bg-amber-400 text-black scale-110" :
+                            "w-7 h-7 rounded-lg flex items-center justify-center font-black text-[10px] shrink-0",
+                            i === 0 ? "bg-amber-400 text-black" :
                               i === 1 ? "bg-slate-300 text-black" :
-                                i === 2 ? "bg-amber-700 text-white" : "bg-card text-textSec"
+                                i === 2 ? "bg-amber-700 text-white" : "bg-white/5 text-textSec"
                           )}>
                             {i + 1}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <div className="text-xs font-black text-white truncate group-hover:text-primary transition-colors">{p.name || 'İsimsiz Paket'}</div>
-                            <div className="text-[9px] font-bold text-textSec uppercase tracking-tighter">{p.category}</div>
+                            <div className="text-xs font-bold text-white truncate group-hover:text-primary transition-colors">{p.name || 'İsimsiz Paket'}</div>
+                            <div className="text-[9px] font-bold text-textSec/50">{p.category}</div>
                           </div>
-                          <div className="text-right">
+                          <div className="text-right shrink-0">
                             <div className="text-xs font-black text-primary">{(p.download_count || 0).toLocaleString()}</div>
-                            <div className="text-[8px] font-bold text-textSec uppercase">İndirme</div>
                           </div>
                         </div>
                       ))}
                   </div>
-                  <div className="mt-8 pt-6 border-t border-white/5">
-                    <div className="flex items-center justify-between text-xs font-black">
-                      <span className="text-textSec uppercase tracking-widest">Kapsam:</span>
-                      <span className="text-white bg-primary/20 px-2.5 py-1 rounded-lg border border-primary/20">{statsFilter.toUpperCase()}</span>
+                  <div className="px-5 py-3 border-t border-white/5 bg-white/[0.02]">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[9px] font-bold text-textSec/50 uppercase tracking-widest">Kapsam</span>
+                      <span className="text-[9px] font-black text-primary bg-primary/10 px-2 py-0.5 rounded-md border border-primary/10">{statsFilter.toUpperCase()}</span>
                     </div>
                   </div>
                 </div>
               </div>
 
               {/* Full Performance List */}
-              <div className="glass rounded-[3rem] border border-white/5 overflow-hidden shadow-2xl">
-                <div className="px-4 md:px-10 py-6 md:py-8 border-b border-white/5 bg-white/2 flex items-center justify-between">
+              <div className="glass rounded-2xl border border-white/5 overflow-hidden">
+                <div className="px-5 py-4 border-b border-white/5 bg-white/[0.02] flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="bg-primary p-2 rounded-xl">
-                      <Grid className="text-white" size={18} />
+                    <div className="w-9 h-9 bg-primary/10 rounded-xl flex items-center justify-center">
+                      <Grid size={16} className="text-primary" />
                     </div>
-                    <h3 className="text-lg md:text-2xl font-black text-white tracking-tighter uppercase">Detaylı Performans Listesi</h3>
+                    <h3 className="text-sm font-black text-white uppercase tracking-wider">Detaylı Performans Listesi</h3>
                   </div>
                 </div>
                 <div className="overflow-x-auto custom-scrollbar">
                   <table className="w-full text-left border-collapse">
                     <thead>
-                      <tr className="bg-card">
-                        <th className="px-4 md:px-10 py-4 md:py-5 text-[9px] md:text-[10px] font-black uppercase tracking-widest text-textSec border-b border-white/5">Paket Bilgisi</th>
-                        <th className="px-4 md:px-10 py-4 md:py-5 text-[9px] md:text-[10px] font-black uppercase tracking-widest text-textSec border-b border-white/5 text-center">İndirme</th>
-                        <th className="hidden sm:table-cell px-4 md:px-10 py-4 md:py-5 text-[9px] md:text-[10px] font-black uppercase tracking-widest text-textSec border-b border-white/5 text-center">Görüntülenme</th>
-                        <th className="hidden lg:table-cell px-4 md:px-10 py-4 md:py-5 text-[9px] md:text-[10px] font-black uppercase tracking-widest text-textSec border-b border-white/5 text-center">Favori</th>
-                        <th className="hidden md:table-cell px-4 md:px-10 py-4 md:py-5 text-[9px] md:text-[10px] font-black uppercase tracking-widest text-textSec border-b border-white/5 text-right w-64">Dönüşüm Oranı (CVR)</th>
+                      <tr className="bg-white/[0.02]">
+                        <th className="px-5 py-3.5 text-[9px] font-black uppercase tracking-widest text-textSec/60 border-b border-white/5">Paket</th>
+                        <th className="px-5 py-3.5 text-[9px] font-black uppercase tracking-widest text-textSec/60 border-b border-white/5 text-center">İndirme</th>
+                        <th className="hidden sm:table-cell px-5 py-3.5 text-[9px] font-black uppercase tracking-widest text-textSec/60 border-b border-white/5 text-center">Görüntüleme</th>
+                        <th className="hidden lg:table-cell px-5 py-3.5 text-[9px] font-black uppercase tracking-widest text-textSec/60 border-b border-white/5 text-center">Favori</th>
+                        <th className="hidden md:table-cell px-5 py-3.5 text-[9px] font-black uppercase tracking-widest text-textSec/60 border-b border-white/5 text-right w-56">CVR</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-white/2">
+                    <tbody className="divide-y divide-white/[0.03]">
                       {packs
                         .filter(p => {
                           if (statsFilter === 'all') return true;
@@ -2863,20 +3069,20 @@ function App() {
                         })
                         .sort((a, b) => (b.download_count || 0) - (a.download_count || 0))
                         .map((p) => (
-                          <tr key={p.id} className="hover:bg-white/3 transition-all group">
-                            <td className="px-4 md:px-10 py-4 md:py-6">
-                              <div className="flex items-center gap-3 md:gap-5">
-                                <div className="w-10 h-10 md:w-12 md:h-12 rounded-2xl bg-card border border-white/5 p-1 relative overflow-hidden group-hover:scale-110 transition-transform">
+                          <tr key={p.id} className="hover:bg-white/[0.02] transition-all group">
+                            <td className="px-5 py-3.5">
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-xl bg-white/[0.03] border border-white/5 p-1 relative overflow-hidden shrink-0">
                                   <img src={p.tray_url} className="w-full h-full object-contain" />
-                                  {p.is_premium && <div className="absolute top-0 right-0 w-3 h-3 bg-warning rounded-bl-lg" />}
+                                  {p.is_premium && <div className="absolute top-0 right-0 w-2.5 h-2.5 bg-yellow-400 rounded-bl-md" />}
                                 </div>
                                 <div className="min-w-0">
-                                  <div className="font-black text-white text-sm md:text-base group-hover:text-primary transition-colors truncate">{p.name || 'İsimsiz Paket'}</div>
-                                  <div className="flex items-center gap-2 mt-0.5">
-                                    <span className="text-[8px] md:text-[10px] font-bold text-textSec uppercase tracking-widest transition-all truncate">{p.category}</span>
+                                  <div className="font-bold text-white text-sm group-hover:text-primary transition-colors truncate">{p.name || 'İsimsiz Paket'}</div>
+                                  <div className="flex items-center gap-1.5 mt-0.5">
+                                    <span className="text-[9px] font-bold text-textSec/50 uppercase">{p.category}</span>
                                     <span className={cn(
-                                      "px-1.5 py-0.5 rounded-md text-[7px] md:text-[8px] font-black tracking-widest uppercase",
-                                      p.is_active !== false ? "bg-primary/20 text-primary" : "bg-danger/20 text-danger"
+                                      "px-1.5 py-0.5 rounded text-[7px] font-black uppercase",
+                                      p.is_active !== false ? "bg-primary/10 text-primary/70" : "bg-red-500/10 text-red-400/70"
                                     )}>
                                       {p.is_active !== false ? 'AKTİF' : 'PASİF'}
                                     </span>
@@ -2884,27 +3090,27 @@ function App() {
                                 </div>
                               </div>
                             </td>
-                            <td className="px-4 md:px-10 py-4 md:py-6 text-center">
-                              <span className="text-sm md:text-lg font-black text-primary">{(p.download_count || 0).toLocaleString()}</span>
+                            <td className="px-5 py-3.5 text-center">
+                              <span className="text-sm font-black text-primary">{(p.download_count || 0).toLocaleString()}</span>
                             </td>
-                            <td className="hidden sm:table-cell px-4 md:px-10 py-4 md:py-6 text-center">
-                              <span className="text-sm md:text-lg font-black text-accent">{(p.view_count || 0).toLocaleString()}</span>
+                            <td className="hidden sm:table-cell px-5 py-3.5 text-center">
+                              <span className="text-sm font-black text-accent">{(p.view_count || 0).toLocaleString()}</span>
                             </td>
-                            <td className="hidden lg:table-cell px-4 md:px-10 py-4 md:py-6 text-center">
-                              <span className="text-sm md:text-lg font-black text-warning">{(p.favorite_count || 0).toLocaleString()}</span>
+                            <td className="hidden lg:table-cell px-5 py-3.5 text-center">
+                              <span className="text-sm font-black text-yellow-400">{(p.favorite_count || 0).toLocaleString()}</span>
                             </td>
-                            <td className="hidden md:table-cell px-4 md:px-10 py-4 md:py-6">
-                              <div className="flex items-center justify-end gap-5">
-                                <div className="flex-1 max-w-[120px] h-2 bg-white/5 rounded-full overflow-hidden shadow-inner">
+                            <td className="hidden md:table-cell px-5 py-3.5">
+                              <div className="flex items-center justify-end gap-3">
+                                <div className="flex-1 max-w-[100px] h-1.5 bg-white/5 rounded-full overflow-hidden">
                                   <div
                                     className={cn(
-                                      "h-full rounded-full shadow-[0_0_10px_rgba(0,0,0,0.5)] transition-all duration-1000 delay-300",
-                                      ((p.download_count || 0) / (p.view_count || 1)) * 100 > 25 ? "bg-primary" : "bg-warning"
+                                      "h-full rounded-full transition-all duration-1000",
+                                      ((p.download_count || 0) / (p.view_count || 1)) * 100 > 25 ? "bg-primary" : "bg-yellow-400"
                                     )}
                                     style={{ width: `${Math.min(100, ((p.download_count || 0) / (p.view_count || 1)) * 100)}%` }}
                                   />
                                 </div>
-                                <span className="text-sm font-black text-white tabular-nums w-12 text-right">
+                                <span className="text-xs font-black text-white tabular-nums w-10 text-right">
                                   {Math.round(((p.download_count || 0) / (p.view_count || 1)) * 100)}%
                                 </span>
                               </div>
@@ -2948,34 +3154,44 @@ function App() {
 
                   <div className="space-y-2.5 max-h-[calc(100vh-220px)] overflow-y-auto custom-scrollbar pr-1">
                     {[
-                      { cat: '🆕 New Content', color: 'from-emerald-500/20 to-emerald-500/5', border: 'border-emerald-500/20 hover:border-emerald-500/40', templates: [
-                        { title: 'Sticky', body: '🎨 Fresh stickers just dropped! Express yourself like never before ✨' },
-                        { title: 'Sticky', body: '🔥 New sticker pack alert! Be the first to check it out 👀💫' },
-                        { title: 'Sticky', body: '✨ Your chats are about to get a whole lot cooler! New stickers inside 🚀' },
-                        { title: 'Sticky', body: '🎁 Surprise! We just added amazing new stickers you\'ll love 💖' },
-                      ]},
-                      { cat: '💎 Premium', color: 'from-amber-500/20 to-amber-500/5', border: 'border-amber-500/20 hover:border-amber-500/40', templates: [
-                        { title: 'Sticky Premium', body: '👑 Unlock exclusive premium stickers & make your chats legendary ✨💎' },
-                        { title: 'Sticky Premium', body: '🌟 Premium members get early access to our newest collection! Upgrade now 🚀' },
-                        { title: 'Sticky', body: '💎 Go Premium today and get 100+ exclusive stickers! Limited time offer 🔥' },
-                      ]},
-                      { cat: '🎉 Engagement', color: 'from-pink-500/20 to-pink-500/5', border: 'border-pink-500/20 hover:border-pink-500/40', templates: [
-                        { title: 'Sticky', body: '😍 Your friends are already using the trending stickers! Don\'t miss out 🔥' },
-                        { title: 'Sticky', body: '🎭 Over 1000+ stickers waiting for you! Find your perfect match 💫' },
-                        { title: 'Sticky', body: '💬 Make every conversation unforgettable with Sticky stickers! Open now ✨' },
-                        { title: 'Sticky', body: '🌈 Bored of plain texts? Spice up your chats with our stickers! 🎨🔥' },
-                      ]},
-                      { cat: '📢 Updates', color: 'from-blue-500/20 to-blue-500/5', border: 'border-blue-500/20 hover:border-blue-500/40', templates: [
-                        { title: 'Sticky', body: '🚀 Big update! Faster loading, smoother experience & new stickers inside ⚡' },
-                        { title: 'Sticky', body: '✅ We listened to your feedback! Check out what\'s new in Sticky 🎉' },
-                        { title: 'Sticky', body: '⚡ Sticky just got better! Update now for the best sticker experience 💪' },
-                      ]},
-                      { cat: '🐱 Fun & Seasonal', color: 'from-purple-500/20 to-purple-500/5', border: 'border-purple-500/20 hover:border-purple-500/40', templates: [
-                        { title: 'Sticky', body: '🎄 Holiday stickers are here! Spread the festive vibes in your chats 🎅✨' },
-                        { title: 'Sticky', body: '😂 Need a laugh? Our funniest sticker pack ever just landed! Check it out 🤣' },
-                        { title: 'Sticky', body: '🐶🐱 Animal lovers unite! Adorable pet stickers are waiting for you 💕' },
-                        { title: 'Sticky', body: '🌙 Good vibes only! Send some love with our wholesome sticker collection 💖✨' },
-                      ]},
+                      {
+                        cat: '🆕 New Content', color: 'from-emerald-500/20 to-emerald-500/5', border: 'border-emerald-500/20 hover:border-emerald-500/40', templates: [
+                          { title: 'Sticky', body: '🎨 Fresh stickers just dropped! Express yourself like never before ✨' },
+                          { title: 'Sticky', body: '🔥 New sticker pack alert! Be the first to check it out 👀💫' },
+                          { title: 'Sticky', body: '✨ Your chats are about to get a whole lot cooler! New stickers inside 🚀' },
+                          { title: 'Sticky', body: '🎁 Surprise! We just added amazing new stickers you\'ll love 💖' },
+                        ]
+                      },
+                      {
+                        cat: '💎 Premium', color: 'from-amber-500/20 to-amber-500/5', border: 'border-amber-500/20 hover:border-amber-500/40', templates: [
+                          { title: 'Sticky Premium', body: '👑 Unlock exclusive premium stickers & make your chats legendary ✨💎' },
+                          { title: 'Sticky Premium', body: '🌟 Premium members get early access to our newest collection! Upgrade now 🚀' },
+                          { title: 'Sticky', body: '💎 Go Premium today and get 100+ exclusive stickers! Limited time offer 🔥' },
+                        ]
+                      },
+                      {
+                        cat: '🎉 Engagement', color: 'from-pink-500/20 to-pink-500/5', border: 'border-pink-500/20 hover:border-pink-500/40', templates: [
+                          { title: 'Sticky', body: '😍 Your friends are already using the trending stickers! Don\'t miss out 🔥' },
+                          { title: 'Sticky', body: '🎭 Over 1000+ stickers waiting for you! Find your perfect match 💫' },
+                          { title: 'Sticky', body: '💬 Make every conversation unforgettable with Sticky stickers! Open now ✨' },
+                          { title: 'Sticky', body: '🌈 Bored of plain texts? Spice up your chats with our stickers! 🎨🔥' },
+                        ]
+                      },
+                      {
+                        cat: '📢 Updates', color: 'from-blue-500/20 to-blue-500/5', border: 'border-blue-500/20 hover:border-blue-500/40', templates: [
+                          { title: 'Sticky', body: '🚀 Big update! Faster loading, smoother experience & new stickers inside ⚡' },
+                          { title: 'Sticky', body: '✅ We listened to your feedback! Check out what\'s new in Sticky 🎉' },
+                          { title: 'Sticky', body: '⚡ Sticky just got better! Update now for the best sticker experience 💪' },
+                        ]
+                      },
+                      {
+                        cat: '🐱 Fun & Seasonal', color: 'from-purple-500/20 to-purple-500/5', border: 'border-purple-500/20 hover:border-purple-500/40', templates: [
+                          { title: 'Sticky', body: '🎄 Holiday stickers are here! Spread the festive vibes in your chats 🎅✨' },
+                          { title: 'Sticky', body: '😂 Need a laugh? Our funniest sticker pack ever just landed! Check it out 🤣' },
+                          { title: 'Sticky', body: '🐶🐱 Animal lovers unite! Adorable pet stickers are waiting for you 💕' },
+                          { title: 'Sticky', body: '🌙 Good vibes only! Send some love with our wholesome sticker collection 💖✨' },
+                        ]
+                      },
                     ].map((group, gi) => (
                       <div key={gi} className="space-y-1.5">
                         <p className="text-[10px] font-black text-textSec uppercase tracking-widest px-1 pt-2">{group.cat}</p>
@@ -3038,7 +3254,7 @@ function App() {
                         />
                         {/* Quick Emojis */}
                         <div className="flex flex-wrap gap-1">
-                          {['😊','😂','❤️','🔥','✨','🚀','🎉','🌟','💫','🎁','💎','📱','🌈','🎭','🐱','👑','⚡','🔔','💯','😍','🎨','💪','👀','💖','🤩'].map(emoji => (
+                          {['😊', '😂', '❤️', '🔥', '✨', '🚀', '🎉', '🌟', '💫', '🎁', '💎', '📱', '🌈', '🎭', '🐱', '👑', '⚡', '🔔', '💯', '😍', '🎨', '💪', '👀', '💖', '🤩'].map(emoji => (
                             <button
                               key={emoji}
                               type="button"
@@ -3152,118 +3368,199 @@ function App() {
             </div>
           </div>
         ) : activeTab === 'messages' ? (
-          <div className="flex-1 overflow-y-auto p-12 custom-scrollbar bg-background">
-            <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in duration-500">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 md:gap-0">
-                <div>
-                  <h2 className="text-2xl md:text-4xl font-black text-white uppercase tracking-tighter">Mesajlar ve Öneriler</h2>
-                  <p className="text-textSec text-xs md:text-base">Uygulama kullanıcılarından gelen iletişim talepleri</p>
+          <div className="flex-1 overflow-y-auto p-4 md:p-12 custom-scrollbar bg-background">
+            <div className="max-w-6xl mx-auto space-y-6 md:space-y-8 animate-in fade-in duration-500">
+              {/* Header Card */}
+              <div className="glass rounded-2xl p-5 md:p-6 border border-white/5">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div className="flex items-center gap-4">
+                    <div className="w-14 h-14 bg-gradient-to-br from-blue-500/20 to-indigo-500/20 rounded-2xl flex items-center justify-center border border-blue-500/10 shadow-lg shadow-blue-500/5">
+                      <Mail size={26} className="text-blue-400" />
+                    </div>
+                    <div>
+                      <h2 className="text-2xl font-black text-white tracking-tight">Mesajlar & Öneriler</h2>
+                      <p className="text-xs text-textSec mt-0.5">Kullanıcılardan gelen iletişim talepleri</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] text-green-500 font-black uppercase tracking-widest flex items-center gap-1.5 bg-green-500/5 px-3 py-1.5 rounded-lg border border-green-500/10">
+                      <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span>
+                      Canlı
+                    </span>
+                    <button
+                      onClick={clearAllMessages}
+                      className="px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all border border-red-500/10 flex items-center gap-1.5"
+                    >
+                      <Trash2 size={11} /> Mesajları Temizle
+                    </button>
+                    <button
+                      onClick={clearAllSuggestions}
+                      className="px-3 py-1.5 bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-400 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all border border-yellow-500/10 flex items-center gap-1.5"
+                    >
+                      <Trash2 size={11} /> Önerileri Temizle
+                    </button>
+                  </div>
                 </div>
-                <div className="flex flex-wrap items-center gap-2 md:gap-3">
-                  <span className="text-[10px] text-green-500 font-black uppercase tracking-widest flex items-center gap-1.5 bg-green-500/5 px-2 py-1 rounded-lg border border-green-500/10">
-                    <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span>
-                    Canlı
-                  </span>
-                  <button
-                    onClick={clearAllMessages}
-                    className="px-3 py-1.5 bg-danger/10 hover:bg-danger/20 text-danger text-[10px] font-black uppercase tracking-widest rounded-xl transition-all border border-danger/10"
-                  >
-                    Temizle (Mesaj)
-                  </button>
-                  <button
-                    onClick={clearAllSuggestions}
-                    className="px-3 py-1.5 bg-warning/10 hover:bg-warning/20 text-warning text-[10px] font-black uppercase tracking-widest rounded-xl transition-all border border-warning/10"
-                  >
-                    Temizle (Öneri)
-                  </button>
+              </div>
+
+              {/* Stats Row */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="glass rounded-xl p-4 border border-white/5">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-blue-500/10 rounded-xl flex items-center justify-center">
+                      <MessageSquare size={18} className="text-blue-400" />
+                    </div>
+                    <div>
+                      <p className="text-xl font-black text-white">{messages.length}</p>
+                      <span className="text-[9px] font-bold text-textSec uppercase tracking-widest">Toplam Mesaj</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="glass rounded-xl p-4 border border-primary/10">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center">
+                      <Mail size={18} className="text-primary" />
+                    </div>
+                    <div>
+                      <p className="text-xl font-black text-primary">{messages.filter(m => m.status === 'unread').length}</p>
+                      <span className="text-[9px] font-bold text-textSec uppercase tracking-widest">Okunmamış</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="glass rounded-xl p-4 border border-yellow-500/10">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-yellow-500/10 rounded-xl flex items-center justify-center">
+                      <Lightbulb size={18} className="text-yellow-400" />
+                    </div>
+                    <div>
+                      <p className="text-xl font-black text-yellow-400">{suggestions.length}</p>
+                      <span className="text-[9px] font-bold text-textSec uppercase tracking-widest">Toplam Öneri</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="glass rounded-xl p-4 border border-green-500/10">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-green-500/10 rounded-xl flex items-center justify-center">
+                      <Check size={18} className="text-green-400" />
+                    </div>
+                    <div>
+                      <p className="text-xl font-black text-green-400">{messages.filter(m => m.status === 'read').length}</p>
+                      <span className="text-[9px] font-bold text-textSec uppercase tracking-widest">Okunmuş</span>
+                    </div>
+                  </div>
                 </div>
               </div>
 
               {/* Sub Tabs */}
-              <div className="flex bg-hover/50 rounded-2xl p-1 gap-1">
+              <div className="flex bg-white/[0.02] rounded-2xl p-1.5 gap-1.5 border border-white/5">
                 <button
                   onClick={() => setMessagesSubTab('messages')}
                   className={cn(
-                    "flex-1 py-2.5 md:py-3 px-3 md:px-6 rounded-xl text-xs md:text-sm font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2",
-                    messagesSubTab === 'messages' ? "bg-primary text-white shadow-lg" : "text-textSec hover:text-white hover:bg-white/5"
+                    "flex-1 py-3 px-6 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2.5",
+                    messagesSubTab === 'messages'
+                      ? "bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg shadow-blue-500/20"
+                      : "text-textSec hover:text-white hover:bg-white/5"
                   )}
                 >
-                  <MessageSquare size={16} />
+                  <MessageSquare size={15} />
                   Mesajlar
                   {messages.length > 0 && (
-                    <span className="bg-white/20 px-2 py-0.5 rounded-full text-[10px]">{messages.length}</span>
+                    <span className={cn(
+                      "px-2 py-0.5 rounded-full text-[10px] font-black",
+                      messagesSubTab === 'messages' ? "bg-white/20" : "bg-blue-500/10 text-blue-400"
+                    )}>{messages.length}</span>
                   )}
                 </button>
                 <button
                   onClick={() => setMessagesSubTab('suggestions')}
                   className={cn(
-                    "flex-1 py-2.5 md:py-3 px-3 md:px-6 rounded-xl text-xs md:text-sm font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2",
-                    messagesSubTab === 'suggestions' ? "bg-warning text-background shadow-lg" : "text-textSec hover:text-white hover:bg-white/5"
+                    "flex-1 py-3 px-6 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2.5",
+                    messagesSubTab === 'suggestions'
+                      ? "bg-gradient-to-r from-yellow-500 to-orange-500 text-white shadow-lg shadow-yellow-500/20"
+                      : "text-textSec hover:text-white hover:bg-white/5"
                   )}
                 >
-                  <Lightbulb size={16} />
+                  <Lightbulb size={15} />
                   Öneriler
                   {suggestions.length > 0 && (
-                    <span className="bg-white/20 px-2 py-0.5 rounded-full text-[10px]">{suggestions.length}</span>
+                    <span className={cn(
+                      "px-2 py-0.5 rounded-full text-[10px] font-black",
+                      messagesSubTab === 'suggestions' ? "bg-white/20" : "bg-yellow-500/10 text-yellow-400"
+                    )}>{suggestions.length}</span>
                   )}
                 </button>
               </div>
 
               {/* Messages Content */}
               {messagesSubTab === 'messages' ? (
-                <div className="space-y-4">
+                <div className="space-y-3">
                   {messages.length === 0 ? (
-                    <div className="glass rounded-[2rem] p-8 md:p-12 text-center border border-white/5 bg-white/2">
-                      <MessageSquare className="mx-auto text-textSec mb-4 opacity-20" size={32} />
-                      <h3 className="text-lg font-black text-white uppercase tracking-tighter">Henüz mesaj yok</h3>
-                      <p className="text-textSec text-xs mt-2">Kullanıcılar uygulamadan mesaj gönderdiğinde burada görünecek.</p>
+                    <div className="glass rounded-2xl p-16 text-center border border-white/5">
+                      <div className="w-20 h-20 bg-gradient-to-br from-blue-500/10 to-indigo-500/10 rounded-2xl flex items-center justify-center mx-auto mb-5 border border-white/5">
+                        <MessageSquare size={36} className="text-textSec" />
+                      </div>
+                      <h3 className="text-xl font-black text-white mb-2">Henüz Mesaj Yok</h3>
+                      <p className="text-sm text-textSec max-w-md mx-auto">Kullanıcılar uygulamadan mesaj gönderdiğinde burada görünecek.</p>
                     </div>
                   ) : (
                     messages.map(msg => (
                       <div
                         key={msg.id}
                         className={cn(
-                          "glass rounded-2xl p-6 border transition-all",
-                          msg.status === 'unread' ? "border-primary/50 bg-primary/5" : "border-white/5"
+                          "glass rounded-2xl border transition-all overflow-hidden",
+                          msg.status === 'unread' ? "border-primary/30 bg-primary/[0.03]" : "border-white/5 hover:border-white/10"
                         )}
                       >
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="flex-1 space-y-3">
-                            <div className="flex items-center gap-3">
+                        <div className="p-5">
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex items-start gap-4 flex-1 min-w-0">
+                              <div className={cn(
+                                "w-11 h-11 rounded-xl flex items-center justify-center shrink-0",
+                                msg.status === 'unread' ? "bg-primary/10" : "bg-white/5"
+                              )}>
+                                <Mail size={18} className={msg.status === 'unread' ? "text-primary" : "text-textSec"} />
+                              </div>
+                              <div className="flex-1 min-w-0 space-y-2.5">
+                                <div className="flex items-center gap-2.5 flex-wrap">
+                                  {msg.status === 'unread' && (
+                                    <span className="bg-primary text-white text-[8px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider">Yeni</span>
+                                  )}
+                                  <h4 className="text-base font-black text-white truncate">{msg.subject || 'Konu belirtilmemiş'}</h4>
+                                </div>
+                                <div className="flex items-center gap-3 text-xs text-textSec flex-wrap">
+                                  <span className="font-bold text-white/70 flex items-center gap-1.5">
+                                    <UserIcon size={12} /> {msg.name}
+                                  </span>
+                                  <a href={`mailto:${msg.email}`} className="text-primary hover:underline font-bold flex items-center gap-1.5">
+                                    <Mail size={12} /> {msg.email}
+                                  </a>
+                                  <span className="flex items-center gap-1 text-textSec/60">
+                                    <Clock size={12} /> {msg.date} {msg.time}
+                                  </span>
+                                </div>
+                                <div className="bg-white/[0.03] rounded-xl p-4 border border-white/5">
+                                  <p className="text-sm text-white/80 leading-relaxed">{msg.message}</p>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1.5 shrink-0">
                               {msg.status === 'unread' && (
-                                <span className="bg-primary text-white text-[10px] font-black px-2 py-1 rounded-full uppercase">Yeni</span>
+                                <button
+                                  onClick={() => markMessageAsRead(msg.id)}
+                                  className="p-2.5 bg-primary/10 hover:bg-primary/20 text-primary rounded-xl transition-all"
+                                  title="Okundu olarak işaretle"
+                                >
+                                  <Check size={16} />
+                                </button>
                               )}
-                              <h4 className="text-lg font-bold text-white">{msg.subject || 'Konu belirtilmemiş'}</h4>
-                            </div>
-                            <div className="flex items-center gap-4 text-sm text-textSec">
-                              <span className="font-semibold">{msg.name}</span>
-                              <span>•</span>
-                              <a href={`mailto:${msg.email}`} className="text-primary hover:underline">{msg.email}</a>
-                              <span>•</span>
-                              <span className="flex items-center gap-1">
-                                <Clock size={14} />
-                                {msg.date} {msg.time}
-                              </span>
-                            </div>
-                            <p className="text-sm text-textMain leading-relaxed bg-hover/50 rounded-xl p-4">{msg.message}</p>
-                          </div>
-                          <div className="flex flex-col gap-2">
-                            {msg.status === 'unread' && (
                               <button
-                                onClick={() => markMessageAsRead(msg.id)}
-                                className="p-2.5 hover:bg-primary/20 text-primary rounded-xl transition-all"
-                                title="Okundu olarak işaretle"
+                                onClick={() => deleteMessage(msg.id)}
+                                className="p-2.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl transition-all"
+                                title="Sil"
                               >
-                                <Check size={18} />
+                                <Trash2 size={16} />
                               </button>
-                            )}
-                            <button
-                              onClick={() => deleteMessage(msg.id)}
-                              className="p-2.5 hover:bg-danger/20 text-danger rounded-xl transition-all"
-                              title="Sil"
-                            >
-                              <Trash2 size={18} />
-                            </button>
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -3271,39 +3568,47 @@ function App() {
                   )}
                 </div>
               ) : (
-                <div className="space-y-4">
+                <div className="space-y-3">
                   {suggestions.length === 0 ? (
-                    <div className="glass rounded-[2rem] p-12 text-center">
-                      <Lightbulb className="mx-auto text-textSec mb-4" size={48} />
-                      <h3 className="text-xl font-bold text-white">Henüz öneri yok</h3>
-                      <p className="text-textSec mt-2">Kullanıcılar sticker önerisi gönderdiğinde burada görünecek.</p>
+                    <div className="glass rounded-2xl p-16 text-center border border-white/5">
+                      <div className="w-20 h-20 bg-gradient-to-br from-yellow-500/10 to-orange-500/10 rounded-2xl flex items-center justify-center mx-auto mb-5 border border-white/5">
+                        <Lightbulb size={36} className="text-textSec" />
+                      </div>
+                      <h3 className="text-xl font-black text-white mb-2">Henüz Öneri Yok</h3>
+                      <p className="text-sm text-textSec max-w-md mx-auto">Kullanıcılar sticker önerisi gönderdiğinde burada görünecek.</p>
                     </div>
                   ) : (
                     suggestions.map(sugg => (
                       <div
                         key={sugg.id}
-                        className="glass rounded-2xl p-6 border border-white/5 transition-all hover:border-warning/30"
+                        className="glass rounded-2xl border border-white/5 transition-all hover:border-yellow-500/20 overflow-hidden"
                       >
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="flex-1 space-y-2">
-                            <div className="flex items-center gap-3">
-                              <div className="bg-warning/20 p-2 rounded-xl">
-                                <Lightbulb className="text-warning" size={20} />
+                        <div className="p-5">
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex items-start gap-4 flex-1 min-w-0">
+                              <div className="w-11 h-11 bg-yellow-500/10 rounded-xl flex items-center justify-center shrink-0">
+                                <Lightbulb size={18} className="text-yellow-400" />
                               </div>
-                              <span className="text-sm text-textSec flex items-center gap-1">
-                                <Clock size={14} />
-                                {sugg.date} {sugg.time}
-                              </span>
+                              <div className="flex-1 min-w-0 space-y-2.5">
+                                <div className="flex items-center gap-2.5">
+                                  <span className="text-[9px] font-black text-yellow-400 bg-yellow-400/10 px-2 py-0.5 rounded-md uppercase tracking-wider border border-yellow-400/10">Öneri</span>
+                                  <span className="text-xs text-textSec/60 flex items-center gap-1">
+                                    <Clock size={12} /> {sugg.date} {sugg.time}
+                                  </span>
+                                </div>
+                                <div className="bg-white/[0.03] rounded-xl p-4 border border-white/5">
+                                  <p className="text-sm text-white/80 leading-relaxed">{sugg.suggestion}</p>
+                                </div>
+                              </div>
                             </div>
-                            <p className="text-base text-white font-medium leading-relaxed bg-hover/50 rounded-xl p-4">{sugg.suggestion}</p>
+                            <button
+                              onClick={() => deleteSuggestion(sugg.id)}
+                              className="p-2.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl transition-all shrink-0"
+                              title="Sil"
+                            >
+                              <Trash2 size={16} />
+                            </button>
                           </div>
-                          <button
-                            onClick={() => deleteSuggestion(sugg.id)}
-                            className="p-2.5 hover:bg-danger/20 text-danger rounded-xl transition-all"
-                            title="Sil"
-                          >
-                            <Trash2 size={18} />
-                          </button>
                         </div>
                       </div>
                     ))
@@ -3314,107 +3619,146 @@ function App() {
           </div>
         ) : activeTab === 'users' ? (
           <div className="flex-1 overflow-y-auto p-4 md:p-12 custom-scrollbar bg-background">
-            <div className="max-w-7xl mx-auto space-y-8 md:space-y-12">
-              {/* Users Header */}
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 px-4">
-                <div className="flex items-center gap-5">
-                  <div className="w-16 h-16 bg-gradient-to-br from-primary/20 to-accent/20 rounded-2xl flex items-center justify-center shadow-inner">
-                    <Users size={36} className="text-primary" />
+            <div className="max-w-7xl mx-auto space-y-6 md:space-y-8 animate-in fade-in duration-500">
+              {/* Users Header Card */}
+              <div className="glass rounded-2xl p-5 md:p-6 border border-white/5">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                  <div className="flex items-center gap-4">
+                    <div className="w-14 h-14 bg-gradient-to-br from-purple-500/20 to-pink-500/20 rounded-2xl flex items-center justify-center border border-purple-500/10 shadow-lg shadow-purple-500/5">
+                      <Users size={26} className="text-purple-400" />
+                    </div>
+                    <div>
+                      <h1 className="text-2xl font-black text-white tracking-tight">Kullanıcılar</h1>
+                      <p className="text-xs text-textSec mt-0.5">Firebase kullanıcı yönetimi ve abonelik kontrolü</p>
+                    </div>
                   </div>
-                  <div>
-                    <h1 className="text-3xl font-black text-white tracking-tight">Kullanicilar</h1>
-                    <p className="text-textSec text-sm font-medium mt-1">Firebase kullanici yonetimi</p>
-                  </div>
+                  <button
+                    onClick={fetchUsers}
+                    disabled={usersLoading}
+                    className="flex items-center gap-2.5 px-5 py-2.5 bg-white/5 hover:bg-white/10 text-textSec hover:text-white border border-white/5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+                  >
+                    <RefreshCcw size={14} className={usersLoading ? "animate-spin" : ""} />
+                    Yenile
+                  </button>
                 </div>
-                <button
-                  onClick={fetchUsers}
-                  disabled={usersLoading}
-                  className="flex items-center gap-3 px-6 py-3 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-2xl text-xs font-black uppercase tracking-widest transition-all"
-                >
-                  <RefreshCcw size={16} className={usersLoading ? "animate-spin" : ""} />
-                  Yenile
-                </button>
               </div>
 
               {/* Stats Cards */}
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-4 px-4">
-                <div className="bg-card/60 backdrop-blur-sm px-5 py-4 rounded-2xl border border-white/5">
-                  <span className="text-[10px] font-bold text-textSec uppercase tracking-widest">Toplam</span>
-                  <p className="text-2xl font-black text-white mt-1">{userStats.total.toLocaleString()}</p>
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                <div className="glass rounded-xl p-4 border border-white/5">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center">
+                      <Users size={18} className="text-white/60" />
+                    </div>
+                    <div>
+                      <p className="text-xl font-black text-white">{userStats.total.toLocaleString()}</p>
+                      <span className="text-[9px] font-bold text-textSec uppercase tracking-widest">Toplam</span>
+                    </div>
+                  </div>
                 </div>
-                <div className="bg-card/60 backdrop-blur-sm px-5 py-4 rounded-2xl border border-primary/10">
-                  <span className="text-[10px] font-bold text-primary uppercase tracking-widest">Premium</span>
-                  <p className="text-2xl font-black text-primary mt-1">{userStats.premium.toLocaleString()}</p>
+                <div className="glass rounded-xl p-4 border border-primary/10">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center">
+                      <Crown size={18} className="text-primary" />
+                    </div>
+                    <div>
+                      <p className="text-xl font-black text-primary">{userStats.premium.toLocaleString()}</p>
+                      <span className="text-[9px] font-bold text-textSec uppercase tracking-widest">Premium</span>
+                    </div>
+                  </div>
                 </div>
-                <div className="bg-card/60 backdrop-blur-sm px-5 py-4 rounded-2xl border border-accent/10">
-                  <span className="text-[10px] font-bold text-accent uppercase tracking-widest">Aylik Abone</span>
-                  <p className="text-2xl font-black text-accent mt-1">{userStats.monthly.toLocaleString()}</p>
+                <div className="glass rounded-xl p-4 border border-accent/10">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-accent/10 rounded-xl flex items-center justify-center">
+                      <Clock size={18} className="text-accent" />
+                    </div>
+                    <div>
+                      <p className="text-xl font-black text-accent">{userStats.monthly.toLocaleString()}</p>
+                      <span className="text-[9px] font-bold text-textSec uppercase tracking-widest">Aylık</span>
+                    </div>
+                  </div>
                 </div>
-                <div className="bg-card/60 backdrop-blur-sm px-5 py-4 rounded-2xl border border-yellow-500/10">
-                  <span className="text-[10px] font-bold text-yellow-500 uppercase tracking-widest">Yillik Abone</span>
-                  <p className="text-2xl font-black text-yellow-500 mt-1">{userStats.yearly.toLocaleString()}</p>
+                <div className="glass rounded-xl p-4 border border-yellow-500/10">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-yellow-500/10 rounded-xl flex items-center justify-center">
+                      <Calendar size={18} className="text-yellow-400" />
+                    </div>
+                    <div>
+                      <p className="text-xl font-black text-yellow-400">{userStats.yearly.toLocaleString()}</p>
+                      <span className="text-[9px] font-bold text-textSec uppercase tracking-widest">Yıllık</span>
+                    </div>
+                  </div>
                 </div>
-                <div className="bg-card/60 backdrop-blur-sm px-5 py-4 rounded-2xl border border-white/5">
-                  <span className="text-[10px] font-bold text-textSec uppercase tracking-widest">Ucretsiz</span>
-                  <p className="text-2xl font-black text-textSec mt-1">{userStats.free.toLocaleString()}</p>
+                <div className="glass rounded-xl p-4 border border-white/5">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center">
+                      <Shield size={18} className="text-textSec" />
+                    </div>
+                    <div>
+                      <p className="text-xl font-black text-textSec">{userStats.free.toLocaleString()}</p>
+                      <span className="text-[9px] font-bold text-textSec uppercase tracking-widest">Ücretsiz</span>
+                    </div>
+                  </div>
                 </div>
               </div>
 
               {/* Search & Filter Bar */}
-              <div className="flex flex-col sm:flex-row gap-4 px-4">
-                <div className="flex-1 relative">
-                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-textSec" size={20} />
-                  <input
-                    type="text"
-                    value={userSearch}
-                    onChange={(e) => setUserSearch(e.target.value)}
-                    placeholder="E-posta ara..."
-                    className="w-full h-14 bg-hover border border-white/5 rounded-xl pl-12 pr-5 text-white font-bold placeholder:text-textSec/30 outline-none focus:border-primary/50 transition-all"
-                  />
+              <div className="glass rounded-2xl p-4 border border-white/5">
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <div className="flex-1 relative">
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-textSec/40" size={18} />
+                    <input
+                      type="text"
+                      value={userSearch}
+                      onChange={(e) => setUserSearch(e.target.value)}
+                      placeholder="E-posta veya isim ara..."
+                      className="w-full h-12 bg-white/[0.03] border border-white/5 rounded-xl pl-11 pr-5 text-sm text-white font-bold placeholder:text-textSec/30 outline-none focus:border-primary/50 transition-all"
+                    />
+                  </div>
+                  <select
+                    value={userFilter}
+                    onChange={(e) => setUserFilter(e.target.value as any)}
+                    className="h-12 bg-white/[0.03] border border-white/5 rounded-xl px-4 text-sm text-white font-bold outline-none focus:border-primary/50 transition-all appearance-none min-w-[160px]"
+                  >
+                    <option value="all">Tümünü Göster</option>
+                    <option value="premium">Premium</option>
+                    <option value="free">Ücretsiz</option>
+                    <option value="monthly">Aylık Abone</option>
+                    <option value="yearly">Yıllık Abone</option>
+                  </select>
                 </div>
-                <select
-                  value={userFilter}
-                  onChange={(e) => setUserFilter(e.target.value as any)}
-                  className="h-14 bg-hover border border-white/5 rounded-xl px-4 text-white font-bold outline-none focus:border-primary/50 transition-all appearance-none min-w-[160px]"
-                >
-                  <option value="all">Tumunu Goster</option>
-                  <option value="premium">Premium</option>
-                  <option value="free">Ucretsiz</option>
-                  <option value="monthly">Aylik Abone</option>
-                  <option value="yearly">Yillik Abone</option>
-                </select>
               </div>
 
               {/* Loading State */}
               {usersLoading && (
-                <div className="flex flex-col items-center justify-center py-20">
-                  <RefreshCcw size={48} className="animate-spin text-primary mb-4" />
-                  <p className="text-white font-black uppercase tracking-widest text-sm">Kullanicilar yukleniyor...</p>
+                <div className="flex flex-col items-center justify-center py-24">
+                  <RefreshCcw size={28} className="animate-spin text-primary mb-3" />
+                  <p className="text-xs text-textSec font-bold">Kullanıcılar yükleniyor...</p>
                 </div>
               )}
 
               {/* Users Content */}
               {!usersLoading && (
-                <div className="flex flex-col lg:flex-row gap-6 px-4">
+                <div className="flex flex-col lg:flex-row gap-6">
                   {/* Users Table */}
-                  <div className="flex-1 bg-card/40 backdrop-blur-sm rounded-[32px] border border-white/5 overflow-hidden">
+                  <div className="flex-1 glass rounded-2xl border border-white/5 overflow-hidden">
                     {/* Table Header */}
-                    <div className="hidden md:grid grid-cols-12 gap-4 px-6 py-4 border-b border-white/5 bg-white/[0.02]">
-                      <span className="col-span-4 text-[10px] font-black text-textSec uppercase tracking-widest">E-posta</span>
-                      <span className="col-span-2 text-[10px] font-black text-textSec uppercase tracking-widest">Kayit</span>
-                      <span className="col-span-2 text-[10px] font-black text-textSec uppercase tracking-widest">Durum</span>
-                      <span className="col-span-2 text-[10px] font-black text-textSec uppercase tracking-widest">Tur</span>
-                      <span className="col-span-2 text-[10px] font-black text-textSec uppercase tracking-widest">Bitis</span>
+                    <div className="hidden md:grid grid-cols-12 gap-4 px-5 py-3.5 border-b border-white/5 bg-white/[0.02]">
+                      <span className="col-span-4 text-[9px] font-black text-textSec uppercase tracking-widest">Kullanıcı</span>
+                      <span className="col-span-2 text-[9px] font-black text-textSec uppercase tracking-widest">Kayıt</span>
+                      <span className="col-span-2 text-[9px] font-black text-textSec uppercase tracking-widest">Durum</span>
+                      <span className="col-span-2 text-[9px] font-black text-textSec uppercase tracking-widest">Tür</span>
+                      <span className="col-span-2 text-[9px] font-black text-textSec uppercase tracking-widest">Bitiş</span>
                     </div>
 
-                    {/* Table Body - Sonsuz liste, kullanıcı eklendikçe dinamik uzar */}
-                    <div className="divide-y divide-white/5">
+                    {/* Table Body */}
+                    <div className="divide-y divide-white/[0.03] max-h-[calc(100vh-420px)] overflow-y-auto custom-scrollbar">
                       {filteredUsers.length === 0 ? (
                         <div className="flex flex-col items-center justify-center py-20 text-center space-y-4">
-                          <div className="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center text-textSec/20">
-                            <Users size={40} />
+                          <div className="w-16 h-16 bg-white/5 rounded-2xl flex items-center justify-center">
+                            <Users size={28} className="text-textSec/30" />
                           </div>
-                          <p className="text-textSec text-sm font-bold">Kullanici bulunamadi</p>
+                          <p className="text-textSec text-sm font-bold">Kullanıcı bulunamadı</p>
                         </div>
                       ) : (
                         filteredUsers.map((u) => (
@@ -3425,30 +3769,30 @@ function App() {
                               setEditingSubscription(false);
                             }}
                             className={cn(
-                              "w-full grid grid-cols-1 md:grid-cols-12 gap-2 md:gap-4 px-6 py-4 text-left transition-all hover:bg-white/[0.03]",
-                              selectedUser?.id === u.id && "bg-primary/5 border-l-2 border-primary"
+                              "w-full grid grid-cols-1 md:grid-cols-12 gap-2 md:gap-4 px-5 py-3.5 text-left transition-all hover:bg-white/[0.03]",
+                              selectedUser?.id === u.id && "bg-primary/5 border-l-2 border-l-primary"
                             )}
                           >
                             <div className="col-span-4 flex items-center gap-3 min-w-0">
                               <div className={cn(
-                                "w-8 h-8 rounded-lg flex items-center justify-center shrink-0",
-                                u.is_premium ? "bg-primary/20 text-primary" : "bg-white/5 text-textSec"
+                                "w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border",
+                                u.is_premium ? "bg-primary/10 border-primary/20" : "bg-white/5 border-white/5"
                               )}>
                                 {u.photo_url ? (
-                                  <img src={u.photo_url} alt="" className="w-8 h-8 rounded-lg object-cover" />
+                                  <img src={u.photo_url} alt="" className="w-9 h-9 rounded-xl object-cover" />
                                 ) : (
-                                  <UserIcon size={16} />
+                                  <UserIcon size={15} className={u.is_premium ? "text-primary" : "text-textSec"} />
                                 )}
                               </div>
                               <div className="min-w-0">
                                 <span className="text-sm font-bold text-white truncate block">{u.display_name || u.email || u.id}</span>
                                 {u.display_name && u.email && (
-                                  <span className="text-[10px] text-textSec truncate block">{u.email}</span>
+                                  <span className="text-[10px] text-textSec/60 truncate block">{u.email}</span>
                                 )}
                               </div>
                             </div>
                             <div className="col-span-2 flex items-center">
-                              <span className="text-[10px] font-bold text-textSec">
+                              <span className="text-[10px] font-bold text-textSec/60">
                                 {u.created_at?.toDate
                                   ? u.created_at.toDate().toLocaleDateString('tr-TR')
                                   : u.created_at
@@ -3458,25 +3802,24 @@ function App() {
                             </div>
                             <div className="col-span-2 flex items-center">
                               {u.is_premium ? (
-                                <span className="flex items-center gap-1.5 text-xs font-black text-primary">
-                                  <Crown size={14} />
-                                  Premium
+                                <span className="flex items-center gap-1.5 text-[10px] font-black text-primary bg-primary/10 px-2 py-1 rounded-md border border-primary/10">
+                                  <Crown size={11} /> Premium
                                 </span>
                               ) : (
-                                <span className="text-xs font-bold text-textSec">Free</span>
+                                <span className="text-[10px] font-bold text-textSec/50">Free</span>
                               )}
                             </div>
                             <div className="col-span-2 flex items-center">
                               <span className={cn(
-                                "text-xs font-bold px-2 py-1 rounded-lg",
-                                u.premium_type === 'monthly' ? "bg-accent/10 text-accent" :
-                                u.premium_type === 'yearly' ? "bg-yellow-500/10 text-yellow-500" : "text-textSec"
+                                "text-[10px] font-bold px-2 py-1 rounded-md",
+                                u.premium_type === 'monthly' ? "bg-accent/10 text-accent border border-accent/10" :
+                                  u.premium_type === 'yearly' ? "bg-yellow-500/10 text-yellow-400 border border-yellow-500/10" : "text-textSec/40"
                               )}>
-                                {u.premium_type === 'monthly' ? 'Aylik' : u.premium_type === 'yearly' ? 'Yillik' : '-'}
+                                {u.premium_type === 'monthly' ? 'Aylık' : u.premium_type === 'yearly' ? 'Yıllık' : '-'}
                               </span>
                             </div>
                             <div className="col-span-2 flex items-center">
-                              <span className="text-xs font-bold text-textSec">
+                              <span className="text-[10px] font-bold text-textSec/50">
                                 {u.premium_expiry ? new Date(u.premium_expiry).toLocaleDateString('tr-TR') : '-'}
                               </span>
                             </div>
@@ -3486,103 +3829,140 @@ function App() {
                     </div>
 
                     {/* Table Footer */}
-                    <div className="px-6 py-3 border-t border-white/5 bg-white/[0.02]">
-                      <span className="text-[10px] font-black text-textSec uppercase tracking-widest">
-                        {filteredUsers.length} / {usersData.length} kullanici
+                    <div className="px-5 py-3 border-t border-white/5 bg-white/[0.02] flex items-center justify-between">
+                      <span className="text-[9px] font-black text-textSec uppercase tracking-widest">
+                        {filteredUsers.length} / {usersData.length} kullanıcı
+                      </span>
+                      <span className="text-[9px] font-bold text-textSec/40">
+                        Detay için tıklayın →
                       </span>
                     </div>
                   </div>
 
                   {/* User Detail Panel */}
-                  {selectedUser && (
-                    <div className="lg:w-[420px] bg-card/40 backdrop-blur-sm rounded-[32px] border border-white/5 overflow-hidden shrink-0">
+                  {selectedUser ? (
+                    <div className="lg:w-[420px] glass rounded-2xl border border-white/5 overflow-hidden shrink-0">
                       {/* Detail Header */}
-                      <div className="p-6 border-b border-white/5 flex items-center justify-between">
-                        <h3 className="text-lg font-black text-white tracking-tight">Kullanici Detay</h3>
+                      <div className="p-5 border-b border-white/5 bg-white/[0.02] flex items-center justify-between">
+                        <h3 className="text-sm font-black text-white tracking-tight uppercase">Kullanıcı Detayı</h3>
                         <button
                           onClick={() => setSelectedUser(null)}
                           className="p-2 hover:bg-white/10 rounded-xl transition-all text-textSec"
                         >
-                          <X size={18} />
+                          <X size={16} />
                         </button>
                       </div>
 
-                      <div className="p-6 space-y-5">
+                      <div className="p-5 space-y-4 max-h-[calc(100vh-420px)] overflow-y-auto custom-scrollbar">
                         {/* User Profile Header */}
                         <div className="flex items-center gap-4 pb-4 border-b border-white/5">
                           {selectedUser.photo_url ? (
                             <img
                               src={selectedUser.photo_url}
                               alt={selectedUser.display_name || 'User'}
-                              className="w-14 h-14 rounded-full object-cover border-2 border-primary/30"
+                              className="w-14 h-14 rounded-2xl object-cover border-2 border-primary/20 shadow-lg"
                             />
                           ) : (
-                            <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center">
+                            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-primary/10 to-accent/10 flex items-center justify-center border border-primary/10">
                               <UserIcon size={24} className="text-primary" />
                             </div>
                           )}
                           <div className="flex-1 min-w-0">
                             <p className="text-base font-black text-white truncate">
-                              {selectedUser.display_name || 'Isimsiz Kullanici'}
+                              {selectedUser.display_name || 'İsimsiz Kullanıcı'}
                             </p>
                             <p className="text-xs font-medium text-textSec truncate">{selectedUser.email || selectedUser.id}</p>
+                            {selectedUser.is_premium && (
+                              <span className="inline-flex items-center gap-1 mt-1 text-[9px] font-black text-primary bg-primary/10 px-2 py-0.5 rounded-md border border-primary/10">
+                                <Crown size={10} /> Premium
+                              </span>
+                            )}
                           </div>
                         </div>
 
-                        {/* Registration Date */}
-                        <div className="space-y-1 bg-accent/5 border border-accent/10 rounded-xl p-3">
-                          <span className="text-[10px] font-black text-accent uppercase tracking-widest flex items-center gap-1">
-                            <Calendar size={10} /> Kayit Tarihi
-                          </span>
-                          <p className="text-sm font-bold text-white">
-                            {selectedUser.created_at?.toDate
-                              ? selectedUser.created_at.toDate().toLocaleString('tr-TR', {
-                                  year: 'numeric', month: 'long', day: 'numeric',
-                                  hour: '2-digit', minute: '2-digit'
-                                })
-                              : selectedUser.created_at
-                                ? new Date(selectedUser.created_at).toLocaleString('tr-TR', {
-                                    year: 'numeric', month: 'long', day: 'numeric',
-                                    hour: '2-digit', minute: '2-digit'
-                                  })
-                                : 'Bilinmiyor'}
-                          </p>
+                        {/* Info Grid */}
+                        <div className="grid grid-cols-2 gap-2.5">
+                          <div className="bg-white/[0.03] rounded-xl p-3 border border-white/5">
+                            <span className="text-[9px] font-bold text-textSec/60 uppercase tracking-widest block mb-1">Kayıt Tarihi</span>
+                            <p className="text-xs font-bold text-white">
+                              {selectedUser.created_at?.toDate
+                                ? selectedUser.created_at.toDate().toLocaleDateString('tr-TR', { year: 'numeric', month: 'short', day: 'numeric' })
+                                : selectedUser.created_at
+                                  ? new Date(selectedUser.created_at).toLocaleDateString('tr-TR', { year: 'numeric', month: 'short', day: 'numeric' })
+                                  : '-'}
+                            </p>
+                          </div>
+                          <div className="bg-white/[0.03] rounded-xl p-3 border border-white/5">
+                            <span className="text-[9px] font-bold text-textSec/60 uppercase tracking-widest block mb-1">Abonelik Türü</span>
+                            <p className={cn(
+                              "text-xs font-black",
+                              selectedUser.premium_type === 'monthly' ? "text-accent" :
+                                selectedUser.premium_type === 'yearly' ? "text-yellow-400" : "text-textSec/50"
+                            )}>
+                              {selectedUser.premium_type === 'monthly' ? 'Aylık' :
+                                selectedUser.premium_type === 'yearly' ? 'Yıllık' : 'Yok'}
+                            </p>
+                          </div>
+                          <div className="bg-white/[0.03] rounded-xl p-3 border border-white/5">
+                            <span className="text-[9px] font-bold text-textSec/60 uppercase tracking-widest block mb-1">Bitiş Tarihi</span>
+                            <p className="text-xs font-bold text-white">
+                              {selectedUser.premium_expiry ? new Date(selectedUser.premium_expiry).toLocaleDateString('tr-TR', { year: 'numeric', month: 'short', day: 'numeric' }) : '-'}
+                            </p>
+                          </div>
+                          <div className="bg-white/[0.03] rounded-xl p-3 border border-white/5">
+                            <span className="text-[9px] font-bold text-textSec/60 uppercase tracking-widest block mb-1">Son Senkron</span>
+                            <p className="text-xs font-bold text-textSec">
+                              {selectedUser.last_sync?.toDate ? selectedUser.last_sync.toDate().toLocaleDateString('tr-TR') : selectedUser.last_sync ? new Date(selectedUser.last_sync).toLocaleDateString('tr-TR') : '-'}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* User Stats */}
+                        <div className="grid grid-cols-2 gap-2.5">
+                          <div className="bg-primary/5 border border-primary/10 rounded-xl p-3 text-center">
+                            <p className="text-2xl font-black text-primary">{selectedUser.total_stickers_added || 0}</p>
+                            <span className="text-[9px] font-bold text-textSec uppercase">Eklenen Sticker</span>
+                          </div>
+                          <div className="bg-accent/5 border border-accent/10 rounded-xl p-3 text-center">
+                            <p className="text-2xl font-black text-accent">{selectedUser.custom_packs_count || 0}</p>
+                            <span className="text-[9px] font-bold text-textSec uppercase">Özel Paket</span>
+                          </div>
                         </div>
 
                         {/* UID */}
-                        <div className="space-y-1">
-                          <span className="text-[10px] font-black text-textSec uppercase tracking-widest">UID</span>
-                          <p className="text-xs font-mono text-textSec break-all bg-black/20 p-2 rounded-lg">{selectedUser.id}</p>
+                        <div className="bg-white/[0.02] rounded-xl p-3 border border-white/5">
+                          <span className="text-[9px] font-bold text-textSec/60 uppercase tracking-widest block mb-1">UID</span>
+                          <p className="text-[10px] font-mono text-textSec/50 break-all">{selectedUser.id}</p>
                         </div>
 
                         {/* Device Info */}
                         {selectedUser.device_info && (
-                          <div className="space-y-1">
-                            <span className="text-[10px] font-black text-textSec uppercase tracking-widest flex items-center gap-1">
+                          <div className="bg-white/[0.02] rounded-xl p-3 border border-white/5">
+                            <span className="text-[9px] font-bold text-textSec/60 uppercase tracking-widest flex items-center gap-1 mb-2">
                               <Smartphone size={10} /> Cihaz Bilgisi
                             </span>
-                            <div className="bg-black/20 rounded-xl p-3 grid grid-cols-2 gap-2">
+                            <div className="grid grid-cols-2 gap-2">
                               {selectedUser.device_info.model && (
                                 <div>
-                                  <span className="text-[9px] text-textSec">Model</span>
+                                  <span className="text-[8px] text-textSec/40 uppercase">Model</span>
                                   <p className="text-xs font-bold text-white">{selectedUser.device_info.model}</p>
                                 </div>
                               )}
                               {selectedUser.device_info.os_version && (
                                 <div>
-                                  <span className="text-[9px] text-textSec">OS</span>
+                                  <span className="text-[8px] text-textSec/40 uppercase">OS</span>
                                   <p className="text-xs font-bold text-white">{selectedUser.device_info.os_version}</p>
                                 </div>
                               )}
                               {selectedUser.device_info.app_version && (
                                 <div>
-                                  <span className="text-[9px] text-textSec">Uygulama</span>
+                                  <span className="text-[8px] text-textSec/40 uppercase">Uygulama</span>
                                   <p className="text-xs font-bold text-white">v{selectedUser.device_info.app_version}</p>
                                 </div>
                               )}
                               {selectedUser.device_info.language && (
                                 <div>
-                                  <span className="text-[9px] text-textSec">Dil</span>
+                                  <span className="text-[8px] text-textSec/40 uppercase">Dil</span>
                                   <p className="text-xs font-bold text-white">{selectedUser.device_info.language}</p>
                                 </div>
                               )}
@@ -3590,76 +3970,17 @@ function App() {
                           </div>
                         )}
 
-                        {/* User Stats */}
-                        <div className="grid grid-cols-2 gap-3">
-                          <div className="bg-primary/5 border border-primary/10 rounded-xl p-3 text-center">
-                            <p className="text-2xl font-black text-primary">{selectedUser.total_stickers_added || 0}</p>
-                            <span className="text-[9px] font-bold text-textSec uppercase">Eklenen Stiker</span>
-                          </div>
-                          <div className="bg-accent/5 border border-accent/10 rounded-xl p-3 text-center">
-                            <p className="text-2xl font-black text-accent">{selectedUser.custom_packs_count || 0}</p>
-                            <span className="text-[9px] font-bold text-textSec uppercase">Ozel Paket</span>
-                          </div>
-                        </div>
-
-                        {/* Premium Status */}
-                        <div className="space-y-1">
-                          <span className="text-[10px] font-black text-textSec uppercase tracking-widest">Premium</span>
-                          <div className="flex items-center gap-2">
-                            {selectedUser.is_premium ? (
-                              <span className="flex items-center gap-2 px-3 py-1.5 bg-primary/10 text-primary rounded-lg text-xs font-black">
-                                <Crown size={14} /> Evet
-                              </span>
-                            ) : (
-                              <span className="flex items-center gap-2 px-3 py-1.5 bg-white/5 text-textSec rounded-lg text-xs font-bold">
-                                <Shield size={14} /> Hayir
-                              </span>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Type */}
-                        <div className="space-y-1">
-                          <span className="text-[10px] font-black text-textSec uppercase tracking-widest">Tur</span>
-                          <p className={cn(
-                            "text-sm font-black",
-                            selectedUser.premium_type === 'monthly' ? "text-accent" :
-                            selectedUser.premium_type === 'yearly' ? "text-yellow-500" : "text-textSec"
-                          )}>
-                            {selectedUser.premium_type === 'monthly' ? 'Aylik Abone' :
-                             selectedUser.premium_type === 'yearly' ? 'Yillik Abone' : 'Yok'}
-                          </p>
-                        </div>
-
-                        {/* Expiry */}
-                        <div className="space-y-1">
-                          <span className="text-[10px] font-black text-textSec uppercase tracking-widest">Bitis Tarihi</span>
-                          <p className="text-sm font-bold text-white">
-                            {selectedUser.premium_expiry ? new Date(selectedUser.premium_expiry).toLocaleDateString('tr-TR', { year: 'numeric', month: 'long', day: 'numeric' }) : '-'}
-                          </p>
-                        </div>
-
-                        {/* Last Sync */}
-                        <div className="space-y-1">
-                          <span className="text-[10px] font-black text-textSec uppercase tracking-widest">Son Senkronizasyon</span>
-                          <p className="text-sm font-bold text-textSec">
-                            {selectedUser.last_sync?.toDate ? selectedUser.last_sync.toDate().toLocaleString('tr-TR') : selectedUser.last_sync ? new Date(selectedUser.last_sync).toLocaleString('tr-TR') : '-'}
-                          </p>
-                        </div>
-
                         {/* Favourite Packs */}
-                        <div className="space-y-1">
-                          <span className="text-[10px] font-black text-textSec uppercase tracking-widest">Favori Paketler</span>
-                          <div className="flex flex-wrap gap-1.5">
-                            {selectedUser.favorite_packs && selectedUser.favorite_packs.length > 0 ? (
-                              selectedUser.favorite_packs.map((p, i) => (
-                                <span key={i} className="px-2 py-1 bg-white/5 text-textSec text-[10px] font-bold rounded-lg">{p}</span>
-                              ))
-                            ) : (
-                              <span className="text-textSec text-xs font-bold">-</span>
-                            )}
+                        {selectedUser.favorite_packs && selectedUser.favorite_packs.length > 0 && (
+                          <div className="bg-white/[0.02] rounded-xl p-3 border border-white/5">
+                            <span className="text-[9px] font-bold text-textSec/60 uppercase tracking-widest block mb-2">Favori Paketler</span>
+                            <div className="flex flex-wrap gap-1.5">
+                              {selectedUser.favorite_packs.map((p, i) => (
+                                <span key={i} className="px-2 py-1 bg-white/5 text-textSec text-[10px] font-bold rounded-lg border border-white/5">{p}</span>
+                              ))}
+                            </div>
                           </div>
-                        </div>
+                        )}
 
                         {/* Cancelled Info */}
                         {selectedUser.cancelled_at && (
@@ -3763,11 +4084,11 @@ function App() {
                         </div>
                       </div>
                     </div>
-                  )}
+                  ) : null}
                 </div>
               )}
             </div>
-          </div >
+          </div>
         ) : activeTab === 'batch' ? (
           <div className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar bg-background">
             <div className="max-w-7xl mx-auto animate-in fade-in duration-500">
@@ -3799,7 +4120,38 @@ function App() {
                 </div>
               </div>
 
-              {!isBatchRunning ? (
+              {/* Sub-Tab Navigation */}
+              <div className="flex items-center gap-2 mb-6">
+                <button
+                  onClick={() => setBatchSubTab('generator')}
+                  className={cn(
+                    "px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all",
+                    batchSubTab === 'generator'
+                      ? "bg-gradient-to-r from-yellow-500 to-orange-500 text-white shadow-lg shadow-orange-500/20"
+                      : "bg-white/5 text-textSec hover:bg-white/10 hover:text-white"
+                  )}
+                >
+                  <Zap size={14} className="inline mr-1.5 -mt-0.5" />
+                  Üretici
+                </button>
+                <button
+                  onClick={() => setBatchSubTab('drafts')}
+                  className={cn(
+                    "px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center gap-2",
+                    batchSubTab === 'drafts'
+                      ? "bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg shadow-blue-500/20"
+                      : "bg-white/5 text-textSec hover:bg-white/10 hover:text-white"
+                  )}
+                >
+                  <Edit3 size={14} className="inline -mt-0.5" />
+                  Taslaklar
+                  {draftPacks.length > 0 && (
+                    <span className="ml-1 px-2 py-0.5 bg-white/20 rounded-full text-[10px] font-black">{draftPacks.length}</span>
+                  )}
+                </button>
+              </div>
+
+              {batchSubTab === 'generator' && !isBatchRunning ? (
                 <div className="flex flex-col xl:flex-row gap-6">
                   {/* Left Column: Search Terms + Settings */}
                   <div className="flex-1 min-w-0 space-y-5">
@@ -3819,7 +4171,7 @@ function App() {
                             setBatchAiGenerating(true);
                             try {
                               const existingTerms = batchTermsInput.split(',').map(t => t.trim()).filter(Boolean);
-                              const suggestions = await deepseekService.generateSearchTerms(batchMaxPacks, existingTerms);
+                              const suggestions = await deepseekService.generateSearchTerms(batchMaxPacks, existingTerms, batchSelectedCategories);
                               const newTerms = suggestions.map(s => s.searchTerm).join(', ');
                               setBatchTermsInput(prev => prev ? prev + ', ' + newTerms : newTerms);
                             } catch (e: any) {
@@ -3835,6 +4187,52 @@ function App() {
                           {batchAiGenerating ? 'Generating...' : `AI Generate ${batchMaxPacks} Topics`}
                         </button>
                       </div>
+
+                      {/* Category Filter for AI */}
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <label className="text-[9px] font-bold text-textSec uppercase tracking-wider flex items-center gap-1.5">
+                            <span className="text-purple-400">🎯</span> AI Kategori Filtresi
+                          </label>
+                          {batchSelectedCategories.length > 0 && (
+                            <button
+                              onClick={() => setBatchSelectedCategories([])}
+                              className="text-[9px] text-red-400 hover:text-red-300 font-bold"
+                            >
+                              Temizle
+                            </button>
+                          )}
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {CATEGORIES.map(cat => (
+                            <button
+                              key={cat.id}
+                              onClick={() => {
+                                setBatchSelectedCategories(prev =>
+                                  prev.includes(cat.id)
+                                    ? prev.filter(c => c !== cat.id)
+                                    : [...prev, cat.id]
+                                );
+                              }}
+                              className={cn(
+                                "px-2 py-1 rounded-lg text-[10px] font-bold transition-all border",
+                                batchSelectedCategories.includes(cat.id)
+                                  ? "bg-purple-500/30 border-purple-500/50 text-purple-300"
+                                  : "bg-white/5 border-white/10 text-textSec hover:bg-white/10 hover:text-white"
+                              )}
+                            >
+                              {cat.emoji} {cat.name}
+                            </button>
+                          ))}
+                        </div>
+                        <p className="text-[9px] text-textSec/60">
+                          {batchSelectedCategories.length === 0
+                            ? '💡 Kategori seçmezsen tüm kategorilerden üretir'
+                            : `✨ ${batchSelectedCategories.length} kategori seçili - AI bu kategorilere odaklanacak`
+                          }
+                        </p>
+                      </div>
+
                       <textarea
                         value={batchTermsInput}
                         onChange={(e) => setBatchTermsInput(e.target.value)}
@@ -4070,9 +4468,6 @@ function App() {
                         setBatchProgress(null);
 
                         try {
-                          // Kullanıcıyı paketler tab'ına yönlendir
-                          setActiveTab('packs');
-                          
                           const completedPacks = await generateBatchPacks({
                             searchTerms: limitedTerms,
                             source: batchSource,
@@ -4086,10 +4481,10 @@ function App() {
                             }
                           });
 
-                          // Paketleri yeniden yükle (batch generator zaten Firestore'a kaydetti)
-                          await fetchPacks();
-                          
-                          alert(`✅ ${completedPacks.length} paket başarıyla oluşturuldu!`);
+                          // Taslakları yeniden yükle
+                          await fetchDrafts();
+
+                          alert(`✅ ${completedPacks.length} paket taslak olarak oluşturuldu! Taslaklar sekmesinden inceleyip yayınlayabilirsiniz.`);
                         } catch (error: any) {
                           console.error('Batch generation error:', error);
                           alert(`Hata: ${error.message}`);
@@ -4105,7 +4500,7 @@ function App() {
                     </button>
                   </div>
                 </div>
-              ) : (
+              ) : batchSubTab === 'generator' && isBatchRunning ? (
                 /* Batch Progress UI */
                 <div className="space-y-6">
                   <div className="glass rounded-[2rem] p-8 border border-white/5 space-y-6">
@@ -4189,7 +4584,318 @@ function App() {
                     </div>
                   )}
                 </div>
-              )}
+              ) : batchSubTab === 'drafts' ? (
+                /* ========== DRAFTS UI ========== */
+                <div className="space-y-6">
+                  {/* Drafts Header */}
+                  <div className="glass rounded-2xl p-5 border border-white/5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 bg-gradient-to-br from-blue-500/20 to-purple-500/20 rounded-xl flex items-center justify-center border border-blue-500/10">
+                          <Edit3 size={20} className="text-blue-400" />
+                        </div>
+                        <div>
+                          <h3 className="text-xl font-black text-white">Taslak Paketler</h3>
+                          <p className="text-xs text-textSec mt-0.5">{draftPacks.length} taslak inceleme bekliyor</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={fetchDrafts}
+                          disabled={draftLoading}
+                          className="px-4 py-2.5 bg-white/5 hover:bg-white/10 text-textSec hover:text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2"
+                        >
+                          <RefreshCcw size={13} className={cn(draftLoading && "animate-spin")} /> Yenile
+                        </button>
+                        {draftPacks.length > 0 && (
+                          <button
+                            onClick={publishAllDrafts}
+                            className="px-5 py-2.5 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-green-500/20 hover:translate-y-[-1px] transition-all flex items-center gap-2"
+                          >
+                            <Check size={13} /> Tümünü Yayınla
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {draftLoading ? (
+                    <div className="flex items-center justify-center py-24">
+                      <div className="text-center">
+                        <RefreshCcw size={28} className="animate-spin text-primary mx-auto mb-3" />
+                        <p className="text-xs text-textSec font-bold">Taslaklar yükleniyor...</p>
+                      </div>
+                    </div>
+                  ) : draftPacks.length === 0 ? (
+                    <div className="glass rounded-2xl p-16 border border-white/5 text-center">
+                      <div className="w-20 h-20 bg-gradient-to-br from-blue-500/10 to-purple-500/10 rounded-2xl flex items-center justify-center mx-auto mb-5 border border-white/5">
+                        <Package size={36} className="text-textSec" />
+                      </div>
+                      <h4 className="text-xl font-black text-white mb-3">Henüz Taslak Yok</h4>
+                      <p className="text-sm text-textSec max-w-lg mx-auto leading-relaxed">Toplu üretici ile paket oluşturduğunuzda, paketler önce buraya taslak olarak düşecek. İnceleyip onayladıktan sonra yayınlayabilirsiniz.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-6">
+                      {/* Draft Cards */}
+                      {draftPacks.map((draft) => (
+                        <div
+                          key={draft.id}
+                          className="glass rounded-2xl border border-white/5 overflow-hidden transition-all hover:border-white/10"
+                        >
+                          {/* Pack Header Bar */}
+                          <div className="p-5 border-b border-white/5">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-4">
+                                {draft.tray_url ? (
+                                  <img src={draft.tray_url} alt="" className="w-16 h-16 rounded-xl object-cover bg-white/5 border-2 border-white/10 shadow-lg" />
+                                ) : (
+                                  <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-white/5 to-white/[0.02] flex items-center justify-center border-2 border-white/10">
+                                    <Package size={24} className="text-textSec" />
+                                  </div>
+                                )}
+                                <div>
+                                  <div className="flex items-center gap-2.5">
+                                    <h3 className="text-lg font-black text-white">{draft.name}</h3>
+                                    <span className="text-[9px] font-black text-yellow-400 bg-yellow-400/10 px-2 py-0.5 rounded-md uppercase border border-yellow-400/20">Taslak</span>
+                                  </div>
+                                  <div className="flex items-center gap-2 mt-1.5">
+                                    <span className="text-[10px] font-bold text-white/60 bg-white/5 px-2.5 py-0.5 rounded-md">{draft.category}</span>
+                                    <span className="text-[10px] font-bold text-white/60">{draft.sticker_count || draft.stickers?.length || 0} sticker</span>
+                                    {(draft as any).batch_source && (
+                                      <span className="text-[10px] font-bold text-blue-400 bg-blue-400/10 px-2.5 py-0.5 rounded-md border border-blue-400/10">{(draft as any).batch_source}</span>
+                                    )}
+                                    {(draft as any).batch_search_term && (
+                                      <span className="text-[10px] font-bold text-purple-400 bg-purple-400/10 px-2.5 py-0.5 rounded-md border border-purple-400/10">"{(draft as any).batch_search_term}"</span>
+                                    )}
+                                  </div>
+                                  {/* Translations inline */}
+                                  {draft.name_tr && (
+                                    <div className="flex flex-wrap gap-1.5 mt-2">
+                                      {[
+                                        { code: 'tr', flag: '🇹🇷' }, { code: 'es', flag: '🇪🇸' }, { code: 'ar', flag: '🇸🇦' },
+                                        { code: 'zh', flag: '🇨🇳' }, { code: 'hi', flag: '🇮🇳' }, { code: 'pt', flag: '🇧🇷' },
+                                        { code: 'de', flag: '🇩🇪' }, { code: 'ja', flag: '🇯🇵' }, { code: 'fr', flag: '🇫🇷' },
+                                      ].map(lang => {
+                                        const val = (draft as any)[`name_${lang.code}`];
+                                        return val ? (
+                                          <span key={lang.code} className="text-[9px] text-textSec bg-white/[0.03] px-2 py-0.5 rounded-md border border-white/5">
+                                            {lang.flag} {val}
+                                          </span>
+                                        ) : null;
+                                      })}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2 shrink-0">
+                                <button
+                                  onClick={() => {
+                                    setSelectedDraft(draft);
+                                    setDraftEditData({
+                                      name: draft.name,
+                                      name_tr: draft.name_tr,
+                                      category: draft.category,
+                                      is_premium: draft.is_premium,
+                                      is_animated: draft.is_animated,
+                                      is_active: draft.is_active,
+                                    });
+                                    setShowDraftEditModal(true);
+                                  }}
+                                  className="px-4 py-2.5 bg-white/5 hover:bg-white/10 text-textSec hover:text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2"
+                                >
+                                  <Edit3 size={13} /> Düzenle
+                                </button>
+                                <button
+                                  onClick={() => deleteDraftPack(draft)}
+                                  disabled={draftDeleting === draft.id}
+                                  className="px-4 py-2.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2"
+                                >
+                                  <Trash2 size={13} /> {draftDeleting === draft.id ? 'Siliniyor...' : 'Sil'}
+                                </button>
+                                <button
+                                  onClick={() => publishDraft(draft)}
+                                  disabled={draftPublishing === draft.id}
+                                  className="px-5 py-2.5 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-green-500/20 hover:translate-y-[-1px] transition-all flex items-center gap-2 disabled:opacity-50"
+                                >
+                                  <Check size={13} /> {draftPublishing === draft.id ? 'Yayınlanıyor...' : 'Yayınla'}
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Sticker Grid - Large Previews with Drag & Drop */}
+                          <div className="p-5">
+                            <div className="flex items-center justify-between mb-3">
+                              <span className="text-[10px] font-black text-textSec uppercase tracking-widest">Paket İçeriği — {draft.stickers?.length || 0} Dosya</span>
+                              <span className="text-[9px] text-textSec bg-white/5 px-2 py-1 rounded-md">Sürükle & bırak ile sıralayın</span>
+                            </div>
+                            <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8 gap-3">
+                              {draft.stickers?.map((sticker, idx) => (
+                                <div
+                                  key={`${draft.id}-${idx}`}
+                                  draggable
+                                  onDragStart={(e) => {
+                                    setDraftDragIdx(idx);
+                                    setDraftDragPackId(draft.id);
+                                    e.dataTransfer.effectAllowed = 'move';
+                                    e.currentTarget.style.opacity = '0.4';
+                                  }}
+                                  onDragEnd={(e) => {
+                                    e.currentTarget.style.opacity = '1';
+                                    if (draftDragIdx !== null && draftDragOverIdx !== null && draftDragPackId === draft.id) {
+                                      reorderDraftStickers(draft, draftDragIdx, draftDragOverIdx);
+                                    }
+                                    setDraftDragIdx(null);
+                                    setDraftDragOverIdx(null);
+                                    setDraftDragPackId(null);
+                                  }}
+                                  onDragOver={(e) => {
+                                    e.preventDefault();
+                                    e.dataTransfer.dropEffect = 'move';
+                                    if (draftDragPackId === draft.id) setDraftDragOverIdx(idx);
+                                  }}
+                                  onDragLeave={() => {
+                                    if (draftDragOverIdx === idx) setDraftDragOverIdx(null);
+                                  }}
+                                  className={cn(
+                                    "group relative aspect-square bg-white/[0.03] rounded-2xl border overflow-hidden transition-all cursor-grab active:cursor-grabbing",
+                                    draftDragOverIdx === idx && draftDragPackId === draft.id
+                                      ? "border-primary/60 bg-primary/10 shadow-lg shadow-primary/10 scale-105"
+                                      : "border-white/5 hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5"
+                                  )}
+                                >
+                                  <img
+                                    src={sticker.url}
+                                    alt={sticker.image_file}
+                                    className="w-full h-full object-contain p-2"
+                                    onClick={() => setDraftPreviewSticker({ url: sticker.url, title: sticker.image_file })}
+                                    loading="lazy"
+                                    draggable={false}
+                                  />
+                                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-all pointer-events-none" />
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); removeStickerFromDraft(draft, idx); }}
+                                    className="absolute top-1.5 right-1.5 w-6 h-6 bg-red-500/90 text-white rounded-lg flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all shadow-lg"
+                                  >
+                                    <X size={12} />
+                                  </button>
+                                  <div className="absolute bottom-1 left-1 right-1">
+                                    <span className="text-[8px] font-bold text-white/50 bg-black/40 backdrop-blur-sm px-1.5 py-0.5 rounded block text-center">{idx + 1}</span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Sticker Preview Modal */}
+                  {draftPreviewSticker && (
+                    <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onClick={() => setDraftPreviewSticker(null)}>
+                      <div className="relative max-w-lg max-h-[80vh]" onClick={e => e.stopPropagation()}>
+                        <img src={draftPreviewSticker.url} alt="" className="max-w-full max-h-[70vh] object-contain rounded-2xl" />
+                        <button onClick={() => setDraftPreviewSticker(null)} className="absolute -top-3 -right-3 w-8 h-8 bg-white/10 backdrop-blur rounded-full flex items-center justify-center text-white hover:bg-white/20">
+                          <X size={16} />
+                        </button>
+                        {draftPreviewSticker.title && <p className="text-center text-xs text-textSec mt-3">{draftPreviewSticker.title}</p>}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Draft Edit Modal */}
+                  {showDraftEditModal && selectedDraft && (
+                    <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onClick={() => setShowDraftEditModal(false)}>
+                      <div className="bg-card border border-white/10 rounded-2xl p-6 w-full max-w-lg space-y-5 shadow-2xl" onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center justify-between">
+                          <h3 className="text-lg font-black text-white">Taslak Düzenle</h3>
+                          <button onClick={() => setShowDraftEditModal(false)} className="w-8 h-8 bg-white/5 rounded-lg flex items-center justify-center text-textSec hover:text-white hover:bg-white/10">
+                            <X size={16} />
+                          </button>
+                        </div>
+
+                        <div className="space-y-4">
+                          <div>
+                            <label className="text-[10px] font-black text-textSec uppercase tracking-widest mb-1.5 block">Paket Adı (EN)</label>
+                            <input
+                              type="text"
+                              value={draftEditData.name || ''}
+                              onChange={e => setDraftEditData(prev => ({ ...prev, name: e.target.value }))}
+                              className="w-full bg-background border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:ring-2 focus:ring-primary"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[10px] font-black text-textSec uppercase tracking-widest mb-1.5 block">Paket Adı (TR)</label>
+                            <input
+                              type="text"
+                              value={draftEditData.name_tr || ''}
+                              onChange={e => setDraftEditData(prev => ({ ...prev, name_tr: e.target.value }))}
+                              className="w-full bg-background border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:ring-2 focus:ring-primary"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[10px] font-black text-textSec uppercase tracking-widest mb-1.5 block">Kategori</label>
+                            <select
+                              value={draftEditData.category || 'humor'}
+                              onChange={e => setDraftEditData(prev => ({ ...prev, category: e.target.value }))}
+                              className="w-full bg-background border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:ring-2 focus:ring-primary"
+                            >
+                              {['humor', 'love', 'greetings', 'animals', 'food', 'sports', 'movies', 'music', 'gaming', 'memes', 'reactions', 'cute', 'holidays', 'other'].map(cat => (
+                                <option key={cat} value={cat}>{cat.charAt(0).toUpperCase() + cat.slice(1)}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className="flex items-center gap-6">
+                            <label className="flex items-center gap-2 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={draftEditData.is_premium || false}
+                                onChange={e => setDraftEditData(prev => ({ ...prev, is_premium: e.target.checked }))}
+                                className="w-4 h-4 rounded accent-yellow-500"
+                              />
+                              <span className="text-xs font-bold text-white">Premium</span>
+                            </label>
+                            <label className="flex items-center gap-2 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={draftEditData.is_animated ?? true}
+                                onChange={e => setDraftEditData(prev => ({ ...prev, is_animated: e.target.checked }))}
+                                className="w-4 h-4 rounded accent-blue-500"
+                              />
+                              <span className="text-xs font-bold text-white">Animasyonlu</span>
+                            </label>
+                            <label className="flex items-center gap-2 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={draftEditData.is_active ?? true}
+                                onChange={e => setDraftEditData(prev => ({ ...prev, is_active: e.target.checked }))}
+                                className="w-4 h-4 rounded accent-green-500"
+                              />
+                              <span className="text-xs font-bold text-white">Aktif</span>
+                            </label>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-3 pt-2">
+                          <button
+                            onClick={() => setShowDraftEditModal(false)}
+                            className="flex-1 py-3 bg-white/5 hover:bg-white/10 text-textSec rounded-xl font-black text-xs uppercase tracking-widest transition-all"
+                          >
+                            İptal
+                          </button>
+                          <button
+                            onClick={updateDraftPack}
+                            className="flex-1 py-3 bg-primary text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-lg shadow-primary/20 hover:translate-y-[-1px] transition-all flex items-center justify-center gap-2"
+                          >
+                            <Save size={14} /> Kaydet
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : null}
             </div>
           </div>
         ) : null
@@ -4351,16 +5057,7 @@ function App() {
               ))}
             </select>
           </div>
-          <div className="flex bg-hover rounded-xl p-1 gap-1">
-            <button
-              onClick={() => setNewPackData({ ...newPackData, is_premium: false })}
-              className={cn("flex-1 py-2 rounded-lg text-[10px] font-black transition-all", !newPackData.is_premium ? "bg-primary text-white" : "text-textSec")}
-            >NORMAL PAKET</button>
-            <button
-              onClick={() => setNewPackData({ ...newPackData, is_premium: true })}
-              className={cn("flex-1 py-2 rounded-lg text-[10px] font-black transition-all", newPackData.is_premium ? "bg-warning text-background" : "text-textSec")}
-            >PREMIUM PAKET</button>
-          </div>
+          {/* Paket Tipi Secimi Kaldirildi */}
 
 
 
@@ -4540,19 +5237,6 @@ function App() {
                     <option key={cat.id} value={cat.id}>{cat.emoji} {cat.name}</option>
                   ))}
                 </select>
-              </div>
-              <div className="flex-1">
-                <label className="text-xs font-bold text-textSec uppercase mb-2 block">Paket Tipi</label>
-                <div className="flex bg-hover rounded-xl p-1 gap-1">
-                  <button
-                    onClick={() => setEditFormData({ ...editFormData, is_premium: false })}
-                    className={cn("flex-1 py-2 rounded-lg text-[10px] font-black transition-all", !editFormData.is_premium ? "bg-primary text-white" : "text-textSec")}
-                  >NORMAL</button>
-                  <button
-                    onClick={() => setEditFormData({ ...editFormData, is_premium: true })}
-                    className={cn("flex-1 py-2 rounded-lg text-[10px] font-black transition-all", editFormData.is_premium ? "bg-warning text-background" : "text-textSec")}
-                  >PREMIUM</button>
-                </div>
               </div>
             </div>
 
@@ -4910,9 +5594,9 @@ function App() {
                     {Math.round((importProgress?.current || 0) / (importProgress?.total || 1) * 100)}%
                   </span>
                 </div>
-                
+
                 <div className="w-full bg-white/5 h-2 rounded-full overflow-hidden">
-                  <div 
+                  <div
                     className="h-full bg-gradient-to-r from-purple-600 to-pink-600 transition-all duration-300"
                     style={{ width: `${(importProgress?.current || 0) / (importProgress?.total || 1) * 100}%` }}
                   />
@@ -4922,9 +5606,9 @@ function App() {
 
                 {importProgress?.preview && (
                   <div className="flex justify-center">
-                    <img 
-                      src={importProgress.preview} 
-                      alt="Preview" 
+                    <img
+                      src={importProgress.preview}
+                      alt="Preview"
                       className="w-32 h-32 object-contain rounded-xl border border-white/10"
                     />
                   </div>

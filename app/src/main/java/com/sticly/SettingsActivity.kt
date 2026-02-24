@@ -276,6 +276,7 @@ class SettingsActivity : AppCompatActivity() {
             }
         } else {
             findViewById<androidx.appcompat.widget.SwitchCompat>(R.id.switchGoogle).isChecked = false
+            updateLoginSwitches()
         }
     }
 
@@ -288,9 +289,11 @@ class SettingsActivity : AppCompatActivity() {
                     PreferencesHelper.syncUserDataWithFirebase(this, user.uid)
                 }
                 Toast.makeText(this, "Signed in with Google", Toast.LENGTH_SHORT).show()
+                updateLoginSwitches()
             } else {
                 Toast.makeText(this, "Auth failed", Toast.LENGTH_SHORT).show()
                 findViewById<androidx.appcompat.widget.SwitchCompat>(R.id.switchGoogle).isChecked = false
+                updateLoginSwitches()
             }
         }
     }

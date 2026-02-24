@@ -23,8 +23,24 @@ class StickyApp : Application() {
             Log.d("StickyApp", "Starting AdManager initialization...")
             AdManager.initialize(this)
             Log.d("StickyApp", "AdManager.initialize() called successfully")
+
+            // App Open Ad — uygulamaya her dönüşte reklam gösterir
+            AppOpenAdManager(this).init()
+            Log.d("StickyApp", "AppOpenAdManager initialized")
         } catch (e: Exception) {
             Log.e("StickyApp", "AdMob initialization failed: ${e.message}", e)
+        }
+
+        // PRE-WARM: Load disk cache synchronously so MainActivity has data instantly
+        // This is fast (~10-50ms for JSON read) and eliminates the loading screen on warm starts
+        try {
+            val diskPacks = StickerRepository.loadCacheFromDisk(this)
+            if (diskPacks.isNotEmpty()) {
+                StickerRepository.allPacksCache = diskPacks
+                Log.d("StickyApp", "Disk cache pre-warmed: ${diskPacks.size} packs")
+            }
+        } catch (e: Exception) {
+            Log.e("StickyApp", "Disk cache pre-warm error: ${e.message}")
         }
 
         // Firebase paketlerini EN ERKEN ANDA yüklemeye başla
@@ -35,7 +51,7 @@ class StickyApp : Application() {
                 val packs = StickerRepository.loadPacks(this@StickyApp, forceRefresh = false)
                 Log.d("StickyApp", "Early preload done: ${packs.size} packs loaded")
                 if (packs.isNotEmpty()) {
-                    StickyGlideModule.preloadStickerPreviews(this@StickyApp, packs, packCount = 30, stickersPerPack = 5)
+                    StickyGlideModule.preloadStickerPreviews(this@StickyApp, packs, packCount = 10, stickersPerPack = 3)
                 }
             } catch (e: Exception) {
                 Log.e("StickyApp", "Early preload error: ${e.message}")

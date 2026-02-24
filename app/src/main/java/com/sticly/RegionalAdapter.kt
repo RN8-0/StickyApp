@@ -81,13 +81,13 @@ class RegionalAdapter(
         }
 
         // Durumlar
-        val hasAccess = PreferencesHelper.hasAccessToPremiumPack(context, pack.id)
-        val isInstalled = PreferencesHelper.isPackInstalled(context, pack.id) && (!pack.isPremium || hasAccess)
+        val hasAccess = PreferencesHelper.hasAccessToPack(context, pack.id)
+        val isInstalled = PreferencesHelper.isPackInstalled(context, pack.id) && hasAccess
         
         checkIcon.visibility = if (isInstalled) View.VISIBLE else View.GONE
         installedBadge.visibility = if (isInstalled) View.VISIBLE else View.GONE
-        crownIcon.visibility = if (pack.isPremium) View.VISIBLE else View.GONE
-        premiumContainer.visibility = if (pack.isPremium && !hasAccess && !isInstalled) View.VISIBLE else View.GONE
+        crownIcon.visibility = View.GONE
+        premiumContainer.visibility = View.GONE
 
         // Buton Ayarı
         btnAdd.visibility = View.VISIBLE
@@ -104,8 +104,8 @@ class RegionalAdapter(
             btnAdd.layoutParams = params
         } else {
             btnAdd.text = context.getString(R.string.btn_add_short)
-            btnAdd.setIconResource(if (pack.isPremium && !hasAccess) R.drawable.ic_gem else R.drawable.ic_whatsapp_small)
-            val colorRes = if (pack.isPremium && !hasAccess) R.color.premium_gold else R.color.accent
+            btnAdd.setIconResource(R.drawable.ic_whatsapp_small)
+            val colorRes = R.color.accent
             val color = androidx.core.content.ContextCompat.getColorStateList(context, colorRes)
             
             btnAdd.setTextColor(color)
@@ -129,7 +129,6 @@ class RegionalAdapter(
 
     private fun loadStickerPreviews(container: LinearLayout, pack: Pack) {
         val context = container.context
-        container.removeAllViews()
 
         val displayMetrics = context.resources.displayMetrics
         val stickerSize = (52 * displayMetrics.density).toInt()
@@ -137,6 +136,30 @@ class RegionalAdapter(
         val glideOverrideSize = 150
 
         val stickersToShow = pack.stickers.take(5)
+        val currentChildCount = container.childCount
+        val neededCount = stickersToShow.size
+
+        // View'ları yeniden kullan - sadece gerekirse yeni oluştur
+        if (neededCount > currentChildCount) {
+            for (i in currentChildCount until neededCount) {
+                val previewView = ImageView(context).apply {
+                    val params = LinearLayout.LayoutParams(0, stickerSize, 1f)
+                    params.marginEnd = stickerMargin
+                    layoutParams = params
+                    scaleType = ImageView.ScaleType.FIT_CENTER
+                }
+                container.addView(previewView)
+            }
+        } else if (neededCount < currentChildCount) {
+            container.removeViews(neededCount, currentChildCount - neededCount)
+        }
+
+        // Son elemanın margin'ını kaldır
+        for (i in 0 until container.childCount) {
+            val child = container.getChildAt(i) as? ImageView ?: continue
+            (child.layoutParams as? LinearLayout.LayoutParams)?.marginEnd =
+                if (i == container.childCount - 1) 0 else stickerMargin
+        }
 
         val clearBgListener = object : RequestListener<Drawable> {
             override fun onLoadFailed(e: GlideException?, model: Any?, target: Target<Drawable>, isFirstResource: Boolean): Boolean = false
@@ -146,17 +169,11 @@ class RegionalAdapter(
             }
         }
 
+        val glide = Glide.with(context)
+
         stickersToShow.forEachIndexed { index, sticker ->
-            val previewView = ImageView(context).apply {
-                val params = LinearLayout.LayoutParams(0, stickerSize, 1f)
-                if (index < stickersToShow.size - 1) {
-                    params.marginEnd = stickerMargin
-                }
-                layoutParams = params
-                scaleType = ImageView.ScaleType.FIT_CENTER
-                setBackgroundResource(R.drawable.sticker_placeholder)
-            }
-            container.addView(previewView)
+            val previewView = container.getChildAt(index) as? ImageView ?: return@forEachIndexed
+            previewView.setBackgroundResource(R.drawable.sticker_placeholder)
 
             var urlToLoad = sticker.url
             if (urlToLoad.isEmpty() && pack.storagePath.isNotEmpty()) {
@@ -165,10 +182,9 @@ class RegionalAdapter(
 
             when {
                 urlToLoad.isNotEmpty() -> {
-                    Glide.with(context)
-                        .load(urlToLoad)
+                    glide.load(urlToLoad)
                         .override(glideOverrideSize)
-                        .priority(Priority.IMMEDIATE)
+                        .priority(Priority.HIGH)
                         .diskCacheStrategy(DiskCacheStrategy.DATA)
                         .dontAnimate()
                         .listener(clearBgListener)
@@ -177,10 +193,9 @@ class RegionalAdapter(
                 else -> {
                     val cachedSticker = StickerRepository.getCachedStickerPath(context, pack.id, sticker.file)
                     if (cachedSticker.exists() && cachedSticker.length() > 0) {
-                        Glide.with(context)
-                            .load(cachedSticker)
+                        glide.load(cachedSticker)
                             .override(glideOverrideSize)
-                            .priority(Priority.IMMEDIATE)
+                            .priority(Priority.HIGH)
                             .diskCacheStrategy(DiskCacheStrategy.DATA)
                             .signature(ObjectKey(cachedSticker.lastModified()))
                             .dontAnimate()
@@ -188,10 +203,9 @@ class RegionalAdapter(
                             .into(previewView)
                     } else {
                         val assetPath = "file:///android_asset/${pack.id}/${sticker.file}"
-                        Glide.with(context)
-                            .load(android.net.Uri.parse(assetPath))
+                        glide.load(android.net.Uri.parse(assetPath))
                             .override(glideOverrideSize)
-                            .priority(Priority.IMMEDIATE)
+                            .priority(Priority.HIGH)
                             .diskCacheStrategy(DiskCacheStrategy.DATA)
                             .dontAnimate()
                             .listener(clearBgListener)

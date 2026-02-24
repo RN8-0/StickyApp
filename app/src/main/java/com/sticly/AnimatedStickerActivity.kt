@@ -50,7 +50,7 @@ class AnimatedStickerActivity : AppCompatActivity() {
         private const val TAG = "AnimatedSticker"
         private const val STICKER_SIZE = 512
         private const val MAX_FILE_SIZE_KB = 500
-        private const val TARGET_FPS = 15
+        private const val TARGET_FPS = 12
     }
 
     override fun attachBaseContext(newBase: android.content.Context) {
@@ -508,17 +508,18 @@ class AnimatedStickerActivity : AppCompatActivity() {
             ",geq='lum(X,Y)':cb='cb(X,Y)':cr='cr(X,Y)':a='if(gt(pow(X-W/2,2)+pow(Y-H/2,2),pow(min(W,H)/2,2)),0,255)'"
         } else ""
 
-        var q = 75; var ok = false
+        var q = 60; var ok = false // Start at 60 instead of 70 for speed
         while (q >= 20 && !ok) {
             outputFile?.delete()
             val vf = "${cropFilter}scale=$STICKER_SIZE:$STICKER_SIZE:force_original_aspect_ratio=decrease,pad=$STICKER_SIZE:$STICKER_SIZE:-1:-1:color=0x00000000@0x00,fps=$TARGET_FPS${circleAlpha}"
-            val cmd = "-y -i \"${inputFile.absolutePath}\" -vf \"$vf\" -vcodec libwebp -lossless 0 -compression_level 6 -quality $q -loop 0 -preset default -an -pix_fmt yuva420p \"${outputFile!!.absolutePath}\""
+            // Compression level 2 is much faster than 4 or 6
+            val cmd = "-y -i \"${inputFile.absolutePath}\" -vf \"$vf\" -vcodec libwebp -lossless 0 -compression_level 2 -quality $q -loop 0 -preset default -an -pix_fmt yuva420p \"${outputFile!!.absolutePath}\""
             Log.d(TAG, "FFmpeg cmd: $cmd")
             val session = FFmpegKit.execute(cmd)
             if (ReturnCode.isSuccess(session.returnCode)) {
                 val kb = outputFile!!.length() / 1024
                 Log.d(TAG, "Output size: ${kb}KB at q=$q")
-                if (kb <= MAX_FILE_SIZE_KB) ok = true else q -= 15
+                if (kb <= MAX_FILE_SIZE_KB) ok = true else q -= 25
             } else {
                 Log.e(TAG, "FFmpeg fail: ${session.allLogsAsString}")
                 break
@@ -1359,21 +1360,22 @@ class AnimatedStickerActivity : AppCompatActivity() {
         } else ""
 
         // Build filter: crop → scale → pad → fps → circle → overlay PNG on top
-        var q = 60
+        var q = 50 // Start lower for overlays as they increase file size
         var ok = false
         while (q >= 20 && !ok) {
             outFile.delete()
             val vf = "${cropFilter}scale=$STICKER_SIZE:$STICKER_SIZE:force_original_aspect_ratio=decrease,pad=$STICKER_SIZE:$STICKER_SIZE:-1:-1:color=0x00000000@0x00,fps=$TARGET_FPS${circleAlpha}"
+            // Using [1:v] as overlay, and ensuring the overlay is also scaled correctly just in case
             val cmd = "-y -i \"${inputVideo.absolutePath}\" -i \"${overlayPng.absolutePath}\" " +
-                    "-filter_complex \"[0:v]${vf}[base];[base][1:v]overlay=0:0\" " +
-                    "-vcodec libwebp -lossless 0 -compression_level 6 -quality $q -loop 0 " +
+                    "-filter_complex \"[0:v]${vf}[base];[1:v]scale=$STICKER_SIZE:$STICKER_SIZE[ovrl];[base][ovrl]overlay=0:0\" " +
+                    "-vcodec libwebp -lossless 0 -compression_level 2 -quality $q -loop 0 " +
                     "-preset default -an -pix_fmt yuva420p \"${outFile.absolutePath}\""
             Log.d(TAG, "FFmpeg overlay cmd: $cmd")
             val session = FFmpegKit.execute(cmd)
             if (ReturnCode.isSuccess(session.returnCode) && outFile.exists()) {
                 val kb = outFile.length() / 1024
                 Log.d(TAG, "Overlay output: ${kb}KB at q=$q")
-                if (kb <= MAX_FILE_SIZE_KB) ok = true else q -= 15
+                if (kb <= MAX_FILE_SIZE_KB) ok = true else q -= 20
             } else {
                 Log.e(TAG, "FFmpeg overlay fail rc=${session.returnCode}: ${session.allLogsAsString}")
                 break

@@ -3,16 +3,18 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:orientation="vertical">
+    android:orientation="vertical"
+    android:padding="16dp">
 
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="@string/add_text_overlay"
-        android:textColor="@color/toolbar_text"
-        android:textSize="13sp"
+        android:textColor="@color/modern_secondary"
+        android:textSize="14sp"
         android:textStyle="bold"
-        android:layout_marginBottom="10dp" />
+        android:letterSpacing="0.02"
+        android:layout_marginBottom="12dp" />
 
     <!-- Text Input Row -->
     <LinearLayout
@@ -20,18 +22,18 @@
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:background="@drawable/bg_text_input_dark"
+        android:background="@drawable/bg_modern_input"
         android:paddingHorizontal="12dp"
         android:paddingVertical="4dp">
 
         <EditText
             android:id="@+id/etOverlayText"
             android:layout_width="0dp"
-            android:layout_height="44dp"
+            android:layout_height="48dp"
             android:layout_weight="1"
             android:hint="@string/enter_text_hint"
-            android:textColor="@color/white"
-            android:textColorHint="#80FFFFFF"
+            android:textColor="@color/modern_secondary"
+            android:textColorHint="@color/text_hint"
             android:textSize="14sp"
             android:background="@null"
             android:inputType="text"
@@ -40,15 +42,15 @@
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnAddTextOverlay"
-            style="@style/Widget.MaterialComponents.Button.TextButton"
+            style="@style/Widget.MaterialComponents.Button.UnelevatedButton"
             android:layout_width="wrap_content"
             android:layout_height="36dp"
             android:text="@string/add_text_btn"
             android:textColor="@color/white"
             android:textSize="12sp"
             android:textStyle="bold"
-            app:backgroundTint="#40FFFFFF"
-            app:cornerRadius="8dp" />
+            app:backgroundTint="@color/modern_primary"
+            app:cornerRadius="10dp" />
 
     </LinearLayout>
 
@@ -56,7 +58,7 @@
     <HorizontalScrollView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="10dp"
+        android:layout_marginTop="16dp"
         android:scrollbars="none"
         android:clipToPadding="false">
 
@@ -74,14 +76,15 @@
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:layout_marginTop="8dp">
+        android:layout_marginTop="16dp">
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="@string/font_size"
-            android:textColor="@color/white"
-            android:textSize="12sp" />
+            android:textColor="@color/modern_secondary"
+            android:textSize="12sp"
+            android:textStyle="bold" />
 
         <com.google.android.material.slider.Slider
             android:id="@+id/sliderFontSize"
@@ -93,11 +96,11 @@
             android:valueTo="72"
             android:value="36"
             android:stepSize="2"
-            app:trackColorActive="@color/white"
-            app:trackColorInactive="#60FFFFFF"
-            app:thumbColor="@color/white"
-            app:thumbRadius="6dp"
-            app:trackHeight="3dp"
+            app:trackColorActive="@color/modern_primary"
+            app:trackColorInactive="@color/divider"
+            app:thumbColor="@color/modern_primary"
+            app:thumbRadius="8dp"
+            app:trackHeight="4dp"
             app:labelBehavior="gone" />
 
         <TextView
@@ -105,7 +108,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="36px"
-            android:textColor="@color/white"
+            android:textColor="@color/modern_secondary"
             android:textSize="12sp"
             android:textStyle="bold"
             android:minWidth="36dp"
@@ -118,14 +121,15 @@
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:layout_marginTop="8dp">
+        android:layout_marginTop="12dp">
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="@string/rotation"
-            android:textColor="@color/white"
-            android:textSize="12sp" />
+            android:textColor="@color/modern_secondary"
+            android:textSize="12sp"
+            android:textStyle="bold" />
 
         <com.google.android.material.slider.Slider
             android:id="@+id/sliderTextRotation"
@@ -137,11 +141,11 @@
             android:valueTo="360"
             android:value="0"
             android:stepSize="5"
-            app:trackColorActive="@color/white"
-            app:trackColorInactive="#60FFFFFF"
-            app:thumbColor="@color/white"
-            app:thumbRadius="6dp"
-            app:trackHeight="3dp"
+            app:trackColorActive="@color/modern_primary"
+            app:trackColorInactive="@color/divider"
+            app:thumbColor="@color/modern_primary"
+            app:thumbRadius="8dp"
+            app:trackHeight="4dp"
             app:labelBehavior="gone" />
 
         <TextView
@@ -149,7 +153,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="0°"
-            android:textColor="@color/white"
+            android:textColor="@color/modern_secondary"
             android:textSize="12sp"
             android:textStyle="bold"
             android:minWidth="36dp"
@@ -161,7 +165,7 @@
         android:id="@+id/tvTextCount"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:textColor="@color/white"
+        android:textColor="@color/text_secondary"
         android:textSize="11sp"
         android:layout_marginTop="8dp"
         android:visibility="gone" />
@@ -172,6 +176,6 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:layout_marginTop="4dp" />
+        android:layout_marginTop="8dp" />
 
 </LinearLayout>

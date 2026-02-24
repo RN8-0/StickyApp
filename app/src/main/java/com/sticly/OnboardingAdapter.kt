@@ -8,6 +8,7 @@ import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
+import com.airbnb.lottie.LottieAnimationView
 
 class OnboardingAdapter(
     private val onFinish: () -> Unit,
@@ -63,21 +64,50 @@ class OnboardingAdapter(
 
     class IntroViewHolder(view: View) : RecyclerView.ViewHolder(view) {
         val icon: ImageView = view.findViewById(R.id.imgOnboardingIcon)
+        val lottie: LottieAnimationView = view.findViewById(R.id.lottieOnboarding)
         val title: TextView = view.findViewById(R.id.tvTitle)
         val desc: TextView = view.findViewById(R.id.tvDesc)
         val brandContainer: View = view.findViewById(R.id.stickyBrandContainer)
 
         fun bind(imageRes: Int, titleStr: String, descStr: String, position: Int) {
-            icon.setImageResource(imageRes)
             title.text = titleStr
             desc.text = descStr
 
-            if (position == 0) {
-                brandContainer.visibility = View.VISIBLE
-                icon.translationY = -120f
-            } else {
-                brandContainer.visibility = View.GONE
-                icon.translationY = 0f
+            when (position) {
+                0 -> {
+                    brandContainer.visibility = View.VISIBLE
+                    icon.visibility = View.GONE
+                    lottie.visibility = View.VISIBLE
+                    lottie.setAnimation("onboarding_welcome.json")
+                    lottie.repeatCount = 0
+                    lottie.playAnimation()
+                    lottie.translationY = -120f
+                }
+                1 -> {
+                    brandContainer.visibility = View.GONE
+                    icon.visibility = View.GONE
+                    lottie.visibility = View.VISIBLE
+                    lottie.setAnimation("onboarding_create.json")
+                    lottie.repeatCount = 0
+                    lottie.playAnimation()
+                    lottie.translationY = 0f
+                }
+                2 -> {
+                    brandContainer.visibility = View.GONE
+                    icon.visibility = View.GONE
+                    lottie.visibility = View.VISIBLE
+                    lottie.setAnimation("onboarding_notify.json")
+                    lottie.repeatCount = com.airbnb.lottie.LottieDrawable.INFINITE
+                    lottie.playAnimation()
+                    lottie.translationY = 0f
+                }
+                else -> {
+                    brandContainer.visibility = View.GONE
+                    icon.visibility = View.VISIBLE
+                    lottie.visibility = View.GONE
+                    icon.setImageResource(imageRes)
+                    icon.translationY = 0f
+                }
             }
 
             icon.animate().cancel()

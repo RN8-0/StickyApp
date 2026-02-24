@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Sticky - Export Ready Screenshots (1080x1920)</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Noto+Sans+Arabic:wght@400;600;700;800&family=Noto+Sans+JP:wght@400;600;700;800&family=Noto+Sans+KR:wght@400;600;700;800&family=Noto+Sans+SC:wght@400;600;700;800&family=Noto+Sans+Thai:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #0a0a0a;
+            color: white;
+            padding: 20px;
+        }
+
+        .controls {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: #1a1a1a;
+            padding: 15px 30px;
+            z-index: 1000;
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            flex-wrap: wrap;
+            border-bottom: 1px solid #333;
+        }
+
+        .controls select, .controls button {
+            padding: 10px 20px;
+            border-radius: 8px;
+            border: none;
+            font-size: 14px;
+            cursor: pointer;
+        }
+
+        .controls select {
+            background: #333;
+            color: white;
+        }
+
+        .controls button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            font-weight: 600;
+        }
+
+        .controls .info {
+            color: #888;
+            font-size: 13px;
+            margin-left: auto;
+        }
+
+        .export-container {
+            margin-top: 80px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 40px;
+        }
+
+        /* Exact Play Store dimensions: 1080x1920 */
+        .screenshot-full {
+            width: 1080px;
+            height: 1920px;
+            position: relative;
+            overflow: hidden;
+            flex-shrink: 0;
+        }
+
+        /* Gradient Backgrounds */
+        .grad-1 { background: linear-gradient(180deg, #667eea 0%, #764ba2 100%); }
+        .grad-2 { background: linear-gradient(180deg, #f093fb 0%, #f5576c 100%); }
+        .grad-3 { background: linear-gradient(180deg, #4facfe 0%, #00f2fe 100%); }
+        .grad-4 { background: linear-gradient(180deg, #43e97b 0%, #38f9d7 100%); }
+        .grad-5 { background: linear-gradient(180deg, #fa709a 0%, #fee140 100%); }
+        .grad-6 { background: linear-gradient(180deg, #30cfd0 0%, #330867 100%); }
+
+        .screenshot-full .header {
+            padding: 100px 80px 50px;
+            text-align: center;
+        }
+
+        .screenshot-full .badge {
+            display: inline-block;
+            background: rgba(255,255,255,0.25);
+            backdrop-filter: blur(10px);
+            padding: 16px 32px;
+            border-radius: 50px;
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 40px;
+            letter-spacing: 1px;
+        }
+
+        .screenshot-full h1 {
+            font-size: 72px;
+            font-weight: 900;
+            line-height: 1.15;
+            margin-bottom: 30px;
+            text-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            letter-spacing: -1px;
+        }
+
+        .screenshot-full .subtitle {
+            font-size: 36px;
+            font-weight: 500;
+            opacity: 0.95;
+            text-shadow: 0 2px 10px rgba(0,0,0,0.2);
+        }
+
+        .phone-mockup {
+            position: absolute;
+            bottom: -60px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 750px;
+        }
+
+        .phone-body {
+            background: #1a1a1a;
+            border-radius: 70px;
+            padding: 20px;
+            box-shadow: 0 50px 100px rgba(0,0,0,0.5),
+                        inset 0 0 0 3px #2a2a2a,
+                        0 0 0 1px rgba(255,255,255,0.1);
+        }
+
+        .phone-notch {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 200px;
+            height: 45px;
+            background: #1a1a1a;
+            border-radius: 0 0 25px 25px;
+            z-index: 10;
+        }
+
+        .phone-screen {
+            border-radius: 55px;
+            overflow: hidden;
+            background: #000;
+        }
+
+        .phone-screen img {
+            width: 100%;
+            display: block;
+        }
+
+        /* Feature Graphic: 1024x500 */
+        .feature-full {
+            width: 1024px;
+            height: 500px;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            padding: 60px;
+        }
+
+        .feature-full .content {
+            flex: 1;
+        }
+
+        .feature-full h1 {
+            font-size: 80px;
+            font-weight: 900;
+            margin-bottom: 15px;
+        }
+
+        .feature-full .tagline {
+            font-size: 36px;
+            font-weight: 600;
+            opacity: 0.95;
+            margin-bottom: 30px;
+            line-height: 1.3;
+        }
+
+        .feature-full .badge {
+            display: inline-block;
+            background: rgba(255,255,255,0.25);
+            padding: 15px 30px;
+            border-radius: 40px;
+            font-size: 22px;
+            font-weight: 700;
+        }
+
+        .feature-full .phones-wrapper {
+            display: flex;
+            gap: 20px;
+        }
+
+        .feature-full .mini-phone {
+            width: 180px;
+            background: #1a1a1a;
+            border-radius: 25px;
+            padding: 8px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+        }
+
+        .feature-full .mini-phone:nth-child(1) {
+            transform: rotate(-8deg) translateY(20px);
+        }
+
+        .feature-full .mini-phone:nth-child(2) {
+            transform: rotate(5deg) translateY(-10px);
+        }
+
+        .feature-full .mini-phone img {
+            width: 100%;
+            border-radius: 18px;
+        }
+
+        /* RTL Support */
+        .rtl { direction: rtl; text-align: right; }
+        .rtl .header { text-align: right; }
+        .rtl.feature-full { flex-direction: row-reverse; }
+        .rtl.feature-full .content { text-align: right; }
+
+        /* Font families */
+        .ar { font-family: 'Noto Sans Arabic', 'Inter', sans-serif; }
+        .ja { font-family: 'Noto Sans JP', 'Inter', sans-serif; }
+        .ko { font-family: 'Noto Sans KR', 'Inter', sans-serif; }
+        .zh { font-family: 'Noto Sans SC', 'Inter', sans-serif; }
+        .th { font-family: 'Noto Sans Thai', 'Inter', sans-serif; }
+
+        .label {
+            background: #222;
+            color: #888;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+
+        .scale-hint {
+            background: #1a1a1a;
+            padding: 20px;
+            border-radius: 12px;
+            margin: 20px 0;
+            max-width: 800px;
+        }
+
+        .scale-hint h3 {
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+
+        .scale-hint p {
+            color: #aaa;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+    <div class="controls">
+        <label style="font-weight: 600;">Language:</label>
+        <select id="langSelect">
+            <option value="en">English</option>
+            <option value="tr">Turkce</option>
+            <option value="de">Deutsch</option>
+            <option value="ar">العربية</option>
+            <option value="id">Indonesia</option>
+            <option value="fil">Filipino</option>
+            <option value="fr">Francais</option>
+            <option value="hi">हिन्दी</option>
+            <option value="ja">日本語</option>
+            <option value="ko">한국어</option>
+            <option value="pt">Portugues</option>
+            <option value="ru">Русский</option>
+            <option value="th">ภาษาไทย</option>
+            <option value="vi">Tieng Viet</option>
+            <option value="zh">简体中文</option>
+            <option value="es">Espanol</option>
+            <option value="it">Italiano</option>
+        </select>
+        <select id="screenSelect">
+            <option value="all">Tum Ekranlar</option>
+            <option value="0">Screenshot 1 - Ana Ozellik</option>
+            <option value="1">Screenshot 2 - Sticker Paketleri</option>
+            <option value="2">Screenshot 3 - AI Arka Plan</option>
+            <option value="3">Screenshot 4 - GIF Donusturucu</option>
+            <option value="4">Screenshot 5 - Kolay Kullanim</option>
+            <option value="5">Screenshot 6 - Premium</option>
+            <option value="feature">Feature Graphic</option>
+        </select>
+        <button onclick="renderScreenshots()">Goster / Render</button>
+        <span class="info">Boyut: 1080x1920px | Feature: 1024x500px</span>
+    </div>
+
+    <div class="scale-hint" style="margin-top: 80px;">
+        <h3>Screenshot Kaydetme Talimatları:</h3>
+        <p>
+            1. Dil ve ekran seçin, "Göster" butonuna tıklayın<br>
+            2. Screenshot'a sağ tıklayın → "Resmi farklı kaydet"<br>
+            3. VEYA: Tarayıcıda DevTools açın (F12) → Ctrl+Shift+P → "Capture node screenshot" yazın → Screenshot'un üstüne tıklayın<br>
+            4. Her dil için ayrı klasör oluşturup kaydedin<br><br>
+            <strong>İpucu:</strong> Chrome DevTools ile element screenshot alırsanız tam boyutta (1080x1920) kaydedilir.
+        </p>
+    </div>
+
+    <div id="exportContainer" class="export-container"></div>
+
+    <script>
+        const screenshots = [
+            { gradient: 'grad-1', image: 'main_screen.png' },
+            { gradient: 'grad-2', image: 'detail_screen.png' },
+            { gradient: 'grad-3', image: 'sticker_maker.png' },
+            { gradient: 'grad-4', image: 'favorites.png' },
+            { gradient: 'grad-5', image: 'main_screen2.png' },
+            { gradient: 'grad-6', image: 'check.png' }
+        ];
+
+        const translations = {
+            en: {
+                rtl: false, fontClass: '',
+                screens: [
+                    { badge: 'AI POWERED', title: 'Create Amazing<br>WhatsApp Stickers', subtitle: 'From your photos in seconds!' },
+                    { badge: '1000+ PACKS', title: 'Free Sticker<br>Packs', subtitle: 'New packs added every week!' },
+                    { badge: 'SMART AI', title: 'AI Background<br>Remover', subtitle: 'Perfect cutouts with one tap' },
+                    { badge: 'ANIMATED', title: 'GIF to Sticker<br>Converter', subtitle: 'Turn any GIF into WhatsApp sticker' },
+                    { badge: 'EASY', title: 'Simple 3-Step<br>Process', subtitle: 'Select → Edit → Add to WhatsApp' },
+                    { badge: 'PREMIUM', title: 'Unlock All<br>Features', subtitle: 'Ad-free experience & unlimited AI' }
+                ],
+                feature: { title: 'Sticky', tagline: 'The Ultimate<br>Sticker Maker', badge: '1000+ Free Packs' }
+            },
+            tr: {
+                rtl: false, fontClass: '',
+                screens: [
+                    { badge: 'AI DESTEKLI', title: 'Harika WhatsApp<br>Stickerlar Olustur', subtitle: 'Fotograflarindan saniyeler icinde!' },
+                    { badge: '1000+ PAKET', title: 'Ucretsiz Sticker<br>Paketleri', subtitle: 'Her hafta yeni paketler ekleniyor!' },
+                    { badge: 'AKILLI AI', title: 'AI Arka Plan<br>Silici', subtitle: 'Tek dokunusla mukemmel kesim' },
+                    { badge: 'ANIMASYONLU', title: 'GIF\'ten Sticker<br>Donusturucu', subtitle: 'Herhangi bir GIF\'i stickera cevir' },
+                    { badge: 'KOLAY', title: 'Basit 3 Adimli<br>Islem', subtitle: 'Sec → Duzenle → WhatsApp\'a Ekle' },
+                    { badge: 'PREMIUM', title: 'Tum Ozelliklerin<br>Kilidini Ac', subtitle: 'Reklamsiz deneyim & sinirsiz AI' }
+                ],
+                feature: { title: 'Sticky', tagline: 'En Iyi Sticker<br>Yapici', badge: '1000+ Ucretsiz Paket' }
+            },
+            de: {
+                rtl: false, fontClass: '',
+                screens: [
+                    { badge: 'KI-POWERED', title: 'Erstelle Tolle<br>WhatsApp Sticker', subtitle: 'Aus deinen Fotos in Sekunden!' },
+                    { badge: '1000+ PAKETE', title: 'Kostenlose<br>Sticker-Pakete', subtitle: 'Wöchentlich neue Pakete!' },
+                    { badge: 'SMART KI', title: 'KI Hintergrund-<br>Entferner', subtitle: 'Perfekte Ausschnitte mit einem Tipp' },
+                    { badge: 'ANIMIERT', title: 'GIF zu Sticker<br>Konverter', subtitle: 'Jedes GIF in Sticker umwandeln' },
+                    { badge: 'EINFACH', title: 'Einfacher 3-Schritt<br>Prozess', subtitle: 'Wählen → Bearbeiten → Hinzufügen' },
+                    { badge: 'PREMIUM', title: 'Alle Funktionen<br>Freischalten', subtitle: 'Werbefrei & unbegrenzte KI' }
+                ],
+                feature: { title: 'Sticky', tagline: 'Der Beste<br>Sticker Maker', badge: '1000+ Kostenlose Pakete' }
+            },
+            ar: {
+                rtl: true, fontClass: 'ar',
+                screens: [
+                    { badge: 'ذكاء اصطناعي', title: 'اصنع ملصقات<br>واتساب رائعة', subtitle: 'من صورك في ثواني!' },
+                    { badge: '+1000 حزمة', title: 'حزم ملصقات<br>مجانية', subtitle: 'حزم جديدة كل أسبوع!' },
+                    { badge: 'AI ذكي', title: 'مزيل الخلفية<br>بالذكاء الاصطناعي', subtitle: 'قص مثالي بلمسة واحدة' },
+                    { badge: 'متحرك', title: 'محول GIF<br>إلى ملصق', subtitle: 'حول أي GIF إلى ملصق' },
+                    { badge: 'سهل', title: 'عملية بسيطة<br>من 3 خطوات', subtitle: 'اختر ← عدل ← أضف لواتساب' },
+                    { badge: 'بريميوم', title: 'افتح جميع<br>المميزات', subtitle: 'بدون إعلانات و AI غير محدود' }
+                ],
+                feature: { title: 'Sticky', tagline: 'أفضل صانع<br>ملصقات', badge: '+1000 حزمة مجانية' }
+            },
+            id: {
+                rtl: false, fontClass: '',
+                screens: [
+                    { badge: 'AI POWERED', title: 'Buat Stiker<br>WhatsApp Keren', subtitle: 'Dari foto kamu dalam detik!' },
+                    { badge: '1000+ PAKET', title: 'Paket Stiker<br>Gratis', subtitle: 'Paket baru setiap minggu!' },
+                    { badge: 'SMART AI', title: 'AI Penghapus<br>Background', subtitle: 'Potongan sempurna satu ketukan' },
+                    { badge: 'ANIMASI', title: 'Konverter GIF<br>ke Stiker', subtitle: 'Ubah GIF apapun jadi stiker' },
+                    { badge: 'MUDAH', title: 'Proses Simpel<br>3 Langkah', subtitle: 'Pilih → Edit → Tambah ke WA' },
+                    { badge: 'PREMIUM', title: 'Buka Semua<br>Fitur', subtitle: 'Tanpa iklan & AI unlimited' }
+                ],
+                feature: { title: 'Sticky', tagline: 'Pembuat Stiker<br>Terbaik', badge: '1000+ Paket Gratis' }
+            },
+            fil: {
+                rtl: false, fontClass: '',
+                screens: [
+                    { badge: 'AI POWERED', title: 'Gumawa ng Amazing<br>WhatsApp Stickers', subtitle: 'Mula sa photos mo in seconds!' },
+                    { badge: '1000+ PACKS', title: 'Libreng Sticker<br>Packs', subtitle: 'Bagong packs every week!' },
+                    { badge: 'SMART AI', title: 'AI Background<br>Remover', subtitle: 'Perfect cutouts sa isang tap' },
+                    { badge: 'ANIMATED', title: 'GIF to Sticker<br>Converter', subtitle: 'I-convert ang kahit anong GIF' },
+                    { badge: 'EASY', title: 'Simple 3-Step<br>Process', subtitle: 'Pumili → I-edit → Idagdag sa WA' },
+                    { badge: 'PREMIUM', title: 'Unlock Lahat ng<br>Features', subtitle: 'Walang ads & unlimited AI' }
+                ],
+                feature: { title: 'Sticky', tagline: 'Ang Pinakamahusay<br>na Sticker Maker', badge: '1000+ Libreng Packs' }
+            },
+            fr: {
+                rtl: false, fontClass: '',
+                screens: [
+                    { badge: 'IA', title: 'Créez des Stickers<br>WhatsApp Incroyables', subtitle: 'À partir de vos photos en secondes!' },
+                    { badge: '1000+ PACKS', title: 'Packs de Stickers<br>Gratuits', subtitle: 'Nouveaux packs chaque semaine!' },
+                    { badge: 'IA SMART', title: 'Suppression du<br>Fond par IA', subtitle: 'Découpes parfaites en un clic' },
+                    { badge: 'ANIMÉ', title: 'Convertisseur<br>GIF en Sticker', subtitle: 'Convertissez n\'importe quel GIF' },
+                    { badge: 'FACILE', title: 'Processus Simple<br>en 3 Étapes', subtitle: 'Sélectionnez → Éditez → Ajoutez' },
+                    { badge: 'PREMIUM', title: 'Débloquez Toutes<br>les Fonctionnalités', subtitle: 'Sans pub & IA illimitée' }
+                ],
+                feature: { title: 'Sticky', tagline: 'Le Meilleur<br>Créateur de Stickers', badge: '1000+ Packs Gratuits' }
+            },
+            hi: {
+                rtl: false, fontClass: '',
+                screens: [
+                    { badge: 'AI POWERED', title: 'शानदार WhatsApp<br>स्टिकर बनाएं', subtitle: 'अपनी फोटो से सेकंडों में!' },
+                    { badge: '1000+ पैक', title: 'फ्री स्टिकर<br>पैक', subtitle: 'हर हफ्ते नए पैक!' },
+                    { badge: 'स्मार्ट AI', title: 'AI बैकग्राउंड<br>रिमूवर', subtitle: 'एक टैप में परफेक्ट कटआउट' },
+                    { badge: 'एनिमेटेड', title: 'GIF से स्टिकर<br>कन्वर्टर', subtitle: 'किसी भी GIF को स्टिकर बनाएं' },
+                    { badge: 'आसान', title: 'सिंपल 3-स्टेप<br>प्रोसेस', subtitle: 'चुनें → एडिट करें → WA में जोड़ें' },
+                    { badge: 'प्रीमियम', title: 'सभी फीचर्स<br>अनलॉक करें', subtitle: 'एड-फ्री और अनलिमिटेड AI' }
+                ],
+                feature: { title: 'Sticky', tagline: 'बेस्ट स्टिकर<br>मेकर', badge: '1000+ फ्री पैक' }
+            },
+            ja: {
+                rtl: false, fontClass: 'ja',
+                screens: [
+                    { badge: 'AI搭載', title: '素敵なWhatsApp<br>スタンプを作ろう', subtitle: '写真から数秒で!' },
+                    { badge: '1000+パック', title: '無料スタンプ<br>パック', subtitle: '毎週新しいパック!' },
+                    { badge: 'スマートAI', title: 'AI背景<br>除去', subtitle: 'ワンタップで完璧な切り抜き' },
+                    { badge: 'アニメ', title: 'GIFからスタンプ<br>コンバーター', subtitle: 'どんなGIFもスタンプに' },
+                    { badge: '簡単', title: 'シンプル3ステップ<br>プロセス', subtitle: '選択 → 編集 → 追加' },
+                    { badge: 'プレミアム', title: '全機能を<br>アンロック', subtitle: '広告なし＆無制限AI' }
+                ],
+                feature: { title: 'Sticky', tagline: '最高のスタンプ<br>メーカー', badge: '1000+無料パック' }
+            },
+            ko: {
+                rtl: false, fontClass: 'ko',
+                screens: [
+                    { badge: 'AI 탑재', title: '멋진 WhatsApp<br>스티커 만들기', subtitle: '사진에서 몇 초 만에!' },
+                    { badge: '1000+ 팩', title: '무료 스티커<br>팩', subtitle: '매주 새로운 팩!' },
+                    { badge: '스마트 AI', title: 'AI 배경<br>제거', subtitle: '한 번의 탭으로 완벽한 컷아웃' },
+                    { badge: '애니메이션', title: 'GIF를 스티커로<br>변환', subtitle: '모든 GIF를 스티커로 변환' },
+                    { badge: '쉬움', title: '간단한 3단계<br>프로세스', subtitle: '선택 → 편집 → 추가' },
+                    { badge: '프리미엄', title: '모든 기능<br>잠금 해제', subtitle: '광고 없음 & 무제한 AI' }
+                ],
+                feature: { title: 'Sticky', tagline: '최고의 스티커<br>메이커', badge: '1000+ 무료 팩' }
+            },
+            pt: {
+                rtl: false, fontClass: '',
+                screens: [
+                    { badge: 'IA', title: 'Crie Figurinhas<br>Incríveis', subtitle: 'Das suas fotos em segundos!' },
+                    { badge: '1000+ PACOTES', title: 'Pacotes de<br>Figurinhas Grátis', subtitle: 'Novos pacotes toda semana!' },
+                    { badge: 'IA SMART', title: 'Removedor de<br>Fundo com IA', subtitle: 'Recortes perfeitos com um toque' },
+                    { badge: 'ANIMADO', title: 'Conversor GIF<br>para Figurinha', subtitle: 'Converta qualquer GIF' },
+                    { badge: 'FÁCIL', title: 'Processo Simples<br>em 3 Passos', subtitle: 'Selecione → Edite → Adicione' },
+                    { badge: 'PREMIUM', title: 'Desbloqueie Todos<br>os Recursos', subtitle: 'Sem anúncios & IA ilimitada' }
+                ],
+                feature: { title: 'Sticky', tagline: 'O Melhor Criador<br>de Figurinhas', badge: '1000+ Pacotes Grátis' }
+            },
+            ru: {
+                rtl: false, fontClass: '',
+                screens: [
+                    { badge: 'ИИ', title: 'Создавай Крутые<br>Стикеры WhatsApp', subtitle: 'Из твоих фото за секунды!' },
+                    { badge: '1000+ НАБОРОВ', title: 'Бесплатные<br>Наборы Стикеров', subtitle: 'Новые наборы каждую неделю!' },
+                    { badge: 'УМНЫЙ ИИ', title: 'ИИ Удаление<br>Фона', subtitle: 'Идеальная обрезка одним касанием' },
+                    { badge: 'АНИМАЦИЯ', title: 'Конвертер GIF<br>в Стикер', subtitle: 'Преврати любой GIF в стикер' },
+                    { badge: 'ЛЕГКО', title: 'Простой Процесс<br>в 3 Шага', subtitle: 'Выбери → Редактируй → Добавь' },
+                    { badge: 'ПРЕМИУМ', title: 'Разблокируй Все<br>Функции', subtitle: 'Без рекламы & безлимитный ИИ' }
+                ],
+                feature: { title: 'Sticky', tagline: 'Лучший Создатель<br>Стикеров', badge: '1000+ Бесплатных Наборов' }
+            },
+            th: {
+                rtl: false, fontClass: 'th',
+                screens: [
+                    { badge: 'AI', title: 'สร้างสติกเกอร์<br>WhatsApp สุดเจ๋ง', subtitle: 'จากรูปของคุณในไม่กี่วินาที!' },
+                    { badge: '1000+ แพ็ค', title: 'แพ็คสติกเกอร์<br>ฟรี', subtitle: 'แพ็คใหม่ทุกสัปดาห์!' },
+                    { badge: 'AI ฉลาด', title: 'AI ลบ<br>พื้นหลัง', subtitle: 'ตัดสมบูรณ์แบบด้วยการแตะเดียว' },
+                    { badge: 'เคลื่อนไหว', title: 'ตัวแปลง GIF<br>เป็นสติกเกอร์', subtitle: 'แปลง GIF ใดๆ เป็นสติกเกอร์' },
+                    { badge: 'ง่าย', title: 'ขั้นตอนง่าย<br>3 ขั้นตอน', subtitle: 'เลือก → แก้ไข → เพิ่มลง WA' },
+                    { badge: 'พรีเมียม', title: 'ปลดล็อคทุก<br>ฟีเจอร์', subtitle: 'ไม่มีโฆษณา & AI ไม่จำกัด' }
+                ],
+                feature: { title: 'Sticky', tagline: 'แอปสร้างสติกเกอร์<br>ที่ดีที่สุด', badge: '1000+ แพ็คฟรี' }
+            },
+            vi: {
+                rtl: false, fontClass: '',
+                screens: [
+                    { badge: 'AI', title: 'Tạo Sticker<br>WhatsApp Tuyệt Vời', subtitle: 'Từ ảnh của bạn trong vài giây!' },
+                    { badge: '1000+ GÓI', title: 'Gói Sticker<br>Miễn Phí', subtitle: 'Gói mới mỗi tuần!' },
+                    { badge: 'AI THÔNG MINH', title: 'AI Xóa<br>Nền', subtitle: 'Cắt hoàn hảo chỉ với một chạm' },
+                    { badge: 'ĐỘNG', title: 'Chuyển Đổi GIF<br>sang Sticker', subtitle: 'Chuyển đổi bất kỳ GIF nào' },
+                    { badge: 'DỄ', title: 'Quy Trình Đơn Giản<br>3 Bước', subtitle: 'Chọn → Chỉnh Sửa → Thêm vào WA' },
+                    { badge: 'PREMIUM', title: 'Mở Khóa Tất Cả<br>Tính Năng', subtitle: 'Không quảng cáo & AI không giới hạn' }
+                ],
+                feature: { title: 'Sticky', tagline: 'Ứng Dụng Tạo<br>Sticker Tốt Nhất', badge: '1000+ Gói Miễn Phí' }
+            },
+            zh: {
+                rtl: false, fontClass: 'zh',
+                screens: [
+                    { badge: 'AI驱动', title: '创建精彩的<br>WhatsApp贴纸', subtitle: '几秒钟内从您的照片创建!' },
+                    { badge: '1000+包', title: '免费贴纸<br>包', subtitle: '每周新增贴纸包!' },
+                    { badge: '智能AI', title: 'AI智能<br>抠图', subtitle: '一键完美剪切' },
+                    { badge: '动态', title: 'GIF转贴纸<br>转换器', subtitle: '将任何GIF转换为贴纸' },
+                    { badge: '简单', title: '简单3步<br>流程', subtitle: '选择 → 编辑 → 添加到WA' },
+                    { badge: '高级', title: '解锁所有<br>功能', subtitle: '无广告 & 无限AI' }
+                ],
+                feature: { title: 'Sticky', tagline: '最佳贴纸<br>制作器', badge: '1000+免费包' }
+            },
+            es: {
+                rtl: false, fontClass: '',
+                screens: [
+                    { badge: 'IA', title: 'Crea Stickers<br>Increíbles', subtitle: 'De tus fotos en segundos!' },
+                    { badge: '1000+ PAQUETES', title: 'Paquetes de<br>Stickers Gratis', subtitle: 'Nuevos paquetes cada semana!' },
+                    { badge: 'IA SMART', title: 'Eliminador de<br>Fondo con IA', subtitle: 'Recortes perfectos con un toque' },
+                    { badge: 'ANIMADO', title: 'Conversor GIF<br>a Sticker', subtitle: 'Convierte cualquier GIF' },
+                    { badge: 'FÁCIL', title: 'Proceso Simple<br>en 3 Pasos', subtitle: 'Selecciona → Edita → Añade' },
+                    { badge: 'PREMIUM', title: 'Desbloquea Todas<br>las Funciones', subtitle: 'Sin anuncios & IA ilimitada' }
+                ],
+                feature: { title: 'Sticky', tagline: 'El Mejor Creador<br>de Stickers', badge: '1000+ Paquetes Gratis' }
+            },
+            it: {
+                rtl: false, fontClass: '',
+                screens: [
+                    { badge: 'IA', title: 'Crea Sticker<br>Fantastici', subtitle: 'Dalle tue foto in secondi!' },
+                    { badge: '1000+ PACCHETTI', title: 'Pacchetti Sticker<br>Gratis', subtitle: 'Nuovi pacchetti ogni settimana!' },
+                    { badge: 'IA SMART', title: 'Rimozione Sfondo<br>con IA', subtitle: 'Ritagli perfetti con un tocco' },
+                    { badge: 'ANIMATO', title: 'Convertitore GIF<br>in Sticker', subtitle: 'Converti qualsiasi GIF' },
+                    { badge: 'FACILE', title: 'Processo Semplice<br>in 3 Passi', subtitle: 'Seleziona → Modifica → Aggiungi' },
+                    { badge: 'PREMIUM', title: 'Sblocca Tutte<br>le Funzionalità', subtitle: 'Senza pubblicità & IA illimitata' }
+                ],
+                feature: { title: 'Sticky', tagline: 'Il Miglior Creatore<br>di Sticker', badge: '1000+ Pacchetti Gratis' }
+            }
+        };
+
+        function renderScreenshots() {
+            const lang = document.getElementById('langSelect').value;
+            const screen = document.getElementById('screenSelect').value;
+            const data = translations[lang];
+            const container = document.getElementById('exportContainer');
+
+            let html = '';
+
+            if (screen === 'all' || screen === 'feature') {
+                // Feature Graphic
+                const f = data.feature;
+                const rtl = data.rtl ? 'rtl' : '';
+                const fc = data.fontClass;
+                html += `
+                <div class="label">Feature Graphic - 1024x500 - ${lang.toUpperCase()}</div>
+                <div class="feature-full grad-1 ${rtl} ${fc}" data-export="feature-${lang}">
+                    <div class="content">
+                        <h1>${f.title}</h1>
+                        <div class="tagline">${f.tagline}</div>
+                        <span class="badge">${f.badge}</span>
+                    </div>
+                    <div class="phones-wrapper">
+                        <div class="mini-phone"><img src="main_screen.png" alt="App"></div>
+                        <div class="mini-phone"><img src="sticker_maker.png" alt="App"></div>
+                    </div>
+                </div>`;
+            }
+
+            if (screen === 'all') {
+                for (let i = 0; i < 6; i++) {
+                    html += renderSingleScreen(lang, i, data);
+                }
+            } else if (screen !== 'feature') {
+                const idx = parseInt(screen);
+                html += renderSingleScreen(lang, idx, data);
+            }
+
+            container.innerHTML = html;
+        }
+
+        function renderSingleScreen(lang, index, data) {
+            const s = data.screens[index];
+            const sc = screenshots[index];
+            const rtl = data.rtl ? 'rtl' : '';
+            const fc = data.fontClass;
+
+            return `
+            <div class="label">Screenshot ${index + 1} - 1080x1920 - ${lang.toUpperCase()}</div>
+            <div class="screenshot-full ${sc.gradient} ${rtl} ${fc}" data-export="screen-${lang}-${index}">
+                <div class="header">
+                    <div class="badge">${s.badge}</div>
+                    <h1>${s.title}</h1>
+                    <div class="subtitle">${s.subtitle}</div>
+                </div>
+                <div class="phone-mockup">
+                    <div class="phone-body">
+                        <div class="phone-notch"></div>
+                        <div class="phone-screen">
+                            <img src="${sc.image}" alt="Screenshot">
+                        </div>
+                    </div>
+                </div>
+            </div>`;
+        }
+
+        // Initial render
+        renderScreenshots();
+    </script>
+</body>
+</html>

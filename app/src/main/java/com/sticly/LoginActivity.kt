@@ -35,10 +35,10 @@ class LoginActivity : AppCompatActivity() {
         } catch (e: ApiException) {
             val progress = result.resultCode
             val msg = when (e.statusCode) {
-                10 -> "Geliştirici hatası (SHA-1 mismatch?)"
-                7 -> "Ağ hatası (İnternet yok?)"
-                12500 -> "Google Play Hizmetleri güncel değil veya yapılandırma hatası"
-                12501 -> "Giriş iptal edildi"
+                10 -> "Developer error (SHA-1 mismatch?)"
+                7 -> "Network error (No internet?)"
+                12500 -> "Google Play Services outdated or configuration error"
+                12501 -> "Sign in cancelled"
                 else -> "Google Error: ${e.statusCode} - ${e.message}"
             }
             if (e.statusCode != 12501) { // User cancel is not an error to toast usually
@@ -46,7 +46,7 @@ class LoginActivity : AppCompatActivity() {
             }
             android.util.Log.e("LoginActivity", "Google sign in failed: ${e.statusCode}", e)
         } catch (e: Exception) {
-            Toast.makeText(this, "Hata: ${e.message}", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -65,42 +65,40 @@ class LoginActivity : AppCompatActivity() {
 
         setupListeners()
 
-        // Arka planda verileri ve görselleri önceden yükle
+        // Pre-load data and images in background
         preloadDataInBackground()
     }
 
     private var isDataPreloaded = false
 
     /**
-     * Kullanıcı login ekranındayken arka planda:
-     * 1. Firebase'den paketleri çek ve önbelleğe al
-     * 2. Popüler paketlerin görsellerini preload et
-     * 3. İlk paketlerin önizlemelerini preload et
-     * 
-     * ÖNEMLI: Bu işlem TAMAMLANANA KADAR MainActivity'ye geçiş yapılmaz
+     * While user is on login screen, preload in background:
+     * 1. Fetch packs from Firebase and cache them
+     * 2. Preload images of popular packs
+     * 3. Preload previews of first packs
      */
     private fun preloadDataInBackground() {
         lifecycleScope.launch(Dispatchers.IO) {
             try {
-                // Firebase'den paketleri yükle (önbelleğe alınacak)
+                // Load packs from Firebase (will be cached)
                 val packs = StickerRepository.loadPacks(this@LoginActivity, forceRefresh = false)
 
                 if (packs.isNotEmpty()) {
-                    // En popüler 10 paketi al
+                    // Get top 10 popular packs
                     val popularPacks = packs
                         .filter { it.isActive && it.category != "custom" }
                         .sortedByDescending { it.downloadCount }
                         .take(10)
 
-                    // Popüler paketlerin görsellerini EN YÜKSEK öncelikle preload et
+                    // Preload popular pack images with highest priority
                     StickyGlideModule.preloadPopularPacks(this@LoginActivity, popularPacks)
 
-                    // İlk 30 paketin önizlemelerini preload et (daha fazla)
+                    // Preload previews of first 30 packs
                     StickyGlideModule.preloadStickerPreviews(this@LoginActivity, packs, packCount = 30, stickersPerPack = 5)
                 }
                 isDataPreloaded = true
             } catch (e: Exception) {
-                // Hata olursa yine de geçişe izin ver
+                // Allow transition even if error occurs
                 android.util.Log.e("LoginActivity", "Background preload error: ${e.message}")
                 isDataPreloaded = true
             }

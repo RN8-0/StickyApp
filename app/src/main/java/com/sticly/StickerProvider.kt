@@ -202,7 +202,10 @@ class StickerProvider : ContentProvider() {
 
     private fun getStickersForPack(identifier: String): Cursor {
         val cursor = MatrixCursor(STICKER_COLUMNS)
-        getPack(identifier)?.stickers?.forEach { sticker ->
+        val pack = getPack(identifier)
+        val stickers = pack?.stickers ?: emptyList()
+        
+        stickers.forEach { sticker ->
             // WhatsApp requires at least one valid emoji - filter out empty strings
             val validEmojis = sticker.emojis?.filter { it.isNotBlank() }
             val emojiString = if (validEmojis.isNullOrEmpty()) "😀" else validEmojis.joinToString(",")
@@ -211,6 +214,20 @@ class StickerProvider : ContentProvider() {
                 emojiString
             ))
         }
+
+        // WhatsApp strictly requires at least 3 stickers. If we have 1 or 2, 
+        // we can pad the rest with the first sticker so it passes the check.
+        if (stickers.isNotEmpty() && stickers.size < 3) {
+            val firstSticker = stickers[0]
+            val validEmojis = firstSticker.emojis?.filter { it.isNotBlank() }
+            val emojiString = if (validEmojis.isNullOrEmpty()) "😀" else validEmojis.joinToString(",")
+            val missingCount = 3 - stickers.size
+            for (i in 1..missingCount) {
+                val dummyFileName = firstSticker.file.replace(".webp", "_copy$i.webp").replace(".png", "_copy$i.png")
+                cursor.addRow(arrayOf(dummyFileName, emojiString))
+            }
+        }
+
         return cursor
     }
 
@@ -221,7 +238,12 @@ class StickerProvider : ContentProvider() {
         if (pathSegments.size != 3) return null
 
         val identifier = pathSegments[1]
-        val fileName = pathSegments[2]
+        val requestedFileName = pathSegments[2]
+        val fileName = if (requestedFileName.contains("_copy")) {
+            requestedFileName.replace(Regex("_copy\\d+"), "")
+        } else {
+            requestedFileName
+        }
 
         android.util.Log.d("StickerProvider", "openAssetFile: $identifier / $fileName")
 

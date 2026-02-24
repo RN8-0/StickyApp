@@ -47,7 +47,7 @@ class RangeSelectionView @JvmOverloads constructor(
 
     var onRangeChanged: ((leftNorm: Float, rightNorm: Float) -> Unit)? = null
 
-    private enum class DragTarget { NONE, LEFT, RIGHT }
+    private enum class DragTarget { NONE, LEFT, RIGHT, CENTER }
 
     // The usable width between the two handle gutters
     private fun usableWidth(): Float = width.toFloat() - 2 * handleWidthPx
@@ -130,6 +130,7 @@ class RangeSelectionView @JvmOverloads constructor(
                     }
                     distLeft <= touchSlopPx -> DragTarget.LEFT
                     distRight <= touchSlopPx -> DragTarget.RIGHT
+                    x > leftX && x < rightX -> DragTarget.CENTER
                     else -> DragTarget.NONE
                 }
 
@@ -150,6 +151,23 @@ class RangeSelectionView @JvmOverloads constructor(
                         }
                         DragTarget.RIGHT -> {
                             rightPos = newNorm.coerceAtLeast(leftPos + 0.01f)
+                        }
+                        DragTarget.CENTER -> {
+                            val dxNorm = (x - lastTouchX) / usableWidth()
+                            val range = rightPos - leftPos
+                            var newLeft = leftPos + dxNorm
+                            var newRight = rightPos + dxNorm
+
+                            if (newLeft < 0f) {
+                                newLeft = 0f
+                                newRight = range
+                            } else if (newRight > 1f) {
+                                newRight = 1f
+                                newLeft = 1f - range
+                            }
+
+                            leftPos = newLeft
+                            rightPos = newRight
                         }
                         else -> {}
                     }

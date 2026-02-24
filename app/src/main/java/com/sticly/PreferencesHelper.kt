@@ -28,6 +28,8 @@ object PreferencesHelper {
     private const val KEY_FAVORITES_SYNCED = "favorites_synced" // İlk favori senkronizasyonu yapıldı mı
     private const val KEY_CUSTOM_PACKS_COUNT = "custom_packs_count"
     private const val KEY_TOTAL_STICKERS_ADDED = "total_stickers_added"
+    private const val KEY_INITIAL_LOAD_DONE = "initial_load_done"
+    private const val KEY_PACKS_SINCE_PROMO = "packs_since_promo"
 
     private fun getPrefs(context: Context): SharedPreferences {
         return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -117,6 +119,36 @@ object PreferencesHelper {
         getPrefs(context).edit().putBoolean(KEY_FIRST_LAUNCH, false).apply()
     }
 
+    /**
+     * Her 3 pakette bir mesaj göstermek için sayacı artır
+     */
+    fun incrementPacksSincePromo(context: Context) {
+        val current = getPrefs(context).getInt(KEY_PACKS_SINCE_PROMO, 0)
+        getPrefs(context).edit().putInt(KEY_PACKS_SINCE_PROMO, current + 1).apply()
+    }
+
+    /**
+     * Bilgilendirme mesajı gösterilmeli mi?
+     * 1. İlk açılış ise true
+     * 2. Sayaç 3'e ulaştı ise true (ve sayaç sıfırlanır)
+     */
+    fun shouldShowSupportPromo(context: Context): Boolean {
+        // Premium kullanıcılara gösterme
+        if (isPremium(context)) return false
+        
+        // Kullanıcı her açıldığında görmek istiyor (veya bekliyor)
+        return true
+    }
+
+    // İlk yükleme ekranı (yüzdelik) gösterildi mi
+    fun isInitialLoadDone(context: Context): Boolean {
+        return getPrefs(context).getBoolean(KEY_INITIAL_LOAD_DONE, false)
+    }
+
+    fun setInitialLoadDone(context: Context) {
+        getPrefs(context).edit().putBoolean(KEY_INITIAL_LOAD_DONE, true).apply()
+    }
+
     fun wasNotificationPermissionAsked(context: Context): Boolean {
         return getPrefs(context).getBoolean(KEY_NOTIFICATION_PERMISSION_ASKED, false)
     }
@@ -172,12 +204,47 @@ object PreferencesHelper {
     }
 
     /**
-     * Kullanıcının premium pakete erişimi var mı?
-     * Premium abonelik varsa veya paketi satın almışsa true döner
+     * Kullanıcının pakete erişimi var mı?
+     * Premium abonelik, satın alma VEYA reklam izleyerek geçici kilit açma
      */
-    fun hasAccessToPremiumPack(context: Context, packId: String): Boolean {
-        return isPremium(context) || isPackPurchased(context, packId)
+    fun hasAccessToPack(context: Context, packId: String): Boolean {
+        return isPremium(context) || isPackPurchased(context, packId) || isPackUnlocked(context, packId)
     }
+
+    // ========== REWARDED AD: Kalıcı Kilit Açma ==========
+    private const val KEY_PACK_UNLOCK_PREFIX = "pack_unlock_"
+
+    /**
+     * Paketi kalıcı olarak aç (reklam izledikten sonra)
+     */
+    fun unlockPack(context: Context, packId: String) {
+        getPrefs(context).edit().putBoolean(KEY_PACK_UNLOCK_PREFIX + packId, true).apply()
+        Log.d(TAG, "Pack $packId unlocked permanently via ad")
+    }
+
+    /**
+     * Paket açıldı mı? (Reklam izlenerek)
+     * Not: Eski sürümlerde 'Long' (timestamp) idi, yeni sürümde 'Boolean'. 
+     * Çökmeyi önlemek için güvenli okuma yapıyoruz.
+     */
+    fun isPackUnlocked(context: Context, packId: String): Boolean {
+        val prefs = getPrefs(context)
+        val key = KEY_PACK_UNLOCK_PREFIX + packId
+        
+        return try {
+            // Yeni format: Boolean
+            prefs.getBoolean(key, false)
+        } catch (e: ClassCastException) {
+            // Eski format: Long (Migrate to permanent)
+            val legacyValue = prefs.getLong(key, 0L)
+            if (legacyValue > 0) {
+                // Kalıcıya çevir
+                prefs.edit().putBoolean(key, true).apply()
+                true
+            } else false
+        }
+    }
+
 
     // Sticker Ekleme Sayacı
     fun getStickersAddedCount(context: Context): Int {

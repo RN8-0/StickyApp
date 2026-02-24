@@ -99,4 +99,14 @@
     <color name="onboarding_text_secondary">#CCFFFFFF</color>
     <color name="onboarding_card_bg">#33FFFFFF</color>
     <color name="onboarding_button_text">#FFFFFF</color>
+    <!-- Modern Design Tokens -->
+    <color name="modern_primary">#00C896</color>
+    <color name="modern_primary_variant">#00A884</color>
+    <color name="modern_secondary">#2C3E50</color>
+    <color name="modern_background">#F4F7F6</color>
+    <color name="modern_surface">#FFFFFF</color>
+    <color name="glass_white">#BCFFFFFF</color>
+    <color name="soft_shadow">#1A000000</color>
+    <color name="vibrant_green_start">#00F2B0</color>
+    <color name="vibrant_green_end">#00C896</color>
 </resources>

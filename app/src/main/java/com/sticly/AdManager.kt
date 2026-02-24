@@ -15,30 +15,27 @@ import com.google.android.gms.ads.FullScreenContentCallback
 import com.google.android.gms.ads.LoadAdError
 import com.google.android.gms.ads.MobileAds
 import com.google.android.gms.ads.VideoOptions
-import com.google.android.gms.ads.interstitial.InterstitialAd
-import com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback
 import com.google.android.gms.ads.nativead.MediaView
 import com.google.android.gms.ads.nativead.NativeAd
 import com.google.android.gms.ads.nativead.NativeAdOptions
 import com.google.android.gms.ads.nativead.NativeAdView
+import com.google.android.gms.ads.rewarded.RewardedAd
+import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback
 import androidx.core.content.ContextCompat
-import com.unity3d.ads.UnityAds
 
 object AdManager {
 
     private const val TAG = "AdManager"
 
     // REKLAM KIMLIKLERI
-    private const val INTERSTITIAL_MY_STICKERS_ID = "ca-app-pub-1522897791319993/6303114381" // Stickerlarım whatsapp'a ekle
-    private const val INTERSTITIAL_WA_ADD_ID = "ca-app-pub-1522897791319993/4917880521"      // Whatsapp'a ekle butonu
-    private const val LIST_NATIVE_AD_ID = "ca-app-pub-1522897791319993/9417073326"
+    private const val REWARDED_AD_ID = "ca-app-pub-1522897791319993/7893209835"
     private const val MAKER_NATIVE_AD_ID = "ca-app-pub-1522897791319993/2892861725"
-    private const val FAV_NATIVE_AD_ID = "ca-app-pub-1522897791319993/7323061326"
-    private const val MY_STICKERS_NATIVE_AD_ID = "ca-app-pub-1522897791319993/3649030882"
 
-    private var interstitialAd: InterstitialAd? = null
+    // Rewarded Video
+    private var rewardedAd: RewardedAd? = null
+    private var isRewardedLoading = false
+
     private var isInitialized = false
-    private var isLoading = false
     
     // Preloaded Ad for Maker
     private var preloadedMakerAd: NativeAd? = null
@@ -48,13 +45,11 @@ object AdManager {
         if (isInitialized) return
         Log.d(TAG, "Initializing AdMob SDK...")
 
-        // SDK'yı arka planda başlat (UI'yı bloklamaz)
         MobileAds.initialize(context) { initStatus ->
             isInitialized = true
             Log.d(TAG, "AdMob SDK initialized. Status: ${initStatus.adapterStatusMap}")
-            Log.d(TAG, "User isPremium: ${PreferencesHelper.isPremium(context)}")
 
-            // Unity Ads mediation'ı initialize et
+            // Unity Ads mediation
             try {
                 com.unity3d.ads.UnityAds.initialize(context, "6048973", false)
                 Log.d(TAG, "Unity Ads initialized for mediation (Game ID: 6048973)")
@@ -62,17 +57,94 @@ object AdManager {
                 Log.e(TAG, "Unity Ads initialization failed: ${e.message}")
             }
 
-            // Reklamları paralel olarak yükle
+            // Reklamları yükle
             android.os.Handler(android.os.Looper.getMainLooper()).post {
-                loadInterstitial(context)
+                loadRewardedAd(context)
                 preloadMakerNativeAd(context)
             }
         }
     }
 
+    // ========== REWARDED VIDEO ==========
+
+    fun loadRewardedAd(context: Context) {
+        if (isRewardedLoading || rewardedAd != null) return
+        if (PreferencesHelper.isPremium(context)) return
+
+        isRewardedLoading = true
+        Log.d(TAG, "Loading rewarded ad...")
+
+        RewardedAd.load(context, REWARDED_AD_ID, AdRequest.Builder().build(),
+            object : RewardedAdLoadCallback() {
+                override fun onAdLoaded(ad: RewardedAd) {
+                    Log.d(TAG, "Rewarded ad loaded successfully")
+                    rewardedAd = ad
+                    isRewardedLoading = false
+                }
+
+                override fun onAdFailedToLoad(error: LoadAdError) {
+                    Log.e(TAG, "Rewarded ad failed to load: ${error.message}")
+                    rewardedAd = null
+                    isRewardedLoading = false
+
+                    // 5 saniye sonra tekrar dene
+                    android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                        loadRewardedAd(context)
+                    }, 5000)
+                }
+            })
+    }
+
+    fun isRewardedReady(): Boolean = rewardedAd != null
+
     /**
-     * Sticker Maker ekranı için reklamı önceden yükle
+     * Rewarded video göster.
+     * @param onRewarded Kullanıcı ödülü kazanınca çağrılır
+     * @param onFailed Reklam gösterilemezse çağrılır
      */
+    fun showRewardedAd(activity: Activity, onRewarded: () -> Unit, onFailed: () -> Unit = {}) {
+        if (PreferencesHelper.isPremium(activity)) {
+            onRewarded()
+            return
+        }
+
+        val ad = rewardedAd
+        if (ad == null) {
+            Log.e(TAG, "Rewarded ad not ready")
+            onFailed()
+            loadRewardedAd(activity)
+            return
+        }
+
+        var rewardEarned = false
+
+        ad.fullScreenContentCallback = object : FullScreenContentCallback() {
+            override fun onAdDismissedFullScreenContent() {
+                Log.d(TAG, "Rewarded ad dismissed")
+                rewardedAd = null
+                loadRewardedAd(activity) 
+                
+                if (rewardEarned) {
+                    onRewarded()
+                }
+            }
+
+            override fun onAdFailedToShowFullScreenContent(error: AdError) {
+                Log.e(TAG, "Rewarded ad failed to show: ${error.message}")
+                rewardedAd = null
+                loadRewardedAd(activity)
+                onFailed()
+            }
+        }
+
+        ad.show(activity) { _ ->
+            Log.d(TAG, "User earned reward")
+            rewardEarned = true
+        }
+    }
+
+    // ========== MAKER NATIVE AD ==========
+
     fun preloadMakerNativeAd(context: Context) {
         if (PreferencesHelper.isPremium(context) || preloadedMakerAd != null || isPreloadingMaker) return
         
@@ -93,174 +165,42 @@ object AdManager {
         adLoader.loadAd(AdRequest.Builder().build())
     }
 
-    /**
-     * Önceden yüklenmiş reklamı al ve hafızayı temizle
-     */
     fun getPreloadedMakerAd(): NativeAd? {
         val ad = preloadedMakerAd
-        preloadedMakerAd = null // Bir kez kullanıldıktan sonra temizle
+        preloadedMakerAd = null
         return ad
     }
 
-    private var lastLoadTime = 0L
-    private var retryCount = 0
-    private const val MAX_RETRY = 3
-
-    fun loadInterstitial(context: Context) {
-        val now = System.currentTimeMillis()
-        Log.d(TAG, "loadInterstitial called. isLoading: $isLoading, hasAd: ${interstitialAd != null}")
-        
-        // Eğer zaten yükleniyorsa ama 15 saniyeden fazla sürdüyse, takılmış olabilir, tekrar dene
-        if (isLoading && (now - lastLoadTime < 15000)) {
-            Log.d(TAG, "Still loading, wait for callback...")
-            return
-        }
-        
-        if (interstitialAd != null) {
-            Log.d(TAG, "Ad already loaded.")
-            return
-        }
-
-        if (PreferencesHelper.isPremium(context)) return
-
-        isLoading = true
-        lastLoadTime = now
-        val adRequest = AdRequest.Builder().build()
-        
-        InterstitialAd.load(context, INTERSTITIAL_WA_ADD_ID, adRequest,
-            object : InterstitialAdLoadCallback() {
-                override fun onAdLoaded(ad: InterstitialAd) {
-                    Log.d(TAG, "Interstitial ad loaded successfully")
-                    interstitialAd = ad
-                    isLoading = false
-                    retryCount = 0 
-                    
-                    ad.fullScreenContentCallback = object : FullScreenContentCallback() {
-                        override fun onAdDismissedFullScreenContent() {
-                            Log.d(TAG, "Ad dismissed")
-                            interstitialAd = null
-                            loadInterstitial(context)
-                        }
-                        override fun onAdFailedToShowFullScreenContent(error: AdError) {
-                            Log.e(TAG, "Ad failed to show: ${error.message}")
-                            interstitialAd = null
-                            loadInterstitial(context)
-                        }
-                    }
-                }
-                override fun onAdFailedToLoad(error: LoadAdError) {
-                    Log.e(TAG, "Interstitial failed to load: ${error.message} Code: ${error.code}")
-                    interstitialAd = null
-                    isLoading = false
-                    
-                    if (retryCount < MAX_RETRY) {
-                        retryCount++
-                        val delay = (retryCount * 2000L) // 2s, 4s, 6s...
-                        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                            loadInterstitial(context)
-                        }, delay)
-                    }
-                }
-            })
-    }
-
-    fun showInterstitial(activity: Activity) {
-        if (PreferencesHelper.isPremium(activity)) return
-        interstitialAd?.show(activity) ?: loadInterstitial(activity)
-    }
-
-    /**
-     * Interstitial reklam göster ve kapandığında callback'i çağır
-     * Bu sayede önce reklam gösterilir, sonra işlem devam eder
-     */
-    fun showInterstitialWithCallback(activity: Activity, onAdClosed: () -> Unit) {
-        if (PreferencesHelper.isPremium(activity)) {
-            Log.d(TAG, "User is premium, skipping ad and calling callback")
-            onAdClosed()
-            return
-        }
-
-        val ad = interstitialAd
-        if (ad != null) {
-            Log.d(TAG, "Showing interstitial ad...")
-            ad.fullScreenContentCallback = object : FullScreenContentCallback() {
-                override fun onAdDismissedFullScreenContent() {
-                    Log.d(TAG, "Interstitial dismissed, calling callback")
-                    interstitialAd = null
-                    loadInterstitial(activity)
-                    onAdClosed()
-                }
-                override fun onAdFailedToShowFullScreenContent(error: AdError) {
-                    Log.e(TAG, "Failed to show interstitial: ${error.message}")
-                    interstitialAd = null
-                    loadInterstitial(activity)
-                    onAdClosed()
-                }
-            }
-            ad.show(activity)
-        } else {
-            // Reklam yüklenmemişse, yüklemeyi başlat
-            Log.d(TAG, "No interstitial loaded, starting load if not already loading")
-            if (!isLoading) {
-                loadInterstitial(activity)
-            }
-            
-            // Eğer reklam hazır değilse DetailsActivity 5 saniye bekliyor zaten. 
-            // Hala hazır değilse direkt geçiyoruz (Kullanıcıyı engellememek için)
-            onAdClosed()
-        }
-    }
-
-    fun isInterstitialReady(): Boolean = interstitialAd != null
+    // ========== NATIVE AD (for Maker screen only) ==========
 
     enum class NativeAdType {
-        LIST, MAKER, FAVORITE, MY_STICKERS
+        MAKER
     }
 
-    fun loadNativeAd(context: Context, type: NativeAdType = NativeAdType.LIST, onLoaded: (NativeAd) -> Unit) {
-        Log.d(TAG, "loadNativeAd called. Type: $type, isPremium: ${PreferencesHelper.isPremium(context)}, isInitialized: $isInitialized")
-        if (PreferencesHelper.isPremium(context)) {
-            Log.d(TAG, "User is premium, skipping ad load")
-            return
-        }
+    fun loadNativeAd(context: Context, type: NativeAdType = NativeAdType.MAKER, onLoaded: (NativeAd) -> Unit) {
+        if (PreferencesHelper.isPremium(context)) return
 
-        // SDK henüz başlatılmamışsa 1 saniye sonra tekrar dene
         if (!isInitialized) {
-            Log.d(TAG, "SDK not initialized yet, retrying in 1 second...")
             android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
                 loadNativeAd(context, type, onLoaded)
             }, 1000)
             return
         }
 
-        // Eğer Maker ekranıysa ve önceden yüklenmiş reklam varsa onu kullan
-        if (type == NativeAdType.MAKER) {
-            val preloaded = getPreloadedMakerAd()
-            if (preloaded != null) {
-                onLoaded(preloaded)
-                return
-            }
+        // Maker ekranıysa önceden yüklenmiş reklamı kullan
+        val preloaded = getPreloadedMakerAd()
+        if (preloaded != null) {
+            onLoaded(preloaded)
+            return
         }
 
-        val adUnitId = when (type) {
-            NativeAdType.MAKER -> MAKER_NATIVE_AD_ID
-            NativeAdType.FAVORITE -> FAV_NATIVE_AD_ID
-            NativeAdType.MY_STICKERS -> MY_STICKERS_NATIVE_AD_ID
-            else -> LIST_NATIVE_AD_ID
-        }
-
-        Log.d(TAG, "Loading Native Ad with ID: $adUnitId")
-        val adLoader = AdLoader.Builder(context, adUnitId)
+        val adLoader = AdLoader.Builder(context, MAKER_NATIVE_AD_ID)
             .forNativeAd { nativeAd ->
-                Log.d(TAG, "Native Ad loaded successfully for type: $type")
                 onLoaded(nativeAd)
             }
             .withAdListener(object : AdListener() {
                 override fun onAdFailedToLoad(e: LoadAdError) {
-                    Log.e(TAG, "Native Ad Error for $type: ${e.message} Code: ${e.code} Domain: ${e.domain}")
-                }
-                override fun onAdLoaded() {
-                    Log.d(TAG, "Ad loaded event fired for type: $type")
+                    Log.e(TAG, "Native Ad Error: ${e.message}")
                 }
             })
             .withNativeAdOptions(NativeAdOptions.Builder()
@@ -269,7 +209,6 @@ object AdManager {
                 .build())
             .build()
         adLoader.loadAd(AdRequest.Builder().build())
-        Log.d(TAG, "Ad request sent for type: $type")
     }
 
     fun populateNativeAdView(nativeAd: NativeAd, adView: NativeAdView) {

@@ -73,7 +73,7 @@ Return as JSON array: [{"name": "Pack Name Here", "emoji": "🎉✨"}]`
     ];
 
     const result = await callDeepSeek(messages, 0.9);
-    
+
     try {
         const jsonMatch = result.match(/\[[\s\S]*\]/);
         if (jsonMatch) {
@@ -154,18 +154,18 @@ Include ALL language codes listed above.`
     ];
 
     const result = await callDeepSeek(messages, 0.3);
-    
+
     try {
         const jsonMatch = result.match(/\{[\s\S]*\}/);
         if (jsonMatch) {
             const translations = JSON.parse(jsonMatch[0]);
             const finalMap: Record<string, string> = { name_en: englishName };
-            
+
             for (const lang of SUPPORTED_LANGUAGES) {
                 if (lang.code === 'en') continue;
                 finalMap[`name_${lang.code}`] = translations[lang.code] || englishName;
             }
-            
+
             return finalMap;
         }
     } catch (e) {
@@ -188,53 +188,114 @@ export interface ThemeSuggestion {
     description: string;
 }
 
+// Kategori ID'lerinden açıklamalı isimler (daha iyi AI sonuçları için)
+const CATEGORY_DESCRIPTIONS: Record<string, string> = {
+    humor: 'Humor & Comedy (funny memes, jokes, laugh reactions, comedy scenes, hilarious moments)',
+    love: 'Love & Romance (hearts, couples, romantic gestures, valentine, crush, dating)',
+    religious: 'Religious & Spiritual (islamic, christian, jewish, hindu, buddhist greetings, prayers)',
+    entertainment: 'Entertainment & Fun (party, celebration, music, dance, joy)',
+    background: 'Backgrounds & Aesthetics (aesthetic wallpapers, gradients, patterns, textures)',
+    morning: 'Good Morning (sunrise greetings, coffee, breakfast, morning motivation)',
+    night: 'Good Night (moon, stars, sleep, bedtime, sweet dreams)',
+    birthday: 'Birthday (cake, party, balloons, gifts, celebrations, age milestones)',
+    congrats: 'Congratulations (success, achievement, graduation, promotion, victory)',
+    animals: 'Animals & Pets (cats, dogs, birds, wildlife, cute pets, funny animals)',
+    sports: 'Sports & Fitness (football, basketball, soccer, gym, workout, champions)',
+    gaming: 'Gaming & Esports (video games, consoles, streamers, gaming reactions)',
+    movie: 'Movies & TV Shows (cinema, series, actors, scenes, fan reactions)',
+    music: 'Music & Dance (singers, instruments, concerts, dancing, musical vibes)',
+    food: 'Food & Drinks (delicious meals, coffee, desserts, cooking, restaurants)',
+    emoji: 'Emoji Style (emoticons, faces, expressions, classic emoji recreations)',
+    cars: 'Cars & Vehicles (automobiles, motorcycles, racing, luxury cars, speed)',
+    motivation: 'Motivation & Inspiration (quotes, success, hustle, never give up)',
+    cute: 'Cute & Kawaii (adorable, chibi, baby animals, sweet, wholesome)',
+    text: 'Text & Typography (quotes, messages, colorful words, neon text)',
+    anime: 'Anime & Manga (japanese animation, otaku, waifu, popular anime characters)',
+    memes: 'Memes & Viral (internet culture, trending memes, viral moments)',
+    nature: 'Nature & Scenery (landscapes, flowers, ocean, mountains, weather)',
+    other: 'Miscellaneous (unique, diverse, creative, unconventional topics)'
+};
+
 export async function generateSearchTerms(
     count: number = 50,
     existingTerms: string[] = [],
-    focus?: string
+    selectedCategories: string[] = []
 ): Promise<ThemeSuggestion[]> {
     const existingNote = existingTerms.length > 0
-        ? `\nAlready existing packs (DO NOT repeat these): ${existingTerms.join(', ')}`
+        ? `\n\n⚠️ ALREADY EXISTING (DO NOT generate these or anything too similar): ${existingTerms.join(', ')}`
         : '';
 
-    const focusNote = focus
-        ? `\nFocus area: ${focus}`
-        : '';
+    let categoryNote = '';
+    if (selectedCategories.length > 0) {
+        const categoryDescriptions = selectedCategories
+            .map(cat => CATEGORY_DESCRIPTIONS[cat] || cat)
+            .join('\n- ');
+        categoryNote = `\n\n🎯 FOCUS YOUR CREATIVITY STRICTLY ON THESE CATEGORIES:\n- ${categoryDescriptions}`;
+    }
+
+    const requestCount = Math.max(10, count * 2);
 
     const messages: DeepSeekMessage[] = [
         {
             role: 'system',
-            content: `You are a sticker pack content strategist for a WhatsApp sticker app competing with Sticker.ly. Generate diverse, popular search terms that will attract users. Think about:
-- Trending topics and memes
-- Universal emotions and reactions
-- Pop culture references (use generic terms, not copyrighted names)
-- Daily life situations
-- Holidays and celebrations worldwide
-- Animals and cute content
-- Anime and gaming culture
-- Food and lifestyle
-- Sports and entertainment
-- Regional/cultural content for different countries
-Return ONLY a JSON array, no other text.`
+            content: `You are an elite content strategist for a massively popular, global WhatsApp sticker application. Your sole purpose is to invent highly engaging, imaginative, and highly searchable sticker pack topics.
+
+You are interacting with Giphy and Tenor's search engines. You must generate terms that will yield visually distinct, highly expressive GIF/Sticker results.
+
+CRITICAL DIRECTIVES:
+1. MAXIMAL CREATIVE FREEDOM: Do not limit yourself. Think of every possible human emotion, internet subculture, daily struggle, universally recognizable situation, gaming moment, or abstract aesthetic. 
+2. NO GEOGRAPHY/NATIONALITIES: Do NOT ever use country names, nationalities, or specific geographic regions (e.g., NEVER use "Turkish", "American", "Brazilian", "Indian", "Arabic", "African"). Stick to universal human experiences.
+3. VISUAL ACTION/EMOTION: Every term must describe something visual. "Sad" is bad. "Crying loudly in bed" is great. "Happy" is bad. "Jumping with joy celebration" is great.
+4. FORMAT: Exactly 2 to 4 words per term. English only.
+
+Think about what users actually send to their friends, families, and coworkers:
+- Intense reactions and dramatic emotions
+- Relatable daily annoyances and victories (work, school, home)
+- Trending internet humor and surreal abstract memes
+- Cute, funny, or chaotic animal behaviors
+- Specific social situations (flirting, ignoring, apologizing, celebrating)
+- Pop culture archetypes (anime reactions, gaming rage, cinematic drama)
+
+Return ONLY a valid JSON array. Zero markdown formatting. Zero explanation.`
         },
         {
             role: 'user',
-            content: `Generate ${count} unique sticker pack search terms for Giphy/Klipy.${existingNote}${focusNote}
+            content: `Generate exactly ${requestCount} completely UNIQUE, visually descriptive sticker search terms.${categoryNote}${existingNote}
 
-Each term should be an English search query that will return good sticker results.
+RULES:
+- Exactly 2 to 4 words
+- NO countries, NO nationalities, NO geographic locations
+- Must yield great Giphy/Tenor visual results
+- Every term must be conceptually distinct from the others
 
-Return as JSON array: [{"searchTerm": "cute cats sleeping", "category": "animals", "description": "Adorable sleeping cat stickers"}]
+Return AS A RAW JSON ARRAY ONLY:
+[{"searchTerm": "specific visual term", "category": "category_id", "description": "Brief description of the vibe"}]
 
-Categories to use: humor, love, animals, reactions, greetings, celebrations, anime, gaming, food, sports, entertainment, lifestyle, memes, emotions, text, seasonal`
+${selectedCategories.length > 0 ? `MUST use these category IDs: ${selectedCategories.join(', ')}` : 'You may use any of these valid category IDs: humor, love, religious, entertainment, morning, night, birthday, congrats, animals, sports, gaming, movie, music, food, emoji, cars, motivation, cute, text, anime, memes, nature, other'}`
         }
     ];
 
-    const result = await callDeepSeek(messages, 0.95);
-    
+    const result = await callDeepSeek(messages, 1.2); // High temperature for maximum creativity
+
     try {
         const jsonMatch = result.match(/\[[\s\S]*\]/);
         if (jsonMatch) {
-            return JSON.parse(jsonMatch[0]);
+            const parsed = JSON.parse(jsonMatch[0]);
+            const seen = new Set<string>();
+            const countryWords = ['turkish', 'american', 'brazilian', 'indian', 'chinese', 'japanese', 'korean', 'arabic', 'african', 'european', 'mexican', 'russian', 'thai', 'vietnamese', 'indonesian', 'pakistani', 'persian', 'filipino', 'malay', 'bengali', 'german', 'french', 'italian', 'spanish', 'portuguese', 'dutch', 'polish', 'swedish', 'norwegian', 'finnish', 'greek', 'hungarian', 'romanian', 'czech', 'ukrainian', 'hebrew', 'latino'];
+
+            const validItems = parsed.filter((item: ThemeSuggestion) => {
+                const normalized = item.searchTerm?.toLowerCase().trim();
+                if (!normalized) return false;
+                if (seen.has(normalized)) return false;
+                if (countryWords.some(cw => normalized.includes(cw))) return false;
+                if (normalized.split(' ').length < 2) return false;
+
+                seen.add(normalized);
+                return true;
+            });
+
+            return validItems.slice(0, count);
         }
     } catch (e) {
         console.error('[DeepSeek] Tema üretim parse hatası:', e, result);
@@ -266,7 +327,7 @@ const CATEGORY_MAP: Record<string, string[]> = {
 
 export function autoDetectCategory(searchTerm: string): string {
     const lower = searchTerm.toLowerCase();
-    
+
     let bestMatch = 'humor'; // default
     let bestScore = 0;
 

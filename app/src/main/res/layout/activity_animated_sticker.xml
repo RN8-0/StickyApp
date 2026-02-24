@@ -34,7 +34,7 @@
                 android:layout_height="48dp"
                 android:background="?selectableItemBackgroundBorderless"
                 android:src="@drawable/ic_back"
-                app:tint="@color/toolbar_icon"
+                app:tint="@color/white"
                 android:contentDescription="@string/back" />
 
             <TextView
@@ -42,8 +42,8 @@
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:text="@string/edit_video"
-                android:textColor="@color/toolbar_text"
-                android:textSize="17sp"
+                android:textColor="@color/white"
+                android:textSize="20sp"
                 android:textStyle="bold" />
 
         </LinearLayout>
@@ -97,46 +97,77 @@
             android:paddingBottom="12dp"
             app:layout_constraintBottom_toBottomOf="parent">
 
-            <!-- Trim Section -->
-            <TextView
-                android:id="@+id/tvTrimInstruction"
+            <!-- Trim Section Pill -->
+            <LinearLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_gravity="center_horizontal"
-                android:text="@string/trim_instruction"
-                android:textColor="@color/text_secondary"
-                android:textSize="11sp"
-                android:layout_marginBottom="4dp" />
+                android:orientation="horizontal"
+                android:gravity="center"
+                android:background="@drawable/bg_option_card"
+                android:paddingHorizontal="16dp"
+                android:paddingVertical="8dp"
+                android:layout_marginBottom="16dp">
 
-            <TextView
-                android:id="@+id/tvTrimDuration"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="center_horizontal"
-                android:text="0.0s"
-                android:textColor="@color/text_primary"
-                android:textSize="14sp"
-                android:textStyle="bold"
-                android:layout_marginBottom="6dp" />
+                <ImageView
+                    android:layout_width="16dp"
+                    android:layout_height="16dp"
+                    android:src="@drawable/ic_info"
+                    app:tint="@color/text_secondary"
+                    android:layout_marginEnd="8dp" />
+
+                <TextView
+                    android:id="@+id/tvTrimInstruction"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/trim_instruction"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="12sp"
+                    android:fontFamily="sans-serif-medium" />
+
+                <View
+                    android:layout_width="1dp"
+                    android:layout_height="14dp"
+                    android:background="#20000000"
+                    android:layout_marginHorizontal="12dp" />
+
+                <TextView
+                    android:id="@+id/tvTrimDuration"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="0.0s"
+                    android:textColor="@color/primary"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
 
             <!-- Timeline: RecyclerView + RangeSelectionView overlay -->
-            <FrameLayout
+            <com.google.android.material.card.MaterialCardView
                 android:layout_width="match_parent"
-                android:layout_height="44dp"
+                android:layout_height="52dp"
                 android:layout_marginHorizontal="20dp"
-                android:layout_marginBottom="10dp">
+                android:layout_marginBottom="24dp"
+                app:cardCornerRadius="12dp"
+                app:cardElevation="0dp"
+                app:strokeWidth="2dp"
+                app:strokeColor="#10000000">
 
-                <androidx.recyclerview.widget.RecyclerView
-                    android:id="@+id/trimFrameRecyclerView"
+                <FrameLayout
                     android:layout_width="match_parent"
-                    android:layout_height="match_parent"
-                    android:clipToPadding="false" />
+                    android:layout_height="match_parent">
 
-                <com.sticly.RangeSelectionView
-                    android:id="@+id/trimRangeSelectionView"
-                    android:layout_width="match_parent"
-                    android:layout_height="match_parent" />
-            </FrameLayout>
+                    <androidx.recyclerview.widget.RecyclerView
+                        android:id="@+id/trimFrameRecyclerView"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:clipToPadding="false" />
+
+                    <com.sticly.RangeSelectionView
+                        android:id="@+id/trimRangeSelectionView"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent" />
+                </FrameLayout>
+            </com.google.android.material.card.MaterialCardView>
 
             <!-- Crop Shape Buttons -->
             <LinearLayout
@@ -144,7 +175,7 @@
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
                 android:gravity="center"
-                android:paddingHorizontal="24dp">
+                android:paddingHorizontal="20dp">
 
                 <LinearLayout
                     android:id="@+id/btnCropNone"
@@ -153,8 +184,9 @@
                     android:layout_weight="1"
                     android:orientation="vertical"
                     android:gravity="center"
-                    android:paddingVertical="6dp"
-                    android:background="?selectableItemBackgroundBorderless"
+                    android:layout_marginHorizontal="6dp"
+                    android:paddingVertical="12dp"
+                    android:background="@drawable/bg_option_card"
                     android:clickable="true"
                     android:focusable="true">
 
@@ -169,10 +201,11 @@
                         android:id="@+id/labelCropNone"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="2dp"
+                        android:layout_marginTop="6dp"
                         android:text="@string/crop_none"
-                        android:textColor="@color/text_secondary"
-                        android:textSize="11sp" />
+                        android:textColor="@color/text_primary"
+                        android:textSize="12sp"
+                        android:textStyle="bold" />
                 </LinearLayout>
 
                 <LinearLayout
@@ -182,8 +215,9 @@
                     android:layout_weight="1"
                     android:orientation="vertical"
                     android:gravity="center"
-                    android:paddingVertical="6dp"
-                    android:background="?selectableItemBackgroundBorderless"
+                    android:layout_marginHorizontal="6dp"
+                    android:paddingVertical="12dp"
+                    android:background="@drawable/bg_option_card"
                     android:clickable="true"
                     android:focusable="true">
 
@@ -198,10 +232,11 @@
                         android:id="@+id/labelCropCircle"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="2dp"
+                        android:layout_marginTop="6dp"
                         android:text="@string/crop_circle"
-                        android:textColor="@color/text_secondary"
-                        android:textSize="11sp" />
+                        android:textColor="@color/text_primary"
+                        android:textSize="12sp"
+                        android:textStyle="bold" />
                 </LinearLayout>
 
                 <LinearLayout
@@ -211,8 +246,9 @@
                     android:layout_weight="1"
                     android:orientation="vertical"
                     android:gravity="center"
-                    android:paddingVertical="6dp"
-                    android:background="?selectableItemBackgroundBorderless"
+                    android:layout_marginHorizontal="6dp"
+                    android:paddingVertical="12dp"
+                    android:background="@drawable/bg_option_card"
                     android:clickable="true"
                     android:focusable="true">
 
@@ -227,10 +263,11 @@
                         android:id="@+id/labelCropSquare"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="2dp"
+                        android:layout_marginTop="6dp"
                         android:text="@string/crop_square"
-                        android:textColor="@color/text_secondary"
-                        android:textSize="11sp" />
+                        android:textColor="@color/text_primary"
+                        android:textSize="12sp"
+                        android:textStyle="bold" />
                 </LinearLayout>
 
                 <LinearLayout
@@ -240,8 +277,9 @@
                     android:layout_weight="1"
                     android:orientation="vertical"
                     android:gravity="center"
-                    android:paddingVertical="6dp"
-                    android:background="?selectableItemBackgroundBorderless"
+                    android:layout_marginHorizontal="6dp"
+                    android:paddingVertical="12dp"
+                    android:background="@drawable/bg_option_card"
                     android:clickable="true"
                     android:focusable="true">
 
@@ -256,10 +294,11 @@
                         android:id="@+id/labelCropRect"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="2dp"
+                        android:layout_marginTop="6dp"
                         android:text="@string/crop_rectangle"
-                        android:textColor="@color/text_secondary"
-                        android:textSize="11sp" />
+                        android:textColor="@color/text_primary"
+                        android:textSize="12sp"
+                        android:textStyle="bold" />
                 </LinearLayout>
 
             </LinearLayout>
@@ -343,7 +382,7 @@
                 android:layout_marginStart="4dp"
                 android:background="?selectableItemBackgroundBorderless"
                 android:src="@drawable/ic_close"
-                app:tint="@color/toolbar_icon"
+                app:tint="@color/white"
                 android:contentDescription="@string/back" />
 
             <TextView
@@ -351,8 +390,8 @@
                 android:layout_height="wrap_content"
                 android:layout_gravity="center"
                 android:text="@string/customize"
-                android:textColor="@color/toolbar_text"
-                android:textSize="17sp"
+                android:textColor="@color/white"
+                android:textSize="20sp"
                 android:textStyle="bold" />
 
         </FrameLayout>
@@ -421,7 +460,7 @@
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
                 android:gravity="center"
-                android:paddingVertical="12dp">
+                android:paddingVertical="8dp">
 
                 <LinearLayout
                     android:id="@+id/btnToolText"
@@ -430,10 +469,11 @@
                     android:layout_weight="1"
                     android:orientation="vertical"
                     android:gravity="center"
-                    android:background="?selectableItemBackgroundBorderless"
+                    android:layout_marginHorizontal="16dp"
+                    android:paddingVertical="8dp"
+                    android:background="@drawable/bg_tool_card"
                     android:clickable="true"
-                    android:focusable="true"
-                    android:paddingVertical="4dp">
+                    android:focusable="true">
 
                     <ImageView
                         android:id="@+id/iconToolText"
@@ -449,7 +489,8 @@
                         android:layout_marginTop="4dp"
                         android:text="@string/text_tool"
                         android:textColor="@color/white"
-                        android:textSize="11sp" />
+                        android:textSize="12sp"
+                        android:textStyle="bold" />
                 </LinearLayout>
 
                 <LinearLayout
@@ -459,10 +500,11 @@
                     android:layout_weight="1"
                     android:orientation="vertical"
                     android:gravity="center"
-                    android:background="?selectableItemBackgroundBorderless"
+                    android:layout_marginHorizontal="16dp"
+                    android:paddingVertical="8dp"
+                    android:background="@drawable/bg_tool_card"
                     android:clickable="true"
-                    android:focusable="true"
-                    android:paddingVertical="4dp">
+                    android:focusable="true">
 
                     <ImageView
                         android:id="@+id/iconToolEmoji"
@@ -478,7 +520,8 @@
                         android:layout_marginTop="4dp"
                         android:text="@string/add_emoji_short"
                         android:textColor="@color/white"
-                        android:textSize="11sp" />
+                        android:textSize="12sp"
+                        android:textStyle="bold" />
                 </LinearLayout>
 
             </LinearLayout>
@@ -493,15 +536,16 @@
                 android:layout_marginTop="4dp"
                 android:layout_marginBottom="8dp"
                 android:text="@string/save_sticker_btn"
-                android:textColor="@color/white"
-                android:textSize="15sp"
+                android:textColor="@color/text_primary"
+                android:textSize="16sp"
                 android:textStyle="bold"
                 android:textAllCaps="false"
                 app:icon="@drawable/ic_save"
                 app:iconGravity="textStart"
-                app:iconTint="@color/white"
+                app:iconTint="@color/text_primary"
                 app:cornerRadius="26dp"
-                app:backgroundTint="@color/accent" />
+                app:backgroundTint="@color/white"
+                app:elevation="8dp" />
 
         </LinearLayout>
 

@@ -20,7 +20,7 @@
     <string name="contact_us">Contact Us</string>
     <string name="rate_us">Rate Us</string>
     <string name="premium">Premium</string>
-    <string name="get_premium_access">Get Premium Access</string>
+    <string name="get_premium_access">Get Premium</string>
     <string name="suggest_sticker">Suggest Sticker</string>
     <string name="share_app">Share App</string>
     <string name="privacy_policy">Privacy Policy</string>
@@ -65,8 +65,12 @@
     <string name="suggestion_sent">Thanks for your suggestion!</string>
 
     <!-- Share -->
-    <string name="share_text">Try the Sticky app! Great stickers for WhatsApp: https://play.google.com/store/apps/details?id=com.sticly</string>
+    <string name="share_text">🔥 I found the BEST sticker app for WhatsApp! 1000+ amazing stickers, try it free:\nhttps://play.google.com/store/apps/details?id=com.sticly</string>
     <string name="share_pack">Share Stickers</string>
+    <string name="share_prompt_title">Stickers Added! 🎉</string>
+    <string name="share_prompt_message">Love these stickers? Share with your friends so they can enjoy them too!</string>
+    <string name="share_with_friends">Share with Friends</string>
+    <string name="share_pack_text">😍 Check out \'%s\' stickers for WhatsApp! So cool!\n\n📲 Get them free: https://play.google.com/store/apps/details?id=com.sticly</string>
 
     <!-- Privacy -->
     <string name="privacy_title">Privacy Policy</string>
@@ -79,6 +83,13 @@
     <string name="notifications_saved">Settings saved</string>
     <string name="notifications_enabled">🔔 Notifications enabled! You will be informed about new packs.</string>
     <string name="notifications_disabled">🔕 Notifications disabled.</string>
+
+    <!-- Loading Screen -->
+    <string name="loading_status_init">Starting up…</string>
+    <string name="loading_status_cache">Loading cached data…</string>
+    <string name="loading_status_firebase">Fetching sticker packs…</string>
+    <string name="loading_status_preparing">Preparing content…</string>
+    <string name="loading_status_ready">Almost ready…</string>
 
     <!-- Internet -->
     <string name="no_internet_title">No Internet Connection</string>
@@ -106,18 +117,18 @@
     <string name="remove_pack_title">Remove Pack</string>
     <string name="remove_pack_message">Are you sure you want to remove this sticker pack?</string>
     <string name="play_store">Go to Play Store</string>
-    <string name="downloading">Downloading…</string>
-    <string name="download_failed">Download failed</string>
-    <string name="error">Error: %s</string>
     <string name="pack_loading">Loading pack…</string>
     <string name="pack_not_found">Pack not found</string>
     <string name="pack_load_failed">Pack could not be loaded</string>
-
-    <!-- Premium Promo Dialog -->
-    <string name="premium_promo_title">Ad-Free Experience</string>
-    <string name="premium_promo_message">We know ads can be annoying sometimes.\n\nWe need a small income to improve our app and add new stickers.\n\nYou can get Premium subscription for ad-free use and all premium stickers 💙</string>
-    <string name="get_premium">Get Premium Membership</string>
-    <string name="maybe_later">Maybe Later</string>
+    <string name="downloading">Downloading…</string>
+    <string name="download_failed">Download failed</string>
+    <string name="error">Error: %s</string>
+    <!-- Rewarded Buttons -->
+    <string name="watch_ad_button">İzle &amp; Ekle</string>
+    <string name="premium_promo_title">Sorry for the Ads! 🧡</string>
+    <string name="premium_promo_message">We\'re sorry for the ads! They are necessary for us to keep adding new stickers and improving the app for you.\n\nThank you for your understanding! 🙏</string>
+    <string name="get_premium">I Understand</string>
+    <string name="maybe_later">Continue</string>
 
     <!-- Premium Preview -->
     <string name="tap_to_unlock">Tap to unlock Premium</string>
@@ -251,6 +262,11 @@
     <string name="stickers_load_failed">Stickers could not be loaded</string>
     <string name="loading_percent">Loading %1$d%%</string>
     <string name="ad_preparing">Preparing…</string>
+    <string name="watch_ad_to_unlock">Watch Ad to Unlock</string>
+    <string name="pack_unlocked_24h">🎉 Pack unlocked for 24 hours!</string>
+    <string name="ad_failed_try_again">Ad failed to load. Please try again.</string>
+    <string name="ad_loading_please_wait">Loading ad, please wait…</string>
+    <string name="ad_not_available">Ad not available right now. Unlocking anyway!</string>
 
     <!-- Pack Validation Errors -->
     <string name="pack_empty_error">📦 This pack has no stickers! Add at least 3 stickers first.</string>
@@ -616,4 +632,6 @@
     <string name="error_loading_video">Error loading video</string>
     <string name="trim_failed">Trim failed</string>
     <string name="trim_instruction">Drag the handles to select the portion to trim</string>
+    <string name="preparing_pack">PREPARING PACK</string>
+    <string name="downloading_assets">Downloading assets…</string>
 </resources>

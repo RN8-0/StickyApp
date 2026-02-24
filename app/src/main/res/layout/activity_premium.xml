@@ -4,7 +4,6 @@
     android:id="@+id/premium_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:fitsSystemWindows="true"
     android:background="@color/background">
 
     <!-- Header Image with Crown -->
@@ -309,8 +308,8 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
-            android:minHeight="64dp"
-            android:paddingVertical="12dp"
+            android:minHeight="56dp"
+            android:paddingVertical="6dp"
             android:text="@string/start_free_trial"
             android:textColor="@color/premium_text_on_gold"
             android:textSize="17sp"
@@ -320,7 +319,7 @@
             android:lineSpacingMultiplier="1.2"
             android:gravity="center"
             app:backgroundTint="@color/premium_gold"
-            app:cornerRadius="32dp"
+            app:cornerRadius="28dp"
             app:elevation="4dp" />
 
         <!-- View Plans Link -->

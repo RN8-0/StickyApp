@@ -50,7 +50,7 @@ class StickyMessagingService : FirebaseMessagingService() {
             this,
             0,
             intent,
-            PendingIntent.FLAG_IMMUTABLE
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
         // Süslü başlık ve mesaj oluştur
