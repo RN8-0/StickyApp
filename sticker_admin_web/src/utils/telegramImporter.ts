@@ -464,7 +464,6 @@ export async function importTelegramPacks(
 ): Promise<TelegramCompletedPack[]> {
     const {
         useAiNaming = false,
-        useAiTranslation = false,
         stickerLimit = 30,
         maxStickers = 0,
         splitPacks = true,
@@ -599,15 +598,8 @@ export async function importTelegramPacks(
             }
             const totalParts = chunks.length;
 
-            // Pre-translate once for the base name
-            let translations: Record<string, string> = { name_en: baseName };
-            if (useAiTranslation && deepseekService.isConfigured()) {
-                try {
-                    translations = await deepseekService.translatePackName(baseName);
-                } catch {
-                    translations = { name_en: baseName };
-                }
-            }
+            // Only English name for drafts
+            const translations: Record<string, string> = { name_en: baseName };
 
             const category = autoDetectCategory(stickerSet.title + ' ' + setName);
 

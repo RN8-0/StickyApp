@@ -699,10 +699,21 @@ function App() {
     if (!window.confirm(`Are you sure you want to publish "${draft.name}"?`)) return;
     setDraftPublishing(draft.id);
     try {
+      // Auto-translate from name_en at publish time
+      let translations: Record<string, string> = {};
+      const englishName = (draft as any).name_en || draft.name;
+      if (deepseekService.isConfigured()) {
+        try {
+          translations = await deepseekService.translatePackName(englishName);
+        } catch { translations = {}; }
+      }
+
       const targetCollection = draft.is_premium ? 'premium_stickers' : 'stickers';
       const { id, ...packDataWithoutId } = draft as any;
       await setDoc(doc(db, targetCollection, draft.id), {
         ...packDataWithoutId,
+        ...translations,
+        name_en: englishName,
         is_active: true,
         published_at: serverTimestamp(),
       });
@@ -726,10 +737,20 @@ function App() {
     for (const draft of draftPacks) {
       setDraftPublishing(draft.id);
       try {
+        let translations: Record<string, string> = {};
+        const englishName = (draft as any).name_en || draft.name;
+        if (deepseekService.isConfigured()) {
+          try {
+            translations = await deepseekService.translatePackName(englishName);
+          } catch { translations = {}; }
+        }
+
         const targetCollection = draft.is_premium ? 'premium_stickers' : 'stickers';
         const { id, ...packDataWithoutId } = draft as any;
         await setDoc(doc(db, targetCollection, draft.id), {
           ...packDataWithoutId,
+          ...translations,
+          name_en: englishName,
           is_active: true,
           published_at: serverTimestamp(),
         });
@@ -5110,23 +5131,6 @@ function App() {
                                       <span className="text-[10px] font-bold text-purple-400 bg-purple-400/10 px-2.5 py-0.5 rounded-md border border-purple-400/10">"{(draft as any).batch_search_term}"</span>
                                     )}
                                   </div>
-                                  {/* Translations inline */}
-                                  {draft.name_tr && (
-                                    <div className="flex flex-wrap gap-1.5 mt-2">
-                                      {[
-                                        { code: 'tr', flag: '🇹🇷' }, { code: 'es', flag: '🇪🇸' }, { code: 'ar', flag: '🇸🇦' },
-                                        { code: 'zh', flag: '🇨🇳' }, { code: 'hi', flag: '🇮🇳' }, { code: 'pt', flag: '🇧🇷' },
-                                        { code: 'de', flag: '🇩🇪' }, { code: 'ja', flag: '🇯🇵' }, { code: 'fr', flag: '🇫🇷' },
-                                      ].map(lang => {
-                                        const val = (draft as any)[`name_${lang.code}`];
-                                        return val ? (
-                                          <span key={lang.code} className="text-[9px] text-textSec bg-white/[0.03] px-2 py-0.5 rounded-md border border-white/5">
-                                            {lang.flag} {val}
-                                          </span>
-                                        ) : null;
-                                      })}
-                                    </div>
-                                  )}
                                 </div>
                               </div>
                               <div className="flex items-center gap-2 shrink-0">
@@ -5135,7 +5139,6 @@ function App() {
                                     setSelectedDraft(draft);
                                     setDraftEditData({
                                       name: draft.name,
-                                      name_tr: draft.name_tr,
                                       category: draft.category,
                                       is_premium: draft.is_premium,
                                       is_animated: draft.is_animated,
@@ -5264,15 +5267,6 @@ function App() {
                               type="text"
                               value={draftEditData.name || ''}
                               onChange={e => setDraftEditData(prev => ({ ...prev, name: e.target.value }))}
-                              className="w-full bg-background border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:ring-2 focus:ring-primary"
-                            />
-                          </div>
-                          <div>
-                            <label className="text-[10px] font-black text-textSec uppercase tracking-widest mb-1.5 block">Pack Name (TR)</label>
-                            <input
-                              type="text"
-                              value={draftEditData.name_tr || ''}
-                              onChange={e => setDraftEditData(prev => ({ ...prev, name_tr: e.target.value }))}
                               className="w-full bg-background border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:ring-2 focus:ring-primary"
                             />
                           </div>
