@@ -404,6 +404,7 @@ function App() {
   const [telegramPacksInput, setTelegramPacksInput] = useState('');
   const [isTelegramImporting, setIsTelegramImporting] = useState(false);
   const [telegramProgress, setTelegramProgress] = useState<any>(null);
+  const [telegramAbortController, setTelegramAbortController] = useState<AbortController | null>(null);
   const [telegramStickerLimit, setTelegramStickerLimit] = useState(30);
   const [telegramMaxStickers, setTelegramMaxStickers] = useState(0); // 0 = all
   const [telegramSplitPacks, setTelegramSplitPacks] = useState(true);
@@ -742,6 +743,30 @@ function App() {
     setSelectedDraft(null);
     await fetchPacks();
     alert(`✅ ${published}/${draftPacks.length} packs published!`);
+  };
+
+  const deleteAllDrafts = async () => {
+    if (draftPacks.length === 0) return;
+    if (!window.confirm(`⚠️ Delete ALL ${draftPacks.length} drafts? This cannot be undone!`)) return;
+    let deleted = 0;
+    for (const draft of draftPacks) {
+      try {
+        try {
+          const folderRef = ref(storage, `stickers/${draft.id}`);
+          const fileList = await listAll(folderRef);
+          for (const item of fileList.items) {
+            await deleteObject(item);
+          }
+        } catch (e) { console.log('Storage delete:', e); }
+        await deleteDoc(doc(db, 'draft_stickers', draft.id));
+        deleted++;
+      } catch (error: any) {
+        console.error(`Delete error (${draft.name}):`, error);
+      }
+    }
+    setDraftPacks([]);
+    setSelectedDraft(null);
+    alert(`🗑️ ${deleted}/${draftPacks.length} drafts deleted!`);
   };
 
   const deleteDraftPack = async (draft: StickerPack) => {
@@ -4787,6 +4812,7 @@ function App() {
                   </div>
 
                   {/* Import Button */}
+                  <div className="flex gap-2">
                   <button
                     onClick={async () => {
                       if (!telegramTokenValid) {
@@ -4807,6 +4833,8 @@ function App() {
                         return;
                       }
                       setIsTelegramImporting(true);
+                      const ac = new AbortController();
+                      setTelegramAbortController(ac);
                       try {
                         await importTelegramPacks(telegramBotToken.trim(), packs, {
                           useAiNaming: !telegramKeepOriginalName,
@@ -4815,16 +4843,18 @@ function App() {
                           maxStickers: telegramMaxStickers,
                           splitPacks: telegramSplitPacks,
                           keepOriginalName: telegramKeepOriginalName,
+                          abortSignal: ac.signal,
                           onProgress: (p) => setTelegramProgress(p)
                         });
                       } catch (e: any) {
                         alert('Import error: ' + e.message);
                       } finally {
                         setIsTelegramImporting(false);
+                        setTelegramAbortController(null);
                       }
                     }}
                     disabled={isTelegramImporting || !telegramTokenValid}
-                    className="w-full py-4 bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 text-white rounded-2xl text-sm font-black uppercase tracking-wider transition-all disabled:opacity-50 shadow-lg shadow-sky-500/20"
+                    className="flex-1 py-4 bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 text-white rounded-2xl text-sm font-black uppercase tracking-wider transition-all disabled:opacity-50 shadow-lg shadow-sky-500/20"
                   >
                     {isTelegramImporting ? (
                       <span className="flex items-center justify-center gap-2">
@@ -4836,6 +4866,19 @@ function App() {
                       </span>
                     )}
                   </button>
+                  {isTelegramImporting && (
+                    <button
+                      onClick={() => {
+                        telegramAbortController?.abort();
+                      }}
+                      className="py-4 px-6 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white rounded-2xl text-sm font-black uppercase tracking-wider transition-all shadow-lg shadow-red-500/20"
+                    >
+                      <span className="flex items-center justify-center gap-2">
+                        <X size={16} /> Stop
+                      </span>
+                    </button>
+                  )}
+                  </div>
 
                   {/* Progress */}
                   {telegramProgress && (
@@ -4961,12 +5004,20 @@ function App() {
                           <RefreshCcw size={13} className={cn(draftLoading && "animate-spin")} /> Refresh
                         </button>
                         {draftPacks.length > 0 && (
+                          <>
+                          <button
+                            onClick={deleteAllDrafts}
+                            className="px-5 py-2.5 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-red-500/20 hover:translate-y-[-1px] transition-all flex items-center gap-2"
+                          >
+                            <Trash2 size={13} /> Delete All
+                          </button>
                           <button
                             onClick={publishAllDrafts}
                             className="px-5 py-2.5 bg-gradient-to-r from-violet-500 to-purple-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-violet-500/20 hover:translate-y-[-1px] transition-all flex items-center gap-2"
                           >
                             <Check size={13} /> Publish All
                           </button>
+                          </>
                         )}
                       </div>
                     </div>

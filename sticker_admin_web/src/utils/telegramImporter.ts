@@ -412,6 +412,7 @@ export async function importTelegramPacks(
         maxStickers?: number;
         splitPacks?: boolean;
         keepOriginalName?: boolean;
+        abortSignal?: AbortSignal;
         onProgress?: (progress: TelegramImportProgress) => void;
     } = {}
 ): Promise<TelegramCompletedPack[]> {
@@ -422,6 +423,7 @@ export async function importTelegramPacks(
         maxStickers = 0,
         splitPacks = true,
         keepOriginalName = true,
+        abortSignal,
         onProgress
     } = options;
     const completedPacks: TelegramCompletedPack[] = [];
@@ -429,6 +431,18 @@ export async function importTelegramPacks(
     const batchProcessedNames = new Set<string>(); // In-memory dedup within this batch
 
     for (let i = 0; i < packInputs.length; i++) {
+        // Check abort signal
+        if (abortSignal?.aborted) {
+            onProgress?.({
+                currentPack: i,
+                totalPacks: packInputs.length,
+                currentStep: `⛔ Import stopped! ${completedPacks.length} packs completed.`,
+                status: 'done',
+                completedPacks
+            });
+            return completedPacks;
+        }
+
         const input = packInputs[i].trim();
         if (!input) continue;
 
@@ -590,6 +604,8 @@ export async function importTelegramPacks(
                 const processedStickers: Sticker[] = [];
 
                 for (let j = 0; j < chunk.length; j++) {
+                    if (abortSignal?.aborted) break;
+
                     onProgress?.({
                         currentPack: i + 1,
                         totalPacks: packInputs.length,
