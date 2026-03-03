@@ -56,48 +56,30 @@ export interface TelegramCompletedPack {
 
 async function getStickerSet(botToken: string, setName: string): Promise<TelegramStickerSet> {
     const url = `${TELEGRAM_PROXY}?token=${encodeURIComponent(botToken)}&method=getStickerSet&name=${encodeURIComponent(setName)}`;
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 30000);
-    try {
-        const response = await fetch(url, { signal: controller.signal });
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.description || `Telegram API error: ${response.status}`);
-        }
-        const data = await response.json();
-        if (!data.ok) throw new Error(data.description || 'Failed to get sticker set');
-        return data.result;
-    } finally {
-        clearTimeout(timeout);
+    const response = await fetch(url);
+    if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.description || `Telegram API error: ${response.status}`);
     }
+    const data = await response.json();
+    if (!data.ok) throw new Error(data.description || 'Failed to get sticker set');
+    return data.result;
 }
 
 async function getFile(botToken: string, fileId: string): Promise<string> {
     const url = `${TELEGRAM_PROXY}?token=${encodeURIComponent(botToken)}&method=getFile&file_id=${encodeURIComponent(fileId)}`;
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 20000);
-    try {
-        const response = await fetch(url, { signal: controller.signal });
-        if (!response.ok) throw new Error(`getFile error: ${response.status}`);
-        const data = await response.json();
-        if (!data.ok) throw new Error(data.description || 'Failed to get file');
-        return data.result.file_path;
-    } finally {
-        clearTimeout(timeout);
-    }
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`getFile error: ${response.status}`);
+    const data = await response.json();
+    if (!data.ok) throw new Error(data.description || 'Failed to get file');
+    return data.result.file_path;
 }
 
 async function downloadTelegramFile(botToken: string, filePath: string): Promise<Blob> {
     const url = `${TELEGRAM_PROXY}?token=${encodeURIComponent(botToken)}&file_path=${encodeURIComponent(filePath)}`;
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 30000);
-    try {
-        const response = await fetch(url, { signal: controller.signal });
-        if (!response.ok) throw new Error(`Download failed: ${response.status}`);
-        return await response.blob();
-    } finally {
-        clearTimeout(timeout);
-    }
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`Download failed: ${response.status}`);
+    return await response.blob();
 }
 
 // ========== PACK NAME EXTRACTION ==========
@@ -604,94 +586,41 @@ export async function importTelegramPacks(
                     completedPacks
                 });
 
-                // Process stickers in this chunk
-                // Animated/video stickers MUST be sequential (FFmpeg WASM is single-threaded)
-                // Static stickers can be parallelized (just download + upload, no FFmpeg)
+                // Process stickers sequentially (FFmpeg WASM is single-threaded)
                 const processedStickers: Sticker[] = [];
 
-                if (isAnimatedPack) {
-                    // Sequential processing for animated — FFmpeg can only handle one at a time
-                    for (let j = 0; j < chunk.length; j++) {
+                for (let j = 0; j < chunk.length; j++) {
+                    onProgress?.({
+                        currentPack: i + 1,
+                        totalPacks: packInputs.length,
+                        currentStep: `${totalParts > 1 ? `[Part ${partNum}/${totalParts}] ` : ''}Processing sticker ${j + 1}/${chunk.length}`,
+                        packName,
+                        stickerProgress: { current: j, total: chunk.length },
+                        status: 'running',
+                        completedPacks
+                    });
+
+                    const globalIdx = partIdx * stickerLimit + j;
+                    const sticker = await processTelegramSticker(botToken, chunk[j], packId, globalIdx, (msg) => {
                         onProgress?.({
                             currentPack: i + 1,
                             totalPacks: packInputs.length,
-                            currentStep: `${totalParts > 1 ? `[Part ${partNum}/${totalParts}] ` : ''}Processing animated sticker ${j + 1}/${chunk.length}`,
+                            currentStep: msg,
                             packName,
                             stickerProgress: { current: j, total: chunk.length },
                             status: 'running',
                             completedPacks
                         });
+                    });
 
-                        const globalIdx = partIdx * stickerLimit + j;
-                        const sticker = await processTelegramSticker(botToken, chunk[j], packId, globalIdx, (msg) => {
-                            onProgress?.({
-                                currentPack: i + 1,
-                                totalPacks: packInputs.length,
-                                currentStep: msg,
-                                packName,
-                                stickerProgress: { current: j, total: chunk.length },
-                                status: 'running',
-                                completedPacks
-                            });
-                        });
-
-                        if (sticker) processedStickers.push(sticker);
-
+                    if (sticker) {
+                        processedStickers.push(sticker);
                         onProgress?.({
                             currentPack: i + 1,
                             totalPacks: packInputs.length,
-                            currentStep: `✓ ${processedStickers.length}/${chunk.length} stickers processed`,
+                            currentStep: `✓ Sticker ${processedStickers.length}/${chunk.length} done`,
                             packName,
                             stickerProgress: { current: j + 1, total: chunk.length },
-                            status: 'running',
-                            completedPacks
-                        });
-                    }
-                } else {
-                    // Parallel batches for static stickers (no FFmpeg needed)
-                    const BATCH_SIZE = 5;
-                    for (let batchStart = 0; batchStart < chunk.length; batchStart += BATCH_SIZE) {
-                        const batch = chunk.slice(batchStart, batchStart + BATCH_SIZE);
-
-                        onProgress?.({
-                            currentPack: i + 1,
-                            totalPacks: packInputs.length,
-                            currentStep: `${totalParts > 1 ? `[Part ${partNum}/${totalParts}] ` : ''}Downloading stickers ${batchStart + 1}-${Math.min(batchStart + BATCH_SIZE, chunk.length)}/${chunk.length}`,
-                            packName,
-                            stickerProgress: { current: processedStickers.length, total: chunk.length },
-                            status: 'running',
-                            completedPacks
-                        });
-
-                        const batchResults = await Promise.allSettled(
-                            batch.map((stickerItem, bIdx) => {
-                                const globalIdx = partIdx * stickerLimit + batchStart + bIdx;
-                                return processTelegramSticker(botToken, stickerItem, packId, globalIdx, (msg) => {
-                                    onProgress?.({
-                                        currentPack: i + 1,
-                                        totalPacks: packInputs.length,
-                                        currentStep: msg,
-                                        packName,
-                                        stickerProgress: { current: processedStickers.length + bIdx, total: chunk.length },
-                                        status: 'running',
-                                        completedPacks
-                                    });
-                                });
-                            })
-                        );
-
-                        for (const result of batchResults) {
-                            if (result.status === 'fulfilled' && result.value) {
-                                processedStickers.push(result.value);
-                            }
-                        }
-
-                        onProgress?.({
-                            currentPack: i + 1,
-                            totalPacks: packInputs.length,
-                            currentStep: `✓ ${processedStickers.length}/${chunk.length} stickers processed`,
-                            packName,
-                            stickerProgress: { current: processedStickers.length, total: chunk.length },
                             status: 'running',
                             completedPacks
                         });
