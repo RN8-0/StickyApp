@@ -31,7 +31,7 @@ class AppOpenAdManager(private val application: Application) :
         private const val PREFS_NAME = "app_open_ad_prefs"
         private const val KEY_LAST_SHOWN_DATE = "last_shown_date"
         private const val KEY_SHOWN_COUNT = "shown_count_today"
-        private const val MAX_SHOWS_PER_DAY = 3
+        private const val MAX_SHOWS_PER_DAY = 50 // Pratik olarak sınırsız
         private const val MIN_BACKGROUND_MS = 3000L // 3 saniye arka planda kaldıysa göster
     }
 

@@ -147,15 +147,27 @@ class MainActivity : AppCompatActivity() {
     // Session-based rank caching to prevent jumping list order when favorites update
     private val sessionRankScores = mutableMapOf<String, Double>()
     
+    // Cache parsed dates to avoid repeated SimpleDateFormat.parse() in sort loops
+    private val parsedDateCache = mutableMapOf<String, Long>()
+    
     // Debounce applyFilters to prevent excessive calls
     private var filterJob: Job? = null
     
     // Deterministic Random Seed for Session
     private val sessionSeed = System.currentTimeMillis()
+    
+    // Cached format instance (only used on Default dispatcher — single thread safe)
+    private val rankDateFormat = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
 
     private fun getOrCalculateRankScore(pack: Pack): Double {
         return sessionRankScores.getOrPut(pack.id) {
             calculateRankScore(pack)
+        }
+    }
+
+    private fun parseDateCached(dateStr: String): Long {
+        return parsedDateCache.getOrPut(dateStr) {
+            try { rankDateFormat.parse(dateStr)?.time ?: 0L } catch (_: Exception) { 0L }
         }
     }
 
@@ -185,21 +197,18 @@ class MainActivity : AppCompatActivity() {
         // 3. Time Decay (YouTube-style exponential decay with freshness boost)
         var ageMultiplier = 1.0
         if (pack.createdAt.isNotEmpty()) {
-            try {
-                val format = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
-                val createdDate = format.parse(pack.createdAt)
-                if (createdDate != null) {
-                    val diffHours = (currentTime - createdDate.time).toDouble() / (1000 * 60 * 60)
-                    val diffDays = diffHours / 24.0
-                    when {
-                        diffDays <= 2 -> ageMultiplier = 4.0    // Brand new: strong boost
-                        diffDays <= 7 -> ageMultiplier = 2.5    // This week: good boost
-                        diffDays <= 14 -> ageMultiplier = 1.5   // Recent: mild boost
-                        diffDays <= 30 -> ageMultiplier = 1.0   // Normal
-                        else -> ageMultiplier = 0.85            // Older: slight decay
-                    }
+            val createdTime = parseDateCached(pack.createdAt)
+            if (createdTime > 0) {
+                val diffHours = (currentTime - createdTime).toDouble() / (1000 * 60 * 60)
+                val diffDays = diffHours / 24.0
+                when {
+                    diffDays <= 2 -> ageMultiplier = 4.0    // Brand new: strong boost
+                    diffDays <= 7 -> ageMultiplier = 2.5    // This week: good boost
+                    diffDays <= 14 -> ageMultiplier = 1.5   // Recent: mild boost
+                    diffDays <= 30 -> ageMultiplier = 1.0   // Normal
+                    else -> ageMultiplier = 0.85            // Older: slight decay
                 }
-            } catch (_: Exception) {}
+            }
         }
 
         // 4. Diversity bonus (animated/premium get slight variety boost)
@@ -2037,11 +2046,8 @@ Rules:
 
     override fun onResume() {
         super.onResume()
-        
-        // Preload maker ad (deferred to avoid blocking)
-        AdManager.preloadMakerNativeAd(this)
 
-        // WhatsApp installation status
+        // WhatsApp installation status (runs on IO with 500ms delay, lightweight)
         checkInstallationUpdates()
         
         startAutoScroll()
@@ -2051,8 +2057,8 @@ Rules:
             aiContentContainer?.post { aiLoadHistory() }
         }
 
-        // Only reload custom packs if we have data and user is on a relevant tab
-        if (::adapter.isInitialized && (currentFilter == FilterType.CUSTOM || currentFilter == FilterType.ALL)) {
+        // Only reload custom packs if user is specifically on CUSTOM tab
+        if (::adapter.isInitialized && currentFilter == FilterType.CUSTOM) {
             lifecycleScope.launch {
                 val updatedPacks = withContext(Dispatchers.IO) {
                     val customPacks = CustomStickerManager.getCustomPacks(this@MainActivity).mapNotNull { cp ->
