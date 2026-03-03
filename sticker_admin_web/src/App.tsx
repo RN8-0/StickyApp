@@ -392,6 +392,7 @@ function App() {
   const [draftEditData, setDraftEditData] = useState<Partial<StickerPack>>({});
   const [draftPublishing, setDraftPublishing] = useState<string | null>(null);
   const [draftDeleting, setDraftDeleting] = useState<string | null>(null);
+  const [deleteAllProgress, setDeleteAllProgress] = useState<{ current: number; total: number } | null>(null);
   const [draftPreviewSticker, setDraftPreviewSticker] = useState<{ url: string, title?: string } | null>(null);
   const [draftDragIdx, setDraftDragIdx] = useState<number | null>(null);
   const [draftDragOverIdx, setDraftDragOverIdx] = useState<number | null>(null);
@@ -748,15 +749,19 @@ function App() {
   const deleteAllDrafts = async () => {
     if (draftPacks.length === 0) return;
     if (!window.confirm(`⚠️ Delete ALL ${draftPacks.length} drafts? This cannot be undone!`)) return;
+    const total = draftPacks.length;
     let deleted = 0;
-    for (const draft of draftPacks) {
+    setDeleteAllProgress({ current: 0, total });
+
+    for (let i = 0; i < draftPacks.length; i++) {
+      const draft = draftPacks[i];
+      setDeleteAllProgress({ current: i, total });
+      setDraftDeleting(draft.id);
       try {
         try {
           const folderRef = ref(storage, `stickers/${draft.id}`);
           const fileList = await listAll(folderRef);
-          for (const item of fileList.items) {
-            await deleteObject(item);
-          }
+          await Promise.all(fileList.items.map(item => deleteObject(item)));
         } catch (e) { console.log('Storage delete:', e); }
         await deleteDoc(doc(db, 'draft_stickers', draft.id));
         deleted++;
@@ -764,9 +769,12 @@ function App() {
         console.error(`Delete error (${draft.name}):`, error);
       }
     }
+
+    setDeleteAllProgress(null);
+    setDraftDeleting(null);
     setDraftPacks([]);
     setSelectedDraft(null);
-    alert(`🗑️ ${deleted}/${draftPacks.length} drafts deleted!`);
+    alert(`🗑️ ${deleted}/${total} drafts deleted!`);
   };
 
   const deleteDraftPack = async (draft: StickerPack) => {
@@ -5007,7 +5015,8 @@ function App() {
                           <>
                           <button
                             onClick={deleteAllDrafts}
-                            className="px-5 py-2.5 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-red-500/20 hover:translate-y-[-1px] transition-all flex items-center gap-2"
+                            disabled={!!deleteAllProgress}
+                            className="px-5 py-2.5 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-red-500/20 hover:translate-y-[-1px] transition-all flex items-center gap-2 disabled:opacity-50"
                           >
                             <Trash2 size={13} /> Delete All
                           </button>
@@ -5022,6 +5031,34 @@ function App() {
                       </div>
                     </div>
                   </div>
+
+                  {/* Delete All Progress */}
+                  {deleteAllProgress && (
+                    <div className="glass rounded-2xl p-5 border border-red-500/20 space-y-3 bg-gradient-to-br from-red-500/5 to-red-600/5">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <Trash2 size={16} className="text-red-400 animate-pulse" />
+                          <span className="text-sm font-black text-white">
+                            Deleting {deleteAllProgress.current + 1}/{deleteAllProgress.total}
+                          </span>
+                        </div>
+                        <span className="text-lg font-black text-red-400">
+                          {Math.round(((deleteAllProgress.current + 1) / deleteAllProgress.total) * 100)}%
+                        </span>
+                      </div>
+                      <div className="w-full bg-white/5 rounded-full h-3 overflow-hidden">
+                        <div
+                          className="h-full bg-gradient-to-r from-red-500 to-red-600 rounded-full transition-all duration-300"
+                          style={{ width: `${Math.max(2, ((deleteAllProgress.current + 1) / deleteAllProgress.total) * 100)}%` }}
+                        />
+                      </div>
+                      {draftDeleting && (
+                        <p className="text-[10px] text-red-300/70 truncate">
+                          🗑️ {draftPacks.find(d => d.id === draftDeleting)?.name || draftDeleting}
+                        </p>
+                      )}
+                    </div>
+                  )}
 
                   {draftLoading ? (
                     <div className="flex items-center justify-center py-24">
