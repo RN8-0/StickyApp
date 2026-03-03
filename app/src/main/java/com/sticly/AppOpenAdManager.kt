@@ -3,6 +3,10 @@ package com.sticly
 import android.app.Activity
 import android.app.Application
 import android.os.Bundle
+import android.util.Log
+import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.ProcessLifecycleOwner
 import com.google.android.gms.ads.AdError
 import com.google.android.gms.ads.AdRequest
 import com.google.android.gms.ads.FullScreenContentCallback
@@ -11,17 +15,24 @@ import com.google.android.gms.ads.appopen.AppOpenAd
 
 /**
  * App Open Ad Manager
- * Günde bir kez, 3. paket açılışında reklam gösterir.
- * Premium kullanıcılara reklam gösterilmez.
+ * - Uygulama arka plandan ön plana geldiğinde reklam gösterir (cold start dahil)
+ * - Ayrıca 3. paket açılışında da tetiklenebilir (tryShowAd)
+ * - Arka minimum süre: 3 saniye (kısa geçişlerde reklam göstermez)
+ * - Günde maksimum 3 kez gösterir
+ * - Premium kullanıcılara reklam gösterilmez
  */
 class AppOpenAdManager(private val application: Application) :
-    Application.ActivityLifecycleCallbacks {
+    Application.ActivityLifecycleCallbacks, DefaultLifecycleObserver {
 
     companion object {
+        private const val TAG = "AppOpenAd"
         private const val AD_UNIT_ID = "ca-app-pub-1522897791319993/7665306671"
         private const val AD_EXPIRY_MS = 4 * 60 * 60 * 1000L
         private const val PREFS_NAME = "app_open_ad_prefs"
         private const val KEY_LAST_SHOWN_DATE = "last_shown_date"
+        private const val KEY_SHOWN_COUNT = "shown_count_today"
+        private const val MAX_SHOWS_PER_DAY = 3
+        private const val MIN_BACKGROUND_MS = 3000L // 3 saniye arka planda kaldıysa göster
     }
 
     private var appOpenAd: AppOpenAd? = null
@@ -29,22 +40,45 @@ class AppOpenAdManager(private val application: Application) :
     private var isShowingAd = false
     private var loadTime = 0L
     private var currentActivity: Activity? = null
-    private var shownToday = false
+    private var backgroundTime = 0L
+    private var shownCountToday = 0
 
     fun init() {
         application.registerActivityLifecycleCallbacks(this)
-        // Check if already shown today
+        ProcessLifecycleOwner.get().lifecycle.addObserver(this)
+
+        // Bugün kaç kez gösterildiğini kontrol et
         val prefs = application.getSharedPreferences(PREFS_NAME, 0)
         val lastDate = prefs.getString(KEY_LAST_SHOWN_DATE, "") ?: ""
         val today = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
-        shownToday = lastDate == today
+        shownCountToday = if (lastDate == today) prefs.getInt(KEY_SHOWN_COUNT, 0) else 0
+
         loadAd()
     }
 
     /** Called from MainActivity when user opens 3rd pack */
     fun tryShowAd() {
-        if (shownToday) return
+        if (shownCountToday >= MAX_SHOWS_PER_DAY) return
         showAdIfAvailable()
+    }
+
+    // ProcessLifecycleOwner: Uygulama arka plana gitti
+    override fun onStop(owner: LifecycleOwner) {
+        backgroundTime = System.currentTimeMillis()
+        Log.d(TAG, "App went to background")
+    }
+
+    // ProcessLifecycleOwner: Uygulama ön plana geldi
+    override fun onStart(owner: LifecycleOwner) {
+        val elapsed = System.currentTimeMillis() - backgroundTime
+        Log.d(TAG, "App came to foreground, background time: ${elapsed}ms")
+
+        // Minimum süre kontrolü (çok kısa geçişlerde gösterme)
+        if (backgroundTime > 0 && elapsed >= MIN_BACKGROUND_MS) {
+            if (shownCountToday < MAX_SHOWS_PER_DAY) {
+                showAdIfAvailable()
+            }
+        }
     }
 
     private fun loadAd() {
@@ -60,10 +94,12 @@ class AppOpenAdManager(private val application: Application) :
                     appOpenAd = ad
                     isLoadingAd = false
                     loadTime = System.currentTimeMillis()
+                    Log.d(TAG, "App open ad loaded")
                 }
 
                 override fun onAdFailedToLoad(error: LoadAdError) {
                     isLoadingAd = false
+                    Log.d(TAG, "App open ad failed to load: ${error.message}")
                 }
             })
     }
@@ -78,7 +114,7 @@ class AppOpenAdManager(private val application: Application) :
 
     private fun showAdIfAvailable() {
         if (isShowingAd) return
-        if (shownToday) return
+        if (shownCountToday >= MAX_SHOWS_PER_DAY) return
         if (PreferencesHelper.isPremium(application)) return
 
         val activity = currentActivity ?: return
@@ -96,7 +132,7 @@ class AppOpenAdManager(private val application: Application) :
             override fun onAdDismissedFullScreenContent() {
                 appOpenAd = null
                 isShowingAd = false
-                loadAd()
+                loadAd() // Hemen sonrakini yükle
             }
 
             override fun onAdFailedToShowFullScreenContent(error: AdError) {
@@ -107,10 +143,14 @@ class AppOpenAdManager(private val application: Application) :
 
             override fun onAdShowedFullScreenContent() {
                 isShowingAd = true
-                shownToday = true
+                shownCountToday++
                 val prefs = application.getSharedPreferences(PREFS_NAME, 0)
                 val today = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
-                prefs.edit().putString(KEY_LAST_SHOWN_DATE, today).apply()
+                prefs.edit()
+                    .putString(KEY_LAST_SHOWN_DATE, today)
+                    .putInt(KEY_SHOWN_COUNT, shownCountToday)
+                    .apply()
+                Log.d(TAG, "App open ad shown ($shownCountToday/$MAX_SHOWS_PER_DAY today)")
             }
         }
 
