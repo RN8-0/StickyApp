@@ -638,6 +638,7 @@ export async function importTelegramPacks(
 
                 // Process stickers sequentially (FFmpeg WASM is single-threaded)
                 const processedStickers: Sticker[] = [];
+                const processedIsAnimated: boolean[] = []; // Track if each sticker is animated
 
                 for (let j = 0; j < chunk.length; j++) {
                     if (abortSignal?.aborted) break;
@@ -667,6 +668,7 @@ export async function importTelegramPacks(
 
                     if (sticker) {
                         processedStickers.push(sticker);
+                        processedIsAnimated.push(chunk[j].is_animated || chunk[j].is_video);
                         onProgress?.({
                             currentPack: i + 1,
                             totalPacks: packInputs.length,
@@ -690,6 +692,55 @@ export async function importTelegramPacks(
                     continue;
                 }
 
+                // WhatsApp requires packs to be either ALL animated or ALL static
+                // Determine actual pack type based on processed stickers
+                const animatedCount = processedIsAnimated.filter(Boolean).length;
+                const staticCount = processedStickers.length - animatedCount;
+                let finalStickers = processedStickers;
+                let finalIsAnimated = isAnimatedPack;
+
+                if (animatedCount > 0 && staticCount > 0) {
+                    // Mixed pack! Keep the majority type, skip the minority
+                    if (animatedCount >= staticCount) {
+                        finalStickers = processedStickers.filter((_, idx) => processedIsAnimated[idx]);
+                        finalIsAnimated = true;
+                        console.log(`[TELEGRAM] Mixed pack: keeping ${animatedCount} animated, dropping ${staticCount} static`);
+                        onProgress?.({
+                            currentPack: i + 1,
+                            totalPacks: packInputs.length,
+                            currentStep: `⚠️ Mixed pack detected: keeping ${animatedCount} animated, skipping ${staticCount} static`,
+                            packName,
+                            status: 'running',
+                            completedPacks
+                        });
+                    } else {
+                        finalStickers = processedStickers.filter((_, idx) => !processedIsAnimated[idx]);
+                        finalIsAnimated = false;
+                        console.log(`[TELEGRAM] Mixed pack: keeping ${staticCount} static, dropping ${animatedCount} animated`);
+                        onProgress?.({
+                            currentPack: i + 1,
+                            totalPacks: packInputs.length,
+                            currentStep: `⚠️ Mixed pack detected: keeping ${staticCount} static, skipping ${animatedCount} animated`,
+                            packName,
+                            status: 'running',
+                            completedPacks
+                        });
+                    }
+                } else {
+                    finalIsAnimated = animatedCount > 0;
+                }
+
+                if (finalStickers.length === 0) {
+                    onProgress?.({
+                        currentPack: i + 1,
+                        totalPacks: packInputs.length,
+                        currentStep: `⚠️ No compatible stickers for "${packName}" after filtering`,
+                        status: 'running',
+                        completedPacks
+                    });
+                    continue;
+                }
+
                 // Create tray
                 onProgress?.({
                     currentPack: i + 1,
@@ -700,7 +751,7 @@ export async function importTelegramPacks(
                     completedPacks
                 });
 
-                const { trayUrl, trayFile } = await createTrayFromSticker(processedStickers, packId);
+                const { trayUrl, trayFile } = await createTrayFromSticker(finalStickers, packId);
 
                 // Save to Firestore
                 onProgress?.({
@@ -721,15 +772,15 @@ export async function importTelegramPacks(
                     license_agreement_website: '',
                     category,
                     is_premium: false,
-                    is_animated: isAnimatedPack,
+                    is_animated: finalIsAnimated,
                     download_count: 0,
                     fake_download_base: Math.floor(Math.random() * 7001) + 3000,
                     view_count: 0,
                     favorite_count: 0,
-                    sticker_count: processedStickers.length,
+                    sticker_count: finalStickers.length,
                     image_data_version: Date.now().toString(),
                     is_active: true,
-                    stickers: processedStickers,
+                    stickers: finalStickers,
                     tray_url: trayUrl,
                     tray_image_file: trayFile,
                     created_at: serverTimestamp(),
@@ -746,20 +797,20 @@ export async function importTelegramPacks(
                 completedPacks.push({
                     id: packId,
                     name: packName,
-                    stickerCount: processedStickers.length,
+                    stickerCount: finalStickers.length,
                     telegramName: setName
                 });
 
                 onProgress?.({
                     currentPack: i + 1,
                     totalPacks: packInputs.length,
-                    currentStep: `✅ "${packName}" imported! (${processedStickers.length} stickers)`,
+                    currentStep: `✅ "${packName}" imported! (${finalStickers.length} ${finalIsAnimated ? 'animated' : 'static'} stickers)`,
                     packName,
                     status: 'running',
                     completedPacks
                 });
 
-                console.log(`[TELEGRAM] ✅ Imported: ${packName} (${processedStickers.length} stickers from @${setName})`);
+                console.log(`[TELEGRAM] ✅ Imported: ${packName} (${finalStickers.length} ${finalIsAnimated ? 'animated' : 'static'} stickers from @${setName})`);
             }
 
             batchProcessedNames.add(setName.toLowerCase());
