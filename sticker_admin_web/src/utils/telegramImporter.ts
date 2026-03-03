@@ -715,8 +715,7 @@ export async function importTelegramPacks(
                     batch_search_term: setName,
                     telegram_set_name: setName,
                     telegram_set_title: stickerSet.title,
-                    telegram_part: totalParts > 1 ? partNum : undefined,
-                    telegram_total_parts: totalParts > 1 ? totalParts : undefined
+                    ...(totalParts > 1 ? { telegram_part: partNum, telegram_total_parts: totalParts } : {})
                 };
 
                 await setDoc(doc(db, 'draft_stickers', packId), packData);

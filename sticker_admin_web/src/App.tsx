@@ -69,7 +69,8 @@ import {
   Smartphone,
   Zap,
   List,
-  Star
+  Star,
+  AlertTriangle
 } from 'lucide-react';
 import { translateTextAllLanguages, TARGET_LANGUAGES } from './utils/translator';
 import {
@@ -4659,17 +4660,25 @@ function App() {
 
                   {/* Pack URLs Input */}
                   <div className="glass rounded-2xl p-4 border border-white/5 space-y-2">
-                    <label className="text-[10px] font-black text-textSec uppercase tracking-widest flex items-center gap-2">
-                      <List size={10} className="text-sky-400" />
-                      Sticker Pack Links
-                    </label>
+                    <div className="flex items-center justify-between">
+                      <label className="text-[10px] font-black text-textSec uppercase tracking-widest flex items-center gap-2">
+                        <List size={10} className="text-sky-400" />
+                        Sticker Pack Links
+                      </label>
+                      {telegramPacksInput.trim() && (
+                        <span className="text-[10px] font-black text-sky-400 bg-sky-500/10 px-2 py-0.5 rounded-full">
+                          {telegramPacksInput.split('\n').map(s => s.trim()).filter(Boolean).length} packs
+                        </span>
+                      )}
+                    </div>
                     <textarea
                       value={telegramPacksInput}
                       onChange={(e) => setTelegramPacksInput(e.target.value)}
-                      placeholder={"Enter Telegram sticker pack links, one per line...\ne.g:\nhttps://t.me/addstickers/AnimatedCats\nhttps://t.me/addstickers/CoolDogs\nPepeAnimated"}
-                      rows={5}
+                      placeholder={"Paste Telegram sticker pack links, one per line...\n\nhttps://t.me/addstickers/AnimatedCats\nhttps://t.me/addstickers/CoolDogs\nhttps://t.me/addstickers/FunnyMemes\nhttps://t.me/addstickers/CuteAnimals"}
+                      rows={7}
                       className="w-full bg-card/60 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-medium outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500/50 transition-all resize-none placeholder:text-white/15"
                     />
+                    <p className="text-[9px] text-textSec">💡 Paste multiple links at once — they will all be imported in parallel</p>
                   </div>
 
                   {/* Directory links — single row of small icon buttons */}
@@ -4764,13 +4773,14 @@ function App() {
                       </div>
                     </div>
 
-                    <p className="text-[9px] text-textSec">
-                      {telegramMaxStickers > 0 ? `First ${telegramMaxStickers} stickers will be downloaded. ` : ''}
-                      {telegramSplitPacks
-                        ? `Split into packs of ${telegramStickerLimit} each.`
-                        : `Saved as a single pack (max 30 for WhatsApp).`
-                      }
-                    </p>
+                    <div className="p-3 bg-sky-500/5 rounded-xl border border-sky-500/10">
+                      <p className="text-[10px] text-sky-300 font-bold">
+                        📋 {telegramMaxStickers > 0 ? `Download first ${telegramMaxStickers} stickers from each pack` : '⚠️ Set max stickers count!'} → {telegramSplitPacks
+                          ? `Split into packs of ${telegramStickerLimit}`
+                          : `Single pack (max 30)`
+                        } → {telegramKeepOriginalName ? 'Keep Telegram names' : 'AI-generated names'}
+                      </p>
+                    </div>
                     {!telegramSplitPacks && telegramStickerLimit > 30 && (
                       <p className="text-[9px] text-red-400 font-bold">⚠️ WhatsApp supports max 30 stickers per pack! Please reduce "Stickers per Pack" to 30 or less.</p>
                     )}
@@ -4829,47 +4839,99 @@ function App() {
 
                   {/* Progress */}
                   {telegramProgress && (
-                    <div className="glass rounded-2xl p-5 border border-white/5 space-y-3">
+                    <div className="glass rounded-2xl p-6 border border-sky-500/20 space-y-4 bg-gradient-to-br from-sky-500/5 to-blue-500/5">
+                      {/* Header */}
                       <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-white">
-                          Pack {telegramProgress.currentPack}/{telegramProgress.totalPacks}
-                        </span>
-                        {telegramProgress.packName && (
-                          <span className="text-[10px] text-sky-400 font-bold">{telegramProgress.packName}</span>
+                        <div className="flex items-center gap-3">
+                          <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center",
+                            telegramProgress.status === 'done' ? "bg-green-500/20" : telegramProgress.status === 'error' ? "bg-red-500/20" : "bg-sky-500/20"
+                          )}>
+                            {telegramProgress.status === 'done' ? (
+                              <Check size={18} className="text-green-400" />
+                            ) : telegramProgress.status === 'error' ? (
+                              <AlertTriangle size={18} className="text-red-400" />
+                            ) : (
+                              <RefreshCcw size={18} className="text-sky-400 animate-spin" />
+                            )}
+                          </div>
+                          <div>
+                            <h4 className="text-sm font-black text-white">
+                              {telegramProgress.status === 'done' ? 'Import Complete' : `Importing Pack ${telegramProgress.currentPack}/${telegramProgress.totalPacks}`}
+                            </h4>
+                            {telegramProgress.packName && (
+                              <p className="text-xs text-sky-400 font-bold mt-0.5">{telegramProgress.packName}</p>
+                            )}
+                          </div>
+                        </div>
+                        {telegramProgress.stickerProgress && (
+                          <span className="text-lg font-black text-white">
+                            {Math.round((telegramProgress.stickerProgress.current / telegramProgress.stickerProgress.total) * 100)}%
+                          </span>
                         )}
                       </div>
+
+                      {/* Progress Bar */}
                       {telegramProgress.stickerProgress ? (
-                        <div className="space-y-1">
-                          <div className="flex items-center justify-between text-[10px] text-textSec font-bold">
-                            <span>Sticker {telegramProgress.stickerProgress.current}/{telegramProgress.stickerProgress.total}</span>
-                            <span>{Math.round((telegramProgress.stickerProgress.current / telegramProgress.stickerProgress.total) * 100)}%</span>
-                          </div>
-                          <div className="w-full bg-white/5 rounded-full h-2.5">
+                        <div className="space-y-2">
+                          <div className="w-full bg-white/5 rounded-full h-3 overflow-hidden">
                             <div
-                              className="h-full bg-gradient-to-r from-sky-500 to-blue-500 rounded-full transition-all duration-300"
-                              style={{ width: `${(telegramProgress.stickerProgress.current / telegramProgress.stickerProgress.total) * 100}%` }}
+                              className="h-full bg-gradient-to-r from-sky-500 to-blue-500 rounded-full transition-all duration-500 ease-out"
+                              style={{ width: `${Math.max(2, (telegramProgress.stickerProgress.current / telegramProgress.stickerProgress.total) * 100)}%` }}
                             />
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] text-textSec font-bold">
+                              {telegramProgress.stickerProgress.current} / {telegramProgress.stickerProgress.total} stickers
+                            </span>
+                            <span className="text-[10px] text-textSec">{telegramProgress.currentStep}</span>
                           </div>
                         </div>
                       ) : (
-                        <div className="w-full bg-white/5 rounded-full h-2.5">
-                          <div
-                            className="h-full bg-gradient-to-r from-sky-500 to-blue-500 rounded-full transition-all duration-300"
-                            style={{ width: `${(telegramProgress.currentPack / telegramProgress.totalPacks) * 100}%` }}
-                          />
+                        <div className="space-y-2">
+                          <div className="w-full bg-white/5 rounded-full h-3 overflow-hidden">
+                            <div
+                              className="h-full bg-gradient-to-r from-sky-500 to-blue-500 rounded-full transition-all duration-500"
+                              style={{ width: `${Math.max(2, (telegramProgress.currentPack / telegramProgress.totalPacks) * 100)}%` }}
+                            />
+                          </div>
+                          <p className="text-[10px] text-textSec font-medium">{telegramProgress.currentStep}</p>
                         </div>
                       )}
-                      <p className="text-[10px] text-textSec">{telegramProgress.currentStep}</p>
 
+                      {/* Current step detail */}
+                      {telegramProgress.status === 'running' && (
+                        <div className="flex items-center gap-2 px-3 py-2 bg-white/5 rounded-lg">
+                          <div className="w-1.5 h-1.5 bg-sky-400 rounded-full animate-pulse" />
+                          <span className="text-[10px] text-white/70 font-medium truncate">{telegramProgress.currentStep}</span>
+                        </div>
+                      )}
+
+                      {/* Completed Packs List */}
                       {telegramProgress.completedPacks?.length > 0 && (
-                        <div className="space-y-1.5 mt-3 max-h-48 overflow-y-auto">
-                          {telegramProgress.completedPacks.map((p: any) => (
-                            <div key={p.id} className="flex items-center gap-2 p-2 bg-green-500/10 rounded-lg">
-                              <Check size={12} className="text-green-400" />
-                              <span className="text-[10px] text-white font-bold flex-1">{p.name}</span>
-                              <span className="text-[10px] text-green-400">{p.stickerCount} stickers</span>
-                            </div>
-                          ))}
+                        <div className="space-y-2">
+                          <span className="text-[10px] font-black text-textSec uppercase tracking-widest">
+                            ✅ Completed ({telegramProgress.completedPacks.length})
+                          </span>
+                          <div className="space-y-1.5 max-h-60 overflow-y-auto">
+                            {telegramProgress.completedPacks.map((p: any) => (
+                              <div key={p.id} className="flex items-center gap-3 p-3 bg-green-500/10 rounded-xl border border-green-500/10">
+                                <Check size={14} className="text-green-400 shrink-0" />
+                                <div className="flex-1 min-w-0">
+                                  <span className="text-xs text-white font-bold block truncate">{p.name}</span>
+                                  <span className="text-[10px] text-green-400/70">@{p.telegramName}</span>
+                                </div>
+                                <span className="text-xs text-green-400 font-black shrink-0">{p.stickerCount} stickers</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Error display */}
+                      {telegramProgress.error && (
+                        <div className="flex items-start gap-2 p-3 bg-red-500/10 rounded-xl border border-red-500/20">
+                          <AlertTriangle size={14} className="text-red-400 shrink-0 mt-0.5" />
+                          <span className="text-xs text-red-300 font-medium">{telegramProgress.error}</span>
                         </div>
                       )}
                     </div>
