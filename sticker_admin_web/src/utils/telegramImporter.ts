@@ -77,9 +77,18 @@ async function getFile(botToken: string, fileId: string): Promise<string> {
 
 async function downloadTelegramFile(botToken: string, filePath: string): Promise<Blob> {
     const url = `${TELEGRAM_PROXY}?token=${encodeURIComponent(botToken)}&file_path=${encodeURIComponent(filePath)}`;
-    const response = await fetch(url);
-    if (!response.ok) throw new Error(`Download failed: ${response.status}`);
-    return await response.blob();
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30000);
+    try {
+        const response = await fetch(url, { signal: controller.signal });
+        clearTimeout(timeout);
+        if (!response.ok) throw new Error(`Download error: ${response.status}`);
+        return await response.blob();
+    } catch (e: any) {
+        clearTimeout(timeout);
+        if (e.name === 'AbortError') throw new Error('File download timeout (30s)');
+        throw e;
+    }
 }
 
 // ========== PACK NAME EXTRACTION ==========
@@ -279,6 +288,25 @@ async function checkDuplicatePack(setName: string): Promise<{ exists: boolean; l
 // ========== STICKER PROCESSING ==========
 
 async function processTelegramSticker(
+    botToken: string,
+    sticker: TelegramSticker,
+    packId: string,
+    index: number,
+    onProgress?: (msg: string) => void
+): Promise<Sticker | null> {
+    // Per-sticker timeout: 90s for animated/video, 30s for static
+    const timeoutMs = (sticker.is_animated || sticker.is_video) ? 90000 : 30000;
+    return Promise.race([
+        processTelegramStickerInner(botToken, sticker, packId, index, onProgress),
+        new Promise<null>((resolve) => setTimeout(() => {
+            console.warn(`[TELEGRAM] Sticker #${index + 1} timed out after ${timeoutMs / 1000}s`);
+            onProgress?.(`⏱️ Sticker #${index + 1} timed out, skipping...`);
+            resolve(null);
+        }, timeoutMs))
+    ]);
+}
+
+async function processTelegramStickerInner(
     botToken: string,
     sticker: TelegramSticker,
     packId: string,

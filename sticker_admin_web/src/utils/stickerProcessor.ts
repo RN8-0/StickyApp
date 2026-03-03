@@ -76,10 +76,14 @@ class StickerProcessor {
         this.loadPromise = (async () => {
             this.ffmpeg = new FFmpeg();
             const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm';
-            await this.ffmpeg.load({
-                coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
-                wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
-            });
+            const loadWithTimeout = Promise.race([
+                this.ffmpeg.load({
+                    coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
+                    wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+                }),
+                new Promise<never>((_, reject) => setTimeout(() => reject(new Error('FFmpeg load timeout (30s)')), 30000))
+            ]);
+            await loadWithTimeout;
             this.isLoaded = true;
             this.isLoading = false;
         })();
@@ -92,6 +96,7 @@ class StickerProcessor {
         this.isLoaded = false;
         this.isLoading = false;
         this.loadPromise = null;
+        try { this.ffmpeg?.terminate(); } catch {}
         this.ffmpeg = null;
         return this.load();
     }
@@ -102,45 +107,43 @@ class StickerProcessor {
     }
 
     /**
-     * Statik görsel işleme
+     * Static image processing
      */
     async processStatic(file: File, onProgress?: (p: StickerProgress) => void): Promise<Blob> {
-        onProgress?.({ message: 'Arka plan siliniyor...', percentage: 20 });
+        onProgress?.({ message: 'Removing background...', percentage: 20 });
 
         const removedBgBlob = await removeBackground(file, {
             progress: (message: string) => {
-                onProgress?.({ message: `Arka plan siliniyor: ${message}`, percentage: 80 });
+                onProgress?.({ message: `Removing background: ${message}`, percentage: 80 });
             }
         });
 
-        onProgress?.({ message: 'Boyutlandırılıyor...', percentage: 90 });
+        onProgress?.({ message: 'Resizing...', percentage: 90 });
         return this.resizeAndCenter(removedBgBlob);
     }
 
     /**
-     * GIF işleme - FFmpeg ile doğrudan WebP'ye çevir (en güvenilir yöntem)
+     * GIF processing - FFmpeg direct WebP conversion
      */
     private async processGifFrames(file: File, onProgress?: (p: StickerProgress) => void): Promise<Blob> {
         await this.load();
-        onProgress?.({ message: 'GIF analiz ediliyor...', percentage: 10 });
+        onProgress?.({ message: 'Analyzing GIF...', percentage: 10 });
 
-        // FFmpeg ile doğrudan dönüştür (en güvenilir)
         return this.processGifWithFFmpeg(file, onProgress);
     }
 
     /**
-     * FFmpeg ile GIF→WebP dönüşümü - ORİJİNAL FPS VE ZAMANLAMA KORUNUR
-     * HIZLI: Büyük dosyalar için düşük kaliteden başla
+     * FFmpeg GIF→WebP conversion - preserves original FPS and timing
      */
     private async processGifWithFFmpeg(file: File, onProgress?: (p: StickerProgress) => void): Promise<Blob> {
         const ffmpeg = this.ffmpeg!;
         const inputName = `input_${Date.now()}.gif`;
         const outputName = 'output.webp';
 
-        onProgress?.({ message: 'GIF yükleniyor...', percentage: 15 });
+        onProgress?.({ message: 'Loading GIF...', percentage: 15 });
         await ffmpeg.writeFile(inputName, await fetchFile(file));
 
-        onProgress?.({ message: 'WebP oluşturuluyor...', percentage: 30 });
+        onProgress?.({ message: 'Creating WebP...', percentage: 30 });
 
         let blob: Blob | null = null;
 
@@ -182,37 +185,37 @@ class StickerProcessor {
             blob = new Blob([new Uint8Array(data)], { type: 'image/webp' });
 
             if (blob.size <= MAX_ANIMATED_SIZE) {
-                onProgress?.({ message: `Tamamlandı! (${Math.round(blob.size / 1024)}KB)`, percentage: 100 });
+                onProgress?.({ message: `Done! (${Math.round(blob.size / 1024)}KB)`, percentage: 100 });
                 break;
             }
 
-            onProgress?.({ message: `Sıkıştırılıyor (q:${q})...`, percentage: 50 + Math.round((50 - q) / 45 * 40) });
+            onProgress?.({ message: `Compressing (q:${q})...`, percentage: 50 + Math.round((50 - q) / 45 * 40) });
         }
 
-        // Temizlik
+        // Cleanup
         try { await ffmpeg.deleteFile(inputName); } catch { }
         try { await ffmpeg.deleteFile(outputName); } catch { }
 
         if (!blob) {
-            throw new Error('GIF işlenemedi');
+            throw new Error('GIF processing failed');
         }
 
         return blob;
     }
 
     /**
-     * ffmpeg ile WhatsApp uyumlu animated WebP oluştur - HIZLI YÖNTEM
+     * Create WhatsApp-compatible animated WebP from frames
      */
     private async createWebPFromFrames(frameCount: number, onProgress?: (p: StickerProgress) => void, fps: number = DEFAULT_FPS): Promise<Blob> {
         const ffmpeg = this.ffmpeg!;
         const outputName = 'output.webp';
         const MAX_SIZE = 500 * 1024;
 
-        onProgress?.({ message: 'WebP oluşturuluyor...', percentage: 70 });
+        onProgress?.({ message: 'Creating WebP...', percentage: 70 });
 
         let blob: Blob | null = null;
 
-        // Frame sayısına göre başlangıç kalitesi — start high
+        // Quality based on frame count — start high
         const qualities = frameCount > 50 ? [50, 35, 25, 15] : [65, 50, 35, 25];
 
         for (const q of qualities) {
@@ -242,10 +245,10 @@ class StickerProcessor {
 
             if (blob.size <= MAX_SIZE) break;
 
-            onProgress?.({ message: `Sıkıştırılıyor (q:${q})...`, percentage: 85 });
+            onProgress?.({ message: `Compressing (q:${q})...`, percentage: 85 });
         }
 
-        // Temizlik - paralel olarak yap
+        // Cleanup in parallel
         const cleanupPromises = [];
         for (let i = 0; i < frameCount; i++) {
             cleanupPromises.push(ffmpeg.deleteFile(`frame_${i.toString().padStart(4, '0')}.png`).catch(() => {}));
@@ -253,12 +256,12 @@ class StickerProcessor {
         cleanupPromises.push(ffmpeg.deleteFile(outputName).catch(() => {}));
         await Promise.all(cleanupPromises);
 
-        onProgress?.({ message: `Tamamlandı! (${Math.round(blob!.size / 1024)}KB)`, percentage: 100 });
+        onProgress?.({ message: `Done! (${Math.round(blob!.size / 1024)}KB)`, percentage: 100 });
         return blob!;
     }
 
     /**
-     * Animated WebP dosyasındaki ANMF frame'lerinin süresini ve disposal flag'larını düzelt
+     * Patch ANMF frame durations and disposal flags in animated WebP
      * ANMF yapısı: x(3) + y(3) + w(3) + h(3) + duration(3) + flags(1) = 16 bytes header
      * Duration 3 byte little-endian, milisaniye cinsindendir
      */
@@ -303,7 +306,7 @@ class StickerProcessor {
     }
 
     /**
-     * Videonun süresini al (saniye cinsinden)
+     * Get video duration in seconds
      */
     private getVideoDuration(file: File): Promise<number> {
         return new Promise((resolve, reject) => {
@@ -315,29 +318,29 @@ class StickerProcessor {
             };
             video.onerror = () => {
                 URL.revokeObjectURL(video.src);
-                reject(new Error('Video süresi alınamadı'));
+                reject(new Error('Could not get video duration'));
             };
             video.src = URL.createObjectURL(file);
         });
     }
 
     /**
-     * Video işleme (MP4) - ORİJİNAL FPS KORUNUR, max 5 saniye
+     * Video processing - preserves original FPS, max 5 seconds
      */
     private async processVideo(file: File, onProgress?: (p: StickerProgress) => void, removeBg: boolean = false): Promise<Blob> {
         await this.load();
         const ffmpeg = this.ffmpeg!;
         const outputName = 'output.webp';
 
-        onProgress?.({ message: 'Video analiz ediliyor...', percentage: 10 });
+        onProgress?.({ message: 'Analyzing video...', percentage: 10 });
 
-        // Videonun orijinal süresini al
+        // Get original video duration
         let videoDuration = MAX_DURATION;
         try {
             videoDuration = await this.getVideoDuration(file);
-            console.log(`Orijinal video süresi: ${videoDuration}s`);
+            console.log(`Original video duration: ${videoDuration}s`);
         } catch (e) {
-            console.warn('Video süresi alınamadı, varsayılan kullanılıyor:', e);
+            console.warn('Could not get video duration, using default:', e);
         }
 
         // WhatsApp limiti (5sn) ile sınırla
@@ -347,12 +350,11 @@ class StickerProcessor {
         const inputName = `input_${Date.now()}.${ext}`;
         await ffmpeg.writeFile(inputName, await fetchFile(file));
 
-        // Eğer arka plan silinecekse, frame-by-frame işlem yap
+        // If background removal is needed, process frame-by-frame
         if (removeBg) {
-            onProgress?.({ message: 'Frame\'ler çıkarılıyor...', percentage: 20 });
+            onProgress?.({ message: 'Extracting frames...', percentage: 20 });
 
-            // 1. Frame'leri çıkar - ÖNEMLİ: FPS'i baştan düşür (-r 15)
-            // Bu sayede 60fps videodan 4 kat az kare çıkarılır, işlem 4 kat hızlanır.
+            // Extract frames at reduced FPS for speed
             const extractionFps = 15;
 
             await ffmpeg.exec([
@@ -369,17 +371,17 @@ class StickerProcessor {
 
             const frameCount = frames.length;
 
-            // FPS artık extractionFps (15) veya daha düşük (internet hızına/videoya göre drop olabilir)
+            // FPS is now extractionFps (15)
             let detectedFps = extractionFps;
 
-            // FPS sınırlarını uygula
+            // Apply FPS limits
             detectedFps = Math.max(MIN_FPS, Math.min(MAX_FPS, detectedFps));
 
-            console.log(`Video işleme: ${frameCount} frame, ${processingDuration}s süre -> Tespit edilen FPS: ${detectedFps}`);
+            console.log(`Video processing: ${frameCount} frames, ${processingDuration}s duration -> Detected FPS: ${detectedFps}`);
 
-            onProgress?.({ message: `Arka Plan Temizleniyor (${detectedFps} fps)...`, percentage: 25 });
+            onProgress?.({ message: `Removing background (${detectedFps} fps)...`, percentage: 25 });
 
-            // 2. Kareleri PARALEL işle
+            // Process frames in parallel batches
             const batchSize = 2;
             for (let i = 0; i < frameCount; i += batchSize) {
                 const batch = frames.slice(i, i + batchSize);
@@ -396,23 +398,23 @@ class StickerProcessor {
                         });
                         await ffmpeg.writeFile(frameName, await fetchFile(processedBlob));
                     } catch (err) {
-                        console.error("Hata:", err);
+                        console.error("Error:", err);
                     }
                 }));
 
                 onProgress?.({
-                    message: `Akıcı işleme: %${Math.round((Math.min(i + batchSize, frameCount) / frameCount) * 100)}`,
+                    message: `Processing: ${Math.round((Math.min(i + batchSize, frameCount) / frameCount) * 100)}%`,
                     percentage: 25 + Math.round((Math.min(i + batchSize, frameCount) / frameCount) * 55)
                 });
 
                 await new Promise(resolve => setTimeout(resolve, 20));
             }
 
-            // 3. WebP oluştur - tespit edilen fps ile
+            // 3. Create WebP with detected fps
             return this.createWebPFromFrames(frameCount, onProgress, detectedFps);
         }
 
-        // Arka plan silinmeyecekse - HIZLI YÖNTEM
+        // No background removal - FAST method
         let blob: Blob | null = null;
 
         // Dosya boyutuna göre kalite seçimi — start high for best quality
@@ -430,11 +432,11 @@ class StickerProcessor {
         }
 
         for (const q of qualities) {
-            onProgress?.({ message: `WebP oluşturuluyor (q:${q})...`, percentage: 50 });
+            onProgress?.({ message: `Creating WebP (q:${q})...`, percentage: 50 });
 
             try { await ffmpeg.deleteFile(outputName); } catch { }
 
-            // fps=15 filtresi ile sabit 15fps çıkış
+            // Fixed 15fps output
             await ffmpeg.exec([
                 '-i', inputName,
                 '-t', processingDuration.toString(),
@@ -459,12 +461,12 @@ class StickerProcessor {
         try { await ffmpeg.deleteFile(outputName); } catch { }
         try { await ffmpeg.deleteFile(inputName); } catch { }
 
-        onProgress?.({ message: `Tamamlandı! (${Math.round(blob!.size / 1024)}KB)`, percentage: 100 });
+        onProgress?.({ message: `Done! (${Math.round(blob!.size / 1024)}KB)`, percentage: 100 });
         return blob!;
     }
 
     /**
-     * Hareketli görsel işleme (GIF/MP4)
+     * Animated image processing (GIF/MP4)
      */
     async processAnimated(file: File, onProgress?: (p: StickerProgress) => void, removeBg: boolean = false): Promise<Blob> {
         const isGif = file.type === 'image/gif' || file.name.toLowerCase().endsWith('.gif');
@@ -479,13 +481,13 @@ class StickerProcessor {
     }
 
     /**
-     * PNG frame blob'larından animated WebP oluştur (TGS import için)
+     * Create animated WebP from PNG frame blobs (for TGS import)
      */
     async processFromPngFrames(pngBlobs: Blob[], fps: number, onProgress?: (p: StickerProgress) => void): Promise<Blob> {
         await this.load();
         const ffmpeg = this.ffmpeg!;
 
-        onProgress?.({ message: `${pngBlobs.length} kare yazılıyor...`, percentage: 40 });
+        onProgress?.({ message: `Writing ${pngBlobs.length} frames...`, percentage: 40 });
 
         for (let i = 0; i < pngBlobs.length; i++) {
             const frameName = `frame_${(i + 1).toString().padStart(4, '0')}.png`;
@@ -496,25 +498,25 @@ class StickerProcessor {
     }
 
     /**
-     * Statik WebP işleme - Canvas ile 512x512 boyutlandır ve WebP olarak kaydet
+     * Static WebP processing - resize to 512x512 with Canvas
      */
     async processStaticWebP(file: File, onProgress?: (p: StickerProgress) => void): Promise<Blob> {
-        onProgress?.({ message: 'WebP okunuyor...', percentage: 20 });
+        onProgress?.({ message: 'Reading WebP...', percentage: 20 });
 
         return new Promise((resolve) => {
             const img = new Image();
             img.onload = async () => {
-                onProgress?.({ message: 'Boyutlandırılıyor...', percentage: 40 });
+                onProgress?.({ message: 'Resizing...', percentage: 40 });
 
                 const canvas = document.createElement('canvas');
                 canvas.width = STICKER_SIZE;
                 canvas.height = STICKER_SIZE;
                 const ctx = canvas.getContext('2d', { alpha: true })!;
 
-                // Şeffaf arka plan
+                // Transparent background
                 ctx.clearRect(0, 0, STICKER_SIZE, STICKER_SIZE);
 
-                // Oranı koruyarak ortala
+                // Center while preserving aspect ratio
                 const scale = Math.min(STICKER_SIZE / img.width, STICKER_SIZE / img.height);
                 const nw = img.width * scale;
                 const nh = img.height * scale;
@@ -524,9 +526,9 @@ class StickerProcessor {
                 ctx.drawImage(img, nx, ny, nw, nh);
                 URL.revokeObjectURL(img.src);
 
-                onProgress?.({ message: 'WebP oluşturuluyor...', percentage: 60 });
+                onProgress?.({ message: 'Creating WebP...', percentage: 60 });
 
-                // Kalite döngüsü - 100KB altına düşene kadar
+                // Quality loop - try until under 100KB
                 let result: Blob | null = null;
                 for (const quality of [1.0, 0.95, 0.9, 0.85, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3]) {
                     result = await new Promise<Blob | null>(res => {
@@ -534,20 +536,20 @@ class StickerProcessor {
                     });
 
                     if (result && result.size <= MAX_STATIC_SIZE) {
-                        onProgress?.({ message: `Tamamlandı! (${Math.round(result.size / 1024)}KB)`, percentage: 100 });
+                        onProgress?.({ message: `Done! (${Math.round(result.size / 1024)}KB)`, percentage: 100 });
                         resolve(result);
                         return;
                     }
-                    onProgress?.({ message: `Optimize ediliyor (q:${Math.round(quality * 100)})...`, percentage: 60 + Math.round((1 - quality) * 50) });
+                    onProgress?.({ message: `Optimizing (q:${Math.round(quality * 100)})...`, percentage: 60 + Math.round((1 - quality) * 50) });
                 }
 
-                // Son çare - en düşük kalite
-                onProgress?.({ message: `Tamamlandı! (${Math.round(result!.size / 1024)}KB)`, percentage: 100 });
+                // Last resort - lowest quality
+                onProgress?.({ message: `Done! (${Math.round(result!.size / 1024)}KB)`, percentage: 100 });
                 resolve(result || file);
             };
             img.onerror = () => {
                 URL.revokeObjectURL(img.src);
-                onProgress?.({ message: 'Hata: WebP okunamadı', percentage: 100 });
+                onProgress?.({ message: 'Error: Could not read WebP', percentage: 100 });
                 resolve(file);
             };
             img.src = URL.createObjectURL(file);
@@ -555,16 +557,16 @@ class StickerProcessor {
     }
 
     /**
-     * Animasyonlu WebP işleme - TÜM FRAME'LER ALINIR
+     * Animated WebP processing - extracts all frames
      */
     async processAnimatedWebP(file: File, onProgress?: (p: StickerProgress) => void): Promise<Blob> {
         await this.load();
         const ffmpeg = this.ffmpeg!;
 
-        onProgress?.({ message: 'Animasyonlu WebP analiz ediliyor...', percentage: 10 });
+        onProgress?.({ message: 'Analyzing animated WebP...', percentage: 10 });
 
         if (!('ImageDecoder' in window)) {
-            throw new Error('Tarayıcınız animasyonlu WebP işlemeyi desteklemiyor');
+            throw new Error('Your browser does not support animated WebP processing');
         }
 
         const decoder = new (window as any).ImageDecoder({
@@ -575,19 +577,19 @@ class StickerProcessor {
         await decoder.tracks.ready;
         const totalFrames = decoder.tracks.selectedTrack.frameCount;
 
-        // WebP için fps - tüm frame'leri 3 saniyede oynat
+        // WebP fps - play all frames within duration
         const estimatedDuration = totalFrames / DEFAULT_FPS;
         let outputFps: number;
 
         if (estimatedDuration <= MAX_DURATION) {
             outputFps = DEFAULT_FPS;
         } else {
-            // Süre uzunsa fps artır
+            // Increase fps if duration is too long
             outputFps = Math.ceil(totalFrames / MAX_DURATION);
             outputFps = Math.max(MIN_FPS, Math.min(MAX_FPS, outputFps));
         }
 
-        onProgress?.({ message: `${totalFrames} frame işleniyor (${outputFps} fps)...`, percentage: 15 });
+        onProgress?.({ message: `Processing ${totalFrames} frames (${outputFps} fps)...`, percentage: 15 });
 
         const outCanvas = document.createElement('canvas');
         outCanvas.width = STICKER_SIZE;
@@ -619,10 +621,10 @@ class StickerProcessor {
     }
 
     /**
-     * Tray görseli işleme
+     * Tray image processing
      */
     async processTray(file: File, onProgress?: (p: StickerProgress) => void): Promise<Blob> {
-        onProgress?.({ message: 'Boyutlandırılıyor...', percentage: 50 });
+        onProgress?.({ message: 'Resizing...', percentage: 50 });
         return this.resizeAndCenterTray(file);
     }
 
