@@ -448,6 +448,7 @@ export async function importTelegramPacks(
         maxStickers?: number;
         splitPacks?: boolean;
         keepOriginalName?: boolean;
+        stickerType?: 'auto' | 'animated' | 'static';
         abortSignal?: AbortSignal;
         onProgress?: (progress: TelegramImportProgress) => void;
     } = {}
@@ -459,6 +460,7 @@ export async function importTelegramPacks(
         maxStickers = 0,
         splitPacks = true,
         keepOriginalName = true,
+        stickerType = 'auto',
         abortSignal,
         onProgress
     } = options;
@@ -525,9 +527,42 @@ export async function importTelegramPacks(
             }
 
             const allStickers = stickerSet.stickers;
-            const isAnimatedPack = allStickers.some(s => s.is_animated || s.is_video);
 
-            if (allStickers.length === 0) {
+            // Filter stickers by user-selected type
+            let filteredByType = allStickers;
+            if (stickerType === 'animated') {
+                filteredByType = allStickers.filter(s => s.is_animated || s.is_video);
+                if (filteredByType.length === 0) {
+                    // No animated stickers, fall back to all
+                    filteredByType = allStickers;
+                    onProgress?.({
+                        currentPack: i + 1,
+                        totalPacks: packInputs.length,
+                        currentStep: `⚠️ "${stickerSet.title}" has no animated stickers, using all...`,
+                        status: 'running',
+                        completedPacks
+                    });
+                }
+            } else if (stickerType === 'static') {
+                filteredByType = allStickers.filter(s => !s.is_animated && !s.is_video);
+                if (filteredByType.length === 0) {
+                    // No static stickers, fall back to all
+                    filteredByType = allStickers;
+                    onProgress?.({
+                        currentPack: i + 1,
+                        totalPacks: packInputs.length,
+                        currentStep: `⚠️ "${stickerSet.title}" has no static stickers, using all...`,
+                        status: 'running',
+                        completedPacks
+                    });
+                }
+            }
+
+            const isAnimatedPack = stickerType === 'animated' ? true
+                : stickerType === 'static' ? false
+                : filteredByType.some(s => s.is_animated || s.is_video);
+
+            if (filteredByType.length === 0) {
                 onProgress?.({
                     currentPack: i + 1,
                     totalPacks: packInputs.length,
@@ -543,7 +578,7 @@ export async function importTelegramPacks(
             let baseEmoji = '';
 
             // Extract theme emoji from sticker emojis if available
-            const stickerEmojis = allStickers.map(s => s.emoji).filter(Boolean);
+            const stickerEmojis = filteredByType.map(s => s.emoji).filter(Boolean);
             if (stickerEmojis.length > 0) {
                 // Use the most common emoji from the pack
                 const emojiCount = new Map<string, number>();
@@ -572,7 +607,7 @@ export async function importTelegramPacks(
             const baseName = `${baseNameText} ${baseEmoji}`;
 
             // Step 3: Apply max stickers limit, then split or single-pack
-            let stickersToProcess = maxStickers > 0 ? allStickers.slice(0, maxStickers) : allStickers;
+            let stickersToProcess = maxStickers > 0 ? filteredByType.slice(0, maxStickers) : filteredByType;
             const chunks: TelegramSticker[][] = [];
 
             if (splitPacks) {

@@ -410,6 +410,7 @@ function App() {
   const [telegramMaxStickers, setTelegramMaxStickers] = useState(0); // 0 = all
   const [telegramSplitPacks, setTelegramSplitPacks] = useState(true);
   const [telegramKeepOriginalName, setTelegramKeepOriginalName] = useState(true);
+  const [telegramStickerType, setTelegramStickerType] = useState<'auto' | 'animated' | 'static'>('auto');
 
   // Helper: get fixed dropdown position from button ref
   const getDropdownPos = (ref: React.RefObject<HTMLButtonElement | null>) => {
@@ -4804,14 +4805,32 @@ function App() {
                           >AI Name</button>
                         </div>
                       </div>
-                    </div>
 
+                      {/* Sticker Type */}
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-bold text-textSec uppercase">Sticker Type</label>
+                        <div className="flex bg-hover rounded-xl p-1 gap-1">
+                          <button
+                            onClick={() => setTelegramStickerType('auto')}
+                            className={cn("flex-1 py-2 rounded-lg text-[10px] font-black transition-all", telegramStickerType === 'auto' ? "bg-sky-500 text-white" : "text-textSec")}
+                          >Auto</button>
+                          <button
+                            onClick={() => setTelegramStickerType('animated')}
+                            className={cn("flex-1 py-2 rounded-lg text-[10px] font-black transition-all", telegramStickerType === 'animated' ? "bg-green-500 text-white" : "text-textSec")}
+                          >Animated</button>
+                          <button
+                            onClick={() => setTelegramStickerType('static')}
+                            className={cn("flex-1 py-2 rounded-lg text-[10px] font-black transition-all", telegramStickerType === 'static' ? "bg-orange-500 text-white" : "text-textSec")}
+                          >Static</button>
+                        </div>
+                      </div>
+                    </div>
                     <div className="p-3 bg-sky-500/5 rounded-xl border border-sky-500/10">
                       <p className="text-[10px] text-sky-300 font-bold">
                         📋 {telegramMaxStickers > 0 ? `Download first ${telegramMaxStickers} stickers from each pack` : '⚠️ Set max stickers count!'} → {telegramSplitPacks
                           ? `Split into packs of ${telegramStickerLimit}`
                           : `Single pack (max 30)`
-                        } → {telegramKeepOriginalName ? 'Keep Telegram names' : 'AI-generated names'}
+                        } → {telegramKeepOriginalName ? 'Keep Telegram names' : 'AI-generated names'} → {telegramStickerType === 'auto' ? 'Auto detect type' : telegramStickerType === 'animated' ? '🎬 Animated only' : '🖼️ Static only'}
                       </p>
                     </div>
                     {!telegramSplitPacks && telegramStickerLimit > 30 && (
@@ -4851,6 +4870,7 @@ function App() {
                           maxStickers: telegramMaxStickers,
                           splitPacks: telegramSplitPacks,
                           keepOriginalName: telegramKeepOriginalName,
+                          stickerType: telegramStickerType,
                           abortSignal: ac.signal,
                           onProgress: (p) => setTelegramProgress(p)
                         });
