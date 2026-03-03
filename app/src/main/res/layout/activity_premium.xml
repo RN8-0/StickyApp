@@ -127,7 +127,12 @@
                         android:id="@+id/featurePremiumPacks"
                         layout="@layout/item_premium_feature" />
 
-                    <!-- Feature 3: AI Background Removal -->
+                    <!-- Feature 3: Unlimited AI Stickers -->
+                    <include
+                        android:id="@+id/featureAISticker"
+                        layout="@layout/item_premium_feature" />
+
+                    <!-- Feature 4: AI Background Removal -->
                     <include
                         android:id="@+id/featureAIBg"
                         layout="@layout/item_premium_feature" />
@@ -220,7 +225,7 @@
                     <androidx.cardview.widget.CardView
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        app:cardBackgroundColor="@color/premium_gold"
+                        app:cardBackgroundColor="@color/primary"
                         app:cardCornerRadius="16dp"
                         app:cardElevation="4dp">
 
@@ -311,14 +316,14 @@
             android:minHeight="56dp"
             android:paddingVertical="6dp"
             android:text="@string/start_free_trial"
-            android:textColor="@color/premium_text_on_gold"
+            android:textColor="@color/white"
             android:textSize="17sp"
             android:textStyle="bold"
             android:textAllCaps="false"
             android:singleLine="false"
             android:lineSpacingMultiplier="1.2"
             android:gravity="center"
-            app:backgroundTint="@color/premium_gold"
+            app:backgroundTint="@color/primary"
             app:cornerRadius="28dp"
             app:elevation="4dp" />
 
@@ -331,7 +336,7 @@
             android:layout_marginTop="12dp"
             android:padding="8dp"
             android:text="@string/view_all_plans"
-            android:textColor="@color/text_secondary"
+            android:textColor="@color/primary"
             android:textSize="14sp" />
 
     </LinearLayout>

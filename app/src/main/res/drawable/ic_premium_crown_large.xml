@@ -70,34 +70,34 @@
 
     <!-- Crown center gem - large emerald -->
     <path
-        android:fillColor="#00C896"
+        android:fillColor="#6C5CE7"
         android:pathData="M100,82 A12,12 0 1,1 100,106 A12,12 0 1,1 100,82 Z" />
 
     <!-- Gem inner highlight -->
     <path
-        android:fillColor="#00E8AA"
+        android:fillColor="#8B7EF0"
         android:fillAlpha="0.6"
         android:pathData="M96,88 A4,4 0 1,1 96,96 A4,4 0 1,1 96,88 Z" />
 
     <!-- Crown left gem -->
     <path
-        android:fillColor="#00A87E"
+        android:fillColor="#5A4BD1"
         android:pathData="M65,108 A7,7 0 1,1 65,122 A7,7 0 1,1 65,108 Z" />
 
     <!-- Left gem highlight -->
     <path
-        android:fillColor="#00C896"
+        android:fillColor="#6C5CE7"
         android:fillAlpha="0.5"
         android:pathData="M62,111 A2,2 0 1,1 62,115 A2,2 0 1,1 62,111 Z" />
 
     <!-- Crown right gem -->
     <path
-        android:fillColor="#00A87E"
+        android:fillColor="#5A4BD1"
         android:pathData="M135,108 A7,7 0 1,1 135,122 A7,7 0 1,1 135,108 Z" />
 
     <!-- Right gem highlight -->
     <path
-        android:fillColor="#00C896"
+        android:fillColor="#6C5CE7"
         android:fillAlpha="0.5"
         android:pathData="M132,111 A2,2 0 1,1 132,115 A2,2 0 1,1 132,111 Z" />
 

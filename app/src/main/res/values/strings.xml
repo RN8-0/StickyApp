@@ -95,6 +95,8 @@
     <string name="no_internet_title">No Internet Connection</string>
     <string name="no_internet_message">This app requires an internet connection. Please check your connection.</string>
     <string name="no_internet_warning">Internet connection not found. Some features may not work.\n\nLocal sticker packs can be used.</string>
+    <string name="no_internet_required">Internet connection is required to use this app. Please connect to Wi-Fi or mobile data to continue.</string>
+    <string name="check_connection_hint">Check your Wi-Fi or mobile data settings</string>
     <string name="still_no_internet">Still no internet connection</string>
     <string name="search_history_cleared">Search history cleared</string>
     <string name="retry">Retry</string>
@@ -102,6 +104,8 @@
 
     <!-- Sticker Pack -->
     <string name="add_to_whatsapp">Add to WhatsApp</string>
+    <string name="update_on_whatsapp">Update on WhatsApp</string>
+    <string name="add_short">Add</string>
     <string name="remove_from_whatsapp">Remove from WhatsApp</string>
     <string name="confirm_remove">Remove</string>
     <string name="pack_added">Pack added!</string>
@@ -124,7 +128,7 @@
     <string name="download_failed">Download failed</string>
     <string name="error">Error: %s</string>
     <!-- Rewarded Buttons -->
-    <string name="watch_ad_button">İzle &amp; Ekle</string>
+    <string name="watch_ad_button">Watch &amp; Add</string>
     <string name="premium_promo_title">Sorry for the Ads! 🧡</string>
     <string name="premium_promo_message">We\'re sorry for the ads! They are necessary for us to keep adding new stickers and improving the app for you.\n\nThank you for your understanding! 🙏</string>
     <string name="get_premium">I Understand</string>
@@ -270,6 +274,7 @@
 
     <!-- Pack Validation Errors -->
     <string name="pack_empty_error">📦 This pack has no stickers! Add at least 3 stickers first.</string>
+    <string name="min_stickers_required">📦 WhatsApp requires at least 3 stickers. Please add %d more sticker(s).</string>
     <string name="pack_min_stickers_error">⚠️ WhatsApp requires at least 3 stickers. Please add more stickers.</string>
     <string name="pack_cover_error">🖼️ Please set a cover image first.</string>
     <string name="sticker_size_error">⚠️ %1$d sticker(s) exceed WhatsApp limit (%2$dKB). Largest: %3$dKB. Re-upload from admin panel.</string>
@@ -291,6 +296,7 @@
     <string name="btn_add_short">Add</string>
     <string name="btn_share_short">Share</string>
     <string name="download_label">downloads</string>
+    <string name="filter_downloads">Downloads</string>
     <string name="no_custom_packs">No Sticker Packs Yet</string>
     <string name="empty_state_subtitle">Create your first sticker pack and express yourself!</string>
     <string name="no_favorites_yet">You haven\'t added any favorites yet.</string>
@@ -401,6 +407,9 @@
     <string name="onboarding_2_title">🎨 Create Your Own</string>
     <string name="onboarding_2_desc">Turn your photos, videos, and GIFs into custom stickers with our advanced AI background removal! ✂️</string>
 
+    <string name="onboarding_ai_title">🤖 AI Sticker Generator</string>
+    <string name="onboarding_ai_desc">Describe it, AI creates it! Generate unique stickers instantly with 12+ art styles. ✨</string>
+
     <string name="onboarding_3_title">🔔 Stay Updated</string>
     <string name="onboarding_3_desc">Enable notifications to be the first to know about new trending sticker packs added every week! 🚀</string>
 
@@ -476,6 +485,8 @@
     <string name="pack_updated_version">Pack updated (v%d)</string>
     <string name="sync_error">Synchronization error</string>
     <string name="sticker_deleted_whatsapp_triggered">Sticker deleted and WhatsApp forced update triggered.</string>
+    <string name="delete_sticker_title">Delete Sticker</string>
+    <string name="delete_sticker_message">This sticker will be permanently deleted and removed from WhatsApp.</string>
     
     <!-- Premium Redesign -->
     <string name="premium_remove_limits">🔓 Remove Limits</string>
@@ -569,6 +580,8 @@
     <string name="feature_maker_desc">Unlimited sticker creation and pack management.</string>
     <string name="feature_support_title">Priority Support</string>
     <string name="feature_support_desc">Get faster responses and dedicated help from our team.</string>
+    <string name="feature_ai_sticker_title">Unlimited AI Stickers</string>
+    <string name="feature_ai_sticker_desc">Create unlimited AI-powered stickers with Sticky AI — no daily limits!</string>
 
     <!-- Animated Sticker Maker -->
     <string name="edit_video">Edit Video</string>
@@ -634,4 +647,59 @@
     <string name="trim_instruction">Drag the handles to select the portion to trim</string>
     <string name="preparing_pack">PREPARING PACK</string>
     <string name="downloading_assets">Downloading assets…</string>
+    <string name="related_packs">More Sticker Packs</string>
+
+    <!-- AI Sticker Generator -->
+    <string name="ai_sticker">AI Create</string>
+    <string name="ai_sticker_title">AI Sticker Generator</string>
+    <string name="ai_sticker_subtitle">Describe your sticker and let AI create it</string>
+    <string name="ai_prompt_hint">e.g. a chubby cat wearing sunglasses, sipping coffee with a smug face…</string>
+    <string name="ai_generate">Generate Sticker</string>
+    <string name="ai_generating">Creating your sticker…</string>
+    <string name="ai_optimizing_prompt">Optimizing prompt…</string>
+    <string name="ai_generating_image">Generating image…</string>
+    <string name="ai_processing">Processing sticker…</string>
+    <string name="ai_save_sticker">Save to My Stickers</string>
+    <string name="ai_saved_success">Sticker saved to your pack!</string>
+    <string name="ai_generation_failed">Generation failed. Please try again.</string>
+    <string name="ai_daily_limit_title">Daily Limit Reached</string>
+    <string name="ai_daily_limit_msg">Free users can create %d stickers per day. Upgrade to Premium for unlimited creations!</string>
+    <string name="ai_remaining">%d / %d daily</string>
+    <string name="ai_unlimited">Unlimited</string>
+    <string name="ai_style_cartoon">Cartoon</string>
+    <string name="ai_style_kawaii">Kawaii</string>
+    <string name="ai_style_pixel">Pixel Art</string>
+    <string name="ai_style_realistic">Realistic</string>
+    <string name="ai_style_comic">Comic</string>
+    <string name="ai_style_watercolor">Watercolor</string>
+    <string name="ai_style_flat">Flat Design</string>
+    <string name="ai_style_3d">3D Render</string>
+    <string name="ai_style_anime">Anime</string>
+    <string name="ai_style_doodle">Doodle</string>
+    <string name="ai_style_pop">Pop Art</string>
+    <string name="ai_style_retro">Retro</string>
+    <string name="ai_style_graffiti">Graffiti</string>
+    <string name="ai_style_neon">Neon Glow</string>
+    <string name="ai_get_premium">Go Premium for Unlimited</string>
+    <string name="ai_empty_prompt">Please describe your sticker first</string>
+    <string name="ai_try_again">Try Again</string>
+    <string name="ai_add_to_pack">Add to Pack</string>
+    <string name="ai_remove_bg_ask">Remove Background</string>
+    <string name="ai_select_pack">Select a Pack</string>
+    <string name="ai_create_new_pack">+ Create New Pack</string>
+    <string name="ai_new_pack_title">New Pack Name</string>
+    <string name="ai_examples_title">💡 Try These Prompts</string>
+    <string name="ai_examples_subtitle">Tap on any example to use it as your prompt</string>
+    <string name="ai_example_1">Angry cat with sunglasses</string>
+    <string name="ai_example_2">Sleepy fox with coffee</string>
+    <string name="ai_example_3">Baby dragon breathing fire</string>
+    <string name="ai_example_4">Cherry blossom fairy</string>
+    <string name="ai_example_5">Cute robot waving hello</string>
+    <string name="ai_example_6">Gamer with headset</string>
+    <string name="ai_new_sticker">New Sticker</string>
+    <string name="google_already_signed_in">You are already signed in with your Google account</string>
+    <string name="purchased_packs_restored">Purchased packs have been restored.</string>
+    <string name="google_account_connected">Your account is connected with Google</string>
+    <string name="notification_channel_desc">Notifications about new sticker packs</string>
+    <string name="ai_loading_hint">You can explore other stickers while this runs in the background</string>
 </resources>

@@ -32,6 +32,7 @@ data class Pack(
     val favoriteCount: Int = 0,  // Favori sayısı
     val isAnimated: Boolean = false, // Animasyonlu paket mi?
     val isActive: Boolean = true, // Paket aktif mi?
+    val isPopular: Boolean = false, // Popular paket mi? (Ana sayfada gösterilir)
     val priceTRY: String = "",
     val priceUSD: String = "",
     val priceEUR: String = "",

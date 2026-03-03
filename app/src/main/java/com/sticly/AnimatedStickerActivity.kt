@@ -274,7 +274,6 @@ class AnimatedStickerActivity : AppCompatActivity() {
     private fun trimAndStartConversion() {
         val uri = sourceVideoUri ?: return
         btnCropNext.isEnabled = false
-        btnCropNext.text = getString(R.string.processing_sticker)
 
         lifecycleScope.launch {
             val outputPath = withContext(Dispatchers.IO) {
@@ -1484,19 +1483,30 @@ class AnimatedStickerActivity : AppCompatActivity() {
         private val onClick: (CustomStickerManager.CustomPack) -> Unit
     ) : RecyclerView.Adapter<PackAdapter.VH>() {
         inner class VH(v: View) : RecyclerView.ViewHolder(v) {
-            val name: TextView = v.findViewById(R.id.name)
-            val count: TextView = v.findViewById(R.id.count)
+            val name: TextView = v.findViewById(R.id.tvPackName)
+            val count: TextView = v.findViewById(R.id.tvPackCount)
+            val cover: ImageView = v.findViewById(R.id.ivPackCover)
         }
         override fun onCreateViewHolder(p: ViewGroup, t: Int) =
-            VH(android.view.LayoutInflater.from(p.context).inflate(R.layout.item_pack, p, false))
+            VH(android.view.LayoutInflater.from(p.context).inflate(R.layout.item_pack_selection, p, false))
         override fun onBindViewHolder(h: VH, pos: Int) {
             val pack = packs[pos]
             h.name.text = pack.name
             h.count.text = "${pack.stickerCount}/30"
-            h.itemView.findViewById<View>(R.id.btnFavorite).visibility = View.GONE
-            h.itemView.findViewById<View>(R.id.btnDelete).visibility = View.GONE
-            h.itemView.findViewById<View>(R.id.pub).visibility = View.GONE
-            h.itemView.findViewById<View>(R.id.downloadCount).visibility = View.GONE
+
+            if (pack.stickerCount > 0) {
+                val stickerFile = CustomStickerManager.getCustomStickerPath(
+                    h.itemView.context, pack.id, "sticker_1.webp"
+                )
+                com.bumptech.glide.Glide.with(h.itemView.context)
+                    .load(stickerFile)
+                    .placeholder(R.drawable.ic_sticker_placeholder)
+                    .error(R.drawable.ic_sticker_placeholder)
+                    .into(h.cover)
+            } else {
+                h.cover.setImageResource(R.drawable.ic_sticker_placeholder)
+            }
+
             h.itemView.setOnClickListener { onClick(pack) }
         }
         override fun getItemCount() = packs.size

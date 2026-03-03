@@ -31,6 +31,15 @@ object PreferencesHelper {
     private const val KEY_INITIAL_LOAD_DONE = "initial_load_done"
     private const val KEY_PACKS_SINCE_PROMO = "packs_since_promo"
 
+    // In-memory caches to avoid repeated SharedPreferences disk reads during scrolling
+    @Volatile private var installedPacksCache: Set<String>? = null
+    @Volatile private var favoritePacksCache: Set<String>? = null
+
+    fun invalidateCaches() {
+        installedPacksCache = null
+        favoritePacksCache = null
+    }
+
     private fun getPrefs(context: Context): SharedPreferences {
         return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     }
@@ -129,15 +138,16 @@ object PreferencesHelper {
 
     /**
      * Bilgilendirme mesajı gösterilmeli mi?
-     * 1. İlk açılış ise true
-     * 2. Sayaç 3'e ulaştı ise true (ve sayaç sıfırlanır)
+     * Kullanıcı 2. paketi indirdikten sonra bir kez gösterilir, sonra sıfırlanır.
      */
     fun shouldShowSupportPromo(context: Context): Boolean {
-        // Premium kullanıcılara gösterme
         if (isPremium(context)) return false
-        
-        // Kullanıcı her açıldığında görmek istiyor (veya bekliyor)
-        return true
+        val count = getPrefs(context).getInt(KEY_PACKS_SINCE_PROMO, 0)
+        return count >= 2
+    }
+
+    fun resetPacksSincePromo(context: Context) {
+        getPrefs(context).edit().putInt(KEY_PACKS_SINCE_PROMO, 0).apply()
     }
 
     // İlk yükleme ekranı (yüzdelik) gösterildi mi
@@ -158,28 +168,34 @@ object PreferencesHelper {
     }
 
     // Installed Packs
+    @Synchronized
     fun getInstalledPacks(context: Context): Set<String> {
-        return getPrefs(context).getStringSet(KEY_INSTALLED_PACKS, emptySet())?.toSet() ?: emptySet()
+        installedPacksCache?.let { return it }
+        val result = getPrefs(context).getStringSet(KEY_INSTALLED_PACKS, emptySet())?.toSet() ?: emptySet()
+        installedPacksCache = result
+        return result
     }
 
+    @Synchronized
     fun addInstalledPack(context: Context, packId: String) {
         val current = HashSet(getInstalledPacks(context))
         current.add(packId)
         getPrefs(context).edit().putStringSet(KEY_INSTALLED_PACKS, current).commit()
+        installedPacksCache = current
         
-        // WhatsApp'a eklenen paket aynı zamanda favorilere eklenir ve Firebase'e senkronize edilir
-        // Özel (custom) paketler favorilere eklenmez - sadece My Stickers'da görünür
+        // WhatsApp'a eklenen paket aynı zamanda favorilere eklenir
         if (!packId.startsWith("custom_")) {
             addFavoritePack(context, packId)
         }
     }
 
+    @Synchronized
     fun removeInstalledPack(context: Context, packId: String) {
         val current = HashSet(getInstalledPacks(context))
         current.remove(packId)
         getPrefs(context).edit().putStringSet(KEY_INSTALLED_PACKS, current).commit()
+        installedPacksCache = current
         
-        // WhatsApp'tan kaldırılan paket favorilerden silinir ve Firebase'den düşer
         removeFavoritePack(context, packId)
     }
 
@@ -276,14 +292,20 @@ object PreferencesHelper {
     }
 
     // Favorite Packs
+    @Synchronized
     fun getFavoritePacks(context: Context): Set<String> {
-        return getPrefs(context).getStringSet(KEY_FAVORITE_PACKS, emptySet())?.toSet() ?: emptySet()
+        favoritePacksCache?.let { return it }
+        val result = getPrefs(context).getStringSet(KEY_FAVORITE_PACKS, emptySet())?.toSet() ?: emptySet()
+        favoritePacksCache = result
+        return result
     }
 
+    @Synchronized
     fun addFavoritePack(context: Context, packId: String) {
         val current = HashSet(getFavoritePacks(context))
         current.add(packId)
         getPrefs(context).edit().putStringSet(KEY_FAVORITE_PACKS, current).commit()
+        favoritePacksCache = current
 
         // İlk favori ekleme - senkronizasyonu aktifleştir
         markFavoritesSynced(context)
@@ -296,10 +318,12 @@ object PreferencesHelper {
         }
     }
 
+    @Synchronized
     fun removeFavoritePack(context: Context, packId: String) {
         val current = HashSet(getFavoritePacks(context))
         current.remove(packId)
         getPrefs(context).edit().putStringSet(KEY_FAVORITE_PACKS, current).commit()
+        favoritePacksCache = current
 
         // Sync to Firebase
         val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
@@ -313,6 +337,7 @@ object PreferencesHelper {
         return getFavoritePacks(context).contains(packId)
     }
 
+    @Synchronized
     fun toggleFavorite(context: Context, packId: String): Boolean {
         val isFav = isPackFavorite(context, packId)
         if (isFav) {

@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { db, storage, auth } from './firebase';
 import {
   collection,
@@ -41,7 +42,6 @@ import {
   X,
   Save,
   Info,
-  ExternalLink,
   ChevronRight,
   TrendingUp,
   BarChart3,
@@ -68,7 +68,8 @@ import {
   Calendar,
   Smartphone,
   Zap,
-  List
+  List,
+  Star
 } from 'lucide-react';
 import { translateTextAllLanguages, TARGET_LANGUAGES } from './utils/translator';
 import {
@@ -85,8 +86,9 @@ import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { stickerProcessor } from './utils/stickerProcessor';
 import { importStickers, type StickerImportProgress } from './utils/stickerImporter';
-import { generateBatchPacks, type BatchProgress, type BatchSource } from './utils/batchPackGenerator';
+import { generateBatchPacks, getCategoryStats, type BatchProgress, type BatchSource } from './utils/batchPackGenerator';
 import { deepseekService } from './utils/deepseekService';
+import { importTelegramPacks, validateBotToken } from './utils/telegramImporter';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -196,30 +198,30 @@ const generateCreativeName = async (currentName: string): Promise<string> => {
 };
 
 const CATEGORIES = [
-  { id: 'humor', name: 'Mizah', emoji: '😂' },
-  { id: 'love', name: 'Aşk', emoji: '❤️' },
-  { id: 'religious', name: 'Dini', emoji: '🕌' },
-  { id: 'entertainment', name: 'Eğlence', emoji: '🎉' },
-  { id: 'background', name: 'Arka Plan', emoji: '🌅' },
-  { id: 'morning', name: 'Günaydın', emoji: '☀️' },
-  { id: 'night', name: 'İyi Geceler', emoji: '🌙' },
-  { id: 'birthday', name: 'Doğum Günü', emoji: '🎂' },
-  { id: 'congrats', name: 'Tebrikler', emoji: '👏' },
-  { id: 'animals', name: 'Hayvanlar', emoji: '🐱' },
-  { id: 'sports', name: 'Spor', emoji: '⚽' },
-  { id: 'gaming', name: 'Oyun', emoji: '🎮' },
-  { id: 'movie', name: 'Film & Dizi', emoji: '🎬' },
-  { id: 'music', name: 'Müzik', emoji: '🎵' },
-  { id: 'food', name: 'Yemek', emoji: '🍔' },
+  { id: 'humor', name: 'Humor', emoji: '😂' },
+  { id: 'love', name: 'Love', emoji: '❤️' },
+  { id: 'religious', name: 'Religious', emoji: '🕌' },
+  { id: 'entertainment', name: 'Entertainment', emoji: '🎉' },
+  { id: 'background', name: 'Background', emoji: '🌅' },
+  { id: 'morning', name: 'Good Morning', emoji: '☀️' },
+  { id: 'night', name: 'Good Night', emoji: '🌙' },
+  { id: 'birthday', name: 'Birthday', emoji: '🎂' },
+  { id: 'congrats', name: 'Congratulations', emoji: '👏' },
+  { id: 'animals', name: 'Animals', emoji: '🐱' },
+  { id: 'sports', name: 'Sports', emoji: '⚽' },
+  { id: 'gaming', name: 'Gaming', emoji: '🎮' },
+  { id: 'movie', name: 'Movies & TV', emoji: '🎬' },
+  { id: 'music', name: 'Music', emoji: '🎵' },
+  { id: 'food', name: 'Food', emoji: '🍔' },
   { id: 'emoji', name: 'Emoji', emoji: '😊' },
-  { id: 'cars', name: 'Araba', emoji: '🚗' },
-  { id: 'motivation', name: 'Motivasyon', emoji: '⚡' },
-  { id: 'cute', name: 'Sevimli', emoji: '🧸' },
-  { id: 'text', name: 'Metin/Yazı', emoji: '✍️' },
+  { id: 'cars', name: 'Cars', emoji: '🚗' },
+  { id: 'motivation', name: 'Motivation', emoji: '⚡' },
+  { id: 'cute', name: 'Cute', emoji: '🧸' },
+  { id: 'text', name: 'Text', emoji: '✍️' },
   { id: 'anime', name: 'Anime', emoji: '⛩️' },
   { id: 'memes', name: 'Memes', emoji: '🎭' },
-  { id: 'nature', name: 'Doğa', emoji: '🌿' },
-  { id: 'other', name: 'Diğer', emoji: '📂' }
+  { id: 'nature', name: 'Nature', emoji: '🌿' },
+  { id: 'other', name: 'Other', emoji: '📂' }
 ];
 
 // ========== COMPONENTS ==========
@@ -239,7 +241,7 @@ const Modal = ({ show, onClose, title, children }: { show: boolean, onClose: () 
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-md animate-in fade-in duration-200" onClick={onClose}>
       <div
         onClick={(e) => e.stopPropagation()}
-        className="glass w-full max-w-2xl rounded-3xl overflow-hidden animate-in zoom-in-95 duration-200 shadow-[0_0_100px_rgba(0,168,132,0.1)]"
+        className="glass w-full max-w-2xl rounded-3xl overflow-hidden animate-in zoom-in-95 duration-200 shadow-[0_0_100px_rgba(108,92,231,0.1)]"
       >
         <div className="px-8 py-6 border-b border-white/5 flex items-center justify-between bg-card/50">
           <h3 className="text-xl font-black tracking-tight text-white">{title}</h3>
@@ -287,12 +289,15 @@ function App() {
   const [panelDragOverIdx, setPanelDragOverIdx] = useState<number | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState<'dashboard' | 'packs' | 'stats' | 'messages' | 'notifications' | 'users' | 'batch'>('dashboard');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'passive' | 'animated' | 'static' | 'new'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'passive' | 'animated' | 'static' | 'premium' | 'new'>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
-  const [statsFilter, setStatsFilter] = useState<'all' | 'active' | 'passive'>('all');
+  const [statsFilter, setStatsFilter] = useState<'all' | 'active' | 'passive' | 'premium' | 'normal' | 'popular'>('all');
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
+  const statusFilterRef = useRef<HTMLButtonElement>(null);
+  const categoryFilterRef = useRef<HTMLButtonElement>(null);
+  const statsFilterRef = useRef<HTMLButtonElement>(null);
 
   // Mail System States
   const [messages, setMessages] = useState<ContactMessage[]>([]);
@@ -322,7 +327,8 @@ function App() {
     category: 'humor',
     is_premium: false,
     is_active: true,
-    is_animated: true
+    is_animated: true,
+    is_popular: false
   });
   const [editFormData, setEditFormData] = useState<Partial<StickerPack>>({});
   const [previewSticker, setPreviewSticker] = useState<{ url: string, title?: string } | null>(null);
@@ -354,9 +360,6 @@ function App() {
   const [editingSubscription, setEditingSubscription] = useState(false);
   const [subPlan, setSubPlan] = useState('none');
 
-  const [adminName, setAdminName] = useState('');
-  const [showWelcome, setShowWelcome] = useState(false);
-  const [welcomeExit, setWelcomeExit] = useState(false);
   const [showVideoBgModal, setShowVideoBgModal] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
 
@@ -373,7 +376,6 @@ function App() {
   const [isBatchRunning, setIsBatchRunning] = useState(false);
   const [batchProgress, setBatchProgress] = useState<BatchProgress | null>(null);
   const [batchAiGenerating, setBatchAiGenerating] = useState(false);
-  const [batchSelectedCategories, setBatchSelectedCategories] = useState<string[]>([]);
   const [importContentType, setImportContentType] = useState<'gifs' | 'stickers'>('stickers');
   const [importCount, setImportCount] = useState(20);
   const [customSearchText, setCustomSearchText] = useState('');
@@ -381,7 +383,7 @@ function App() {
   const [importProgress, setImportProgress] = useState<{ current: number, total: number, message: string, preview?: string } | null>(null);
 
   // Draft States
-  const [batchSubTab, setBatchSubTab] = useState<'generator' | 'drafts'>('generator');
+  const [batchSubTab, setBatchSubTab] = useState<'generator' | 'telegram' | 'drafts'>('generator');
   const [draftPacks, setDraftPacks] = useState<StickerPack[]>([]);
   const [draftLoading, setDraftLoading] = useState(false);
   const [selectedDraft, setSelectedDraft] = useState<StickerPack | null>(null);
@@ -393,6 +395,24 @@ function App() {
   const [draftDragIdx, setDraftDragIdx] = useState<number | null>(null);
   const [draftDragOverIdx, setDraftDragOverIdx] = useState<number | null>(null);
   const [draftDragPackId, setDraftDragPackId] = useState<string | null>(null);
+
+  // Telegram Import States
+  const [telegramBotToken, setTelegramBotToken] = useState(() => localStorage.getItem('telegram_bot_token') || '');
+  const [telegramBotName, setTelegramBotName] = useState('');
+  const [telegramTokenValid, setTelegramTokenValid] = useState(false);
+  const [telegramPacksInput, setTelegramPacksInput] = useState('');
+  const [isTelegramImporting, setIsTelegramImporting] = useState(false);
+  const [telegramProgress, setTelegramProgress] = useState<any>(null);
+  const [telegramStickerLimit, setTelegramStickerLimit] = useState(30);
+  const [telegramSplitPacks, setTelegramSplitPacks] = useState(true);
+  const [telegramKeepOriginalName, setTelegramKeepOriginalName] = useState(true);
+
+  // Helper: get fixed dropdown position from button ref
+  const getDropdownPos = (ref: React.RefObject<HTMLButtonElement | null>) => {
+    if (!ref.current) return { top: 0, left: 0 };
+    const rect = ref.current.getBoundingClientRect();
+    return { top: rect.bottom + 8, left: Math.max(8, rect.right - 220) };
+  };
 
   // FFmpeg'i önceden yükle - işlem başladığında hazır olsun
   useEffect(() => {
@@ -410,34 +430,21 @@ function App() {
             console.warn("YETKESİZ GİRİŞ DENEMESİ:", u.email);
             await signOut(auth);
             setUser(null);
-            alert("Yetkisiz Erişim: " + u.email + " yönetici listesinde bulunamadı.");
+            alert("Unauthorized Access: " + u.email + " was not found in the admin list.");
             setLoading(false);
             return;
           }
 
           const adminData = adminDoc.data();
-          // Hem 'name' hem 'admin' alanına bak, yoksa e-posta ismini al
           const name = adminData?.name || adminData?.admin || u.email.split('@')[0];
-          setAdminName(name);
 
-          // Eğer yeni giriş yapılıyorsa hoş geldin ekranını göster
-          if (!user && !showWelcome) {
-            setShowWelcome(true);
-            setWelcomeExit(false);
-            // 2.9 saniyede fırlamaya başla, 3.5 saniyede bitir
-            setTimeout(() => setWelcomeExit(true), 2900);
-            setTimeout(() => {
-              setShowWelcome(false);
-              setLoading(false);
-            }, 3500);
-          } else {
-            setLoading(false);
-          }
+          // Go directly to panel, no welcome animation
+          setLoading(false);
 
-          console.log("Admin girişi başarılı, isim:", name);
+          console.log("Admin login successful, name:", name);
         } catch (error: any) {
           console.error("Admin yetkisi kontrol edilirken hata:", error);
-          alert("Giriş Hatası: " + (error?.message || "Yetki kontrolü yapılamadı."));
+          alert("Login Error: " + (error?.message || "Authorization check failed."));
           await signOut(auth);
           setUser(null);
           setLoading(false);
@@ -488,7 +495,7 @@ function App() {
   };
 
   const deleteMessage = async (messageId: string) => {
-    if (!window.confirm("Bu mesajı silmek istediğinize emin misiniz?")) return;
+    if (!window.confirm("Are you sure you want to delete this message?")) return;
     try {
       await deleteDoc(doc(db, 'messages', messageId));
       setMessages(messages.filter(m => m.id !== messageId));
@@ -498,7 +505,7 @@ function App() {
   };
 
   const deleteSuggestion = async (suggestionId: string) => {
-    if (!window.confirm("Bu öneriyi silmek istediğinize emin misiniz?")) return;
+    if (!window.confirm("Are you sure you want to delete this suggestion?")) return;
     try {
       await deleteDoc(doc(db, 'suggestions', suggestionId));
       setSuggestions(suggestions.filter(s => s.id !== suggestionId));
@@ -508,13 +515,13 @@ function App() {
   };
 
   const clearAllMessages = async () => {
-    if (!window.confirm("TÜM mesajları silmek istediğinize emin misiniz?")) return;
+    if (!window.confirm("Are you sure you want to delete ALL messages?")) return;
     try {
-      setDeleteProgress({ deleting: true, message: 'Mesajlar siliniyor...', current: 0, total: messages.length });
+      setDeleteProgress({ deleting: true, message: 'Deleting messages...', current: 0, total: messages.length });
       const snapshot = await getDocs(collection(db, 'messages'));
       for (let i = 0; i < snapshot.docs.length; i++) {
         await deleteDoc(snapshot.docs[i].ref);
-        setDeleteProgress({ deleting: true, message: 'Mesajlar siliniyor...', current: i + 1, total: snapshot.docs.length });
+        setDeleteProgress({ deleting: true, message: 'Deleting messages...', current: i + 1, total: snapshot.docs.length });
       }
       setDeleteProgress(null);
     } catch (e) {
@@ -524,13 +531,13 @@ function App() {
   };
 
   const clearAllSuggestions = async () => {
-    if (!window.confirm("TÜM önerileri silmek istediğinize emin misiniz?")) return;
+    if (!window.confirm("Are you sure you want to delete ALL suggestions?")) return;
     try {
-      setDeleteProgress({ deleting: true, message: 'Öneriler siliniyor...', current: 0, total: suggestions.length });
+      setDeleteProgress({ deleting: true, message: 'Deleting suggestions...', current: 0, total: suggestions.length });
       const snapshot = await getDocs(collection(db, 'suggestions'));
       for (let i = 0; i < snapshot.docs.length; i++) {
         await deleteDoc(snapshot.docs[i].ref);
-        setDeleteProgress({ deleting: true, message: 'Öneriler siliniyor...', current: i + 1, total: snapshot.docs.length });
+        setDeleteProgress({ deleting: true, message: 'Deleting suggestions...', current: i + 1, total: snapshot.docs.length });
       }
       setDeleteProgress(null);
     } catch (e) {
@@ -541,8 +548,8 @@ function App() {
 
   const handleSendNotification = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!notifBody) return alert("Lütfen bildirim mesajını girin.");
-    if (!window.confirm("Bu bildirimi tüm kullanıcılara göndermek istediğinize emin misiniz?")) return;
+    if (!notifBody) return alert("Please enter the notification message.");
+    if (!window.confirm("Are you sure you want to send this notification to all users?")) return;
 
     setIsSendingNotif(true);
     try {
@@ -553,12 +560,12 @@ function App() {
         imageUrl: notifImageUrl || '',
         timestamp: serverTimestamp()
       });
-      alert(" Bildirim kuyruğa alındı! Birkaç saniye içinde tüm cihazlara ulaşacak.");
+      alert(" Notification queued! It will reach all devices within a few seconds.");
       setNotifBody('');
       setNotifImageUrl('');
     } catch (e: any) {
       console.error("Bildirim gönderme hatası:", e);
-      alert("Hata: " + e.message);
+      alert("Error: " + e.message);
     } finally {
       setIsSendingNotif(false);
     }
@@ -573,7 +580,7 @@ function App() {
       await signInWithPopup(auth, provider);
     } catch (error: any) {
       console.error("Google login error:", error);
-      alert("Google ile giriş yapılamadı: " + error.message);
+      alert("Google sign-in failed: " + error.message);
     } finally {
       setLoading(false);
     }
@@ -651,7 +658,7 @@ function App() {
       setPacks(allPacks.sort((a, b) => (a.name || '').localeCompare(b.name || '')));
     } catch (error: any) {
       console.error("Fetch error:", error);
-      alert("Firebase Veri Çekme Hatası: " + (error?.message || "Bilinmeyen hata"));
+      alert("Firebase Data Fetch Error: " + (error?.message || "Unknown error"));
     } finally {
       setLoading(false);
     }
@@ -685,7 +692,7 @@ function App() {
   };
 
   const publishDraft = async (draft: StickerPack) => {
-    if (!window.confirm(`"${draft.name}" paketini yayınlamak istediğinize emin misiniz?`)) return;
+    if (!window.confirm(`Are you sure you want to publish "${draft.name}"?`)) return;
     setDraftPublishing(draft.id);
     try {
       const targetCollection = draft.is_premium ? 'premium_stickers' : 'stickers';
@@ -699,10 +706,10 @@ function App() {
       setDraftPacks(prev => prev.filter(p => p.id !== draft.id));
       if (selectedDraft?.id === draft.id) setSelectedDraft(null);
       await fetchPacks();
-      alert(`✅ "${draft.name}" başarıyla yayınlandı!`);
+      alert(`✅ "${draft.name}" published successfully!`);
     } catch (error: any) {
       console.error("Publish error:", error);
-      alert(`Yayınlama hatası: ${error.message}`);
+      alert(`Publish error: ${error.message}`);
     } finally {
       setDraftPublishing(null);
     }
@@ -710,7 +717,7 @@ function App() {
 
   const publishAllDrafts = async () => {
     if (draftPacks.length === 0) return;
-    if (!window.confirm(`${draftPacks.length} taslak paketi yayınlamak istediğinize emin misiniz?`)) return;
+    if (!window.confirm(`Are you sure you want to publish ${draftPacks.length} draft packs?`)) return;
     let published = 0;
     for (const draft of draftPacks) {
       setDraftPublishing(draft.id);
@@ -732,11 +739,11 @@ function App() {
     setDraftPacks([]);
     setSelectedDraft(null);
     await fetchPacks();
-    alert(`✅ ${published}/${draftPacks.length} paket yayınlandı!`);
+    alert(`✅ ${published}/${draftPacks.length} packs published!`);
   };
 
   const deleteDraftPack = async (draft: StickerPack) => {
-    if (!window.confirm(`"${draft.name}" taslağını silmek istediğinize emin misiniz? Bu işlem geri alınamaz!`)) return;
+    if (!window.confirm(`Are you sure you want to delete the draft "${draft.name}"? This action cannot be undone!`)) return;
     setDraftDeleting(draft.id);
     try {
       // Storage'dan sticker dosyalarını sil
@@ -752,7 +759,7 @@ function App() {
       if (selectedDraft?.id === draft.id) setSelectedDraft(null);
     } catch (error: any) {
       console.error("Draft delete error:", error);
-      alert(`Silme hatası: ${error.message}`);
+      alert(`Delete error: ${error.message}`);
     } finally {
       setDraftDeleting(null);
     }
@@ -768,10 +775,10 @@ function App() {
       setDraftPacks(prev => prev.map(p => p.id === selectedDraft.id ? updated : p));
       setSelectedDraft(updated);
       setShowDraftEditModal(false);
-      alert("Taslak başarıyla güncellendi.");
+      alert("Draft updated successfully.");
     } catch (error: any) {
       console.error("Draft update error:", error);
-      alert(`Güncelleme hatası: ${error.message}`);
+      alert(`Update error: ${error.message}`);
     }
   };
 
@@ -786,12 +793,12 @@ function App() {
       setDraftPacks(prev => prev.map(p => p.id === draft.id ? updated : p));
     } catch (error: any) {
       console.error("Reorder error:", error);
-      alert(`Sıralama hatası: ${error.message}`);
+      alert(`Reorder error: ${error.message}`);
     }
   };
 
   const removeStickerFromDraft = async (draft: StickerPack, stickerIndex: number) => {
-    if (!window.confirm('Bu sticker\'ı taslaktan kaldırmak istediğinize emin misiniz?')) return;
+    if (!window.confirm('Are you sure you want to remove this sticker from the draft?')) return;
     try {
       const updatedStickers = draft.stickers.filter((_, idx) => idx !== stickerIndex);
       await updateDoc(doc(db, 'draft_stickers', draft.id), {
@@ -803,7 +810,7 @@ function App() {
       if (selectedDraft?.id === draft.id) setSelectedDraft(updated);
     } catch (error: any) {
       console.error("Remove sticker error:", error);
-      alert(`Sticker kaldırma hatası: ${error.message}`);
+      alert(`Remove sticker error: ${error.message}`);
     }
   };
 
@@ -943,7 +950,7 @@ function App() {
       const user = usersData.find(u => u.id === userId);
       // Prevent changing Google Play subscriptions via Admin
       if (user?.subscription_source === 'google_play' && plan !== 'none') {
-        alert("Google Play abonelikleri admin panelinden değiştirilemez.");
+        alert("Google Play subscriptions cannot be changed from the admin panel.");
         return;
       }
 
@@ -958,14 +965,14 @@ function App() {
         const d = new Date();
         d.setMonth(d.getMonth() + 1);
         expiry = d.getTime();
-        details = 'Admin tarafindan 1 Aylik eklendi';
+        details = 'Added 1 month by Admin';
       } else if (plan === 'yearly') {
         isPremium = true;
         type = 'yearly';
         const d = new Date();
         d.setFullYear(d.getFullYear() + 1);
         expiry = d.getTime();
-        details = 'Admin tarafindan 1 Yillik eklendi';
+        details = 'Added 1 year by Admin';
       }
 
       // History item
@@ -1005,7 +1012,7 @@ function App() {
       setSelectedUser(updatedUser);
     } catch (error) {
       console.error("Update subscription error:", error);
-      alert("Abonelik güncellenirken hata oluştu.");
+      alert("Error occurred while updating subscription.");
     }
   };
 
@@ -1014,11 +1021,11 @@ function App() {
     if (!user) return;
 
     if (user.subscription_source === 'google_play') {
-      alert("Google Play üzerinden alınan abonelikler buradan iptal edilemez. Kullanıcının Play Store üzerinden iptal etmesi gerekir.");
+      alert("Subscriptions purchased through Google Play cannot be cancelled here. The user needs to cancel through the Play Store.");
       return;
     }
 
-    if (!window.confirm("Bu kullanıcının aboneliğini iptal etmek istediğinize emin misiniz?")) return;
+    if (!window.confirm("Are you sure you want to cancel this user's subscription?")) return;
 
     try {
       const historyItem: SubscriptionHistoryItem = {
@@ -1028,7 +1035,7 @@ function App() {
         source: 'admin',
         timestamp: Date.now(),
         date_str: new Date().toLocaleDateString('tr-TR'),
-        details: 'Admin tarafindan iptal edildi'
+        details: 'Cancelled by Admin'
       };
 
       await updateDoc(doc(db, 'users', userId), {
@@ -1053,7 +1060,7 @@ function App() {
       setSelectedUser(updatedUser);
     } catch (error) {
       console.error("Revoke subscription error:", error);
-      alert("Abonelik iptal edilirken hata oluştu.");
+      alert("Error occurred while cancelling subscription.");
     }
   };
 
@@ -1067,7 +1074,7 @@ function App() {
   // ========== KULLANICI YÖNETİM FONKSİYONLARI SON ==========
 
   const handleCreatePack = async () => {
-    if (!newPackData.name || !newPackData.publisher) return alert("Lütfen isim ve yayıncı alanlarını doldurun.");
+    if (!newPackData.name || !newPackData.publisher) return alert("Please fill in the name and publisher fields.");
     setIsProcessing(true);
     try {
       const packId = newPackData.name.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
@@ -1144,9 +1151,9 @@ function App() {
         is_animated: true,
 
       });
-      alert("Yeni hareketli paket oluşturuldu. Şimdi video/gif ekleyebilirsiniz.");
+      alert("New animated pack created. You can now add video/gif files.");
     } catch (e) {
-      alert("Hata: " + e);
+      alert("Error: " + e);
     } finally {
       setIsProcessing(false);
     }
@@ -1155,7 +1162,7 @@ function App() {
   const handleAutoTranslate = async (isEdit: boolean) => {
     const textToTranslate = isEdit ? editFormData.name : newPackData.name;
     if (!textToTranslate) {
-      alert("Lütfen önce bir ana isim (İngilizce) girin.");
+      alert("Please enter a main name (English) first.");
       return;
     }
 
@@ -1167,10 +1174,10 @@ function App() {
       } else {
         setNewPackData((prev: any) => ({ ...prev, ...translations }));
       }
-      alert("✅ Gemini tüm dilleri başarıyla çevirdi!");
+      alert("✅ Gemini translated all languages successfully!");
     } catch (error) {
       console.error("Gemini Error:", error);
-      alert("⚠️ Çeviri sırasında bir hata oluştu. Lütfen tekrar deneyin.");
+      alert("⚠️ An error occurred during translation. Please try again.");
     } finally {
       setIsTranslating(false);
     }
@@ -1216,7 +1223,7 @@ function App() {
         setSelectedPack(updated);
         setShowEditPackModal(false);
 
-        alert(`Paket başarıyla güncellendi.`);
+        alert(`Pack updated successfully.`);
       } else {
         // Sadece bilgi güncelleme (tip değişikliği yok)
         await updateDoc(doc(db, oldCollection, selectedPack.id), updatedData);
@@ -1224,12 +1231,12 @@ function App() {
         setPacks(packs.map(p => p.id === selectedPack.id ? updated : p));
         setSelectedPack(updated);
         setShowEditPackModal(false);
-        alert("Paket bilgileri başarıyla güncellendi.");
+        alert("Pack details updated successfully.");
       }
 
     } catch (e: any) {
       console.error('[UPDATE] Hata:', e);
-      alert("Hata: " + e.message);
+      alert("Error: " + e.message);
     } finally {
       setIsProcessing(false);
     }
@@ -1240,7 +1247,7 @@ function App() {
 
     const uploadCount = files.length;
     setIsProcessing(true);
-    setUploadProgress({ current: 0, total: uploadCount, message: 'İşlem başlıyor...' });
+    setUploadProgress({ current: 0, total: uploadCount, message: 'Processing started...' });
 
     try {
       const collectionName = selectedPack.is_premium ? 'premium_stickers' : 'stickers';
@@ -1255,18 +1262,18 @@ function App() {
 
         // Karışık paket kontrolü (WhatsApp kısıtlaması)
         if (selectedPack.is_animated && !isAnimatedFile && !file.name.endsWith('.webp')) {
-          alert(`Hata: Bu paket hareketli bir pakettir. "${file.name}" gibi statik görseller eklenemez.`);
+          alert(`Error: This is an animated pack. Static images like "${file.name}" cannot be added.`);
           continue;
         }
         if (!selectedPack.is_animated && isAnimatedFile) {
-          alert(`Hata: Bu paket statik bir pakettir. "${file.name}" gibi hareketli dosyalar eklenemez.`);
+          alert(`Error: This is a static pack. Animated files like "${file.name}" cannot be added.`);
           continue;
         }
 
         setUploadProgress({
           current: i + 1,
           total: uploadCount,
-          message: `${file.name} işleniyor...`
+          message: `${file.name} processing...`
         });
 
         let processedBlob: Blob;
@@ -1286,11 +1293,11 @@ function App() {
               });
             } else if (isAnimatedPack && !isAnimatedWebP) {
               // Animasyonlu pakete statik WebP eklenemez
-              alert(`Hata: Bu paket hareketli bir pakettir. "${file.name}" statik bir WebP dosyasıdır.`);
+              alert(`Error: This is an animated pack. "${file.name}" is a static WebP file.`);
               continue;
             } else if (!isAnimatedPack && isAnimatedWebP) {
               // Statik pakete animasyonlu WebP eklenemez
-              alert(`Hata: Bu paket statik bir pakettir. "${file.name}" animasyonlu bir WebP dosyasıdır.`);
+              alert(`Error: This is a static pack. "${file.name}" is an animated WebP file.`);
               continue;
             } else {
               // Statik paket + Statik WebP
@@ -1311,7 +1318,7 @@ function App() {
         } catch (processingError: any) {
           // Dosya işleme hatası - kullanıcıya bildir ve bu dosyayı atla
           console.error(`Dosya işleme hatası (${file.name}):`, processingError);
-          alert(`Hata: "${file.name}" işlenemedi.\n\n${processingError.message || 'Bilinmeyen hata'}`);
+          alert(`Error: "${file.name}" could not be processed.\n\n${processingError.message || 'Unknown error'}`);
           continue;
         }
 
@@ -1320,7 +1327,7 @@ function App() {
         if (processedBlob.size > MAX_WHATSAPP_SIZE) {
           const sizeMB = (processedBlob.size / 1024).toFixed(0);
           console.error(`[UPLOAD] ❌ WhatsApp limit aşıldı: ${file.name} = ${sizeMB}KB (max: 500KB)`);
-          alert(`Hata: "${file.name}" WhatsApp 500KB limitini aşıyor (${sizeMB}KB).\n\nBu sticker yüklenemedi. Daha kısa veya daha düşük çözünürlüklü bir dosya deneyin.`);
+          alert(`Error: "${file.name}" exceeds the WhatsApp 500KB limit (${sizeMB}KB).\n\nThis sticker could not be uploaded. Try a shorter or lower resolution file.`);
           continue;
         }
 
@@ -1351,7 +1358,7 @@ function App() {
       let newTrayFile = selectedPack.tray_image_file;
 
       if (processedBlobs.length > 0) {
-        setUploadProgress({ current: uploadCount, total: uploadCount, message: 'Kapak resmi otomatik seçiliyor...' });
+        setUploadProgress({ current: uploadCount, total: uploadCount, message: 'Auto-selecting cover image...' });
 
         try {
           // Eski kapak resmini sil (varsa)
@@ -1402,10 +1409,10 @@ function App() {
 
       setPacks(packs.map(p => p.id === selectedPack.id ? updated : p));
       setSelectedPack(updated);
-      alert(`${newStickers.length} sticker başarıyla işlendi ve eklendi. Kapak resmi güncellendi.`);
+      alert(`${newStickers.length} stickers processed and added successfully. Cover image updated.`);
     } catch (error: any) {
       console.error(error);
-      alert("Yükleme hatası: " + error.message);
+      alert("Upload error: " + error.message);
     } finally {
       setIsProcessing(false);
       setUploadProgress(null);
@@ -1422,7 +1429,7 @@ function App() {
 
   const handleImportStickers = async () => {
     if (!selectedPack) {
-      alert('Lütfen önce bir paket seçin!');
+      alert('Please select a pack first!');
       return;
     }
 
@@ -1432,17 +1439,17 @@ function App() {
     const totalCount = currentCount + importCount;
 
     if (totalCount > 30) {
-      alert(`Hata: Bir pakette en fazla 30 sticker olabilir. (Mevcut: ${currentCount}, Eklenecek: ${importCount}, Toplam: ${totalCount})`);
+      alert(`Error: A pack can have a maximum of 30 stickers. (Current: ${currentCount}, To add: ${importCount}, Total: ${totalCount})`);
       return;
     }
 
     const contentTypeName = importContentType === 'gifs' ? 'GIFs' : 'Stickers';
-    if (!window.confirm(`Giphy'dan "${query}" için ${importCount} ${contentTypeName} eklenecek. Onaylıyor musunuz?`)) {
+    if (!window.confirm(`${importCount} ${contentTypeName} for "${query}" will be added from Giphy. Do you confirm?`)) {
       return;
     }
 
     setIsImporting(true);
-    setImportProgress({ current: 0, total: importCount, message: 'Başlıyor...' });
+    setImportProgress({ current: 0, total: importCount, message: 'Starting...' });
 
     try {
       const importedStickers = await importStickers({
@@ -1462,7 +1469,7 @@ function App() {
       });
 
       if (importedStickers.length === 0) {
-        alert('Hiçbir sticker eklenemedi. Lütfen farklı bir arama deneyin.');
+        alert('No stickers could be added. Please try a different search.');
         return;
       }
 
@@ -1487,10 +1494,10 @@ function App() {
       setSelectedPack(updated);
       setShowImportModal(false);
 
-      alert(`Import başarılı! ${importedStickers.length} sticker eklendi.\n\nKaynak: Giphy\nEklenen: ${importedStickers.length}`);
+      alert(`Import successful! ${importedStickers.length} stickers added.\n\nSource: Giphy\nAdded: ${importedStickers.length}`);
     } catch (error: any) {
       console.error('Import error:', error);
-      alert(`Hata: ${error.message}`);
+      alert(`Error: ${error.message}`);
     } finally {
       setIsImporting(false);
       setImportProgress(null);
@@ -1508,13 +1515,13 @@ function App() {
 
     // WhatsApp Paket Standartları Kontrolü (Min 3, Max 30 Toplam)
     if (totalCount > 30) {
-      alert(`Hata: Bir pakette en fazla 30 sticker olabilir. (Mevcut: ${currentCount}, Yeni: ${uploadCount}, Toplam: ${totalCount})`);
+      alert(`Error: A pack can have a maximum of 30 stickers. (Current: ${currentCount}, New: ${uploadCount}, Total: ${totalCount})`);
       e.target.value = '';
       return;
     }
 
     if (totalCount < 3) {
-      alert(`Hata: Bir pakette en az 3 sticker olmalıdır. (Mevcut: ${currentCount}, Yeni: ${uploadCount}, Toplam: ${totalCount}). En az ${3 - currentCount} adet daha eklemelisiniz.`);
+      alert(`Error: A pack must have at least 3 stickers. (Current: ${currentCount}, New: ${uploadCount}, Total: ${totalCount}). You need to add at least ${3 - currentCount} more.`);
       e.target.value = '';
       return;
     }
@@ -1541,10 +1548,10 @@ function App() {
 
 
   const deletePack = async (pack: StickerPack) => {
-    if (!window.confirm(`"${pack.name}" paketini TAMAMEN silmek istediğinize emin misiniz?\n\nBu işlem geri alınamaz ve tüm dosyalar silinecek!`)) return;
+    if (!window.confirm(`Are you sure you want to PERMANENTLY delete "${pack.name}"?\n\nThis action cannot be undone and all files will be deleted!`)) return;
 
     try {
-      setDeleteProgress({ deleting: true, message: 'Dosyalar listeleniyor...', current: 0, total: 0 });
+      setDeleteProgress({ deleting: true, message: 'Listing files...', current: 0, total: 0 });
 
       const folderRef = ref(storage, `stickers/${pack.id}`);
 
@@ -1552,16 +1559,16 @@ function App() {
       try {
         const fileList = await listAll(folderRef);
         const total = fileList.items.length;
-        setDeleteProgress({ deleting: true, message: `Storage'dan siliniyor...`, current: 0, total });
+        setDeleteProgress({ deleting: true, message: `Deleting from storage...`, current: 0, total });
 
         for (let i = 0; i < fileList.items.length; i++) {
           await deleteObject(fileList.items[i]);
-          setDeleteProgress({ deleting: true, message: `Storage'dan siliniyor...`, current: i + 1, total });
+          setDeleteProgress({ deleting: true, message: `Deleting from storage...`, current: i + 1, total });
         }
       } catch (e) { console.log('Storage silme hatası:', e); }
 
       // 2. Firestore dokümanını sil
-      setDeleteProgress({ deleting: true, message: 'Veritabanından siliniyor...', current: 0, total: 1 });
+      setDeleteProgress({ deleting: true, message: 'Deleting from database...', current: 0, total: 1 });
       const collectionName = pack.is_premium ? 'premium_stickers' : 'stickers';
       await deleteDoc(doc(db, collectionName, pack.id));
 
@@ -1570,12 +1577,12 @@ function App() {
       setDeleteProgress(null);
     } catch (error) {
       setDeleteProgress(null);
-      alert("Silme hatası: " + error);
+      alert("Delete error: " + error);
     }
   };
 
   const deleteSticker = async (pack: StickerPack, sticker: Sticker) => {
-    if (!window.confirm("Bu çıkartmayı silmek istediğinize emin misiniz?")) return;
+    if (!window.confirm("Are you sure you want to delete this sticker?")) return;
 
     try {
       const collectionName = pack.is_premium ? 'premium_stickers' : 'stickers';
@@ -1616,17 +1623,17 @@ function App() {
         return newSizes;
       });
     } catch (error) {
-      alert("Çıkartma silme hatası: " + error);
+      alert("Sticker delete error: " + error);
     }
   };
 
   const setAsTray = async (pack: StickerPack, sticker: Sticker) => {
     if (!pack || !sticker || isProcessing) return;
 
-    if (!window.confirm("Bu sticker'ı paket kapağı yapmak istediğinize emin misiniz?")) return;
+    if (!window.confirm("Are you sure you want to set this sticker as the pack cover?")) return;
 
     setIsProcessing(true);
-    setUploadProgress({ current: 0, total: 1, message: 'Kapak resmi hazırlanıyor...' });
+    setUploadProgress({ current: 0, total: 1, message: 'Preparing cover image...' });
 
     try {
       // Sticker'ı blob olarak çek
@@ -1676,10 +1683,10 @@ function App() {
       setPacks(packs.map(p => p.id === pack.id ? updatedPack : p));
       setSelectedPack(updatedPack);
 
-      alert("Kapak resmi başarıyla güncellendi.");
+      alert("Cover image updated successfully.");
     } catch (error: any) {
       console.error(error);
-      alert("Kapak yapma hatası: " + error.message);
+      alert("Set cover error: " + error.message);
     } finally {
       setIsProcessing(false);
       setUploadProgress(null);
@@ -1688,7 +1695,7 @@ function App() {
 
   const deleteSelectedStickers = async () => {
     if (!selectedPack || selectedStickerIds.length === 0) return;
-    if (!window.confirm(`${selectedStickerIds.length} adet çıkartmayı silmek istediğinize emin misiniz?`)) return;
+    if (!window.confirm(`Are you sure you want to delete ${selectedStickerIds.length} stickers?`)) return;
 
     try {
       setIsProcessing(true);
@@ -1737,12 +1744,12 @@ function App() {
         return newSizes;
       });
 
-      alert(`${selectedStickerIds.length} çıkartma başarıyla silindi.`);
+      alert(`${selectedStickerIds.length} stickers deleted successfully.`);
       setSelectedStickerIds([]);
       setIsSelectionMode(false);
     } catch (error) {
       console.error('Toplu silme hatası:', error);
-      alert('Seçili çıkartmalar silinirken bir hata oluştu.');
+      alert('An error occurred while deleting selected stickers.');
     } finally {
       setIsProcessing(false);
     }
@@ -1792,12 +1799,12 @@ function App() {
       setPacks(packs.map(p => p.id === pack.id ? updatedPack : p));
       setSelectedPack(updatedPack);
     } catch (error) {
-      alert("Sıralama hatası: " + error);
+      alert("Reorder error: " + error);
     }
   };
 
   const resetStats = async (pack: StickerPack) => {
-    if (!window.confirm("İstatistikleri sıfırlamak istiyor musunuz?")) return;
+    if (!window.confirm("Do you want to reset the statistics?")) return;
     try {
       const collectionName = pack.is_premium ? 'premium_stickers' : 'stickers';
       await updateDoc(doc(db, collectionName, pack.id), {
@@ -1807,18 +1814,18 @@ function App() {
       const updated = { ...pack, download_count: 0, view_count: 0 };
       setPacks(packs.map(p => p.id === pack.id ? updated : p));
       setSelectedPack(updated);
-      alert("İstatistikler sıfırlandı.");
-    } catch (e) { alert("Hata: " + e); }
+      alert("Statistics reset.");
+    } catch (e) { alert("Error: " + e); }
   };
 
   // Tüm paketleri fake_download_base ve premium fiyatlarıyla güncelle
   const updateAllPacksWithFakeBase = async (forceUpdate: boolean = false) => {
     const range = fakeBaseMax - fakeBaseMin;
     if (range <= 0) {
-      alert("Geçersiz aralık! Max değer Min'den büyük olmalı.");
+      alert("Invalid range! Max value must be greater than Min.");
       return;
     }
-    if (!window.confirm(`Tüm paketlere fake download base (${fakeBaseMin.toLocaleString()} - ${fakeBaseMax.toLocaleString()}) ${forceUpdate ? 'ZORLA ' : ''}eklenecek ve premium paket fiyatları güncellenecek. Devam?`)) return;
+    if (!window.confirm(`Fake download base (${fakeBaseMin.toLocaleString()} - ${fakeBaseMax.toLocaleString()}) will be ${forceUpdate ? 'FORCE ' : ''}added to all packs and premium pack prices will be updated. Continue?`)) return;
     setIsProcessing(true);
     try {
       const collections = ['stickers', 'premium_stickers'];
@@ -1849,96 +1856,14 @@ function App() {
         }
       }
 
-      alert(`${updated} paket güncellendi! Listeyi yenilemek için bekleyin...`);
+      alert(`${updated} packs updated! Please wait for the list to refresh...`);
       await fetchPacks();
     } catch (e) {
-      alert("Hata: " + e);
+      alert("Error: " + e);
     } finally {
       setIsProcessing(false);
     }
   };
-
-  if (showWelcome) {
-    return (
-      <div className={cn(
-        "fixed inset-0 z-[9999] bg-[#08090A] flex flex-col items-center justify-center transition-all duration-700 ease-out-expo",
-        welcomeExit ? "scale-[2] blur-3xl opacity-0 -translate-y-full" : "scale-100 opacity-100"
-      )}>
-        {/* Techy Grid Background */}
-        <div className="absolute inset-0 opacity-[0.03] pointer-events-none"
-          style={{ backgroundImage: 'radial-gradient(#10B981 1px, transparent 0)', backgroundSize: '40px 40px' }} />
-
-        {/* Scanning Line */}
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <div className="w-full h-[2px] bg-gradient-to-r from-transparent via-primary to-transparent animate-scan shadow-[0_0_20px_#10B981]" />
-        </div>
-
-        <div className="relative z-10 text-center space-y-12 max-w-4xl px-4">
-          {/* Hexagon/Circle Container */}
-          <div className="relative mx-auto w-32 h-32 animate-in zoom-in duration-700">
-            <div className="absolute inset-0 bg-primary/20 rounded-3xl rotate-12 animate-pulse" />
-            <div className="absolute inset-0 bg-primary/20 rounded-3xl -rotate-12 animate-pulse delay-75" />
-            <div className="relative bg-[#0F1112] border-2 border-primary/50 w-full h-full rounded-3xl flex items-center justify-center shadow-[0_0_50px_rgba(16,185,129,0.3)]">
-              <Sparkles className="text-primary animate-bounce-subtle" size={56} />
-            </div>
-            {/* Spinning Rings */}
-            <div className="absolute -inset-4 border border-primary/10 rounded-full border-t-primary/40 animate-spin-slow" />
-            <div className="absolute -inset-8 border border-primary/5 rounded-full border-b-primary/20 animate-reverse-spin" />
-          </div>
-
-          <div className="space-y-6">
-            <div className="inline-flex items-center gap-2 px-4 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-mono tracking-widest animate-in fade-in slide-in-from-top-4 duration-500">
-              <CloudLightning size={14} className="animate-pulse" />
-              ERİŞİM ONAYLANDI • SİSTEM GÜVENLİ
-            </div>
-
-            <h1 className="text-7xl font-black tracking-tight leading-none italic animate-in slide-in-from-bottom-8 duration-700">
-              <span className="block text-textSec text-2xl font-mono uppercase tracking-[0.5em] mb-4 opacity-40">HOŞ GELDİN</span>
-              <span className="text-transparent bg-clip-text bg-gradient-to-br from-white via-primary to-emerald-500 drop-shadow-[0_0_30px_rgba(16,185,129,0.3)]">
-                {adminName.toLowerCase()}
-              </span>
-            </h1>
-
-            <div className="font-mono text-primary/40 text-sm tracking-widest flex justify-center gap-8 pt-4">
-              <div className="flex flex-col gap-1">
-                <span className="text-[10px] uppercase opacity-50">KİMLİK</span>
-                <span className="text-white/80">DOĞRULANDI</span>
-              </div>
-              <div className="w-px h-8 bg-white/10" />
-              <div className="flex flex-col gap-1">
-                <span className="text-[10px] uppercase opacity-50">PROTOKOL</span>
-                <span className="text-white/80">ŞİFRELENDİ</span>
-              </div>
-              <div className="w-px h-8 bg-white/10" />
-              <div className="flex flex-col gap-1">
-                <span className="text-[10px] uppercase opacity-50">DURUM</span>
-                <span className="text-primary font-bold">AKTİF</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* CSS for custom animations */}
-        <style dangerouslySetInnerHTML={{
-          __html: `
-          @keyframes scan {
-            0% { transform: translateY(-100%); opacity: 0; }
-            50% { opacity: 1; }
-            100% { transform: translateY(100vh); opacity: 0; }
-          }
-          .animate-scan { animation: scan 3s linear infinite; }
-          .animate-spin-slow { animation: spin 8s linear infinite; }
-          .animate-reverse-spin { animation: spin 12s linear reverse infinite; }
-          .animate-bounce-subtle { animation: bounceSubtle 2s ease-in-out infinite; }
-          @keyframes bounceSubtle {
-            0%, 100% { transform: translateY(0); }
-            50% { transform: translateY(-8px); }
-          }
-          .ease-out-expo { transition-timing-function: cubic-bezier(0.19, 1, 0.22, 1); }
-        ` }} />
-      </div>
-    );
-  }
 
   if (loading && !user) {
     return (
@@ -1956,8 +1881,8 @@ function App() {
             <div className="bg-primary w-16 h-16 rounded-2xl flex items-center justify-center mx-auto shadow-lg shadow-primary/20">
               <Lock className="text-white" size={32} />
             </div>
-            <h1 className="text-2xl font-bold">Sticky Admin Girişi</h1>
-            <p className="text-textSec text-sm">Yönetim paneline erişmek için giriş yapın</p>
+            <h1 className="text-2xl font-bold">Sticky Admin Login</h1>
+            <p className="text-textSec text-sm">Sign in to access the admin panel</p>
           </div>
 
 
@@ -1984,7 +1909,7 @@ function App() {
                 d="M12 5.38c1.62 0 3.06.56 4.21 1.66l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 12-4.53z"
               />
             </svg>
-            Google ile Giriş Yap
+            Sign in with Google
           </button>
         </div>
       </div>
@@ -2017,6 +1942,7 @@ function App() {
 
     if (statusFilter === 'animated') return p.is_animated === true;
     if (statusFilter === 'static') return p.is_animated !== true;
+    if (statusFilter === 'premium') return p.is_premium === true;
     if (statusFilter === 'new') return isNew(p);
     return true;
   });
@@ -2031,7 +1957,7 @@ function App() {
               <div className="w-10 h-10 bg-danger/20 rounded-xl flex items-center justify-center">
                 <Trash2 className="text-danger animate-pulse" size={20} />
               </div>
-              <h3 className="text-xl font-bold text-white">Siliniyor...</h3>
+              <h3 className="text-xl font-bold text-white">Deleting...</h3>
             </div>
             <p className="text-textSec mb-4">{deleteProgress.message}</p>
             {deleteProgress.total > 0 && (
@@ -2068,8 +1994,8 @@ function App() {
                 Sticky <span className="text-primary/70">Admin</span>
               </h1>
               <div className="flex items-center gap-1.5">
-                <div className="w-1 h-1 bg-primary rounded-full animate-pulse shadow-[0_0_8px_rgba(0,168,132,0.8)]" />
-                <span className="text-[9px] text-textSec font-black uppercase tracking-widest opacity-80">Aktif</span>
+                <div className="w-1 h-1 bg-primary rounded-full animate-pulse shadow-[0_0_8px_rgba(108,92,231,0.8)]" />
+                <span className="text-[9px] text-textSec font-black uppercase tracking-widest opacity-80">Active</span>
               </div>
             </div>
           </div>
@@ -2080,7 +2006,7 @@ function App() {
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-textSec/50 group-focus-within:text-primary transition-colors" size={16} />
             <input
               type="text"
-              placeholder="Hızlı arama..."
+              placeholder="Quick search..."
               className="bg-white/5 border border-white/5 rounded-full pl-10 pr-4 py-2 focus:ring-2 focus:ring-primary/20 focus:border-primary/50 outline-none text-sm w-48 md:w-64 transition-all text-white placeholder:text-textSec/30"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -2096,7 +2022,7 @@ function App() {
               }
             }}
             className="p-2.5 hover:bg-white/10 rounded-xl transition-all active:scale-90 group relative"
-            title="Sistemi Yenile"
+            title="Refresh System"
           >
             <RefreshCcw size={18} className={cn("text-textSec group-hover:text-primary transition-colors", (loading || checkingSizes) && 'animate-spin text-primary')} />
           </button>
@@ -2105,12 +2031,12 @@ function App() {
 
           <button
             onClick={() => {
-              if (window.confirm("Güvenli çıkış yapmak istiyor musunuz?")) signOut(auth);
+              if (window.confirm("Do you want to sign out safely?")) signOut(auth);
             }}
             className="hidden md:flex items-center gap-2.5 px-4 py-2 bg-danger/5 hover:bg-danger/10 text-textSec hover:text-danger rounded-xl transition-all border border-transparent hover:border-danger/20"
           >
             <LogOut size={16} />
-            <span className="text-xs font-black uppercase tracking-wider">Çıkış</span>
+            <span className="text-xs font-black uppercase tracking-wider">Sign Out</span>
           </button>
         </div>
       </header>
@@ -2137,10 +2063,10 @@ function App() {
             <div className="flex-1 space-y-4">
               {[
                 { id: 'dashboard', label: 'Dashboard', icon: Grid },
-                { id: 'stats', label: 'İstatistikler', icon: BarChart3 },
-                { id: 'messages', label: 'Mesajlar', icon: Mail, count: messages.filter(m => m.status === 'unread').length },
-                { id: 'notifications', label: 'Bildirimler', icon: Bell },
-                { id: 'users', label: 'Kullanicilar', icon: Users }
+                { id: 'stats', label: 'Statistics', icon: BarChart3 },
+                { id: 'messages', label: 'Messages', icon: Mail, count: messages.filter(m => m.status === 'unread').length },
+                { id: 'notifications', label: 'Notifications', icon: Bell },
+                { id: 'users', label: 'Users', icon: Users }
               ].map((item) => (
                 <button
                   key={item.id}
@@ -2169,12 +2095,12 @@ function App() {
             <div className="pt-8 border-t border-white/5">
               <button
                 onClick={() => {
-                  if (window.confirm("Çıkış yapmak istediğinize emin misiniz?")) signOut(auth);
+                  if (window.confirm("Are you sure you want to sign out?")) signOut(auth);
                 }}
                 className="w-full flex items-center justify-center gap-4 p-5 bg-danger/10 text-danger rounded-3xl font-black uppercase tracking-widest"
               >
                 <LogOut size={24} />
-                Güvenli Çıkış
+                Sign Out
               </button>
             </div>
           </div>
@@ -2186,12 +2112,12 @@ function App() {
         <div className="hidden md:flex fixed left-0 top-0 bottom-0 w-24 flex-col items-center justify-center z-30 pointer-events-none">
           <div className="bg-card/40 backdrop-blur-2xl border border-white/5 rounded-[2.5rem] p-4 space-y-6 pointer-events-auto shadow-2xl shadow-black/40">
             {[
-              { id: 'dashboard', icon: Grid, label: 'Panel' },
-              { id: 'stats', icon: BarChart3, label: 'Veriler' },
-              { id: 'messages', icon: Mail, label: 'Mesajlar', count: messages.filter(m => m.status === 'unread').length },
-              { id: 'notifications', icon: Bell, label: 'Bildirim' },
-              { id: 'users', icon: Users, label: 'Kullanicilar' },
-              { id: 'batch', icon: Zap, label: 'Toplu Üretici' }
+              { id: 'dashboard', icon: Grid, label: 'Dashboard' },
+              { id: 'stats', icon: BarChart3, label: 'Statistics' },
+              { id: 'messages', icon: Mail, label: 'Messages', count: messages.filter(m => m.status === 'unread').length },
+              { id: 'notifications', icon: Bell, label: 'Notifications' },
+              { id: 'users', icon: Users, label: 'Users' },
+              { id: 'batch', icon: Zap, label: 'Batch Generator' }
             ].map(item => (
               <button
                 key={item.id}
@@ -2233,15 +2159,17 @@ function App() {
               <div className="p-4 space-y-3 shrink-0">
                 <div className="flex items-center justify-between">
                   <div className="flex flex-col">
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-textSec">Sticker Paketleri</span>
-                    <span className="text-lg font-bold">{filteredPacks.length} Paket</span>
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-textSec">Sticker Packs</span>
+                    <span className="text-lg font-bold">{filteredPacks.length} Packs</span>
                   </div>
+                </div>
 
-                  {/* Filter Dropdown */}
-                  <div className="flex items-center gap-2">
-                    {/* Status Filter */}
-                    <div className="relative">
+                {/* Filter Buttons Row */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  {/* Status Filter */}
+                  <div className="relative">
                       <button
+                        ref={statusFilterRef}
                         onClick={() => {
                           setShowFilterDropdown(!showFilterDropdown);
                           setShowCategoryDropdown(false);
@@ -2254,21 +2182,23 @@ function App() {
                         )}
                       >
                         <Filter size={14} />
-                        {statusFilter === 'all' ? 'Filtrele' : statusFilter.toUpperCase()}
+                        {statusFilter === 'all' ? 'Filter' : statusFilter.toUpperCase()}
                         <ChevronDown size={14} className={cn("transition-transform", showFilterDropdown && "rotate-180")} />
                       </button>
 
-                      {showFilterDropdown && (
+                      {showFilterDropdown && createPortal(
                         <>
-                          <div className="fixed inset-0 z-30" onClick={() => setShowFilterDropdown(false)} />
-                          <div className="absolute right-0 top-full mt-2 w-48 glass rounded-2xl border border-white/10 shadow-2xl py-2 z-40 animate-in fade-in zoom-in-95 duration-200">
+                          <div className="fixed inset-0 z-[9990]" onClick={() => setShowFilterDropdown(false)} />
+                          <div className="fixed w-48 glass rounded-2xl border border-white/10 shadow-2xl py-2 z-[9991] animate-in fade-in zoom-in-95 duration-200"
+                            style={{ top: getDropdownPos(statusFilterRef).top, left: getDropdownPos(statusFilterRef).left }}>
                             {[
-                              { id: 'all', label: 'Tümü', icon: Grid },
-                              { id: 'active', label: 'Aktif Paketler', icon: Check },
-                              { id: 'passive', label: 'Pasif Paketler', icon: X },
-                              { id: 'animated', label: 'Hareketli Paketler', icon: RefreshCcw },
-                              { id: 'static', label: 'Statik Paketler', icon: ImageIcon },
-                              { id: 'new', label: 'Yeni Eklenenler', icon: Clock }
+                              { id: 'all', label: 'All', icon: Grid },
+                              { id: 'active', label: 'Active Packs', icon: Check },
+                              { id: 'passive', label: 'Inactive Packs', icon: X },
+                              { id: 'animated', label: 'Animated Packs', icon: RefreshCcw },
+                              { id: 'static', label: 'Static Packs', icon: ImageIcon },
+                              { id: 'premium', label: 'Premium Packs', icon: Crown },
+                              { id: 'new', label: 'Recently Added', icon: Clock }
                             ].map(f => (
                               <button
                                 key={f.id}
@@ -2286,13 +2216,15 @@ function App() {
                               </button>
                             ))}
                           </div>
-                        </>
+                        </>,
+                        document.body
                       )}
                     </div>
 
                     {/* Category Filter */}
                     <div className="relative">
                       <button
+                        ref={categoryFilterRef}
                         onClick={() => {
                           setShowCategoryDropdown(!showCategoryDropdown);
                           setShowFilterDropdown(false);
@@ -2305,14 +2237,15 @@ function App() {
                         )}
                       >
                         <Grid size={14} />
-                        {categoryFilter === 'all' ? 'Kategori' : CATEGORIES.find(c => c.id === categoryFilter)?.name.toUpperCase()}
+                        {categoryFilter === 'all' ? 'Category' : CATEGORIES.find(c => c.id === categoryFilter)?.name.toUpperCase()}
                         <ChevronDown size={14} className={cn("transition-transform", showCategoryDropdown && "rotate-180")} />
                       </button>
 
-                      {showCategoryDropdown && (
+                      {showCategoryDropdown && createPortal(
                         <>
-                          <div className="fixed inset-0 z-30" onClick={() => setShowCategoryDropdown(false)} />
-                          <div className="absolute right-0 top-full mt-2 w-56 glass rounded-2xl border border-white/10 shadow-2xl py-2 z-40 animate-in fade-in zoom-in-95 duration-200 max-h-[400px] overflow-y-auto custom-scrollbar">
+                          <div className="fixed inset-0 z-[9990]" onClick={() => setShowCategoryDropdown(false)} />
+                          <div className="fixed w-56 glass rounded-2xl border border-white/10 shadow-2xl py-2 z-[9991] animate-in fade-in zoom-in-95 duration-200 max-h-[400px] overflow-y-auto custom-scrollbar"
+                            style={{ top: getDropdownPos(categoryFilterRef).top, left: getDropdownPos(categoryFilterRef).left }}>
                             <button
                               onClick={() => {
                                 setCategoryFilter('all');
@@ -2324,7 +2257,7 @@ function App() {
                               )}
                             >
                               <div className="w-5 h-5 flex items-center justify-center bg-white/5 rounded-lg text-xs">✨</div>
-                              Tümü (Hepsi)
+                              All Categories
                             </button>
                             {CATEGORIES.map(cat => (
                               <button
@@ -2343,12 +2276,12 @@ function App() {
                               </button>
                             ))}
                           </div>
-                        </>
+                        </>,
+                        document.body
                       )}
                     </div>
                   </div>
                 </div>
-              </div>
 
               <div className="flex-1 overflow-y-auto px-3 pb-20 space-y-2 flex flex-col custom-scrollbar">
                 <button
@@ -2356,7 +2289,7 @@ function App() {
                   className="w-full flex items-center justify-center gap-2 p-3 border-2 border-dashed border-white/10 hover:border-primary/50 hover:bg-primary/5 rounded-2xl group transition-all mb-3"
                 >
                   <Plus className="text-textSec group-hover:text-primary transition-colors" size={18} />
-                  <span className="text-sm font-bold text-textSec group-hover:text-primary">Yeni Paket Oluştur</span>
+                  <span className="text-sm font-bold text-textSec group-hover:text-primary">Create New Pack</span>
                 </button>
 
                 {filteredPacks.map(pack => (
@@ -2382,7 +2315,7 @@ function App() {
                         {/* Pack Type Icon Kaldirildi */}
                         {pack.is_active === false && (
                           <div className="absolute bottom-0 left-0 right-0 bg-danger/80 py-0.5 flex items-center justify-center">
-                            <span className="text-[7px] text-white font-black tracking-widest">PASİF</span>
+                            <span className="text-[7px] text-white font-black tracking-widest">INACTIVE</span>
                           </div>
                         )}
                       </div>
@@ -2398,7 +2331,7 @@ function App() {
                             <span className="text-[10px] text-primary font-bold uppercase tracking-tighter">{pack.category}</span>
                           )}
                           {isNew(pack) && (
-                            <span className="px-1.5 py-0.5 bg-accent/20 text-accent text-[8px] font-black rounded-md animate-pulse">YENİ</span>
+                            <span className="px-1.5 py-0.5 bg-accent/20 text-accent text-[8px] font-black rounded-md animate-pulse">NEW</span>
                           )}
                         </div>
                       </div>
@@ -2427,7 +2360,7 @@ function App() {
                     className="md:hidden flex items-center gap-2 text-textSec hover:text-white mb-3"
                   >
                     <ChevronRight className="rotate-180" size={20} />
-                    <span className="text-sm font-bold">Listeye Dön</span>
+                    <span className="text-sm font-bold">Back to List</span>
                   </button>
 
                   <div className="flex items-center gap-4 flex-wrap">
@@ -2446,7 +2379,7 @@ function App() {
                         <h2 className="text-xl font-black tracking-tight text-white truncate">{selectedPack.name}</h2>
                         {/* Tip Badge Kaldirildi */}
                         {selectedPack.is_active === false && (
-                          <span className="px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest bg-danger text-white shrink-0">PASİF</span>
+                          <span className="px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest bg-danger text-white shrink-0">INACTIVE</span>
                         )}
                       </div>
                       <div className="flex items-center gap-3 mt-1 text-xs text-textSec">
@@ -2460,12 +2393,12 @@ function App() {
 
                     {/* Stats */}
                     <div className="flex items-center gap-3 shrink-0">
-                      <StatCard label="İndirme" value={selectedPack.download_count} color="primary" />
-                      <StatCard label="Görüntülenme" value={selectedPack.view_count} color="accent" />
+                      <StatCard label="Downloads" value={selectedPack.download_count} color="primary" />
+                      <StatCard label="Views" value={selectedPack.view_count} color="accent" />
                       <button
                         onClick={() => resetStats(selectedPack)}
                         className="p-2 bg-white/5 hover:bg-white/10 rounded-xl transition-all text-textSec hover:text-white"
-                        title="İstatistikleri Sıfırla"
+                        title="Reset Statistics"
                       >
                         <RefreshCcw size={16} />
                       </button>
@@ -2474,16 +2407,9 @@ function App() {
                     {/* Action Buttons */}
                     <div className="flex items-center gap-2 shrink-0">
                       <label className="relative flex items-center gap-1.5 px-4 py-2.5 bg-primary hover:bg-primary/90 text-white rounded-xl text-xs font-black shadow-lg shadow-primary/20 transition-all hover:translate-y-[-1px] active:translate-y-0 cursor-pointer">
-                        <Plus size={16} className="stroke-[3]" /> Sticker Ekle
+                        <Plus size={16} className="stroke-[3]" /> Add Sticker
                         <input type="file" multiple className="hidden" onChange={handleAddSticker} disabled={isProcessing} />
                       </label>
-                      <button
-                        onClick={() => setShowImportModal(true)}
-                        disabled={isProcessing || isImporting}
-                        className="flex items-center gap-1.5 px-4 py-2.5 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white rounded-xl text-xs font-black shadow-lg shadow-purple-500/20 transition-all hover:translate-y-[-1px] active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        <Sparkles size={16} className="stroke-[3]" /> Otomatik Ekle
-                      </button>
                       <button
                         onClick={() => {
                           setEditFormData({
@@ -2493,7 +2419,7 @@ function App() {
                         }}
                         className="flex items-center gap-1.5 px-4 py-2.5 bg-card hover:bg-hover border border-white/5 rounded-xl text-xs font-bold transition-all text-textSec hover:text-textMain"
                       >
-                        <Settings size={16} /> Düzenle
+                        <Settings size={16} /> Edit
                       </button>
                     </div>
                   </div>
@@ -2504,23 +2430,23 @@ function App() {
                   <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-5">
                     <h3 className="text-base font-bold flex items-center gap-2">
                       <Grid className="text-primary" size={20} />
-                      Paket İçeriği
-                      <span className="bg-white/5 px-2 py-0.5 rounded-lg text-[10px] font-mono">{selectedPack.sticker_count} DOSYA</span>
+                      Pack Contents
+                      <span className="bg-white/5 px-2 py-0.5 rounded-lg text-[10px] font-mono">{selectedPack.sticker_count} FILES</span>
                       {checkingSizes && (
-                        <span className="text-xs text-textSec animate-pulse">Boyutlar kontrol ediliyor...</span>
+                        <span className="text-xs text-textSec animate-pulse">Checking sizes...</span>
                       )}
                     </h3>
                     <div className="flex items-center gap-3 text-xs text-textSec font-bold uppercase tracking-widest">
                       {isSelectionMode ? (
                         <div className="flex items-center gap-2 animate-in fade-in slide-in-from-right-4 duration-300">
                           <span className="text-white bg-white/10 px-2 py-1 rounded-lg">
-                            {selectedStickerIds.length} Seçildi
+                            {selectedStickerIds.length} Selected
                           </span>
                           <button
                             onClick={toggleSelectAll}
                             className="px-3 py-1.5 bg-white/5 hover:bg-white/10 rounded-lg transition-colors border border-white/5"
                           >
-                            {selectedPack.stickers?.length === selectedStickerIds.length ? 'Seçimi Kaldır' : 'Tümünü Seç'}
+                            {selectedPack.stickers?.length === selectedStickerIds.length ? 'Deselect All' : 'Select All'}
                           </button>
                           <button
                             onClick={deleteSelectedStickers}
@@ -2537,7 +2463,7 @@ function App() {
                             }}
                             className="px-3 py-1.5 bg-white/5 hover:bg-white/10 rounded-lg transition-colors border border-white/5"
                           >
-                            İptal
+                            Cancel
                           </button>
                         </div>
                       ) : (
@@ -2547,9 +2473,9 @@ function App() {
                             className="px-3 py-1.5 bg-white/5 hover:bg-white/10 rounded-lg transition-colors border border-white/5 flex items-center gap-1.5"
                           >
                             <Check size={14} />
-                            Çoklu Seçim
+                            Multi Select
                           </button>
-                          <span className="hidden md:flex items-center gap-1.5"><Info size={14} /> Anlık Bulut Önizleme</span>
+                          <span className="hidden md:flex items-center gap-1.5"><Info size={14} /> Live Cloud Preview</span>
                         </div>
                       )}
                     </div>
@@ -2563,10 +2489,10 @@ function App() {
                       </div>
                       <div>
                         <p className="text-danger font-bold text-sm">
-                          {oversizedStickersCount} sticker WhatsApp 500KB limitini aşıyor!
+                          {oversizedStickersCount} stickers exceed the WhatsApp 500KB limit!
                         </p>
                         <p className="text-danger/70 text-xs mt-0.5">
-                          Bu stickerlar WhatsApp'a eklenirken hata verecektir. Lütfen silin ve yeniden yükleyin.
+                          These stickers will cause errors when adding to WhatsApp. Please delete and re-upload.
                         </p>
                       </div>
                     </div>
@@ -2617,7 +2543,7 @@ function App() {
                         >
                           {/* Boyut Aşımı İkonu */}
                           {isOversized && (
-                            <div className="absolute top-2 right-2 z-10 p-1.5 bg-danger rounded-lg shadow-lg" title={`${sizeKB}KB - WhatsApp limiti aşıyor!`}>
+                            <div className="absolute top-2 right-2 z-10 p-1.5 bg-danger rounded-lg shadow-lg" title={`${sizeKB}KB - Exceeds WhatsApp limit!`}>
                               <X size={14} className="text-white" />
                             </div>
                           )}
@@ -2656,34 +2582,24 @@ function App() {
                           <div className={cn(
                             "absolute inset-0 bg-background/60 transition-opacity flex flex-col items-center justify-center gap-2 rounded-2xl backdrop-blur-[2px]",
                             isSelectionMode ? "opacity-0 pointer-events-none" : "opacity-0 group-hover:opacity-100"
-                          )} onClick={(e) => e.stopPropagation()}>
-                            {/* Aksiyon Butonları */}
+                          )} onClick={(e) => { e.stopPropagation(); setPreviewSticker({ url: sticker.url, title: sticker.image_file }); }}>
+                            {/* Action Buttons */}
                             <div className="flex gap-1.5">
                               <button
-                                onClick={() => deleteSticker(selectedPack, sticker)}
+                                onClick={(e) => { e.stopPropagation(); deleteSticker(selectedPack, sticker); }}
                                 className="p-2 bg-danger hover:bg-danger/80 text-white rounded-xl shadow-lg transition-all hover:scale-110"
-                                title="Sil"
+                                title="Delete"
                               >
                                 <Trash2 size={16} />
                               </button>
                               <button
-                                onClick={() => setAsTray(selectedPack, sticker)}
+                                onClick={(e) => { e.stopPropagation(); setAsTray(selectedPack, sticker); }}
                                 className="p-2 bg-accent hover:bg-accent/80 text-white rounded-xl shadow-lg transition-all hover:scale-110"
-                                title="Kapak Yap"
+                                title="Set as Cover"
                               >
                                 <ImageIcon size={16} />
                               </button>
-                              <a
-                                href={sticker.url}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="p-2 bg-primary hover:bg-primary/80 text-white rounded-xl shadow-lg transition-all hover:scale-110"
-                                title="İndir"
-                              >
-                                <ExternalLink size={16} />
-                              </a>
                             </div>
-                            {/* Sıra Numarası */}
                             <span className="text-[10px] font-black text-white/60">#{idx + 1}</span>
                           </div>
 
@@ -2721,18 +2637,19 @@ function App() {
               <div className="glass rounded-2xl p-5 md:p-6 border border-white/5">
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                   <div className="flex items-center gap-4">
-                    <div className="w-14 h-14 bg-gradient-to-br from-emerald-500/20 to-teal-500/20 rounded-2xl flex items-center justify-center border border-emerald-500/10 shadow-lg shadow-emerald-500/5">
-                      <BarChart3 size={26} className="text-emerald-400" />
+                    <div className="w-14 h-14 bg-gradient-to-br from-purple-500/20 to-purple-500/20 rounded-2xl flex items-center justify-center border border-purple-500/10 shadow-lg shadow-purple-500/5">
+                      <BarChart3 size={26} className="text-purple-400" />
                     </div>
                     <div>
-                      <h2 className="text-2xl font-black text-white tracking-tight">Performans Analizi</h2>
-                      <p className="text-xs text-textSec mt-0.5">Uygulama genelindeki etkileşim ve verimlilik raporu</p>
+                      <h2 className="text-2xl font-black text-white tracking-tight">Performance Analysis</h2>
+                      <p className="text-xs text-textSec mt-0.5">App-wide engagement and performance report</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
                     {/* Stats Filter */}
                     <div className="relative">
                       <button
+                        ref={statsFilterRef}
                         onClick={() => setShowFilterDropdown(!showFilterDropdown)}
                         className={cn(
                           "flex items-center gap-2 px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border",
@@ -2742,21 +2659,25 @@ function App() {
                         )}
                       >
                         <Filter size={13} />
-                        {statsFilter === 'all' ? 'Filtrele' : statsFilter.toUpperCase()}
+                        {statsFilter === 'all' ? 'Filter' : statsFilter.toUpperCase()}
                         <ChevronDown size={13} className={cn("transition-transform duration-300", showFilterDropdown && "rotate-180")} />
                       </button>
 
-                      {showFilterDropdown && (
+                      {showFilterDropdown && createPortal(
                         <>
-                          <div className="fixed inset-0 z-30" onClick={() => setShowFilterDropdown(false)} />
-                          <div className="absolute right-0 top-full mt-2 w-52 glass rounded-2xl border border-white/10 shadow-2xl py-2 z-40 animate-in fade-in zoom-in-95 duration-200">
+                          <div className="fixed inset-0 z-[9990]" onClick={() => setShowFilterDropdown(false)} />
+                          <div className="fixed w-52 glass rounded-2xl border border-white/10 shadow-2xl py-2 z-[9991] animate-in fade-in zoom-in-95 duration-200"
+                            style={{ top: getDropdownPos(statsFilterRef).top, left: getDropdownPos(statsFilterRef).left }}>
                             <div className="px-4 py-2 mb-1 border-b border-white/5">
-                              <span className="text-[9px] font-black text-textSec uppercase tracking-widest">Görünüm</span>
+                              <span className="text-[9px] font-black text-textSec uppercase tracking-widest">View</span>
                             </div>
                             {[
-                              { id: 'all', label: 'Tüm Paketler', icon: Grid, color: 'text-white' },
-                              { id: 'active', label: 'Aktif Olanlar', icon: Check, color: 'text-primary' },
-                              { id: 'passive', label: 'Pasif Olanlar', icon: X, color: 'text-danger' }
+                              { id: 'all', label: 'All Packs', icon: Grid, color: 'text-white' },
+                              { id: 'popular', label: 'Popular', icon: Star, color: 'text-yellow-400' },
+                              { id: 'active', label: 'Active', icon: Check, color: 'text-primary' },
+                              { id: 'passive', label: 'Inactive', icon: X, color: 'text-danger' },
+                              { id: 'premium', label: 'Premium', icon: Crown, color: 'text-yellow-400' },
+                              { id: 'normal', label: 'Free', icon: Shield, color: 'text-textSec' }
                             ].map(f => (
                               <button
                                 key={f.id}
@@ -2774,14 +2695,15 @@ function App() {
                               </button>
                             ))}
                           </div>
-                        </>
+                        </>,
+                        document.body
                       )}
                     </div>
 
                     <button
                       onClick={fetchPacks}
                       className="p-2.5 bg-white/5 hover:bg-white/10 border border-white/5 rounded-xl text-textSec transition-all"
-                      title="Verileri Güncelle"
+                      title="Refresh Data"
                     >
                       <RefreshCcw size={14} className={loading ? 'animate-spin text-primary' : ''} />
                     </button>
@@ -2792,7 +2714,7 @@ function App() {
               {/* Fake Base Controls */}
               <div className="glass rounded-2xl p-4 border border-white/5">
                 <div className="flex flex-wrap items-center gap-3">
-                  <span className="text-[10px] font-black text-textSec uppercase tracking-widest shrink-0">Fake İndirme Aralığı:</span>
+                  <span className="text-[10px] font-black text-textSec uppercase tracking-widest shrink-0">Fake Download Range:</span>
                   <div className="flex items-center gap-2">
                     <input
                       type="number"
@@ -2816,14 +2738,14 @@ function App() {
                       disabled={isProcessing}
                       className="px-4 py-2 bg-primary/10 hover:bg-primary/20 border border-primary/10 rounded-xl text-primary text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-50"
                     >
-                      {isProcessing ? '..' : 'Eksiklere'}
+                      {isProcessing ? '..' : 'Missing Only'}
                     </button>
                     <button
                       onClick={() => updateAllPacksWithFakeBase(true)}
                       disabled={isProcessing}
                       className="px-4 py-2 bg-yellow-500/10 hover:bg-yellow-500/20 border border-yellow-500/10 rounded-xl text-yellow-400 text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-50"
                     >
-                      {isProcessing ? '..' : 'Tümünü'}
+                      {isProcessing ? '..' : 'All Packs'}
                     </button>
                   </div>
                 </div>
@@ -2834,6 +2756,7 @@ function App() {
                 {((): any => {
                   const sPacks = packs.filter(p => {
                     if (statsFilter === 'all') return true;
+                    if (statsFilter === 'popular') return p.is_popular === true;
                     if (statsFilter === 'active') return p.is_active !== false;
                     if (statsFilter === 'passive') return p.is_active === false;
                     if (statsFilter === 'premium') return p.is_premium === true;
@@ -2854,7 +2777,7 @@ function App() {
                           <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center">
                             <TrendingUp size={18} className="text-primary" />
                           </div>
-                          <span className="text-[8px] font-black text-primary/60 bg-primary/5 px-1.5 py-0.5 rounded uppercase tracking-widest">İndirme</span>
+                          <span className="text-[8px] font-black text-primary/60 bg-primary/5 px-1.5 py-0.5 rounded uppercase tracking-widest">Downloads</span>
                         </div>
                         <p className="text-2xl font-black text-white">{totalDL.toLocaleString()}</p>
                       </div>
@@ -2864,7 +2787,7 @@ function App() {
                           <div className="w-10 h-10 bg-accent/10 rounded-xl flex items-center justify-center">
                             <BarChart3 size={18} className="text-accent" />
                           </div>
-                          <span className="text-[8px] font-black text-accent/60 bg-accent/5 px-1.5 py-0.5 rounded uppercase tracking-widest">Görüntüleme</span>
+                          <span className="text-[8px] font-black text-accent/60 bg-accent/5 px-1.5 py-0.5 rounded uppercase tracking-widest">Views</span>
                         </div>
                         <p className="text-2xl font-black text-white">{totalViews.toLocaleString()}</p>
                       </div>
@@ -2890,7 +2813,7 @@ function App() {
                           <span className="text-[8px] font-black text-purple-400/60 bg-purple-500/5 px-1.5 py-0.5 rounded uppercase tracking-widest">Sticker</span>
                         </div>
                         <p className="text-2xl font-black text-white">{totalStickers.toLocaleString()}</p>
-                        <p className="text-[9px] font-bold text-textSec/50 mt-0.5">{sPacks.length} paket</p>
+                        <p className="text-[9px] font-bold text-textSec/50 mt-0.5">{sPacks.length} packs</p>
                       </div>
 
                       <div className="glass rounded-xl p-4 border border-pink-500/10 group hover:border-pink-500/30 transition-all">
@@ -2898,7 +2821,7 @@ function App() {
                           <div className="w-10 h-10 bg-pink-500/10 rounded-xl flex items-center justify-center">
                             <Crown size={18} className="text-pink-400" />
                           </div>
-                          <span className="text-[8px] font-black text-pink-400/60 bg-pink-500/5 px-1.5 py-0.5 rounded uppercase tracking-widest">Favori</span>
+                          <span className="text-[8px] font-black text-pink-400/60 bg-pink-500/5 px-1.5 py-0.5 rounded uppercase tracking-widest">Favorites</span>
                         </div>
                         <p className="text-2xl font-black text-white">{totalFavorites.toLocaleString()}</p>
                       </div>
@@ -2908,7 +2831,7 @@ function App() {
                           <div className="w-10 h-10 bg-cyan-500/10 rounded-xl flex items-center justify-center">
                             <Users size={18} className="text-cyan-400" />
                           </div>
-                          <span className="text-[8px] font-black text-cyan-400/60 bg-cyan-500/5 px-1.5 py-0.5 rounded uppercase tracking-widest">Kullanıcı</span>
+                          <span className="text-[8px] font-black text-cyan-400/60 bg-cyan-500/5 px-1.5 py-0.5 rounded uppercase tracking-widest">Users</span>
                         </div>
                         <p className="text-2xl font-black text-white">{usersData.length.toLocaleString()}</p>
                         <p className="text-[9px] font-bold text-textSec/50 mt-0.5">{userStats.premium} premium</p>
@@ -2924,17 +2847,17 @@ function App() {
                 <div className="lg:col-span-2 glass rounded-2xl p-6 md:p-8 border border-white/5 overflow-hidden">
                   <div className="flex items-center justify-between mb-6">
                     <div>
-                      <h3 className="text-lg font-black text-white tracking-tight">Eğilim Analizi</h3>
-                      <p className="text-[10px] text-textSec mt-0.5">En popüler 10 paketin performans karşılaştırması</p>
+                      <h3 className="text-lg font-black text-white tracking-tight">Trend Analysis</h3>
+                      <p className="text-[10px] text-textSec mt-0.5">Performance comparison of top 10 packs</p>
                     </div>
                     <div className="flex items-center gap-4">
                       <div className="flex items-center gap-1.5">
                         <div className="w-2.5 h-2.5 rounded-full bg-primary" />
-                        <span className="text-[9px] font-bold text-textSec">İndirme</span>
+                        <span className="text-[9px] font-bold text-textSec">Downloads</span>
                       </div>
                       <div className="flex items-center gap-1.5">
                         <div className="w-2.5 h-2.5 rounded-full bg-accent" />
-                        <span className="text-[9px] font-bold text-textSec">Görüntüleme</span>
+                        <span className="text-[9px] font-bold text-textSec">Views</span>
                       </div>
                     </div>
                   </div>
@@ -2945,6 +2868,7 @@ function App() {
                         data={packs
                           .filter(p => {
                             if (statsFilter === 'all') return true;
+                            if (statsFilter === 'popular') return p.is_popular === true;
                             if (statsFilter === 'active') return p.is_active !== false;
                             if (statsFilter === 'passive') return p.is_active === false;
                             if (statsFilter === 'premium') return p.is_premium === true;
@@ -2954,7 +2878,7 @@ function App() {
                           .sort((a, b) => (b.download_count || 0) - (a.download_count || 0))
                           .slice(0, 10)
                           .map(p => {
-                            const pName = p.name || 'İsimsiz Paket';
+                            const pName = p.name || 'Unnamed Pack';
                             return {
                               name: pName.length > 10 ? pName.substring(0, 8) + '..' : pName,
                               downloads: p.download_count || 0,
@@ -2966,12 +2890,12 @@ function App() {
                       >
                         <defs>
                           <linearGradient id="gPrimary" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor="#00A884" stopOpacity={1} />
-                            <stop offset="100%" stopColor="#00A884" stopOpacity={0.4} />
+                            <stop offset="0%" stopColor="#6C5CE7" stopOpacity={1} />
+                            <stop offset="100%" stopColor="#6C5CE7" stopOpacity={0.4} />
                           </linearGradient>
                           <linearGradient id="gAccent" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor="#34B7F1" stopOpacity={1} />
-                            <stop offset="100%" stopColor="#34B7F1" stopOpacity={0.4} />
+                            <stop offset="0%" stopColor="#A78BFA" stopOpacity={1} />
+                            <stop offset="100%" stopColor="#A78BFA" stopOpacity={0.4} />
                           </linearGradient>
                         </defs>
                         <CartesianGrid strokeDasharray="5 5" stroke="rgba(255,255,255,0.03)" vertical={false} />
@@ -2982,8 +2906,8 @@ function App() {
                           cursor={{ fill: 'rgba(255,255,255,0.02)' }}
                           itemStyle={{ fontWeight: '800', fontSize: '12px' }}
                         />
-                        <Bar dataKey="downloads" fill="url(#gPrimary)" radius={[6, 6, 2, 2]} name="İndirme" barSize={20} />
-                        <Bar dataKey="views" fill="url(#gAccent)" radius={[6, 6, 2, 2]} name="Görüntüleme" barSize={20} />
+                        <Bar dataKey="downloads" fill="url(#gPrimary)" radius={[6, 6, 2, 2]} name="Downloads" barSize={20} />
+                        <Bar dataKey="views" fill="url(#gAccent)" radius={[6, 6, 2, 2]} name="Views" barSize={20} />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
@@ -2992,13 +2916,14 @@ function App() {
                 {/* Leaderboard */}
                 <div className="glass rounded-2xl border border-white/5 flex flex-col overflow-hidden">
                   <div className="p-5 border-b border-white/5 bg-white/[0.02]">
-                    <h3 className="text-sm font-black text-white uppercase tracking-wider">🏆 Lider Tablosu</h3>
-                    <p className="text-[9px] font-bold text-textSec mt-0.5">En çok indirilen ilk 5</p>
+                    <h3 className="text-sm font-black text-white uppercase tracking-wider">🏆 Leaderboard</h3>
+                    <p className="text-[9px] font-bold text-textSec mt-0.5">Top 5 most downloaded</p>
                   </div>
                   <div className="flex-1 p-4 space-y-2.5">
                     {packs
                       .filter(p => {
                         if (statsFilter === 'all') return true;
+                        if (statsFilter === 'popular') return p.is_popular === true;
                         if (statsFilter === 'active') return p.is_active !== false;
                         if (statsFilter === 'passive') return p.is_active === false;
                         if (statsFilter === 'premium') return p.is_premium === true;
@@ -3018,7 +2943,7 @@ function App() {
                             {i + 1}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <div className="text-xs font-bold text-white truncate group-hover:text-primary transition-colors">{p.name || 'İsimsiz Paket'}</div>
+                            <div className="text-xs font-bold text-white truncate group-hover:text-primary transition-colors">{p.name || 'Unnamed Pack'}</div>
                             <div className="text-[9px] font-bold text-textSec/50">{p.category}</div>
                           </div>
                           <div className="text-right shrink-0">
@@ -3029,9 +2954,92 @@ function App() {
                   </div>
                   <div className="px-5 py-3 border-t border-white/5 bg-white/[0.02]">
                     <div className="flex items-center justify-between">
-                      <span className="text-[9px] font-bold text-textSec/50 uppercase tracking-widest">Kapsam</span>
+                      <span className="text-[9px] font-bold text-textSec/50 uppercase tracking-widest">Scope</span>
                       <span className="text-[9px] font-black text-primary bg-primary/10 px-2 py-0.5 rounded-md border border-primary/10">{statsFilter.toUpperCase()}</span>
                     </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* App Health & Improvement Insights */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="glass rounded-2xl p-6 border border-white/5">
+                  <h3 className="text-sm font-black text-white tracking-tight mb-4 flex items-center gap-2">
+                    <BarChart3 size={16} className="text-primary" /> Content Health
+                  </h3>
+                  <div className="space-y-3">
+                    {(() => {
+                      const activePacks = packs.filter(p => p.is_active !== false);
+                      const animatedPacks = packs.filter(p => p.is_animated);
+                      const premiumPacks = packs.filter(p => p.is_premium);
+                      const zeroDLPacks = activePacks.filter(p => (p.download_count || 0) === 0);
+                      const avgStickersPerPack = activePacks.length > 0 ? Math.round(activePacks.reduce((a, p) => a + (p.sticker_count || 0), 0) / activePacks.length) : 0;
+                      const telegramPacks = packs.filter(p => p.batch_source === 'telegram');
+                      const giphyPacks = packs.filter(p => p.batch_source === 'giphy' || p.batch_source === 'klipy');
+
+                      return [
+                        { label: 'Total Packs', value: packs.length, color: 'text-white' },
+                        { label: 'Active / Inactive', value: `${activePacks.length} / ${packs.length - activePacks.length}`, color: 'text-green-400' },
+                        { label: 'Animated Packs', value: animatedPacks.length, color: 'text-cyan-400' },
+                        { label: 'Premium Packs', value: premiumPacks.length, color: 'text-yellow-400' },
+                        { label: 'Telegram Content', value: telegramPacks.length, color: 'text-sky-400' },
+                        { label: 'Giphy/Klipy Content', value: giphyPacks.length, color: 'text-orange-400' },
+                        { label: 'Avg. Sticker/Pack', value: avgStickersPerPack, color: 'text-purple-400' },
+                        { label: '⚠️ 0 Downloads (active)', value: zeroDLPacks.length, color: zeroDLPacks.length > 5 ? 'text-red-400' : 'text-green-400' },
+                      ].map((item, idx) => (
+                        <div key={idx} className="flex items-center justify-between py-1.5 border-b border-white/[0.03] last:border-0">
+                          <span className="text-xs text-textSec font-medium">{item.label}</span>
+                          <span className={`text-sm font-black ${item.color}`}>{item.value}</span>
+                        </div>
+                      ));
+                    })()}
+                  </div>
+                </div>
+
+                <div className="glass rounded-2xl p-6 border border-white/5">
+                  <h3 className="text-sm font-black text-white tracking-tight mb-4 flex items-center gap-2">
+                    <TrendingUp size={16} className="text-accent" /> Improvement Suggestions
+                  </h3>
+                  <div className="space-y-3">
+                    {(() => {
+                      const suggestions: { icon: string; text: string; severity: 'info' | 'warn' | 'good' }[] = [];
+                      const activePacks = packs.filter(p => p.is_active !== false);
+                      const animatedRatio = packs.length > 0 ? packs.filter(p => p.is_animated).length / packs.length : 0;
+                      const premiumRatio = packs.length > 0 ? packs.filter(p => p.is_premium).length / packs.length : 0;
+                      const zeroDL = activePacks.filter(p => (p.download_count || 0) === 0).length;
+                      const categories = new Set(packs.map(p => p.category).filter(Boolean));
+
+                      if (packs.length < 50) suggestions.push({ icon: '📦', text: `${packs.length} packs available. 100+ packs are important for organic growth.`, severity: 'warn' });
+                      else suggestions.push({ icon: '✅', text: `${packs.length} packs — good content volume!`, severity: 'good' });
+
+                      if (animatedRatio < 0.2) suggestions.push({ icon: '🎬', text: `Animated ratio is ${Math.round(animatedRatio * 100)}%. Add more animated stickers.`, severity: 'warn' });
+                      else suggestions.push({ icon: '🎬', text: `Animated ratio is ${Math.round(animatedRatio * 100)}% — great!`, severity: 'good' });
+
+                      if (zeroDL > activePacks.length * 0.3) suggestions.push({ icon: '⚠️', text: `${zeroDL} active packs have zero downloads. Check SEO and names.`, severity: 'warn' });
+
+                      if (categories.size < 5) suggestions.push({ icon: '🏷️', text: `Only ${categories.size} categories used. Add more variety.`, severity: 'warn' });
+                      else suggestions.push({ icon: '🏷️', text: `${categories.size} different categories — diverse!`, severity: 'good' });
+
+                      if (premiumRatio < 0.05) suggestions.push({ icon: '💎', text: 'Few premium packs. Add premium content for revenue.', severity: 'info' });
+
+                      if (usersData.length > 0) {
+                        const premUsers = usersData.filter((u: any) => u.isPremium || u.subscription_type).length;
+                        const convRate = (premUsers / usersData.length * 100).toFixed(1);
+                        suggestions.push({ icon: '👑', text: `Premium conversion: ${convRate}% (${premUsers}/${usersData.length})`, severity: Number(convRate) > 5 ? 'good' : 'info' });
+                      }
+
+                      return suggestions.map((s, idx) => (
+                        <div key={idx} className={cn(
+                          "flex items-start gap-3 p-3 rounded-xl border",
+                          s.severity === 'warn' ? 'bg-yellow-500/5 border-yellow-500/10' :
+                          s.severity === 'good' ? 'bg-green-500/5 border-green-500/10' :
+                          'bg-blue-500/5 border-blue-500/10'
+                        )}>
+                          <span className="text-base shrink-0">{s.icon}</span>
+                          <span className="text-xs text-white/80 font-medium leading-relaxed">{s.text}</span>
+                        </div>
+                      ));
+                    })()}
                   </div>
                 </div>
               </div>
@@ -3043,17 +3051,17 @@ function App() {
                     <div className="w-9 h-9 bg-primary/10 rounded-xl flex items-center justify-center">
                       <Grid size={16} className="text-primary" />
                     </div>
-                    <h3 className="text-sm font-black text-white uppercase tracking-wider">Detaylı Performans Listesi</h3>
+                    <h3 className="text-sm font-black text-white uppercase tracking-wider">Detailed Performance List</h3>
                   </div>
                 </div>
                 <div className="overflow-x-auto custom-scrollbar">
                   <table className="w-full text-left border-collapse">
                     <thead>
                       <tr className="bg-white/[0.02]">
-                        <th className="px-5 py-3.5 text-[9px] font-black uppercase tracking-widest text-textSec/60 border-b border-white/5">Paket</th>
-                        <th className="px-5 py-3.5 text-[9px] font-black uppercase tracking-widest text-textSec/60 border-b border-white/5 text-center">İndirme</th>
-                        <th className="hidden sm:table-cell px-5 py-3.5 text-[9px] font-black uppercase tracking-widest text-textSec/60 border-b border-white/5 text-center">Görüntüleme</th>
-                        <th className="hidden lg:table-cell px-5 py-3.5 text-[9px] font-black uppercase tracking-widest text-textSec/60 border-b border-white/5 text-center">Favori</th>
+                        <th className="px-5 py-3.5 text-[9px] font-black uppercase tracking-widest text-textSec/60 border-b border-white/5">Pack</th>
+                        <th className="px-5 py-3.5 text-[9px] font-black uppercase tracking-widest text-textSec/60 border-b border-white/5 text-center">Downloads</th>
+                        <th className="hidden sm:table-cell px-5 py-3.5 text-[9px] font-black uppercase tracking-widest text-textSec/60 border-b border-white/5 text-center">Views</th>
+                        <th className="hidden lg:table-cell px-5 py-3.5 text-[9px] font-black uppercase tracking-widest text-textSec/60 border-b border-white/5 text-center">Favorites</th>
                         <th className="hidden md:table-cell px-5 py-3.5 text-[9px] font-black uppercase tracking-widest text-textSec/60 border-b border-white/5 text-right w-56">CVR</th>
                       </tr>
                     </thead>
@@ -3061,6 +3069,7 @@ function App() {
                       {packs
                         .filter(p => {
                           if (statsFilter === 'all') return true;
+                          if (statsFilter === 'popular') return p.is_popular === true;
                           if (statsFilter === 'active') return p.is_active !== false;
                           if (statsFilter === 'passive') return p.is_active === false;
                           if (statsFilter === 'premium') return p.is_premium === true;
@@ -3077,14 +3086,14 @@ function App() {
                                   {p.is_premium && <div className="absolute top-0 right-0 w-2.5 h-2.5 bg-yellow-400 rounded-bl-md" />}
                                 </div>
                                 <div className="min-w-0">
-                                  <div className="font-bold text-white text-sm group-hover:text-primary transition-colors truncate">{p.name || 'İsimsiz Paket'}</div>
+                                  <div className="font-bold text-white text-sm group-hover:text-primary transition-colors truncate">{p.name || 'Unnamed Pack'}</div>
                                   <div className="flex items-center gap-1.5 mt-0.5">
                                     <span className="text-[9px] font-bold text-textSec/50 uppercase">{p.category}</span>
                                     <span className={cn(
                                       "px-1.5 py-0.5 rounded text-[7px] font-black uppercase",
                                       p.is_active !== false ? "bg-primary/10 text-primary/70" : "bg-red-500/10 text-red-400/70"
                                     )}>
-                                      {p.is_active !== false ? 'AKTİF' : 'PASİF'}
+                                      {p.is_active !== false ? 'ACTIVE' : 'INACTIVE'}
                                     </span>
                                   </div>
                                 </div>
@@ -3139,7 +3148,7 @@ function App() {
                   </div>
                 </div>
                 <div className="hidden md:flex items-center gap-2 text-[10px] text-textSec font-bold uppercase tracking-widest">
-                  <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                  <span className="w-2 h-2 bg-violet-500 rounded-full animate-pulse" />
                   FCM Active
                 </div>
               </div>
@@ -3155,7 +3164,7 @@ function App() {
                   <div className="space-y-2.5 max-h-[calc(100vh-220px)] overflow-y-auto custom-scrollbar pr-1">
                     {[
                       {
-                        cat: '🆕 New Content', color: 'from-emerald-500/20 to-emerald-500/5', border: 'border-emerald-500/20 hover:border-emerald-500/40', templates: [
+                        cat: '🆕 New Content', color: 'from-purple-500/20 to-purple-500/5', border: 'border-purple-500/20 hover:border-purple-500/40', templates: [
                           { title: 'Sticky', body: '🎨 Fresh stickers just dropped! Express yourself like never before ✨' },
                           { title: 'Sticky', body: '🔥 New sticker pack alert! Be the first to check it out 👀💫' },
                           { title: 'Sticky', body: '✨ Your chats are about to get a whole lot cooler! New stickers inside 🚀' },
@@ -3190,6 +3199,28 @@ function App() {
                           { title: 'Sticky', body: '😂 Need a laugh? Our funniest sticker pack ever just landed! Check it out 🤣' },
                           { title: 'Sticky', body: '🐶🐱 Animal lovers unite! Adorable pet stickers are waiting for you 💕' },
                           { title: 'Sticky', body: '🌙 Good vibes only! Send some love with our wholesome sticker collection 💖✨' },
+                        ]
+                      },
+                      {
+                        cat: '🤖 AI Features', color: 'from-cyan-500/20 to-cyan-500/5', border: 'border-cyan-500/20 hover:border-cyan-500/40', templates: [
+                          { title: 'Sticky AI ✨', body: '🤖 NEW: Create your own stickers with AI! Just describe it & Sticky makes it 🎨✨' },
+                          { title: 'Sticky AI', body: '🧠 AI sticker generator is here! Turn your imagination into stickers in seconds 🚀' },
+                          { title: 'Sticky AI', body: '✨ Custom stickers powered by AI! Type anything → get a unique sticker instantly 🔥' },
+                          { title: 'Sticky AI', body: '🎭 Your creativity + Our AI = Unlimited stickers! Try the new AI generator now 💫' },
+                        ]
+                      },
+                      {
+                        cat: '📱 Animated Stickers', color: 'from-green-500/20 to-green-500/5', border: 'border-green-500/20 hover:border-green-500/40', templates: [
+                          { title: 'Sticky', body: '🎬 Animated stickers are HERE! Moving stickers for next-level chats 🔥✨' },
+                          { title: 'Sticky', body: '💃 Your stickers now MOVE! Check out our animated collection 🎉🚀' },
+                          { title: 'Sticky', body: '⚡ Static is boring! Try our new animated stickers & blow up your group chats 🎆' },
+                        ]
+                      },
+                      {
+                        cat: '⭐ Rate & Review', color: 'from-yellow-500/20 to-yellow-500/5', border: 'border-yellow-500/20 hover:border-yellow-500/40', templates: [
+                          { title: 'Sticky', body: '⭐ Enjoying Sticky? A quick 5-star review helps us grow & make more stickers for you! 💖' },
+                          { title: 'Sticky', body: '🙏 Love our stickers? Share the love with a review on Play Store! It means the world to us ✨' },
+                          { title: 'Sticky', body: '📱 Help us reach more sticker lovers! Rate Sticky on Play Store ⭐⭐⭐⭐⭐' },
                         ]
                       },
                     ].map((group, gi) => (
@@ -3378,26 +3409,34 @@ function App() {
                       <Mail size={26} className="text-blue-400" />
                     </div>
                     <div>
-                      <h2 className="text-2xl font-black text-white tracking-tight">Mesajlar & Öneriler</h2>
-                      <p className="text-xs text-textSec mt-0.5">Kullanıcılardan gelen iletişim talepleri</p>
+                      <h2 className="text-2xl font-black text-white tracking-tight">Messages & Suggestions</h2>
+                      <p className="text-xs text-textSec mt-0.5">Communication requests from users</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-[10px] text-green-500 font-black uppercase tracking-widest flex items-center gap-1.5 bg-green-500/5 px-3 py-1.5 rounded-lg border border-green-500/10">
-                      <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span>
-                      Canlı
+                    <span className="text-[10px] text-violet-500 font-black uppercase tracking-widest flex items-center gap-1.5 bg-violet-500/5 px-3 py-1.5 rounded-lg border border-violet-500/10">
+                      <span className="w-1.5 h-1.5 bg-violet-500 rounded-full animate-pulse"></span>
+                      Live
                     </span>
+                    <a
+                      href="https://mail.hostinger.com/v2/mailboxes/INBOX"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-3 py-1.5 bg-sky-500/10 hover:bg-sky-500/20 text-sky-400 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all border border-sky-500/10 flex items-center gap-1.5"
+                    >
+                      <Mail size={11} /> Send Email
+                    </a>
                     <button
                       onClick={clearAllMessages}
                       className="px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all border border-red-500/10 flex items-center gap-1.5"
                     >
-                      <Trash2 size={11} /> Mesajları Temizle
+                      <Trash2 size={11} /> Clear Messages
                     </button>
                     <button
                       onClick={clearAllSuggestions}
                       className="px-3 py-1.5 bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-400 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all border border-yellow-500/10 flex items-center gap-1.5"
                     >
-                      <Trash2 size={11} /> Önerileri Temizle
+                      <Trash2 size={11} /> Clear Suggestions
                     </button>
                   </div>
                 </div>
@@ -3412,7 +3451,7 @@ function App() {
                     </div>
                     <div>
                       <p className="text-xl font-black text-white">{messages.length}</p>
-                      <span className="text-[9px] font-bold text-textSec uppercase tracking-widest">Toplam Mesaj</span>
+                      <span className="text-[9px] font-bold text-textSec uppercase tracking-widest">Total Messages</span>
                     </div>
                   </div>
                 </div>
@@ -3423,7 +3462,7 @@ function App() {
                     </div>
                     <div>
                       <p className="text-xl font-black text-primary">{messages.filter(m => m.status === 'unread').length}</p>
-                      <span className="text-[9px] font-bold text-textSec uppercase tracking-widest">Okunmamış</span>
+                      <span className="text-[9px] font-bold text-textSec uppercase tracking-widest">Unread</span>
                     </div>
                   </div>
                 </div>
@@ -3434,18 +3473,18 @@ function App() {
                     </div>
                     <div>
                       <p className="text-xl font-black text-yellow-400">{suggestions.length}</p>
-                      <span className="text-[9px] font-bold text-textSec uppercase tracking-widest">Toplam Öneri</span>
+                      <span className="text-[9px] font-bold text-textSec uppercase tracking-widest">Total Suggestions</span>
                     </div>
                   </div>
                 </div>
-                <div className="glass rounded-xl p-4 border border-green-500/10">
+                <div className="glass rounded-xl p-4 border border-violet-500/10">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-green-500/10 rounded-xl flex items-center justify-center">
-                      <Check size={18} className="text-green-400" />
+                    <div className="w-10 h-10 bg-violet-500/10 rounded-xl flex items-center justify-center">
+                      <Check size={18} className="text-violet-400" />
                     </div>
                     <div>
-                      <p className="text-xl font-black text-green-400">{messages.filter(m => m.status === 'read').length}</p>
-                      <span className="text-[9px] font-bold text-textSec uppercase tracking-widest">Okunmuş</span>
+                      <p className="text-xl font-black text-violet-400">{messages.filter(m => m.status === 'read').length}</p>
+                      <span className="text-[9px] font-bold text-textSec uppercase tracking-widest">Read</span>
                     </div>
                   </div>
                 </div>
@@ -3463,7 +3502,7 @@ function App() {
                   )}
                 >
                   <MessageSquare size={15} />
-                  Mesajlar
+                  Messages
                   {messages.length > 0 && (
                     <span className={cn(
                       "px-2 py-0.5 rounded-full text-[10px] font-black",
@@ -3481,7 +3520,7 @@ function App() {
                   )}
                 >
                   <Lightbulb size={15} />
-                  Öneriler
+                  Suggestions
                   {suggestions.length > 0 && (
                     <span className={cn(
                       "px-2 py-0.5 rounded-full text-[10px] font-black",
@@ -3499,8 +3538,8 @@ function App() {
                       <div className="w-20 h-20 bg-gradient-to-br from-blue-500/10 to-indigo-500/10 rounded-2xl flex items-center justify-center mx-auto mb-5 border border-white/5">
                         <MessageSquare size={36} className="text-textSec" />
                       </div>
-                      <h3 className="text-xl font-black text-white mb-2">Henüz Mesaj Yok</h3>
-                      <p className="text-sm text-textSec max-w-md mx-auto">Kullanıcılar uygulamadan mesaj gönderdiğinde burada görünecek.</p>
+                      <h3 className="text-xl font-black text-white mb-2">No Messages Yet</h3>
+                      <p className="text-sm text-textSec max-w-md mx-auto">Messages from users will appear here when they send them from the app.</p>
                     </div>
                   ) : (
                     messages.map(msg => (
@@ -3523,9 +3562,9 @@ function App() {
                               <div className="flex-1 min-w-0 space-y-2.5">
                                 <div className="flex items-center gap-2.5 flex-wrap">
                                   {msg.status === 'unread' && (
-                                    <span className="bg-primary text-white text-[8px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider">Yeni</span>
+                                    <span className="bg-primary text-white text-[8px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider">New</span>
                                   )}
-                                  <h4 className="text-base font-black text-white truncate">{msg.subject || 'Konu belirtilmemiş'}</h4>
+                                  <h4 className="text-base font-black text-white truncate">{msg.subject || 'No subject specified'}</h4>
                                 </div>
                                 <div className="flex items-center gap-3 text-xs text-textSec flex-wrap">
                                   <span className="font-bold text-white/70 flex items-center gap-1.5">
@@ -3548,7 +3587,7 @@ function App() {
                                 <button
                                   onClick={() => markMessageAsRead(msg.id)}
                                   className="p-2.5 bg-primary/10 hover:bg-primary/20 text-primary rounded-xl transition-all"
-                                  title="Okundu olarak işaretle"
+                                  title="Mark as read"
                                 >
                                   <Check size={16} />
                                 </button>
@@ -3556,7 +3595,7 @@ function App() {
                               <button
                                 onClick={() => deleteMessage(msg.id)}
                                 className="p-2.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl transition-all"
-                                title="Sil"
+                                title="Delete"
                               >
                                 <Trash2 size={16} />
                               </button>
@@ -3574,8 +3613,8 @@ function App() {
                       <div className="w-20 h-20 bg-gradient-to-br from-yellow-500/10 to-orange-500/10 rounded-2xl flex items-center justify-center mx-auto mb-5 border border-white/5">
                         <Lightbulb size={36} className="text-textSec" />
                       </div>
-                      <h3 className="text-xl font-black text-white mb-2">Henüz Öneri Yok</h3>
-                      <p className="text-sm text-textSec max-w-md mx-auto">Kullanıcılar sticker önerisi gönderdiğinde burada görünecek.</p>
+                      <h3 className="text-xl font-black text-white mb-2">No Suggestions Yet</h3>
+                      <p className="text-sm text-textSec max-w-md mx-auto">Sticker suggestions from users will appear here.</p>
                     </div>
                   ) : (
                     suggestions.map(sugg => (
@@ -3591,7 +3630,7 @@ function App() {
                               </div>
                               <div className="flex-1 min-w-0 space-y-2.5">
                                 <div className="flex items-center gap-2.5">
-                                  <span className="text-[9px] font-black text-yellow-400 bg-yellow-400/10 px-2 py-0.5 rounded-md uppercase tracking-wider border border-yellow-400/10">Öneri</span>
+                                  <span className="text-[9px] font-black text-yellow-400 bg-yellow-400/10 px-2 py-0.5 rounded-md uppercase tracking-wider border border-yellow-400/10">Suggestion</span>
                                   <span className="text-xs text-textSec/60 flex items-center gap-1">
                                     <Clock size={12} /> {sugg.date} {sugg.time}
                                   </span>
@@ -3628,8 +3667,8 @@ function App() {
                       <Users size={26} className="text-purple-400" />
                     </div>
                     <div>
-                      <h1 className="text-2xl font-black text-white tracking-tight">Kullanıcılar</h1>
-                      <p className="text-xs text-textSec mt-0.5">Firebase kullanıcı yönetimi ve abonelik kontrolü</p>
+                      <h1 className="text-2xl font-black text-white tracking-tight">Users</h1>
+                      <p className="text-xs text-textSec mt-0.5">Firebase user management and subscription control</p>
                     </div>
                   </div>
                   <button
@@ -3638,7 +3677,7 @@ function App() {
                     className="flex items-center gap-2.5 px-5 py-2.5 bg-white/5 hover:bg-white/10 text-textSec hover:text-white border border-white/5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
                   >
                     <RefreshCcw size={14} className={usersLoading ? "animate-spin" : ""} />
-                    Yenile
+                    Refresh
                   </button>
                 </div>
               </div>
@@ -3652,7 +3691,7 @@ function App() {
                     </div>
                     <div>
                       <p className="text-xl font-black text-white">{userStats.total.toLocaleString()}</p>
-                      <span className="text-[9px] font-bold text-textSec uppercase tracking-widest">Toplam</span>
+                      <span className="text-[9px] font-bold text-textSec uppercase tracking-widest">Total</span>
                     </div>
                   </div>
                 </div>
@@ -3674,7 +3713,7 @@ function App() {
                     </div>
                     <div>
                       <p className="text-xl font-black text-accent">{userStats.monthly.toLocaleString()}</p>
-                      <span className="text-[9px] font-bold text-textSec uppercase tracking-widest">Aylık</span>
+                      <span className="text-[9px] font-bold text-textSec uppercase tracking-widest">Monthly</span>
                     </div>
                   </div>
                 </div>
@@ -3685,7 +3724,7 @@ function App() {
                     </div>
                     <div>
                       <p className="text-xl font-black text-yellow-400">{userStats.yearly.toLocaleString()}</p>
-                      <span className="text-[9px] font-bold text-textSec uppercase tracking-widest">Yıllık</span>
+                      <span className="text-[9px] font-bold text-textSec uppercase tracking-widest">Yearly</span>
                     </div>
                   </div>
                 </div>
@@ -3696,9 +3735,71 @@ function App() {
                     </div>
                     <div>
                       <p className="text-xl font-black text-textSec">{userStats.free.toLocaleString()}</p>
-                      <span className="text-[9px] font-bold text-textSec uppercase tracking-widest">Ücretsiz</span>
+                      <span className="text-[9px] font-bold text-textSec uppercase tracking-widest">Free</span>
                     </div>
                   </div>
+                </div>
+              </div>
+
+              {/* User Insights */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="glass rounded-xl p-4 border border-white/5">
+                  <div className="flex items-center gap-2 mb-2">
+                    <TrendingUp size={14} className="text-green-400" />
+                    <span className="text-[10px] font-black text-textSec uppercase tracking-widest">Conversion Rate</span>
+                  </div>
+                  <p className="text-lg font-black text-white">
+                    {usersData.length > 0 ? ((userStats.premium / usersData.length) * 100).toFixed(1) : '0'}%
+                  </p>
+                  <p className="text-[9px] text-textSec mt-0.5">Free → Premium conversion</p>
+                </div>
+                <div className="glass rounded-xl p-4 border border-white/5">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Smartphone size={14} className="text-sky-400" />
+                    <span className="text-[10px] font-black text-textSec uppercase tracking-widest">Device Distribution</span>
+                  </div>
+                  {(() => {
+                    const devices: Record<string, number> = {};
+                    usersData.forEach((u: any) => {
+                      const brand = (u.device_model || u.deviceModel || 'Unknown').split(' ')[0];
+                      devices[brand] = (devices[brand] || 0) + 1;
+                    });
+                    const top = Object.entries(devices).sort((a, b) => b[1] - a[1]).slice(0, 3);
+                    return (
+                      <div className="space-y-1">
+                        {top.map(([brand, count]) => (
+                          <div key={brand} className="flex items-center justify-between">
+                            <span className="text-xs text-white/70 font-medium">{brand}</span>
+                            <span className="text-xs font-black text-sky-400">{count}</span>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
+                </div>
+                <div className="glass rounded-xl p-4 border border-white/5">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Globe size={14} className="text-purple-400" />
+                    <span className="text-[10px] font-black text-textSec uppercase tracking-widest">Language Distribution</span>
+                  </div>
+                  {(() => {
+                    const langs: Record<string, number> = {};
+                    usersData.forEach((u: any) => {
+                      const lang = u.language || u.device_language || '?';
+                      langs[lang] = (langs[lang] || 0) + 1;
+                    });
+                    const top = Object.entries(langs).sort((a, b) => b[1] - a[1]).slice(0, 3);
+                    return (
+                      <div className="space-y-1">
+                        {top.map(([lang, count]) => (
+                          <div key={lang} className="flex items-center justify-between">
+                            <span className="text-xs text-white/70 font-medium">{lang.toUpperCase()}</span>
+                            <span className="text-xs font-black text-purple-400">{count}</span>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
 
@@ -3711,7 +3812,7 @@ function App() {
                       type="text"
                       value={userSearch}
                       onChange={(e) => setUserSearch(e.target.value)}
-                      placeholder="E-posta veya isim ara..."
+                      placeholder="Search email or name..."
                       className="w-full h-12 bg-white/[0.03] border border-white/5 rounded-xl pl-11 pr-5 text-sm text-white font-bold placeholder:text-textSec/30 outline-none focus:border-primary/50 transition-all"
                     />
                   </div>
@@ -3720,11 +3821,11 @@ function App() {
                     onChange={(e) => setUserFilter(e.target.value as any)}
                     className="h-12 bg-white/[0.03] border border-white/5 rounded-xl px-4 text-sm text-white font-bold outline-none focus:border-primary/50 transition-all appearance-none min-w-[160px]"
                   >
-                    <option value="all">Tümünü Göster</option>
+                    <option value="all">Show All</option>
                     <option value="premium">Premium</option>
-                    <option value="free">Ücretsiz</option>
-                    <option value="monthly">Aylık Abone</option>
-                    <option value="yearly">Yıllık Abone</option>
+                    <option value="free">Free</option>
+                    <option value="monthly">Monthly Subscriber</option>
+                    <option value="yearly">Yearly Subscriber</option>
                   </select>
                 </div>
               </div>
@@ -3733,7 +3834,7 @@ function App() {
               {usersLoading && (
                 <div className="flex flex-col items-center justify-center py-24">
                   <RefreshCcw size={28} className="animate-spin text-primary mb-3" />
-                  <p className="text-xs text-textSec font-bold">Kullanıcılar yükleniyor...</p>
+                  <p className="text-xs text-textSec font-bold">Loading users...</p>
                 </div>
               )}
 
@@ -3744,11 +3845,11 @@ function App() {
                   <div className="flex-1 glass rounded-2xl border border-white/5 overflow-hidden">
                     {/* Table Header */}
                     <div className="hidden md:grid grid-cols-12 gap-4 px-5 py-3.5 border-b border-white/5 bg-white/[0.02]">
-                      <span className="col-span-4 text-[9px] font-black text-textSec uppercase tracking-widest">Kullanıcı</span>
-                      <span className="col-span-2 text-[9px] font-black text-textSec uppercase tracking-widest">Kayıt</span>
-                      <span className="col-span-2 text-[9px] font-black text-textSec uppercase tracking-widest">Durum</span>
-                      <span className="col-span-2 text-[9px] font-black text-textSec uppercase tracking-widest">Tür</span>
-                      <span className="col-span-2 text-[9px] font-black text-textSec uppercase tracking-widest">Bitiş</span>
+                      <span className="col-span-4 text-[9px] font-black text-textSec uppercase tracking-widest">User</span>
+                      <span className="col-span-2 text-[9px] font-black text-textSec uppercase tracking-widest">Registered</span>
+                      <span className="col-span-2 text-[9px] font-black text-textSec uppercase tracking-widest">Status</span>
+                      <span className="col-span-2 text-[9px] font-black text-textSec uppercase tracking-widest">Type</span>
+                      <span className="col-span-2 text-[9px] font-black text-textSec uppercase tracking-widest">Expiry</span>
                     </div>
 
                     {/* Table Body */}
@@ -3758,7 +3859,7 @@ function App() {
                           <div className="w-16 h-16 bg-white/5 rounded-2xl flex items-center justify-center">
                             <Users size={28} className="text-textSec/30" />
                           </div>
-                          <p className="text-textSec text-sm font-bold">Kullanıcı bulunamadı</p>
+                          <p className="text-textSec text-sm font-bold">No users found</p>
                         </div>
                       ) : (
                         filteredUsers.map((u) => (
@@ -3815,7 +3916,7 @@ function App() {
                                 u.premium_type === 'monthly' ? "bg-accent/10 text-accent border border-accent/10" :
                                   u.premium_type === 'yearly' ? "bg-yellow-500/10 text-yellow-400 border border-yellow-500/10" : "text-textSec/40"
                               )}>
-                                {u.premium_type === 'monthly' ? 'Aylık' : u.premium_type === 'yearly' ? 'Yıllık' : '-'}
+                                {u.premium_type === 'monthly' ? 'Monthly' : u.premium_type === 'yearly' ? 'Yearly' : '-'}
                               </span>
                             </div>
                             <div className="col-span-2 flex items-center">
@@ -3831,10 +3932,10 @@ function App() {
                     {/* Table Footer */}
                     <div className="px-5 py-3 border-t border-white/5 bg-white/[0.02] flex items-center justify-between">
                       <span className="text-[9px] font-black text-textSec uppercase tracking-widest">
-                        {filteredUsers.length} / {usersData.length} kullanıcı
+                        {filteredUsers.length} / {usersData.length} users
                       </span>
                       <span className="text-[9px] font-bold text-textSec/40">
-                        Detay için tıklayın →
+                        Click for details →
                       </span>
                     </div>
                   </div>
@@ -3844,7 +3945,7 @@ function App() {
                     <div className="lg:w-[420px] glass rounded-2xl border border-white/5 overflow-hidden shrink-0">
                       {/* Detail Header */}
                       <div className="p-5 border-b border-white/5 bg-white/[0.02] flex items-center justify-between">
-                        <h3 className="text-sm font-black text-white tracking-tight uppercase">Kullanıcı Detayı</h3>
+                        <h3 className="text-sm font-black text-white tracking-tight uppercase">User Details</h3>
                         <button
                           onClick={() => setSelectedUser(null)}
                           className="p-2 hover:bg-white/10 rounded-xl transition-all text-textSec"
@@ -3869,7 +3970,7 @@ function App() {
                           )}
                           <div className="flex-1 min-w-0">
                             <p className="text-base font-black text-white truncate">
-                              {selectedUser.display_name || 'İsimsiz Kullanıcı'}
+                              {selectedUser.display_name || 'Anonymous User'}
                             </p>
                             <p className="text-xs font-medium text-textSec truncate">{selectedUser.email || selectedUser.id}</p>
                             {selectedUser.is_premium && (
@@ -3883,7 +3984,7 @@ function App() {
                         {/* Info Grid */}
                         <div className="grid grid-cols-2 gap-2.5">
                           <div className="bg-white/[0.03] rounded-xl p-3 border border-white/5">
-                            <span className="text-[9px] font-bold text-textSec/60 uppercase tracking-widest block mb-1">Kayıt Tarihi</span>
+                            <span className="text-[9px] font-bold text-textSec/60 uppercase tracking-widest block mb-1">Registration Date</span>
                             <p className="text-xs font-bold text-white">
                               {selectedUser.created_at?.toDate
                                 ? selectedUser.created_at.toDate().toLocaleDateString('tr-TR', { year: 'numeric', month: 'short', day: 'numeric' })
@@ -3893,24 +3994,24 @@ function App() {
                             </p>
                           </div>
                           <div className="bg-white/[0.03] rounded-xl p-3 border border-white/5">
-                            <span className="text-[9px] font-bold text-textSec/60 uppercase tracking-widest block mb-1">Abonelik Türü</span>
+                            <span className="text-[9px] font-bold text-textSec/60 uppercase tracking-widest block mb-1">Subscription Type</span>
                             <p className={cn(
                               "text-xs font-black",
                               selectedUser.premium_type === 'monthly' ? "text-accent" :
                                 selectedUser.premium_type === 'yearly' ? "text-yellow-400" : "text-textSec/50"
                             )}>
-                              {selectedUser.premium_type === 'monthly' ? 'Aylık' :
-                                selectedUser.premium_type === 'yearly' ? 'Yıllık' : 'Yok'}
+                              {selectedUser.premium_type === 'monthly' ? 'Monthly' :
+                                selectedUser.premium_type === 'yearly' ? 'Yearly' : 'None'}
                             </p>
                           </div>
                           <div className="bg-white/[0.03] rounded-xl p-3 border border-white/5">
-                            <span className="text-[9px] font-bold text-textSec/60 uppercase tracking-widest block mb-1">Bitiş Tarihi</span>
+                            <span className="text-[9px] font-bold text-textSec/60 uppercase tracking-widest block mb-1">Expiry Date</span>
                             <p className="text-xs font-bold text-white">
                               {selectedUser.premium_expiry ? new Date(selectedUser.premium_expiry).toLocaleDateString('tr-TR', { year: 'numeric', month: 'short', day: 'numeric' }) : '-'}
                             </p>
                           </div>
                           <div className="bg-white/[0.03] rounded-xl p-3 border border-white/5">
-                            <span className="text-[9px] font-bold text-textSec/60 uppercase tracking-widest block mb-1">Son Senkron</span>
+                            <span className="text-[9px] font-bold text-textSec/60 uppercase tracking-widest block mb-1">Last Sync</span>
                             <p className="text-xs font-bold text-textSec">
                               {selectedUser.last_sync?.toDate ? selectedUser.last_sync.toDate().toLocaleDateString('tr-TR') : selectedUser.last_sync ? new Date(selectedUser.last_sync).toLocaleDateString('tr-TR') : '-'}
                             </p>
@@ -3921,11 +4022,11 @@ function App() {
                         <div className="grid grid-cols-2 gap-2.5">
                           <div className="bg-primary/5 border border-primary/10 rounded-xl p-3 text-center">
                             <p className="text-2xl font-black text-primary">{selectedUser.total_stickers_added || 0}</p>
-                            <span className="text-[9px] font-bold text-textSec uppercase">Eklenen Sticker</span>
+                            <span className="text-[9px] font-bold text-textSec uppercase">Stickers Added</span>
                           </div>
                           <div className="bg-accent/5 border border-accent/10 rounded-xl p-3 text-center">
                             <p className="text-2xl font-black text-accent">{selectedUser.custom_packs_count || 0}</p>
-                            <span className="text-[9px] font-bold text-textSec uppercase">Özel Paket</span>
+                            <span className="text-[9px] font-bold text-textSec uppercase">Custom Packs</span>
                           </div>
                         </div>
 
@@ -3956,13 +4057,13 @@ function App() {
                               )}
                               {selectedUser.device_info.app_version && (
                                 <div>
-                                  <span className="text-[8px] text-textSec/40 uppercase">Uygulama</span>
+                                  <span className="text-[8px] text-textSec/40 uppercase">App</span>
                                   <p className="text-xs font-bold text-white">v{selectedUser.device_info.app_version}</p>
                                 </div>
                               )}
                               {selectedUser.device_info.language && (
                                 <div>
-                                  <span className="text-[8px] text-textSec/40 uppercase">Dil</span>
+                                  <span className="text-[8px] text-textSec/40 uppercase">Language</span>
                                   <p className="text-xs font-bold text-white">{selectedUser.device_info.language}</p>
                                 </div>
                               )}
@@ -3973,7 +4074,7 @@ function App() {
                         {/* Favourite Packs */}
                         {selectedUser.favorite_packs && selectedUser.favorite_packs.length > 0 && (
                           <div className="bg-white/[0.02] rounded-xl p-3 border border-white/5">
-                            <span className="text-[9px] font-bold text-textSec/60 uppercase tracking-widest block mb-2">Favori Paketler</span>
+                            <span className="text-[9px] font-bold text-textSec/60 uppercase tracking-widest block mb-2">Favorite Packs</span>
                             <div className="flex flex-wrap gap-1.5">
                               {selectedUser.favorite_packs.map((p, i) => (
                                 <span key={i} className="px-2 py-1 bg-white/5 text-textSec text-[10px] font-bold rounded-lg border border-white/5">{p}</span>
@@ -3985,7 +4086,7 @@ function App() {
                         {/* Cancelled Info */}
                         {selectedUser.cancelled_at && (
                           <div className="space-y-1 bg-danger/5 border border-danger/10 rounded-xl p-3">
-                            <span className="text-[10px] font-black text-danger uppercase tracking-widest">Iptal Edildi</span>
+                            <span className="text-[10px] font-black text-danger uppercase tracking-widest">Cancelled</span>
                             <p className="text-xs font-bold text-textSec">{selectedUser.cancelled_reason || '-'}</p>
                           </div>
                         )}
@@ -3995,12 +4096,12 @@ function App() {
                           {/* Subscription History */}
                           {selectedUser.subscription_history && selectedUser.subscription_history.length > 0 && (
                             <div className="space-y-2 mb-4">
-                              <label className="text-[10px] font-black text-textSec uppercase tracking-widest">Abonelik Gecmisi</label>
+                              <label className="text-[10px] font-black text-textSec uppercase tracking-widest">Subscription History</label>
                               <div className="bg-black/20 rounded-xl max-h-32 overflow-y-auto">
                                 {selectedUser.subscription_history.slice().reverse().map((item: any) => (
                                   <div key={item.id} className="p-2 border-b border-white/5 last:border-0 flex items-center justify-between">
                                     <div className="flex flex-col">
-                                      <span className="text-[10px] font-bold text-white capitalize">{item.type === 'start' ? 'Baslangic' : item.type === 'cancel' ? 'Iptal' : item.type}</span>
+                                      <span className="text-[10px] font-bold text-white capitalize">{item.type === 'start' ? 'Start' : item.type === 'cancel' ? 'Cancel' : item.type}</span>
                                       <span className="text-[9px] text-textSec">{item.date_str} • {item.source}</span>
                                     </div>
                                     <span className="text-[9px] font-medium text-textSec">{item.plan}</span>
@@ -4029,7 +4130,7 @@ function App() {
                                 )}
                               >
                                 {selectedUser.subscription_source === 'google_play' ? (
-                                  <span className="text-[10px]">Play Store Aboneligi</span>
+                                  <span className="text-[10px]">Play Store Subscription</span>
                                 ) : (
                                   <>
                                     <Edit3 size={14} />
@@ -4042,7 +4143,7 @@ function App() {
                                 <button
                                   onClick={() => handleRevokeSubscription(selectedUser.id)}
                                   className="h-12 px-4 rounded-xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-all bg-danger/10 hover:bg-danger/20 text-danger"
-                                  title="Aboneligi Iptal Et"
+                                  title="Cancel Subscription"
                                 >
                                   <X size={14} />
                                   Iptal Et
@@ -4052,15 +4153,15 @@ function App() {
                           ) : (
                             <div className="space-y-4 bg-white/[0.02] border border-white/5 rounded-2xl p-4">
                               <div className="space-y-2">
-                                <label className="text-[10px] font-black text-textSec uppercase tracking-widest">Abonelik Plani</label>
+                                <label className="text-[10px] font-black text-textSec uppercase tracking-widest">Subscription Plan</label>
                                 <select
                                   value={subPlan}
                                   onChange={(e) => setSubPlan(e.target.value)}
                                   className="w-full h-12 bg-hover border border-white/5 rounded-xl px-4 text-white font-bold outline-none focus:border-primary/50 transition-all appearance-none"
                                 >
-                                  <option value="none">Yok (Free)</option>
-                                  <option value="monthly">Aylik (Monthly)</option>
-                                  <option value="yearly">Yillik (Yearly)</option>
+                                  <option value="none">None (Free)</option>
+                                  <option value="monthly">Monthly</option>
+                                  <option value="yearly">Yearly</option>
                                 </select>
                               </div>
 
@@ -4107,10 +4208,10 @@ function App() {
                   <span className={cn(
                     "text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 px-3 py-1.5 rounded-lg border",
                     deepseekService.isConfigured()
-                      ? "text-green-500 bg-green-500/5 border-green-500/10"
+                      ? "text-violet-500 bg-violet-500/5 border-violet-500/10"
                       : "text-danger bg-danger/5 border-danger/10"
                   )}>
-                    <span className={cn("w-1.5 h-1.5 rounded-full", deepseekService.isConfigured() ? "bg-green-500 animate-pulse" : "bg-danger")} />
+                    <span className={cn("w-1.5 h-1.5 rounded-full", deepseekService.isConfigured() ? "bg-violet-500 animate-pulse" : "bg-danger")} />
                     {deepseekService.isConfigured() ? 'DeepSeek AI' : 'AI Offline'}
                   </span>
                   <span className="text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-blue-400 bg-blue-400/5 border-blue-400/10">
@@ -4132,7 +4233,19 @@ function App() {
                   )}
                 >
                   <Zap size={14} className="inline mr-1.5 -mt-0.5" />
-                  Üretici
+                  Generator
+                </button>
+                <button
+                  onClick={() => setBatchSubTab('telegram')}
+                  className={cn(
+                    "px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all",
+                    batchSubTab === 'telegram'
+                      ? "bg-gradient-to-r from-sky-500 to-blue-500 text-white shadow-lg shadow-sky-500/20"
+                      : "bg-white/5 text-textSec hover:bg-white/10 hover:text-white"
+                  )}
+                >
+                  <Send size={14} className="inline mr-1.5 -mt-0.5" />
+                  Telegram
                 </button>
                 <button
                   onClick={() => setBatchSubTab('drafts')}
@@ -4144,7 +4257,7 @@ function App() {
                   )}
                 >
                   <Edit3 size={14} className="inline -mt-0.5" />
-                  Taslaklar
+                  Drafts
                   {draftPacks.length > 0 && (
                     <span className="ml-1 px-2 py-0.5 bg-white/20 rounded-full text-[10px] font-black">{draftPacks.length}</span>
                   )}
@@ -4152,353 +4265,178 @@ function App() {
               </div>
 
               {batchSubTab === 'generator' && !isBatchRunning ? (
-                <div className="flex flex-col xl:flex-row gap-6">
-                  {/* Left Column: Search Terms + Settings */}
-                  <div className="flex-1 min-w-0 space-y-5">
-                    {/* Search Terms */}
-                    <div className="glass rounded-2xl p-5 border border-white/5 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <label className="text-[10px] font-black text-textSec uppercase tracking-widest flex items-center gap-2">
-                          <div className="w-5 h-5 bg-primary/20 rounded-md flex items-center justify-center"><List size={10} className="text-primary" /></div>
-                          Search Terms
-                        </label>
-                        <button
-                          onClick={async () => {
-                            if (!deepseekService.isConfigured()) {
-                              alert('DeepSeek API key bulunamadı!');
-                              return;
-                            }
-                            setBatchAiGenerating(true);
-                            try {
-                              const existingTerms = batchTermsInput.split(',').map(t => t.trim()).filter(Boolean);
-                              const suggestions = await deepseekService.generateSearchTerms(batchMaxPacks, existingTerms, batchSelectedCategories);
-                              const newTerms = suggestions.map(s => s.searchTerm).join(', ');
-                              setBatchTermsInput(prev => prev ? prev + ', ' + newTerms : newTerms);
-                            } catch (e: any) {
-                              alert('AI tema üretim hatası: ' + e.message);
-                            } finally {
-                              setBatchAiGenerating(false);
-                            }
-                          }}
-                          disabled={batchAiGenerating}
-                          className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white rounded-lg text-[10px] font-black transition-all disabled:opacity-50"
-                        >
-                          {batchAiGenerating ? <RefreshCcw size={12} className="animate-spin" /> : <Sparkles size={12} />}
-                          {batchAiGenerating ? 'Generating...' : `AI Generate ${batchMaxPacks} Topics`}
-                        </button>
-                      </div>
-
-                      {/* Category Filter for AI */}
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between">
-                          <label className="text-[9px] font-bold text-textSec uppercase tracking-wider flex items-center gap-1.5">
-                            <span className="text-purple-400">🎯</span> AI Kategori Filtresi
-                          </label>
-                          {batchSelectedCategories.length > 0 && (
-                            <button
-                              onClick={() => setBatchSelectedCategories([])}
-                              className="text-[9px] text-red-400 hover:text-red-300 font-bold"
-                            >
-                              Temizle
-                            </button>
-                          )}
-                        </div>
-                        <div className="flex flex-wrap gap-1.5">
-                          {CATEGORIES.map(cat => (
-                            <button
-                              key={cat.id}
-                              onClick={() => {
-                                setBatchSelectedCategories(prev =>
-                                  prev.includes(cat.id)
-                                    ? prev.filter(c => c !== cat.id)
-                                    : [...prev, cat.id]
-                                );
-                              }}
-                              className={cn(
-                                "px-2 py-1 rounded-lg text-[10px] font-bold transition-all border",
-                                batchSelectedCategories.includes(cat.id)
-                                  ? "bg-purple-500/30 border-purple-500/50 text-purple-300"
-                                  : "bg-white/5 border-white/10 text-textSec hover:bg-white/10 hover:text-white"
-                              )}
-                            >
-                              {cat.emoji} {cat.name}
-                            </button>
-                          ))}
-                        </div>
-                        <p className="text-[9px] text-textSec/60">
-                          {batchSelectedCategories.length === 0
-                            ? '💡 Kategori seçmezsen tüm kategorilerden üretir'
-                            : `✨ ${batchSelectedCategories.length} kategori seçili - AI bu kategorilere odaklanacak`
+                <div className="max-w-2xl mx-auto space-y-4">
+                  {/* Search Terms */}
+                  <div className="glass rounded-2xl p-5 border border-white/5 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-black text-textSec uppercase tracking-widest flex items-center gap-2">
+                        <List size={10} className="text-primary" /> Search Terms
+                        <span className="ml-1 px-1.5 py-0.5 bg-primary/20 text-primary rounded text-[10px] font-black">{batchTermsInput.split(',').filter(t => t.trim()).length}</span>
+                      </span>
+                      <button
+                        onClick={async () => {
+                          if (!deepseekService.isConfigured()) {
+                            alert('DeepSeek API key not found!');
+                            return;
                           }
-                        </p>
-                      </div>
-
-                      <textarea
-                        value={batchTermsInput}
-                        onChange={(e) => setBatchTermsInput(e.target.value)}
-                        placeholder="Enter search terms separated by commas...&#10;e.g: cute cats, angry reactions, good morning, birthday party, anime kawaii, love hearts, funny memes..."
-                        rows={5}
-                        className="w-full bg-card/60 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-medium outline-none focus:ring-2 focus:ring-primary focus:border-primary/50 transition-all resize-none placeholder:text-white/15"
-                      />
-                      <div className="flex items-center justify-between text-[10px] text-textSec font-bold">
-                        <span className="flex items-center gap-1.5">
-                          <span className="w-5 h-5 bg-primary/20 text-primary rounded flex items-center justify-center text-[10px] font-black">{batchTermsInput.split(',').filter(t => t.trim()).length}</span>
-                          terms entered
-                        </span>
-                        <span className="text-textSec/50">1 term = 1 pack</span>
-                      </div>
+                          setBatchAiGenerating(true);
+                          try {
+                            const existingTerms = batchTermsInput.split(',').map(t => t.trim()).filter(Boolean);
+                            const catStats = await getCategoryStats();
+                            const suggestions = await deepseekService.generateSearchTerms(batchMaxPacks, existingTerms, [], catStats);
+                            const newTerms = suggestions.map(s => s.searchTerm).join(', ');
+                            setBatchTermsInput(prev => prev ? prev + ', ' + newTerms : newTerms);
+                          } catch (e: any) {
+                            alert('AI topic generation error: ' + e.message);
+                          } finally {
+                            setBatchAiGenerating(false);
+                          }
+                        }}
+                        disabled={batchAiGenerating}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white rounded-lg text-[10px] font-black transition-all disabled:opacity-50"
+                      >
+                        {batchAiGenerating ? <RefreshCcw size={12} className="animate-spin" /> : <Sparkles size={12} />}
+                        {batchAiGenerating ? 'Generating...' : `AI Generate ${batchMaxPacks} Topics`}
+                      </button>
                     </div>
+                    <textarea
+                      value={batchTermsInput}
+                      onChange={(e) => setBatchTermsInput(e.target.value)}
+                      placeholder="Enter search terms separated by commas...&#10;e.g: cute cats, angry reactions, good morning, birthday party, anime kawaii, love hearts, funny memes..."
+                      rows={4}
+                      className="w-full bg-card/60 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-medium outline-none focus:ring-2 focus:ring-primary focus:border-primary/50 transition-all resize-none placeholder:text-white/15"
+                    />
+                  </div>
 
-                    {/* Settings Grid */}
-                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                  {/* Settings Row */}
+                  <div className="glass rounded-2xl p-5 border border-white/5 space-y-3">
+                    <div className="flex items-center gap-3 flex-wrap">
                       {/* Source */}
-                      <div className="glass rounded-xl p-4 border border-white/5 space-y-3">
-                        <label className="text-[10px] font-black text-textSec uppercase tracking-widest">Source</label>
-                        <div className="space-y-1.5">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] font-black text-textSec uppercase tracking-widest shrink-0">Source</span>
+                        <div className="flex rounded-lg border border-white/10 overflow-hidden">
                           {([
-                            { id: 'both' as BatchSource, label: 'Giphy + Klipy', desc: 'Maximum results', color: 'from-blue-500 to-purple-500' },
-                            { id: 'giphy' as BatchSource, label: 'Giphy Only', desc: 'Stickers & GIFs', color: 'from-green-500 to-emerald-500' },
-                            { id: 'klipy' as BatchSource, label: 'Klipy Only', desc: 'Tenor alternative', color: 'from-orange-500 to-red-500' },
+                            { id: 'both' as BatchSource, label: 'Both' },
+                            { id: 'giphy' as BatchSource, label: 'Giphy' },
+                            { id: 'klipy' as BatchSource, label: 'Klipy' },
                           ]).map(s => (
                             <button
                               key={s.id}
                               onClick={() => setBatchSource(s.id)}
                               className={cn(
-                                "w-full flex items-center gap-2 p-2 rounded-lg border text-left transition-all",
-                                batchSource === s.id
-                                  ? "bg-white/10 border-white/20 text-white"
-                                  : "bg-transparent border-white/5 text-textSec hover:border-white/10"
+                                "px-3 py-1.5 text-[10px] font-bold transition-all",
+                                batchSource === s.id ? "bg-purple-600 text-white" : "bg-white/5 text-textSec hover:text-white"
                               )}
                             >
-                              <div className={cn("w-3 h-3 rounded-full shrink-0", batchSource === s.id ? `bg-gradient-to-r ${s.color}` : "bg-white/10")} />
-                              <div>
-                                <span className="text-[11px] font-bold block">{s.label}</span>
-                                <span className="text-[9px] text-textSec">{s.desc}</span>
-                              </div>
+                              {s.label}
                             </button>
                           ))}
                         </div>
                       </div>
 
                       {/* Content Type */}
-                      <div className="glass rounded-xl p-4 border border-white/5 space-y-3">
-                        <label className="text-[10px] font-black text-textSec uppercase tracking-widest">Content Type</label>
-                        <div className="space-y-1.5">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] font-black text-textSec uppercase tracking-widest shrink-0">Type</span>
+                        <div className="flex rounded-lg border border-white/10 overflow-hidden">
                           <button
                             onClick={() => setBatchContentType('stickers')}
-                            className={cn(
-                              "w-full flex items-center gap-2 p-2.5 rounded-lg border transition-all",
-                              batchContentType === 'stickers'
-                                ? "bg-primary/10 border-primary/30 text-white"
-                                : "bg-transparent border-white/5 text-textSec hover:border-white/10"
-                            )}
-                          >
-                            <div className={cn("w-5 h-5 rounded flex items-center justify-center", batchContentType === 'stickers' ? "bg-primary" : "bg-white/10")}>
-                              {batchContentType === 'stickers' && <Check size={12} className="text-white" />}
-                            </div>
-                            <div>
-                              <span className="text-[11px] font-bold block">Stickers</span>
-                              <span className="text-[9px] text-textSec">Cartoon/Graphic</span>
-                            </div>
-                          </button>
+                            className={cn("px-3 py-1.5 text-[10px] font-bold transition-all", batchContentType === 'stickers' ? "bg-purple-600 text-white" : "bg-white/5 text-textSec hover:text-white")}
+                          >Stickers</button>
                           <button
                             onClick={() => setBatchContentType('gifs')}
-                            className={cn(
-                              "w-full flex items-center gap-2 p-2.5 rounded-lg border transition-all",
-                              batchContentType === 'gifs'
-                                ? "bg-primary/10 border-primary/30 text-white"
-                                : "bg-transparent border-white/5 text-textSec hover:border-white/10"
-                            )}
-                          >
-                            <div className={cn("w-5 h-5 rounded flex items-center justify-center", batchContentType === 'gifs' ? "bg-primary" : "bg-white/10")}>
-                              {batchContentType === 'gifs' && <Check size={12} className="text-white" />}
-                            </div>
-                            <div>
-                              <span className="text-[11px] font-bold block">GIFs</span>
-                              <span className="text-[9px] text-textSec">Real video/photo</span>
-                            </div>
-                          </button>
+                            className={cn("px-3 py-1.5 text-[10px] font-bold transition-all", batchContentType === 'gifs' ? "bg-purple-600 text-white" : "bg-white/5 text-textSec hover:text-white")}
+                          >GIFs</button>
                         </div>
                       </div>
 
                       {/* Max Packs */}
-                      <div className="glass rounded-xl p-4 border border-white/5 space-y-3">
-                        <label className="text-[10px] font-black text-textSec uppercase tracking-widest">Max Packs</label>
-                        <div className="text-center">
-                          <span className="text-3xl font-black text-white">{batchMaxPacks}</span>
-                        </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] font-black text-textSec uppercase tracking-widest shrink-0">Packs</span>
                         <input
-                          type="range"
-                          min="1"
-                          max="50"
-                          step="1"
+                          type="number" min={1} max={50}
                           value={batchMaxPacks}
                           onChange={(e) => setBatchMaxPacks(Number(e.target.value))}
-                          className="w-full h-1.5 bg-hover rounded-lg appearance-none cursor-pointer accent-primary"
+                          className="w-14 h-8 bg-card/60 border border-white/10 rounded-lg px-2 text-white text-xs font-bold text-center outline-none focus:border-purple-500/50"
                         />
-                        <div className="flex justify-between text-[9px] text-textSec font-bold">
-                          <span>1</span><span>25</span><span>50</span>
-                        </div>
                       </div>
 
-                      {/* Stickers Per Pack */}
-                      <div className="glass rounded-xl p-4 border border-white/5 space-y-3">
-                        <label className="text-[10px] font-black text-textSec uppercase tracking-widest">Per Pack</label>
-                        <div className="text-center">
-                          <span className="text-3xl font-black text-white">{batchStickersPerPack}</span>
-                        </div>
+                      {/* Per Pack */}
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] font-black text-textSec uppercase tracking-widest shrink-0">Per Pack</span>
                         <input
-                          type="range"
-                          min="5"
-                          max="30"
-                          step="5"
+                          type="number" min={5} max={30} step={5}
                           value={batchStickersPerPack}
                           onChange={(e) => setBatchStickersPerPack(Number(e.target.value))}
-                          className="w-full h-1.5 bg-hover rounded-lg appearance-none cursor-pointer accent-accent"
+                          className="w-14 h-8 bg-card/60 border border-white/10 rounded-lg px-2 text-white text-xs font-bold text-center outline-none focus:border-purple-500/50"
                         />
-                        <div className="flex justify-between text-[9px] text-textSec font-bold">
-                          <span>5</span><span>15</span><span>30</span>
-                        </div>
                       </div>
                     </div>
 
-                    {/* AI Features */}
-                    <div className="grid grid-cols-2 gap-3">
+                    {/* AI Toggles */}
+                    <div className="flex items-center gap-4 pt-1 border-t border-white/5">
                       <button
                         onClick={() => setBatchUseAiNaming(!batchUseAiNaming)}
-                        className={cn(
-                          "flex items-center gap-3 p-4 rounded-xl border transition-all text-left",
-                          batchUseAiNaming
-                            ? "bg-purple-600/10 border-purple-500/30 text-white"
-                            : "bg-card/30 border-white/5 text-textSec"
-                        )}
+                        className="flex items-center gap-2 py-1"
                       >
-                        <div className={cn("w-5 h-5 rounded-md flex items-center justify-center shrink-0", batchUseAiNaming ? "bg-purple-600" : "bg-white/10")}>
-                          {batchUseAiNaming && <Check size={12} className="text-white" />}
+                        <div className={cn("w-8 h-4 rounded-full transition-all relative", batchUseAiNaming ? "bg-purple-600" : "bg-white/10")}>
+                          <div className={cn("w-3 h-3 rounded-full bg-white absolute top-0.5 transition-all", batchUseAiNaming ? "left-4" : "left-0.5")} />
                         </div>
-                        <div>
-                          <span className="text-xs font-bold block">AI Naming</span>
-                          <span className="text-[10px] text-textSec">Creative pack names via DeepSeek</span>
-                        </div>
+                        <span className={cn("text-[10px] font-bold", batchUseAiNaming ? "text-purple-300" : "text-textSec")}>AI Naming</span>
                       </button>
                       <button
                         onClick={() => setBatchUseAiTranslation(!batchUseAiTranslation)}
-                        className={cn(
-                          "flex items-center gap-3 p-4 rounded-xl border transition-all text-left",
-                          batchUseAiTranslation
-                            ? "bg-purple-600/10 border-purple-500/30 text-white"
-                            : "bg-card/30 border-white/5 text-textSec"
-                        )}
+                        className="flex items-center gap-2 py-1"
                       >
-                        <div className={cn("w-5 h-5 rounded-md flex items-center justify-center shrink-0", batchUseAiTranslation ? "bg-purple-600" : "bg-white/10")}>
-                          {batchUseAiTranslation && <Check size={12} className="text-white" />}
+                        <div className={cn("w-8 h-4 rounded-full transition-all relative", batchUseAiTranslation ? "bg-purple-600" : "bg-white/10")}>
+                          <div className={cn("w-3 h-3 rounded-full bg-white absolute top-0.5 transition-all", batchUseAiTranslation ? "left-4" : "left-0.5")} />
                         </div>
-                        <div>
-                          <span className="text-xs font-bold block">AI Translation</span>
-                          <span className="text-[10px] text-textSec">33 languages via DeepSeek</span>
-                        </div>
+                        <span className={cn("text-[10px] font-bold", batchUseAiTranslation ? "text-purple-300" : "text-textSec")}>AI Translation</span>
                       </button>
                     </div>
                   </div>
 
-                  {/* Right Column: Summary + Launch */}
-                  <div className="xl:w-[320px] shrink-0 space-y-5">
-                    {/* Summary Card */}
-                    <div className="glass rounded-2xl p-5 border border-white/5 space-y-4">
-                      <h3 className="text-sm font-black text-white uppercase tracking-wider flex items-center gap-2">
-                        <Info size={14} className="text-primary" /> Summary
-                      </h3>
-                      <div className="space-y-2.5">
-                        {[
-                          { label: 'Terms', value: String(batchTermsInput.split(',').filter(t => t.trim()).length), color: 'text-primary' },
-                          { label: 'Packs to create', value: String(Math.min(batchTermsInput.split(',').filter(t => t.trim()).length, batchMaxPacks)), color: 'text-accent' },
-                          { label: 'Source', value: batchSource === 'both' ? 'Giphy + Klipy' : batchSource === 'giphy' ? 'Giphy' : 'Klipy', color: 'text-blue-400' },
-                          { label: 'Content', value: batchContentType === 'gifs' ? 'GIFs' : 'Stickers', color: 'text-white' },
-                          { label: 'Per pack', value: `${batchStickersPerPack} stickers`, color: 'text-white' },
-                          { label: 'AI Naming', value: batchUseAiNaming ? 'On' : 'Off', color: batchUseAiNaming ? 'text-green-400' : 'text-textSec' },
-                          { label: 'AI Translation', value: batchUseAiTranslation ? '33 langs' : 'Off', color: batchUseAiTranslation ? 'text-green-400' : 'text-textSec' },
-                        ].map((item, idx) => (
-                          <div key={idx} className="flex items-center justify-between">
-                            <span className="text-[10px] text-textSec font-bold uppercase tracking-wider">{item.label}</span>
-                            <span className={cn("text-xs font-black", item.color)}>{item.value}</span>
-                          </div>
-                        ))}
-                        <div className="border-t border-white/5 pt-2 mt-2">
-                          <div className="flex items-center justify-between">
-                            <span className="text-[10px] text-textSec font-bold uppercase tracking-wider">Est. Total</span>
-                            <span className="text-lg font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-orange-500">
-                              ~{Math.min(batchTermsInput.split(',').filter(t => t.trim()).length, batchMaxPacks) * batchStickersPerPack}
-                            </span>
-                          </div>
-                          <p className="text-[9px] text-textSec text-right">stickers total</p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* V2 Engine Info */}
-                    <div className="glass rounded-2xl p-4 border border-emerald-500/10 bg-gradient-to-br from-emerald-500/5 to-transparent space-y-2">
-                      <h4 className="text-[10px] font-black text-emerald-400 uppercase tracking-widest flex items-center gap-1.5">
-                        <Zap size={12} /> V2 Engine
-                      </h4>
-                      <ul className="text-[10px] text-textSec space-y-1 leading-relaxed">
-                        <li className="flex items-start gap-1.5"><Check size={10} className="text-emerald-400 mt-0.5 shrink-0" /> Multi-page Giphy pagination (3x more results)</li>
-                        <li className="flex items-start gap-1.5"><Check size={10} className="text-emerald-400 mt-0.5 shrink-0" /> Klipy integration via Cloud Function proxy</li>
-                        <li className="flex items-start gap-1.5"><Check size={10} className="text-emerald-400 mt-0.5 shrink-0" /> Smart query variations (5-7 per term)</li>
-                        <li className="flex items-start gap-1.5"><Check size={10} className="text-emerald-400 mt-0.5 shrink-0" /> Deduplication across all sources</li>
-                        <li className="flex items-start gap-1.5"><Check size={10} className="text-emerald-400 mt-0.5 shrink-0" /> 3x over-fetch for 500KB filter losses</li>
-                      </ul>
-                    </div>
-
-                    {/* Launch Button */}
-                    <button
-                      onClick={async () => {
-                        const terms = batchTermsInput.split(',').map(t => t.trim()).filter(Boolean);
-                        if (terms.length === 0) {
-                          alert('Lütfen en az bir arama terimi girin!');
-                          return;
-                        }
-
-                        // Paket sayısı limitini uygula
-                        const limitedTerms = terms.slice(0, batchMaxPacks);
-                        const actualCount = limitedTerms.length;
-
-                        if (!window.confirm(`${actualCount} paket oluşturulacak (Limit: ${batchMaxPacks}). Bu işlem uzun sürebilir. Devam etmek istiyor musunuz?`)) return;
-
-                        setIsBatchRunning(true);
-                        setBatchProgress(null);
-
-                        try {
-                          const completedPacks = await generateBatchPacks({
-                            searchTerms: limitedTerms,
-                            source: batchSource,
-                            stickersPerPack: batchStickersPerPack,
-                            useAiNaming: batchUseAiNaming,
-                            useAiTranslation: batchUseAiTranslation,
-                            existingPackNames: packs.map(p => p.name.toLowerCase()),
-                            contentType: batchContentType,
-                            onProgress: (progress) => {
-                              setBatchProgress(progress);
-                            }
-                          });
-
-                          // Taslakları yeniden yükle
-                          await fetchDrafts();
-
-                          alert(`✅ ${completedPacks.length} paket taslak olarak oluşturuldu! Taslaklar sekmesinden inceleyip yayınlayabilirsiniz.`);
-                        } catch (error: any) {
-                          console.error('Batch generation error:', error);
-                          alert(`Hata: ${error.message}`);
-                        } finally {
-                          setIsBatchRunning(false);
-                        }
-                      }}
-                      disabled={batchTermsInput.split(',').filter(t => t.trim()).length === 0}
-                      className="w-full py-4 bg-gradient-to-r from-yellow-500 via-orange-500 to-red-500 hover:from-yellow-600 hover:via-orange-600 hover:to-red-600 text-white rounded-2xl font-black text-sm shadow-xl shadow-orange-500/20 transition-all hover:translate-y-[-2px] active:translate-y-0 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-3"
-                    >
-                      <Zap size={20} />
-                      TOPLU ÜRETİMİ BAŞLAT
-                    </button>
-                  </div>
+                  {/* Launch */}
+                  <button
+                    onClick={async () => {
+                      const terms = batchTermsInput.split(',').map(t => t.trim()).filter(Boolean);
+                      if (terms.length === 0) {
+                        alert('Please enter at least one search term!');
+                        return;
+                      }
+                      const limitedTerms = terms.slice(0, batchMaxPacks);
+                      const actualCount = limitedTerms.length;
+                      if (!window.confirm(`${actualCount} packs will be created (Limit: ${batchMaxPacks}). This may take a while. Do you want to continue?`)) return;
+                      setIsBatchRunning(true);
+                      setBatchProgress(null);
+                      try {
+                        const completedPacks = await generateBatchPacks({
+                          searchTerms: limitedTerms,
+                          source: batchSource,
+                          stickersPerPack: batchStickersPerPack,
+                          useAiNaming: batchUseAiNaming,
+                          useAiTranslation: batchUseAiTranslation,
+                          existingPackNames: packs.map(p => p.name.toLowerCase()),
+                          contentType: batchContentType,
+                          onProgress: (progress) => {
+                            setBatchProgress(progress);
+                          }
+                        });
+                        await fetchDrafts();
+                        alert(`✅ ${completedPacks.length} packs created as drafts! You can review and publish them from the Drafts tab.`);
+                      } catch (error: any) {
+                        console.error('Batch generation error:', error);
+                        alert(`Error: ${error.message}`);
+                      } finally {
+                        setIsBatchRunning(false);
+                      }
+                    }}
+                    disabled={batchTermsInput.split(',').filter(t => t.trim()).length === 0}
+                    className="w-full py-4 bg-gradient-to-r from-yellow-500 via-orange-500 to-red-500 hover:from-yellow-600 hover:via-orange-600 hover:to-red-600 text-white rounded-2xl font-black text-sm shadow-xl shadow-orange-500/20 transition-all hover:translate-y-[-2px] active:translate-y-0 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-3"
+                  >
+                    <Zap size={20} />
+                    START BATCH GENERATION
+                    <span className="text-xs font-bold opacity-70">~{Math.min(batchTermsInput.split(',').filter(t => t.trim()).length, batchMaxPacks) * batchStickersPerPack} stickers</span>
+                  </button>
                 </div>
               ) : batchSubTab === 'generator' && isBatchRunning ? (
                 /* Batch Progress UI */
@@ -4507,10 +4445,10 @@ function App() {
                     <div className="flex items-center justify-between">
                       <div>
                         <h3 className="text-xl font-black text-white">
-                          {batchProgress?.status === 'done' ? 'Üretim Tamamlandı!' : 'Üretim Devam Ediyor...'}
+                          {batchProgress?.status === 'done' ? 'Generation Complete!' : 'Generation in Progress...'}
                         </h3>
                         <p className="text-sm text-textSec mt-1">
-                          Paket {batchProgress?.currentPack || 0} / {batchProgress?.totalPacks || 0}
+                          Pack {batchProgress?.currentPack || 0} / {batchProgress?.totalPacks || 0}
                         </p>
                       </div>
                       {batchProgress?.status === 'done' && (
@@ -4521,7 +4459,7 @@ function App() {
                           }}
                           className="px-6 py-3 bg-primary text-white rounded-xl font-black text-xs uppercase tracking-widest"
                         >
-                          Yeni Üretim
+                          New Generation
                         </button>
                       )}
                     </div>
@@ -4536,13 +4474,13 @@ function App() {
                       </div>
                       <div className="flex justify-between text-[10px] font-bold text-textSec">
                         <span>{Math.round(batchProgress?.totalPacks ? (batchProgress.currentPack / batchProgress.totalPacks) * 100 : 0)}%</span>
-                        <span>{batchProgress?.currentPack || 0} / {batchProgress?.totalPacks || 0} paket</span>
+                        <span>{batchProgress?.currentPack || 0} / {batchProgress?.totalPacks || 0} packs</span>
                       </div>
                     </div>
 
                     {/* Current Step */}
                     <div className="bg-primary/5 border border-primary/20 px-5 py-3 rounded-xl">
-                      <p className="text-xs text-primary font-bold">{batchProgress?.currentStep || 'Başlatılıyor...'}</p>
+                      <p className="text-xs text-primary font-bold">{batchProgress?.currentStep || 'Starting...'}</p>
                     </div>
 
                     {/* Sticker Progress (if available) */}
@@ -4566,13 +4504,13 @@ function App() {
                   {batchProgress?.completedPacks && batchProgress.completedPacks.length > 0 && (
                     <div className="glass rounded-[2rem] p-6 border border-white/5 space-y-4">
                       <h4 className="text-sm font-black text-white uppercase tracking-widest flex items-center gap-2">
-                        <Check size={16} className="text-green-500" />
-                        Oluşturulan Paketler ({batchProgress.completedPacks.length})
+                        <Check size={16} className="text-violet-500" />
+                        Created Packs ({batchProgress.completedPacks.length})
                       </h4>
                       <div className="space-y-2 max-h-[300px] overflow-y-auto custom-scrollbar">
                         {batchProgress.completedPacks.map((pack, idx) => (
                           <div key={pack.id} className="flex items-center gap-3 p-3 bg-white/[0.02] rounded-xl border border-white/5">
-                            <span className="w-7 h-7 rounded-lg bg-green-500/20 text-green-500 flex items-center justify-center text-[10px] font-black">{idx + 1}</span>
+                            <span className="w-7 h-7 rounded-lg bg-violet-500/20 text-violet-500 flex items-center justify-center text-[10px] font-black">{idx + 1}</span>
                             <div className="flex-1 min-w-0">
                               <p className="text-sm font-bold text-white truncate">{pack.name}</p>
                               <p className="text-[10px] text-textSec">{pack.stickerCount} sticker • {pack.searchTerm}</p>
@@ -4581,6 +4519,233 @@ function App() {
                           </div>
                         ))}
                       </div>
+                    </div>
+                  )}
+                </div>
+              ) : batchSubTab === 'telegram' ? (
+                /* ========== TELEGRAM IMPORT UI ========== */
+                <div className="max-w-2xl mx-auto space-y-4">
+                  {/* Bot Token — compact single row */}
+                  <div className="glass rounded-2xl p-4 border border-white/5">
+                    <div className="flex items-center gap-2">
+                      <Send size={14} className="text-sky-400 shrink-0" />
+                      <input
+                        type="password"
+                        value={telegramBotToken}
+                        onChange={(e) => {
+                          setTelegramBotToken(e.target.value);
+                          setTelegramTokenValid(false);
+                        }}
+                        placeholder="Bot token..."
+                        className="flex-1 min-w-0 bg-card border border-white/10 rounded-lg px-3 py-2 text-white text-sm outline-none focus:ring-2 focus:ring-sky-500 transition-all placeholder:text-white/20"
+                      />
+                      <button
+                        onClick={async () => {
+                          if (!telegramBotToken.trim()) return;
+                          const result = await validateBotToken(telegramBotToken.trim());
+                          if (result.valid) {
+                            setTelegramTokenValid(true);
+                            setTelegramBotName(result.botName || '');
+                            localStorage.setItem('telegram_bot_token', telegramBotToken.trim());
+                          } else {
+                            alert('Invalid bot token! Please check and try again.');
+                            setTelegramTokenValid(false);
+                          }
+                        }}
+                        className="px-4 py-2 bg-sky-500 hover:bg-sky-600 text-white rounded-lg text-xs font-bold transition-all shrink-0"
+                      >
+                        Verify
+                      </button>
+                      {telegramTokenValid && (
+                        <span className="shrink-0 flex items-center gap-1 px-2 py-1 bg-green-500/20 text-green-400 rounded-lg text-[10px] font-bold">
+                          <Check size={10} /> @{telegramBotName}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Pack URLs Input */}
+                  <div className="glass rounded-2xl p-4 border border-white/5 space-y-2">
+                    <label className="text-[10px] font-black text-textSec uppercase tracking-widest flex items-center gap-2">
+                      <List size={10} className="text-sky-400" />
+                      Sticker Pack Links
+                    </label>
+                    <textarea
+                      value={telegramPacksInput}
+                      onChange={(e) => setTelegramPacksInput(e.target.value)}
+                      placeholder={"Enter Telegram sticker pack links, one per line...\ne.g:\nhttps://t.me/addstickers/AnimatedCats\nhttps://t.me/addstickers/CoolDogs\nPepeAnimated"}
+                      rows={5}
+                      className="w-full bg-card/60 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-medium outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500/50 transition-all resize-none placeholder:text-white/15"
+                    />
+                  </div>
+
+                  {/* Directory links — single row of small icon buttons */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-[10px] font-bold text-textSec mr-1">Find packs:</span>
+                    {[
+                      { emoji: '✨', name: 'Stickers.gg', url: 'https://stickers.gg/packs/telegram' },
+                      { emoji: '📂', name: 'TLGRM', url: 'https://tlgrm.eu/stickers' },
+                      { emoji: '📊', name: 'Fullyst', url: 'https://fullyst.com/stickers' },
+                    ].map(dir => (
+                      <a
+                        key={dir.name}
+                        href={dir.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-2.5 py-1.5 bg-white/5 hover:bg-white/10 border border-white/5 rounded-lg text-[10px] font-bold text-white/60 hover:text-white transition-all"
+                      >
+                        {dir.emoji} {dir.name}
+                      </a>
+                    ))}
+                  </div>
+
+                  {/* Import Settings */}
+                  <div className="glass rounded-2xl p-5 border border-white/5 space-y-4">
+                    <div className="flex items-center gap-2">
+                      <Settings size={14} className="text-sky-400" />
+                      <span className="text-[10px] font-black text-textSec uppercase tracking-widest">Import Settings</span>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      {/* Sticker Limit */}
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-bold text-textSec uppercase">Stickers per Pack</label>
+                        <input
+                          type="number"
+                          min={1}
+                          max={120}
+                          value={telegramStickerLimit}
+                          onChange={(e) => setTelegramStickerLimit(Math.max(1, Math.min(120, parseInt(e.target.value) || 30)))}
+                          className="w-full bg-card/60 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm font-bold outline-none focus:ring-2 focus:ring-sky-500"
+                        />
+                      </div>
+
+                      {/* Split Packs Toggle */}
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-bold text-textSec uppercase">Split Large Packs</label>
+                        <div className="flex bg-hover rounded-xl p-1 gap-1">
+                          <button
+                            onClick={() => setTelegramSplitPacks(true)}
+                            className={cn("flex-1 py-2 rounded-lg text-[10px] font-black transition-all", telegramSplitPacks ? "bg-sky-500 text-white" : "text-textSec")}
+                          >Split</button>
+                          <button
+                            onClick={() => setTelegramSplitPacks(false)}
+                            className={cn("flex-1 py-2 rounded-lg text-[10px] font-black transition-all", !telegramSplitPacks ? "bg-orange-500 text-white" : "text-textSec")}
+                          >Truncate</button>
+                        </div>
+                      </div>
+
+                      {/* Keep Original Name Toggle */}
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-bold text-textSec uppercase">Pack Naming</label>
+                        <div className="flex bg-hover rounded-xl p-1 gap-1">
+                          <button
+                            onClick={() => setTelegramKeepOriginalName(true)}
+                            className={cn("flex-1 py-2 rounded-lg text-[10px] font-black transition-all", telegramKeepOriginalName ? "bg-sky-500 text-white" : "text-textSec")}
+                          >Original</button>
+                          <button
+                            onClick={() => setTelegramKeepOriginalName(false)}
+                            className={cn("flex-1 py-2 rounded-lg text-[10px] font-black transition-all", !telegramKeepOriginalName ? "bg-purple-500 text-white" : "text-textSec")}
+                          >AI Name</button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <p className="text-[9px] text-textSec">
+                      {telegramSplitPacks
+                        ? `Packs with more than ${telegramStickerLimit} stickers will be split into multiple packs.`
+                        : `Packs will be limited to first ${telegramStickerLimit} stickers.`
+                      }
+                    </p>
+                  </div>
+
+                  {/* Import Button */}
+                  <button
+                    onClick={async () => {
+                      if (!telegramTokenValid) {
+                        alert('Please verify your bot token first!');
+                        return;
+                      }
+                      const packs = telegramPacksInput.split('\n').map(s => s.trim()).filter(Boolean);
+                      if (packs.length === 0) {
+                        alert('Please enter at least one sticker pack link!');
+                        return;
+                      }
+                      setIsTelegramImporting(true);
+                      try {
+                        await importTelegramPacks(telegramBotToken.trim(), packs, {
+                          useAiNaming: !telegramKeepOriginalName,
+                          useAiTranslation: true,
+                          stickerLimit: telegramStickerLimit,
+                          splitPacks: telegramSplitPacks,
+                          keepOriginalName: telegramKeepOriginalName,
+                          onProgress: (p) => setTelegramProgress(p)
+                        });
+                      } catch (e: any) {
+                        alert('Import error: ' + e.message);
+                      } finally {
+                        setIsTelegramImporting(false);
+                      }
+                    }}
+                    disabled={isTelegramImporting || !telegramTokenValid}
+                    className="w-full py-4 bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 text-white rounded-2xl text-sm font-black uppercase tracking-wider transition-all disabled:opacity-50 shadow-lg shadow-sky-500/20"
+                  >
+                    {isTelegramImporting ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <RefreshCcw size={16} className="animate-spin" /> Importing...
+                      </span>
+                    ) : (
+                      <span className="flex items-center justify-center gap-2">
+                        <Send size={16} /> Import from Telegram
+                      </span>
+                    )}
+                  </button>
+
+                  {/* Progress */}
+                  {telegramProgress && (
+                    <div className="glass rounded-2xl p-5 border border-white/5 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-white">
+                          Pack {telegramProgress.currentPack}/{telegramProgress.totalPacks}
+                        </span>
+                        {telegramProgress.packName && (
+                          <span className="text-[10px] text-sky-400 font-bold">{telegramProgress.packName}</span>
+                        )}
+                      </div>
+                      {telegramProgress.stickerProgress ? (
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between text-[10px] text-textSec font-bold">
+                            <span>Sticker {telegramProgress.stickerProgress.current}/{telegramProgress.stickerProgress.total}</span>
+                            <span>{Math.round((telegramProgress.stickerProgress.current / telegramProgress.stickerProgress.total) * 100)}%</span>
+                          </div>
+                          <div className="w-full bg-white/5 rounded-full h-2.5">
+                            <div
+                              className="h-full bg-gradient-to-r from-sky-500 to-blue-500 rounded-full transition-all duration-300"
+                              style={{ width: `${(telegramProgress.stickerProgress.current / telegramProgress.stickerProgress.total) * 100}%` }}
+                            />
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="w-full bg-white/5 rounded-full h-2.5">
+                          <div
+                            className="h-full bg-gradient-to-r from-sky-500 to-blue-500 rounded-full transition-all duration-300"
+                            style={{ width: `${(telegramProgress.currentPack / telegramProgress.totalPacks) * 100}%` }}
+                          />
+                        </div>
+                      )}
+                      <p className="text-[10px] text-textSec">{telegramProgress.currentStep}</p>
+
+                      {telegramProgress.completedPacks?.length > 0 && (
+                        <div className="space-y-1.5 mt-3 max-h-48 overflow-y-auto">
+                          {telegramProgress.completedPacks.map((p: any) => (
+                            <div key={p.id} className="flex items-center gap-2 p-2 bg-green-500/10 rounded-lg">
+                              <Check size={12} className="text-green-400" />
+                              <span className="text-[10px] text-white font-bold flex-1">{p.name}</span>
+                              <span className="text-[10px] text-green-400">{p.stickerCount} stickers</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -4595,8 +4760,8 @@ function App() {
                           <Edit3 size={20} className="text-blue-400" />
                         </div>
                         <div>
-                          <h3 className="text-xl font-black text-white">Taslak Paketler</h3>
-                          <p className="text-xs text-textSec mt-0.5">{draftPacks.length} taslak inceleme bekliyor</p>
+                          <h3 className="text-xl font-black text-white">Draft Packs</h3>
+                          <p className="text-xs text-textSec mt-0.5">{draftPacks.length} drafts awaiting review</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
@@ -4605,14 +4770,14 @@ function App() {
                           disabled={draftLoading}
                           className="px-4 py-2.5 bg-white/5 hover:bg-white/10 text-textSec hover:text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2"
                         >
-                          <RefreshCcw size={13} className={cn(draftLoading && "animate-spin")} /> Yenile
+                          <RefreshCcw size={13} className={cn(draftLoading && "animate-spin")} /> Refresh
                         </button>
                         {draftPacks.length > 0 && (
                           <button
                             onClick={publishAllDrafts}
-                            className="px-5 py-2.5 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-green-500/20 hover:translate-y-[-1px] transition-all flex items-center gap-2"
+                            className="px-5 py-2.5 bg-gradient-to-r from-violet-500 to-purple-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-violet-500/20 hover:translate-y-[-1px] transition-all flex items-center gap-2"
                           >
-                            <Check size={13} /> Tümünü Yayınla
+                            <Check size={13} /> Publish All
                           </button>
                         )}
                       </div>
@@ -4623,7 +4788,7 @@ function App() {
                     <div className="flex items-center justify-center py-24">
                       <div className="text-center">
                         <RefreshCcw size={28} className="animate-spin text-primary mx-auto mb-3" />
-                        <p className="text-xs text-textSec font-bold">Taslaklar yükleniyor...</p>
+                        <p className="text-xs text-textSec font-bold">Loading drafts...</p>
                       </div>
                     </div>
                   ) : draftPacks.length === 0 ? (
@@ -4631,8 +4796,8 @@ function App() {
                       <div className="w-20 h-20 bg-gradient-to-br from-blue-500/10 to-purple-500/10 rounded-2xl flex items-center justify-center mx-auto mb-5 border border-white/5">
                         <Package size={36} className="text-textSec" />
                       </div>
-                      <h4 className="text-xl font-black text-white mb-3">Henüz Taslak Yok</h4>
-                      <p className="text-sm text-textSec max-w-lg mx-auto leading-relaxed">Toplu üretici ile paket oluşturduğunuzda, paketler önce buraya taslak olarak düşecek. İnceleyip onayladıktan sonra yayınlayabilirsiniz.</p>
+                      <h4 className="text-xl font-black text-white mb-3">No Drafts Yet</h4>
+                      <p className="text-sm text-textSec max-w-lg mx-auto leading-relaxed">When you create packs with the batch generator, they will first appear here as drafts. You can review and publish them after approval.</p>
                     </div>
                   ) : (
                     <div className="space-y-6">
@@ -4656,7 +4821,7 @@ function App() {
                                 <div>
                                   <div className="flex items-center gap-2.5">
                                     <h3 className="text-lg font-black text-white">{draft.name}</h3>
-                                    <span className="text-[9px] font-black text-yellow-400 bg-yellow-400/10 px-2 py-0.5 rounded-md uppercase border border-yellow-400/20">Taslak</span>
+                                    <span className="text-[9px] font-black text-yellow-400 bg-yellow-400/10 px-2 py-0.5 rounded-md uppercase border border-yellow-400/20">Draft</span>
                                   </div>
                                   <div className="flex items-center gap-2 mt-1.5">
                                     <span className="text-[10px] font-bold text-white/60 bg-white/5 px-2.5 py-0.5 rounded-md">{draft.category}</span>
@@ -4703,21 +4868,21 @@ function App() {
                                   }}
                                   className="px-4 py-2.5 bg-white/5 hover:bg-white/10 text-textSec hover:text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2"
                                 >
-                                  <Edit3 size={13} /> Düzenle
+                                  <Edit3 size={13} /> Edit
                                 </button>
                                 <button
                                   onClick={() => deleteDraftPack(draft)}
                                   disabled={draftDeleting === draft.id}
                                   className="px-4 py-2.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2"
                                 >
-                                  <Trash2 size={13} /> {draftDeleting === draft.id ? 'Siliniyor...' : 'Sil'}
+                                  <Trash2 size={13} /> {draftDeleting === draft.id ? 'Deleting...' : 'Delete'}
                                 </button>
                                 <button
                                   onClick={() => publishDraft(draft)}
                                   disabled={draftPublishing === draft.id}
-                                  className="px-5 py-2.5 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-green-500/20 hover:translate-y-[-1px] transition-all flex items-center gap-2 disabled:opacity-50"
+                                  className="px-5 py-2.5 bg-gradient-to-r from-violet-500 to-purple-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-violet-500/20 hover:translate-y-[-1px] transition-all flex items-center gap-2 disabled:opacity-50"
                                 >
-                                  <Check size={13} /> {draftPublishing === draft.id ? 'Yayınlanıyor...' : 'Yayınla'}
+                                  <Check size={13} /> {draftPublishing === draft.id ? 'Publishing...' : 'Publish'}
                                 </button>
                               </div>
                             </div>
@@ -4726,8 +4891,8 @@ function App() {
                           {/* Sticker Grid - Large Previews with Drag & Drop */}
                           <div className="p-5">
                             <div className="flex items-center justify-between mb-3">
-                              <span className="text-[10px] font-black text-textSec uppercase tracking-widest">Paket İçeriği — {draft.stickers?.length || 0} Dosya</span>
-                              <span className="text-[9px] text-textSec bg-white/5 px-2 py-1 rounded-md">Sürükle & bırak ile sıralayın</span>
+                              <span className="text-[10px] font-black text-textSec uppercase tracking-widest">Pack Contents — {draft.stickers?.length || 0} Files</span>
+                              <span className="text-[9px] text-textSec bg-white/5 px-2 py-1 rounded-md">Drag & drop to reorder</span>
                             </div>
                             <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8 gap-3">
                               {draft.stickers?.map((sticker, idx) => (
@@ -4809,7 +4974,7 @@ function App() {
                     <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onClick={() => setShowDraftEditModal(false)}>
                       <div className="bg-card border border-white/10 rounded-2xl p-6 w-full max-w-lg space-y-5 shadow-2xl" onClick={e => e.stopPropagation()}>
                         <div className="flex items-center justify-between">
-                          <h3 className="text-lg font-black text-white">Taslak Düzenle</h3>
+                          <h3 className="text-lg font-black text-white">Edit Draft</h3>
                           <button onClick={() => setShowDraftEditModal(false)} className="w-8 h-8 bg-white/5 rounded-lg flex items-center justify-center text-textSec hover:text-white hover:bg-white/10">
                             <X size={16} />
                           </button>
@@ -4817,7 +4982,7 @@ function App() {
 
                         <div className="space-y-4">
                           <div>
-                            <label className="text-[10px] font-black text-textSec uppercase tracking-widest mb-1.5 block">Paket Adı (EN)</label>
+                            <label className="text-[10px] font-black text-textSec uppercase tracking-widest mb-1.5 block">Pack Name (EN)</label>
                             <input
                               type="text"
                               value={draftEditData.name || ''}
@@ -4826,7 +4991,7 @@ function App() {
                             />
                           </div>
                           <div>
-                            <label className="text-[10px] font-black text-textSec uppercase tracking-widest mb-1.5 block">Paket Adı (TR)</label>
+                            <label className="text-[10px] font-black text-textSec uppercase tracking-widest mb-1.5 block">Pack Name (TR)</label>
                             <input
                               type="text"
                               value={draftEditData.name_tr || ''}
@@ -4835,7 +5000,7 @@ function App() {
                             />
                           </div>
                           <div>
-                            <label className="text-[10px] font-black text-textSec uppercase tracking-widest mb-1.5 block">Kategori</label>
+                            <label className="text-[10px] font-black text-textSec uppercase tracking-widest mb-1.5 block">Category</label>
                             <select
                               value={draftEditData.category || 'humor'}
                               onChange={e => setDraftEditData(prev => ({ ...prev, category: e.target.value }))}
@@ -4863,16 +5028,16 @@ function App() {
                                 onChange={e => setDraftEditData(prev => ({ ...prev, is_animated: e.target.checked }))}
                                 className="w-4 h-4 rounded accent-blue-500"
                               />
-                              <span className="text-xs font-bold text-white">Animasyonlu</span>
+                              <span className="text-xs font-bold text-white">Animated</span>
                             </label>
                             <label className="flex items-center gap-2 cursor-pointer">
                               <input
                                 type="checkbox"
                                 checked={draftEditData.is_active ?? true}
                                 onChange={e => setDraftEditData(prev => ({ ...prev, is_active: e.target.checked }))}
-                                className="w-4 h-4 rounded accent-green-500"
+                                className="w-4 h-4 rounded accent-violet-500"
                               />
-                              <span className="text-xs font-bold text-white">Aktif</span>
+                              <span className="text-xs font-bold text-white">Active</span>
                             </label>
                           </div>
                         </div>
@@ -4882,13 +5047,13 @@ function App() {
                             onClick={() => setShowDraftEditModal(false)}
                             className="flex-1 py-3 bg-white/5 hover:bg-white/10 text-textSec rounded-xl font-black text-xs uppercase tracking-widest transition-all"
                           >
-                            İptal
+                            Cancel
                           </button>
                           <button
                             onClick={updateDraftPack}
                             className="flex-1 py-3 bg-primary text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-lg shadow-primary/20 hover:translate-y-[-1px] transition-all flex items-center justify-center gap-2"
                           >
-                            <Save size={14} /> Kaydet
+                            <Save size={14} /> Save
                           </button>
                         </div>
                       </div>
@@ -4906,11 +5071,11 @@ function App() {
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-2">
             <div className="w-1.5 h-1.5 bg-primary rounded-full shadow-sm shadow-primary/50" />
-            Firebase Bağlı: {selectedPack ? selectedPack.id : 'Hazır'}
+            Firebase Connected: {selectedPack ? selectedPack.id : 'Ready'}
           </div>
           <div className="flex items-center gap-2">
             <div className="w-1.5 h-1.5 bg-accent rounded-full" />
-            Storage: Veri Akışı Aktif
+            Storage: Data Stream Active
           </div>
         </div>
         <div>
@@ -4919,16 +5084,16 @@ function App() {
       </footer>
 
       {/* New Pack Modal */}
-      <Modal show={showNewPackModal} onClose={() => setShowNewPackModal(false)} title="Yeni Paket Oluştur">
+      <Modal show={showNewPackModal} onClose={() => setShowNewPackModal(false)} title="Create New Pack">
         <div className="space-y-6">
-          <p className="text-sm text-textSec">StickyApp veritabanına doğrudan el ile yeni paket ekleyin.</p>
+          <p className="text-sm text-textSec">Manually add a new pack directly to the StickyApp database.</p>
 
           {/* Çoklu Dil Desteği */}
           <div className="bg-gradient-to-r from-primary/10 to-transparent border border-primary/20 rounded-2xl p-4 space-y-4">
             <div className="flex items-center gap-2 mb-2">
               <Globe className="text-primary" size={20} />
-              <span className="text-sm font-bold text-white">Çoklu Dil Desteği</span>
-              <span className="text-xs text-textSec ml-auto">Uygulamada seçilen dile göre görünür</span>
+              <span className="text-sm font-bold text-white">Multi-Language Support</span>
+              <span className="text-xs text-textSec ml-auto">Displayed based on selected language in the app</span>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
@@ -4937,7 +5102,7 @@ function App() {
                 <div className="flex items-center justify-between mb-3">
                   <label className="flex items-center gap-2 text-primary font-bold text-sm">
                     <Globe size={18} />
-                    Çoklu Dil Desteği ({TARGET_LANGUAGES.length} dil)
+                    Multi-Language Support ({TARGET_LANGUAGES.length} languages)
                   </label>
                   <button
                     onClick={() => handleAutoTranslate(false)}
@@ -4946,19 +5111,19 @@ function App() {
                     className="px-4 py-2 bg-gradient-to-r from-primary to-accent text-white rounded-xl flex items-center gap-2 hover:opacity-90 transition-all font-bold text-sm disabled:opacity-40 disabled:cursor-not-allowed shadow-lg"
                   >
                     {isTranslating ? <RefreshCcw size={16} className="animate-spin" /> : <Sparkles size={16} />}
-                    {isTranslating ? 'AI Çeviriyor...' : '✨ Otomatik Çevir'}
+                    {isTranslating ? 'AI Translating...' : '✨ Auto Translate'}
                   </button>
                 </div>
 
                 {/* Ana İsim (İngilizce) */}
                 <div className="mb-3">
                   <label className="flex items-center gap-2 text-xs font-bold text-white/80 mb-1.5">
-                    🇬🇧 İngilizce (Ana İsim) <span className="text-red-400">*</span>
+                    🇬🇧 English (Main Name) <span className="text-red-400">*</span>
                   </label>
                   <div className="flex gap-2">
                     <input
                       type="text"
-                      placeholder="Örn: Funny Cats, Love Stickers..."
+                      placeholder="e.g. Funny Cats, Love Stickers..."
                       className="flex-1 bg-bgSecondary border-2 border-primary/50 rounded-xl p-3 text-white placeholder:text-white/30 text-base focus:border-primary outline-none transition-all"
                       value={newPackData.name}
                       onChange={(e) => setNewPackData({ ...newPackData, name: e.target.value, name_en: e.target.value })}
@@ -4970,12 +5135,12 @@ function App() {
                         setNewPackData({ ...newPackData, name: newName, name_en: newName });
                       }}
                       className="px-4 bg-accent/10 border-2 border-accent/20 hover:bg-accent/20 hover:border-accent/50 text-accent rounded-xl transition-all flex items-center justify-center active:scale-95 group"
-                      title="Yaratıcı İsim Öner"
+                      title="Suggest Creative Name"
                     >
                       <Wand2 size={24} className="group-hover:rotate-12 transition-transform" />
                     </button>
                   </div>
-                  <p className="text-xs text-textSec mt-1">İngilizce ismi girin, ardından "Otomatik Çevir" butonuna tıklayın</p>
+                  <p className="text-xs text-textSec mt-1">Enter the English name, then click the "Auto Translate" button</p>
                 </div>
 
                 {/* Arama */}
@@ -4983,7 +5148,7 @@ function App() {
                   <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-textSec" />
                   <input
                     type="text"
-                    placeholder="Dil ara... (Turkish, German, Japanese...)"
+                    placeholder="Search language... (Turkish, German, Japanese...)"
                     className="w-full bg-bgSecondary border border-white/10 rounded-xl py-2.5 pl-10 pr-4 text-sm text-white placeholder:text-white/30"
                     value={langSearch}
                     onChange={(e) => setLangSearch(e.target.value)}
@@ -4993,12 +5158,12 @@ function App() {
                 {/* Doluluk Durumu */}
                 <div className="flex items-center gap-4 mb-3 text-xs">
                   <span className="flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-green-500"></span>
+                    <span className="w-2 h-2 rounded-full bg-violet-500"></span>
                     Dolu: {TARGET_LANGUAGES.filter(l => (newPackData as any)[`name_${l.code}`]).length}
                   </span>
                   <span className="flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-full bg-white/20"></span>
-                    Boş: {TARGET_LANGUAGES.filter(l => !(newPackData as any)[`name_${l.code}`]).length}
+                    Empty: {TARGET_LANGUAGES.filter(l => !(newPackData as any)[`name_${l.code}`]).length}
                   </span>
                 </div>
 
@@ -5016,14 +5181,14 @@ function App() {
                       const isFilled = value.length > 0;
                       return (
                         <div key={lang.code} className="space-y-1">
-                          <label className={`flex items-center gap-1.5 text-xs font-medium ${isFilled ? 'text-green-400' : 'text-textSec'}`}>
+                          <label className={`flex items-center gap-1.5 text-xs font-medium ${isFilled ? 'text-violet-400' : 'text-textSec'}`}>
                             <span>{lang.flag}</span> {lang.name}
-                            {isFilled && <Check size={12} className="text-green-400" />}
+                            {isFilled && <Check size={12} className="text-violet-400" />}
                           </label>
                           <input
                             type="text"
                             placeholder={`${lang.name}...`}
-                            className={`w-full bg-bgSecondary border rounded-lg p-2 text-sm text-white placeholder:text-white/20 ${isFilled ? 'border-green-500/30' : 'border-white/10'}`}
+                            className={`w-full bg-bgSecondary border rounded-lg p-2 text-sm text-white placeholder:text-white/20 ${isFilled ? 'border-violet-500/30' : 'border-white/10'}`}
                             value={value}
                             onChange={(e) => setNewPackData({ ...newPackData, [`name_${lang.code}`]: e.target.value })}
                           />
@@ -5035,18 +5200,18 @@ function App() {
             </div>
           </div>
           <Input
-            label="Yayıncı"
+            label="Publisher"
             placeholder="Sticky"
             value={newPackData.publisher}
             onChange={(e: any) => setNewPackData({ ...newPackData, publisher: e.target.value })}
           />
           <Input
-            label="Yayıncı E-posta"
+            label="Publisher Email"
             value={newPackData.publisher_email}
             onChange={(e: any) => setNewPackData({ ...newPackData, publisher_email: e.target.value })}
           />
           <div>
-            <label className="text-xs font-bold text-textSec uppercase mb-2 block">Kategori</label>
+            <label className="text-xs font-bold text-textSec uppercase mb-2 block">Category</label>
             <select
               className="w-full bg-hover rounded-xl px-4 py-2.5 text-sm outline-none border-none text-white cursor-pointer"
               value={newPackData.category}
@@ -5065,18 +5230,18 @@ function App() {
             <button
               onClick={() => setNewPackData({ ...newPackData, is_animated: false })}
               className={cn("flex-1 py-2 rounded-lg text-[10px] font-black transition-all", !newPackData.is_animated ? "bg-blue-500 text-white" : "text-textSec")}
-            >STATİK PAKET</button>
+            >STATIC PACK</button>
             <button
               onClick={() => setNewPackData({ ...newPackData, is_animated: true })}
               className={cn("flex-1 py-2 rounded-lg text-[10px] font-black transition-all", newPackData.is_animated ? "bg-purple-500 text-white" : "text-textSec")}
-            >HAREKETLİ PAKET</button>
+            >ANIMATED PACK</button>
           </div>
           <div className="bg-primary/5 border border-primary/20 p-4 rounded-xl flex items-center gap-3">
             <Info className="text-primary" size={20} />
             <span className="text-xs text-textMain/70 uppercase font-bold">
               {newPackData.is_animated
-                ? "Hareketli paket: GIF, Video ve Animasyonlu WebP destekler"
-                : "Statik paket: PNG, JPG ve Statik WebP destekler"}
+                ? "Animated pack: Supports GIF, Video and Animated WebP"
+                : "Static pack: Supports PNG, JPG and Static WebP"}
             </span>
           </div>
           <button
@@ -5084,21 +5249,21 @@ function App() {
             disabled={isProcessing}
             className="w-full bg-primary py-4 rounded-2xl font-black shadow-lg shadow-primary/20 hover:scale-[1.01] active:scale-95 transition-all disabled:opacity-50 text-white"
           >
-            {isProcessing ? 'PAKET OLUŞTURULUYOR...' : 'OLUŞTUR VE BAŞLA'}
+            {isProcessing ? 'CREATING PACK...' : 'CREATE AND START'}
           </button>
         </div>
       </Modal>
 
       {/* Edit Pack Modal */}
-      <Modal show={showEditPackModal} onClose={() => setShowEditPackModal(false)} title="Uygulama Bilgilerini Düzenle">
+      <Modal show={showEditPackModal} onClose={() => setShowEditPackModal(false)} title="Edit Pack Details">
         {selectedPack && (
           <div className="space-y-6">
             {/* Çoklu Dil Desteği */}
             <div className="bg-gradient-to-r from-primary/10 to-transparent border border-primary/20 rounded-2xl p-4 space-y-4">
               <div className="flex items-center gap-2 mb-2">
                 <Globe className="text-primary" size={20} />
-                <span className="text-sm font-bold text-white">Çoklu Dil Desteği</span>
-                <span className="text-xs text-textSec ml-auto">Uygulamada seçilen dile göre görünür</span>
+                <span className="text-sm font-bold text-white">Multi-Language Support</span>
+                <span className="text-xs text-textSec ml-auto">Displayed based on selected language in the app</span>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -5107,7 +5272,7 @@ function App() {
                   <div className="flex items-center justify-between mb-3">
                     <label className="flex items-center gap-2 text-primary font-bold text-sm">
                       <Globe size={18} />
-                      Çoklu Dil Desteği ({TARGET_LANGUAGES.length} dil)
+                      Multi-Language Support ({TARGET_LANGUAGES.length} languages)
                     </label>
                     <button
                       onClick={() => handleAutoTranslate(true)}
@@ -5116,19 +5281,19 @@ function App() {
                       className="px-4 py-2 bg-gradient-to-r from-primary to-accent text-white rounded-xl flex items-center gap-2 hover:opacity-90 transition-all font-bold text-sm disabled:opacity-40 disabled:cursor-not-allowed shadow-lg"
                     >
                       {isTranslating ? <RefreshCcw size={16} className="animate-spin" /> : <Sparkles size={16} />}
-                      {isTranslating ? 'AI Çeviriyor...' : '✨ Otomatik Çevir'}
+                      {isTranslating ? 'AI Translating...' : '✨ Auto Translate'}
                     </button>
                   </div>
 
                   {/* Ana İsim (İngilizce) */}
                   <div className="mb-3">
                     <label className="flex items-center gap-2 text-xs font-bold text-white/80 mb-1.5">
-                      🇬🇧 İngilizce (Ana İsim) <span className="text-red-400">*</span>
+                      🇬🇧 English (Main Name) <span className="text-red-400">*</span>
                     </label>
                     <div className="flex gap-2">
                       <input
                         type="text"
-                        placeholder="Örn: Funny Cats, Love Stickers..."
+                        placeholder="e.g. Funny Cats, Love Stickers..."
                         className="flex-1 bg-bgSecondary border-2 border-primary/50 rounded-xl p-3 text-white placeholder:text-white/30 text-base focus:border-primary outline-none transition-all"
                         value={editFormData.name || ''}
                         onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value, name_en: e.target.value })}
@@ -5140,7 +5305,7 @@ function App() {
                           setEditFormData({ ...editFormData, name: newName, name_en: newName });
                         }}
                         className="px-4 bg-accent/10 border-2 border-accent/20 hover:bg-accent/20 hover:border-accent/50 text-accent rounded-xl transition-all flex items-center justify-center active:scale-95 group"
-                        title="Yaratıcı İsim Öner"
+                        title="Suggest Creative Name"
                       >
                         <Wand2 size={24} className="group-hover:rotate-12 transition-transform" />
                       </button>
@@ -5162,12 +5327,12 @@ function App() {
                   {/* Doluluk Durumu */}
                   <div className="flex items-center gap-4 mb-3 text-xs">
                     <span className="flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-green-500"></span>
+                      <span className="w-2 h-2 rounded-full bg-violet-500"></span>
                       Dolu: {TARGET_LANGUAGES.filter(l => (editFormData as any)[`name_${l.code}`]).length}
                     </span>
                     <span className="flex items-center gap-1.5">
                       <span className="w-2 h-2 rounded-full bg-white/20"></span>
-                      Boş: {TARGET_LANGUAGES.filter(l => !(editFormData as any)[`name_${l.code}`]).length}
+                      Empty: {TARGET_LANGUAGES.filter(l => !(editFormData as any)[`name_${l.code}`]).length}
                     </span>
                   </div>
 
@@ -5185,14 +5350,14 @@ function App() {
                         const isFilled = value.length > 0;
                         return (
                           <div key={lang.code} className="space-y-1">
-                            <label className={`flex items-center gap-1.5 text-xs font-medium ${isFilled ? 'text-green-400' : 'text-textSec'}`}>
+                            <label className={`flex items-center gap-1.5 text-xs font-medium ${isFilled ? 'text-violet-400' : 'text-textSec'}`}>
                               <span>{lang.flag}</span> {lang.name}
-                              {isFilled && <Check size={12} className="text-green-400" />}
+                              {isFilled && <Check size={12} className="text-violet-400" />}
                             </label>
                             <input
                               type="text"
                               placeholder={`${lang.name}...`}
-                              className={`w-full bg-bgSecondary border rounded-lg p-2 text-sm text-white placeholder:text-white/20 ${isFilled ? 'border-green-500/30' : 'border-white/10'}`}
+                              className={`w-full bg-bgSecondary border rounded-lg p-2 text-sm text-white placeholder:text-white/20 ${isFilled ? 'border-violet-500/30' : 'border-white/10'}`}
                               value={value}
                               onChange={(e) => setEditFormData({ ...editFormData, [`name_${lang.code}`]: e.target.value })}
                             />
@@ -5204,30 +5369,30 @@ function App() {
               </div>
             </div>
             <Input
-              label="Yayıncı"
+              label="Publisher"
               value={editFormData.publisher}
               onChange={(e: any) => setEditFormData({ ...editFormData, publisher: e.target.value })}
             />
             <Input
-              label="Yayıncı E-posta"
+              label="Publisher Email"
               value={editFormData.publisher_email}
               onChange={(e: any) => setEditFormData({ ...editFormData, publisher_email: e.target.value })}
             />
             <div className="grid grid-cols-2 gap-4">
               <Input
-                label="Gizlilik Politikası Link"
+                label="Privacy Policy Link"
                 value={editFormData.privacy_policy_website}
                 onChange={(e: any) => setEditFormData({ ...editFormData, privacy_policy_website: e.target.value })}
               />
               <Input
-                label="Lisans Sözleşmesi Link"
+                label="License Agreement Link"
                 value={editFormData.license_agreement_website}
                 onChange={(e: any) => setEditFormData({ ...editFormData, license_agreement_website: e.target.value })}
               />
             </div>
             <div className="flex items-center gap-4">
               <div className="flex-1">
-                <label className="text-xs font-bold text-textSec uppercase mb-2 block">Kategori</label>
+                <label className="text-xs font-bold text-textSec uppercase mb-2 block">Category</label>
                 <select
                   className="w-full bg-hover rounded-xl px-4 py-2.5 text-sm outline-none border-none text-white cursor-pointer"
                   value={editFormData.category}
@@ -5240,27 +5405,59 @@ function App() {
               </div>
             </div>
 
-            {/* Product ID alanı kaldırıldı - Artık tekli satın alım yok, premium abonelik tüm premium paketleri açıyor */}
+            {/* Premium Toggle */}
+            <div>
+              <label className="text-xs font-bold text-textSec uppercase mb-2 block">Premium Status</label>
+              <div className="flex bg-hover rounded-xl p-1 gap-1">
+                <button
+                  onClick={() => setEditFormData({ ...editFormData, is_premium: false })}
+                  className={cn("flex-1 py-2.5 rounded-lg text-[10px] font-black transition-all flex items-center justify-center gap-1.5", !editFormData.is_premium ? "bg-primary text-white" : "text-textSec")}
+                >🆓 FREE</button>
+                <button
+                  onClick={() => setEditFormData({ ...editFormData, is_premium: true })}
+                  className={cn("flex-1 py-2.5 rounded-lg text-[10px] font-black transition-all flex items-center justify-center gap-1.5", editFormData.is_premium ? "bg-yellow-500 text-black" : "text-textSec")}
+                >💎 PREMIUM</button>
+              </div>
+              {editFormData.is_premium && !selectedPack?.is_premium && (
+                <p className="text-[10px] text-yellow-400 mt-1.5">⚠️ Pack will be moved to premium_stickers collection when saved</p>
+              )}
+              {!editFormData.is_premium && selectedPack?.is_premium && (
+                <p className="text-[10px] text-violet-400 mt-1.5">⚠️ Pack will be moved to stickers collection (free) when saved</p>
+              )}
+            </div>
 
             <div className="flex items-center gap-4">
               <div className="flex-1">
-                <label className="text-xs font-bold text-textSec uppercase mb-2 block">Paket Türü</label>
+                <label className="text-xs font-bold text-textSec uppercase mb-2 block">Pack Type</label>
                 <div className="bg-primary/10 border border-primary/20 p-2.5 rounded-xl flex items-center justify-center gap-2">
                   <RefreshCcw className="text-primary animate-spin" size={14} />
-                  <span className="text-[10px] text-primary font-black uppercase">HAREKETLİ (ZORUNLU)</span>
+                  <span className="text-[10px] text-primary font-black uppercase">ANIMATED (REQUIRED)</span>
                 </div>
               </div>
               <div className="flex-1">
-                <label className="text-xs font-bold text-textSec uppercase mb-2 block">Durum (Görünürlük)</label>
+                <label className="text-xs font-bold text-textSec uppercase mb-2 block">Status (Visibility)</label>
                 <div className="flex bg-hover rounded-xl p-1 gap-1">
                   <button
                     onClick={() => setEditFormData({ ...editFormData, is_active: true })}
                     className={cn("flex-1 py-2 rounded-lg text-[10px] font-black transition-all", editFormData.is_active !== false ? "bg-primary text-white" : "text-textSec")}
-                  >AKTİF</button>
+                  >ACTIVE</button>
                   <button
                     onClick={() => setEditFormData({ ...editFormData, is_active: false })}
                     className={cn("flex-1 py-2 rounded-lg text-[10px] font-black transition-all", editFormData.is_active === false ? "bg-danger text-white" : "text-textSec")}
-                  >PASİF (GİZLİ)</button>
+                  >INACTIVE (HIDDEN)</button>
+                </div>
+              </div>
+              <div className="flex-1">
+                <label className="text-xs font-bold text-textSec uppercase mb-2 block">Popular (Home Page)</label>
+                <div className="flex bg-hover rounded-xl p-1 gap-1">
+                  <button
+                    onClick={() => setEditFormData({ ...editFormData, is_popular: true })}
+                    className={cn("flex-1 py-2 rounded-lg text-[10px] font-black transition-all", editFormData.is_popular === true ? "bg-yellow-500 text-white" : "text-textSec")}
+                  >⭐ POPULAR</button>
+                  <button
+                    onClick={() => setEditFormData({ ...editFormData, is_popular: false })}
+                    className={cn("flex-1 py-2 rounded-lg text-[10px] font-black transition-all", editFormData.is_popular !== true ? "bg-hover text-textSec border border-white/10" : "text-textSec")}
+                  >NORMAL</button>
                 </div>
               </div>
             </div>
@@ -5269,9 +5466,9 @@ function App() {
               disabled={isProcessing}
               className="w-full bg-primary py-4 rounded-2xl font-black shadow-lg shadow-primary/20 flex items-center justify-center gap-2 hover:scale-[1.01] active:scale-95 transition-all disabled:opacity-50 text-white"
             >
-              {isProcessing ? 'KAYDEDİLİYOR...' : (
+              {isProcessing ? 'SAVING...' : (
                 <>
-                  <Save size={20} /> DEĞİŞİKLİKLERİ KAYDET
+                  <Save size={20} /> SAVE CHANGES
                 </>
               )}
             </button>
@@ -5291,22 +5488,22 @@ function App() {
             </div>
 
             <div className="text-center space-y-4 max-w-lg">
-              <h3 className="text-3xl font-black text-white tracking-tight uppercase">Çıkartmalar İşleniyor</h3>
+              <h3 className="text-3xl font-black text-white tracking-tight uppercase">Processing Stickers</h3>
               <div className="bg-white/5 px-6 py-2 rounded-2xl border border-white/5 inline-block">
                 <p className="text-primary font-black uppercase tracking-[0.2em] text-[10px]">
-                  {uploadProgress.message || 'Medyalar WhatsApp formatına dönüştürülüyor...'}
+                  {uploadProgress.message || 'Converting media to WhatsApp format...'}
                 </p>
               </div>
             </div>
 
             <div className="w-full max-w-md space-y-4">
               <div className="flex items-center justify-between text-[10px] font-black text-textSec uppercase tracking-widest px-1">
-                <span>İşlem: {uploadProgress.current} / {uploadProgress.total}</span>
+                <span>Progress: {uploadProgress.current} / {uploadProgress.total}</span>
                 <span className="text-primary">{Math.round((uploadProgress.current / uploadProgress.total) * 100)}%</span>
               </div>
               <div className="w-full bg-white/5 h-3 rounded-full overflow-hidden border border-white/5 p-1">
                 <div
-                  className="h-full bg-gradient-to-r from-primary via-accent to-primary shadow-[0_0_20px_rgba(0,168,132,0.6)] transition-all duration-700 ease-out rounded-full"
+                  className="h-full bg-gradient-to-r from-primary via-accent to-primary shadow-[0_0_20px_rgba(108,92,231,0.6)] transition-all duration-700 ease-out rounded-full"
                   style={{ width: `${(uploadProgress.current / uploadProgress.total) * 100}%` }}
                 />
               </div>
@@ -5317,7 +5514,7 @@ function App() {
                 <Info size={20} />
               </div>
               <p className="text-[10px] text-textMain/70 font-bold uppercase leading-relaxed text-left">
-                Video ve GIF işlemleri işlemci gücü gerektirir. Lütfen işlemi bölmeyin.
+                Video and GIF processing requires CPU power. Please do not interrupt the process.
               </p>
             </div>
           </div>
@@ -5338,10 +5535,10 @@ function App() {
             <div className="space-y-6 max-w-xl">
               <div className="space-y-2">
                 <h3 className="text-4xl font-black text-white tracking-tighter uppercase italic underline decoration-primary/50 underline-offset-8">
-                  Sistem Aktarımı
+                  System Transfer
                 </h3>
                 <p className="text-textSec font-bold text-sm tracking-wide">
-                  Taslak paket ana sunucuya taşınıyor...
+                  Draft pack is being transferred to the main server...
                 </p>
               </div>
 
@@ -5357,7 +5554,7 @@ function App() {
               <div className="flex items-center justify-between text-[11px] font-black text-white uppercase tracking-[0.2em] px-2">
                 <div className="flex items-center gap-2">
                   <div className="w-1.5 h-1.5 bg-primary rounded-full" />
-                  <span>TAŞINAN: {deleteProgress.current} Çıkartma</span>
+                  <span>TRANSFERRED: {deleteProgress.current} Stickers</span>
                 </div>
                 <div className="bg-white/10 px-3 py-1 rounded-lg">
                   <span className="text-primary">{deleteProgress.total > 0 ? Math.round((deleteProgress.current / deleteProgress.total) * 100) : 0}%</span>
@@ -5366,14 +5563,14 @@ function App() {
 
               <div className="w-full bg-white/5 h-4 rounded-full overflow-hidden border border-white/10 p-1.5">
                 <div
-                  className="h-full bg-gradient-to-r from-primary via-emerald-400 to-primary shadow-[0_0_30px_rgba(0,168,132,0.5)] transition-all duration-500 ease-out rounded-full"
+                  className="h-full bg-gradient-to-r from-primary via-purple-400 to-primary shadow-[0_0_30px_rgba(108,92,231,0.5)] transition-all duration-500 ease-out rounded-full"
                   style={{ width: `${deleteProgress.total > 0 ? (deleteProgress.current / deleteProgress.total) * 100 : 0}%` }}
                 />
               </div>
 
               <div className="pt-2">
                 <p className="text-[10px] text-textSec font-bold uppercase italic opacity-40">
-                  Bu işlem tamamlandığında paket uygulama içerisinde yayınlanacaktır.
+                  Once this process is complete, the pack will be published in the app.
                 </p>
               </div>
             </div>
@@ -5398,11 +5595,11 @@ function App() {
               <img
                 src={previewSticker.url}
                 alt=""
-                className="max-w-full max-h-[80vh] object-contain drop-shadow-[0_0_50px_rgba(0,168,132,0.3)] animate-in zoom-in-90 duration-300"
+                className="max-w-full max-h-[80vh] object-contain drop-shadow-[0_0_50px_rgba(108,92,231,0.3)] animate-in zoom-in-90 duration-300"
                 onClick={(e) => e.stopPropagation()}
               />
               <div className="absolute -bottom-12 left-1/2 -translate-x-1/2 text-primary font-black text-sm tracking-widest uppercase opacity-0 group-hover:opacity-100 transition-opacity">
-                STICKER ÖNİZLEME
+                STICKER PREVIEW
               </div>
             </div>
           </div>
@@ -5410,15 +5607,15 @@ function App() {
       }
 
       {/* Video/GIF Background Removal Modal */}
-      <Modal show={showVideoBgModal} onClose={() => setShowVideoBgModal(false)} title="Hareketli Medya İşleme">
+      <Modal show={showVideoBgModal} onClose={() => setShowVideoBgModal(false)} title="Animated Media Processing">
         <div className="space-y-6">
           <div className="bg-primary/10 border border-primary/20 p-6 rounded-2xl flex items-center gap-4">
             <div className="bg-primary/20 p-3 rounded-xl animate-pulse">
               <CloudLightning className="text-primary" size={28} />
             </div>
             <div>
-              <h3 className="text-lg font-black text-white">Arka Plan Temizlensin mi?</h3>
-              <p className="text-textSec text-xs mt-1">Yüklediğiniz video veya GIF'in arka planı yapay zeka ile otomatik olarak silinebilir.</p>
+              <h3 className="text-lg font-black text-white">Remove Background?</h3>
+              <p className="text-textSec text-xs mt-1">The background of the uploaded video or GIF can be automatically removed using AI.</p>
             </div>
           </div>
 
@@ -5431,8 +5628,8 @@ function App() {
                 <ImageIcon size={24} className="text-textSec group-hover:text-white" />
               </div>
               <div className="text-center">
-                <span className="block font-black text-sm text-white group-hover:text-textMain">HAYIR</span>
-                <span className="text-[10px] text-textSec">Olduğu gibi kalsın</span>
+                <span className="block font-black text-sm text-white group-hover:text-textMain">NO</span>
+                <span className="text-[10px] text-textSec">Keep as is</span>
               </div>
             </button>
 
@@ -5444,28 +5641,28 @@ function App() {
                 <Wand2 size={24} className="text-white" />
               </div>
               <div className="text-center">
-                <span className="block font-black text-sm text-white">EVET, TEMİZLE</span>
-                <span className="text-[10px] text-white/70">Yapay Zeka ile Sil</span>
+                <span className="block font-black text-sm text-white">YES, REMOVE</span>
+                <span className="text-[10px] text-white/70">Remove with AI</span>
               </div>
             </button>
           </div>
 
           <p className="text-[10px] text-center text-textSec opacity-60">
-            Not: Arka plan silme işlemi dosyanın uzunluğuna göre biraz zaman alabilir.
+            Note: Background removal may take some time depending on file length.
           </p>
         </div>
       </Modal>
 
       {/* Sticker Import Modal - Serbest Arama + Kaynak Seçimi */}
-      <Modal show={showImportModal} onClose={() => !isImporting && setShowImportModal(false)} title="🚀 Sticker İçe Aktarma">
+      <Modal show={showImportModal} onClose={() => !isImporting && setShowImportModal(false)} title="🚀 Sticker Import">
         <div className="space-y-6">
           <div className="bg-gradient-to-r from-purple-600/10 to-pink-600/10 border border-purple-500/20 p-6 rounded-2xl flex items-center gap-4">
             <div className="bg-gradient-to-r from-purple-600 to-pink-600 p-3 rounded-xl">
               <Sparkles className="text-white" size={28} />
             </div>
             <div>
-              <h3 className="text-lg font-black text-white">Sticker İçe Aktarma</h3>
-              <p className="text-textSec text-xs mt-1">Giphy'den serbest arama ile sticker ekleyin.</p>
+              <h3 className="text-lg font-black text-white">Sticker Import</h3>
+              <p className="text-textSec text-xs mt-1">Add stickers from Giphy with free search.</p>
             </div>
           </div>
 
@@ -5474,7 +5671,7 @@ function App() {
               <div className="space-y-4">
                 {/* Kaynak - Sadece Giphy (Klipy API key geçersiz) */}
                 <div>
-                  <label className="text-[10px] font-black text-textSec uppercase tracking-[0.2em] px-1 mb-2 block">Kaynak</label>
+                  <label className="text-[10px] font-black text-textSec uppercase tracking-[0.2em] px-1 mb-2 block">Source</label>
                   <div className="bg-gradient-to-r from-purple-600 to-pink-600 rounded-xl p-3 text-center">
                     <span className="text-white text-sm font-black">Giphy</span>
                   </div>
@@ -5482,14 +5679,14 @@ function App() {
 
                 {/* Serbest Arama */}
                 <div>
-                  <label className="text-[10px] font-black text-textSec uppercase tracking-[0.2em] px-1 mb-2 block">Arama Terimi</label>
+                  <label className="text-[10px] font-black text-textSec uppercase tracking-[0.2em] px-1 mb-2 block">Search Term</label>
                   <div className="relative">
                     <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-textSec" size={16} />
                     <input
                       type="text"
                       value={customSearchText}
                       onChange={(e) => setCustomSearchText(e.target.value)}
-                      placeholder="Herhangi bir şey arayın... (ör: cute cats, anime reactions, neon text)"
+                      placeholder="Search anything... (e.g. cute cats, anime reactions, neon text)"
                       className="w-full bg-card/60 border border-white/10 rounded-xl pl-11 pr-4 py-3 text-white text-sm font-medium outline-none focus:ring-2 focus:ring-purple-500 transition-all"
                     />
                   </div>
@@ -5497,7 +5694,7 @@ function App() {
 
                 {/* İçerik Tipi */}
                 <div>
-                  <label className="text-[10px] font-black text-textSec uppercase tracking-[0.2em] px-1 mb-2 block">İçerik Tipi</label>
+                  <label className="text-[10px] font-black text-textSec uppercase tracking-[0.2em] px-1 mb-2 block">Content Type</label>
                   <div className="grid grid-cols-2 gap-2">
                     <button
                       onClick={() => setImportContentType('stickers')}
@@ -5513,7 +5710,7 @@ function App() {
                       </div>
                       <div className="text-center">
                         <span className="text-xs font-bold block">Stickers</span>
-                        <span className="text-[9px] text-textSec">Çizgi film/Grafik</span>
+                        <span className="text-[9px] text-textSec">Cartoon/Graphic</span>
                       </div>
                     </button>
                     <button
@@ -5530,7 +5727,7 @@ function App() {
                       </div>
                       <div className="text-center">
                         <span className="text-xs font-bold block">GIFs</span>
-                        <span className="text-[9px] text-textSec">Gerçek video/foto</span>
+                        <span className="text-[9px] text-textSec">Real video/photo</span>
                       </div>
                     </button>
                   </div>
@@ -5539,7 +5736,7 @@ function App() {
                 {/* Sticker Sayısı */}
                 <div>
                   <label className="text-[10px] font-black text-textSec uppercase tracking-[0.2em] px-1 mb-2 block">
-                    Kaç Sticker Eklensin? ({importCount})
+                    How many stickers to add? ({importCount})
                   </label>
                   <input
                     type="range"
@@ -5557,13 +5754,13 @@ function App() {
 
                 {/* Özet */}
                 <div className="bg-white/5 p-4 rounded-xl text-xs text-textSec space-y-1">
-                  <p>📦 <strong className="text-white">Paket:</strong> {selectedPack?.name}</p>
-                  <p>📊 <strong className="text-white">Mevcut:</strong> {selectedPack?.sticker_count || 0}</p>
-                  <p>🔍 <strong className="text-white">Arama:</strong> {customSearchText || 'trending'}</p>
-                  <p>🌐 <strong className="text-white">Kaynak:</strong> Giphy</p>
-                  <p>🎬 <strong className="text-white">Tip:</strong> {importContentType === 'gifs' ? 'GIFs' : 'Stickers'}</p>
-                  <p>➕ <strong className="text-white">Eklenecek:</strong> {importCount}</p>
-                  <p>🎯 <strong className="text-white">Toplam:</strong> {(selectedPack?.sticker_count || 0) + importCount} / 30</p>
+                  <p>📦 <strong className="text-white">Pack:</strong> {selectedPack?.name}</p>
+                  <p>📊 <strong className="text-white">Current:</strong> {selectedPack?.sticker_count || 0}</p>
+                  <p>🔍 <strong className="text-white">Search:</strong> {customSearchText || 'trending'}</p>
+                  <p>🌐 <strong className="text-white">Source:</strong> Giphy</p>
+                  <p>🎬 <strong className="text-white">Type:</strong> {importContentType === 'gifs' ? 'GIFs' : 'Stickers'}</p>
+                  <p>➕ <strong className="text-white">To add:</strong> {importCount}</p>
+                  <p>🎯 <strong className="text-white">Total:</strong> {(selectedPack?.sticker_count || 0) + importCount} / 30</p>
                 </div>
               </div>
 
@@ -5572,14 +5769,14 @@ function App() {
                   onClick={() => setShowImportModal(false)}
                   className="flex-1 px-6 py-3.5 bg-card hover:bg-hover border border-white/5 rounded-2xl text-sm font-bold transition-all text-textSec hover:text-white"
                 >
-                  İptal
+                  Cancel
                 </button>
                 <button
                   onClick={handleImportStickers}
                   disabled={!selectedPack}
                   className="flex-1 px-6 py-3.5 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white rounded-2xl text-sm font-black shadow-xl shadow-purple-500/20 transition-all hover:translate-y-[-2px] active:translate-y-0 disabled:opacity-50"
                 >
-                  🚀 Başlat
+                  🚀 Start
                 </button>
               </div>
             </>
@@ -5616,7 +5813,7 @@ function App() {
               </div>
 
               <p className="text-[10px] text-center text-textSec opacity-60 animate-pulse">
-                ⏳ Lütfen bekleyin, sticker'lar işleniyor...
+                ⏳ Please wait, stickers are being processed...
               </p>
             </div>
           )}

@@ -7,86 +7,88 @@ import com.bumptech.glide.GlideBuilder
 import com.bumptech.glide.Priority
 import com.bumptech.glide.Registry
 import com.bumptech.glide.annotation.GlideModule
+import com.bumptech.glide.integration.okhttp3.OkHttpUrlLoader
 import com.bumptech.glide.load.engine.DiskCacheStrategy
 import com.bumptech.glide.load.engine.cache.InternalCacheDiskCacheFactory
 import com.bumptech.glide.load.engine.cache.LruResourceCache
+import com.bumptech.glide.load.model.GlideUrl
 import com.bumptech.glide.module.AppGlideModule
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.launch
+import okhttp3.ConnectionPool
+import okhttp3.OkHttpClient
+import java.io.InputStream
+import java.util.concurrent.TimeUnit
 
 /**
- * Glide yapılandırması - daha hızlı yükleme ve daha iyi önbellekleme
+ * Glide yapılandırması - OkHttp bağlantı havuzu + agresif önbellekleme
  */
 @GlideModule
 class StickyGlideModule : AppGlideModule() {
 
     override fun applyOptions(context: Context, builder: GlideBuilder) {
-        // Bellek önbelleği - GC baskısını azaltmak için 1/6 oranında tut
-        val memoryCacheSize = Runtime.getRuntime().maxMemory() / 6
+        val memoryCacheSize = Runtime.getRuntime().maxMemory() / 8
         builder.setMemoryCache(LruResourceCache(memoryCacheSize))
-
-        // Disk önbelleği - 150MB (sticker önizlemeleri için)
         builder.setDiskCache(InternalCacheDiskCacheFactory(context, "glide_cache", 150 * 1024 * 1024))
     }
 
     override fun isManifestParsingEnabled(): Boolean = false
 
     override fun registerComponents(context: Context, glide: Glide, registry: Registry) {
-        // Özel bileşenler eklenebilir
+        val client = OkHttpClient.Builder()
+            .connectionPool(ConnectionPool(6, 2, TimeUnit.MINUTES))
+            .connectTimeout(8, TimeUnit.SECONDS)
+            .readTimeout(10, TimeUnit.SECONDS)
+            .build()
+        registry.replace(GlideUrl::class.java, InputStream::class.java, OkHttpUrlLoader.Factory(client))
     }
 
     companion object {
         private const val TAG = "StickyGlide"
 
-        /**
-         * Popüler paketlerin çıkartma önizlemelerini EN YÜKSEK öncelikle yükle
-         * Bu fonksiyon uygulama açılır açılmaz çağrılmalı
-         */
         fun preloadPopularPacks(context: Context, popularPacks: List<Pack>) {
             if (popularPacks.isEmpty()) return
 
             CoroutineScope(Dispatchers.IO).launch {
                 try {
-                    Log.d(TAG, "Preloading ${popularPacks.size} popular packs...")
-
+                    val urls = mutableListOf<String>()
                     popularPacks.forEach { pack ->
                         if (pack.category != "custom") {
                             pack.stickers.take(3).forEach { sticker ->
-                                val url = if (sticker.url.isNotEmpty()) {
-                                    sticker.url
-                                } else if (pack.storagePath.isNotEmpty()) {
-                                    StickerRepository.getStickerDirectUrl(pack.id, sticker.file, pack.storagePath)
-                                } else ""
-
-                                if (url.isNotEmpty()) {
-                                    try {
-                                        Glide.with(context.applicationContext)
-                                            .load(url)
-                                            .diskCacheStrategy(DiskCacheStrategy.DATA)
-                                            .priority(Priority.HIGH)
-                                            .override(150)
-                                            .preload(150, 150)
-                                    } catch (e: Exception) { }
-                                }
+                                val url = if (sticker.url.isNotEmpty()) sticker.url
+                                else if (pack.storagePath.isNotEmpty()) StickerRepository.getStickerDirectUrl(pack.id, sticker.file, pack.storagePath)
+                                else ""
+                                if (url.isNotEmpty()) urls.add(url)
                             }
                         }
                     }
 
-                    Log.d(TAG, "Popular packs preload completed")
+                    // 4 paralel indirme — daha az GC baskısı
+                    urls.chunked(4).forEach { batch ->
+                        batch.map { url ->
+                            async(Dispatchers.IO) {
+                                try {
+                                    Glide.with(context.applicationContext)
+                                        .asFile()
+                                        .load(url)
+                                        .diskCacheStrategy(DiskCacheStrategy.DATA)
+                                        .priority(Priority.IMMEDIATE)
+                                        .submit()
+                                        .get(6, TimeUnit.SECONDS)
+                                } catch (_: Exception) { null }
+                            }
+                        }.awaitAll()
+                    }
                 } catch (e: Exception) {
                     Log.e(TAG, "Popular packs preload error: ${e.message}")
                 }
             }
         }
 
-        /**
-         * İlk ekranda görünecek paketlerin önizlemelerini preload et.
-         * Sadece ilk 20 paket × 3 sticker = maks 60 istek (ağı boğmadan).
-         */
-        fun preloadStickerPreviews(context: Context, packs: List<Pack>, packCount: Int = 20, stickersPerPack: Int = 3) {
+        fun preloadStickerPreviews(context: Context, packs: List<Pack>, packCount: Int = 8, stickersPerPack: Int = 2) {
             CoroutineScope(Dispatchers.IO).launch {
                 try {
                     val urls = mutableListOf<String>()
@@ -94,24 +96,17 @@ class StickyGlideModule : AppGlideModule() {
                     packs.take(packCount).forEach { pack ->
                         if (pack.category != "custom") {
                             pack.stickers.take(stickersPerPack).forEach { sticker ->
-                                val url = if (sticker.url.isNotEmpty()) {
-                                    sticker.url
-                                } else if (pack.storagePath.isNotEmpty()) {
-                                    StickerRepository.getStickerDirectUrl(pack.id, sticker.file, pack.storagePath)
-                                } else ""
-
-                                if (url.isNotEmpty()) {
-                                    urls.add(url)
-                                }
+                                val url = if (sticker.url.isNotEmpty()) sticker.url
+                                else if (pack.storagePath.isNotEmpty()) StickerRepository.getStickerDirectUrl(pack.id, sticker.file, pack.storagePath)
+                                else ""
+                                if (url.isNotEmpty()) urls.add(url)
                             }
                         }
                     }
 
-                    Log.d(TAG, "Downloading ${urls.size} stickers for preload...")
-
-                    // Paralel indirme - 4 adet aynı anda (IO thread'leri boğmadan)
+                    // 4 paralel indirme — hafif GC baskısı
                     urls.chunked(4).forEach { batch ->
-                        val jobs = batch.map { url ->
+                        batch.map { url ->
                             async(Dispatchers.IO) {
                                 try {
                                     Glide.with(context.applicationContext)
@@ -119,14 +114,11 @@ class StickyGlideModule : AppGlideModule() {
                                         .load(url)
                                         .diskCacheStrategy(DiskCacheStrategy.DATA)
                                         .submit()
-                                        .get()
-                                } catch (e: Exception) { null }
+                                        .get(8, TimeUnit.SECONDS)
+                                } catch (_: Exception) { null }
                             }
-                        }
-                        jobs.forEach { it.await() }
+                        }.awaitAll()
                     }
-
-                    Log.d(TAG, "Preload completed: ${urls.size} stickers")
                 } catch (e: Exception) {
                     Log.e(TAG, "Download error: ${e.message}")
                 }

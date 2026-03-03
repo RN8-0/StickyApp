@@ -53,6 +53,7 @@ class DetailsActivity : AppCompatActivity() {
     private lateinit var btnGridDeleteMode: MaterialButton
     private lateinit var btnConfirmDelete: ImageButton
     private lateinit var installedIcon: ImageView
+    private var btnFixedWhatsApp: MaterialButton? = null
     private var currentPack: Pack? = null
     private var isDeleteMode = false
     private val selectedIndices = mutableSetOf<Int>()
@@ -60,6 +61,7 @@ class DetailsActivity : AppCompatActivity() {
     private var adapter: StickerAdapter? = null
     private var isPackReady = false // Çıkartmalar yüklendi mi kontrolü
     private var isDownloading = false // İndirme devam ediyor mu
+    private var hasLoadedOnce = false // İlk yükleme tamamlandı mı
     private var currentProgress = 0 // Mevcut progress yüzdesi
     private var progressAnimator: ValueAnimator? = null
     private var pendingDeletePackId: String? = null
@@ -85,10 +87,23 @@ class DetailsActivity : AppCompatActivity() {
         onActivityResultInternal(req, res, data)
     }
 
-    private lateinit var professionalLoadingOverlay: View
-    private lateinit var tvOverlayLoadingText: TextView
-    private lateinit var tvDynamicStatus: TextView
-    private lateinit var circularProgress: CircularProgressIndicator
+    private var professionalLoadingOverlay: View? = null
+    private var tvOverlayLoadingText: TextView? = null
+    private var tvDynamicStatus: TextView? = null
+    private var circularProgress: CircularProgressIndicator? = null
+    private var loadingOverlayInflated = false
+
+    private fun ensureLoadingOverlay() {
+        if (!loadingOverlayInflated) {
+            loadingOverlayInflated = true
+            val stub = findViewById<android.view.ViewStub>(R.id.loadingOverlayStub)
+            stub?.inflate()
+            professionalLoadingOverlay = findViewById(R.id.professionalLoadingOverlay)
+            tvOverlayLoadingText = findViewById(R.id.tvOverlayLoadingText)
+            tvDynamicStatus = findViewById(R.id.tvDynamicStatus)
+            circularProgress = findViewById(R.id.circularProgress)
+        }
+    }
 
     override fun onCreate(s: Bundle?) {
         super.onCreate(s)
@@ -96,16 +111,7 @@ class DetailsActivity : AppCompatActivity() {
 
         packId = intent.getStringExtra("id") ?: return finish()
 
-        professionalLoadingOverlay = findViewById(R.id.professionalLoadingOverlay)
-        tvOverlayLoadingText = findViewById(R.id.tvOverlayLoadingText)
-        tvDynamicStatus = findViewById(R.id.tvDynamicStatus)
-        circularProgress = findViewById(R.id.circularProgress)
-
         findViewById<ImageButton>(R.id.btnBack).setOnClickListener {
-            onBackPressedDispatcher.onBackPressed()
-        }
-
-        findViewById<ImageButton>(R.id.btnHome).setOnClickListener {
             val intent = Intent(this, MainActivity::class.java)
             intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
             startActivity(intent)
@@ -142,10 +148,17 @@ class DetailsActivity : AppCompatActivity() {
             updateButton()
         }
         
-        // KRITIK: Veriyi taze yükle (StickerMaker'dan dönüldüğünde veya değişiklik olduğunda)
-        // onCreate içindeki ilk yüklemeyi burada da yapıyoruz, çakışmayı önlemek için bayrak eklenebilir
-        // ama lifecycleScope zaten thread-safe çalıştığı için sorun teşkil etmez.
-        loadPackFromFirebase()
+        // İlk açılışta zaten çalışıyor, sadece geri dönüşlerde tekrar yükle
+        if (hasLoadedOnce) {
+            // Custom paketlerde sticker eklenmiş/silinmiş olabilir
+            if (packId.startsWith("custom_")) {
+                loadPackFromFirebase()
+            }
+            // Firebase paketleri için tekrar yüklemeye gerek yok, cache zaten güncel
+        } else {
+            hasLoadedOnce = true
+            loadPackFromFirebase()
+        }
     }
 
     private fun loadPackFromFirebase() {
@@ -184,11 +197,18 @@ class DetailsActivity : AppCompatActivity() {
                 val packs = withContext(Dispatchers.IO) { StickerRepository.loadPacks(this@DetailsActivity, forceRefresh = false) }
                 val updatedPack = packs.find { it.id == packId }
                 
-                if (updatedPack != null) {
-                    if (updatedPack != pack) {
+                if (updatedPack != null && pack != null) {
+                    // Sadece sticker listesi veya premium durumu değiştiyse UI'ı güncelle
+                    val changed = updatedPack.stickers.size != pack.stickers.size ||
+                            updatedPack.isPremium != pack.isPremium ||
+                            updatedPack.isActive != pack.isActive ||
+                            updatedPack.localizedName != pack.localizedName
+                    if (changed) {
                         setupUI(updatedPack)
                     }
-                } else if (pack == null) {
+                } else if (updatedPack != null && pack == null) {
+                    setupUI(updatedPack)
+                } else if (updatedPack == null && pack == null) {
                     android.util.Log.e("DetailsActivity", "Pack not found: $packId")
                     Toast.makeText(this@DetailsActivity, R.string.pack_not_found, Toast.LENGTH_SHORT).show()
                     finish()
@@ -210,8 +230,11 @@ class DetailsActivity : AppCompatActivity() {
         currentPack = pack
         isPackReady = false // Reset state when setting up new pack
 
-        // Görüntülenme sayısını artır (Firebase'e yaz)
-        StickerRepository.incrementViewCount(pack.id, pack.isPremium)
+        // View count arka planda artır, interstitial main thread'de yüklenmeli
+        AdManager.loadInterstitialAd(this)
+        lifecycleScope.launch(Dispatchers.IO) {
+            StickerRepository.incrementViewCount(pack.id, pack.isPremium)
+        }
 
         findViewById<android.widget.TextView>(R.id.name).text = pack.localizedName
 
@@ -223,6 +246,7 @@ class DetailsActivity : AppCompatActivity() {
         btnGridDeleteMode = findViewById(R.id.btnGridDeleteMode)
         btnConfirmDelete = findViewById(R.id.btnConfirmDelete)
         installedIcon = findViewById(R.id.installedIcon)
+        btnFixedWhatsApp = findViewById(R.id.btnFixedWhatsApp)
 
         val toolbarLayout = findViewById<View>(R.id.toolbarLayout)
         val bottomContainer = findViewById<View>(R.id.bottomContainer)
@@ -238,10 +262,12 @@ class DetailsActivity : AppCompatActivity() {
         
         if (pack.isPremium) {
             tvName.setTextColor(Color.WHITE)
-            if (::circularProgress.isInitialized) circularProgress.setIndicatorColor(ContextCompat.getColor(this, R.color.premium_gold))
+            circularProgress?.setIndicatorColor(ContextCompat.getColor(this, R.color.premium_gold))
+            findViewById<View>(R.id.premiumIconToolbar).visibility = View.VISIBLE
         } else {
             tvName.setTextColor(ContextCompat.getColor(this, R.color.text_on_primary_secondary))
-            if (::circularProgress.isInitialized) circularProgress.setIndicatorColor(primaryColor)
+            circularProgress?.setIndicatorColor(primaryColor)
+            findViewById<View>(R.id.premiumIconToolbar).visibility = View.GONE
         }
 
         // Başlangıçta içeriği göster
@@ -249,15 +275,17 @@ class DetailsActivity : AppCompatActivity() {
         showLoadingState(false)
 
         val rv = findViewById<RecyclerView>(R.id.rv)
-        rv.layoutManager = GridLayoutManager(this, 3)
+        rv.layoutManager = GridLayoutManager(this, 3).apply {
+            initialPrefetchItemCount = 3 // Sadece ilk satırı prefetch et
+        }
         rv.setHasFixedSize(true)
-        rv.setItemViewCacheSize(15)
-        rv.itemAnimator = null // Performans: Animasyonları kapat
+        rv.setItemViewCacheSize(3)
+        rv.itemAnimator = null
+        rv.setRecycledViewPool(RecyclerView.RecycledViewPool().apply { setMaxRecycledViews(0, 15) })
 
-        val hasAccess = PreferencesHelper.hasAccessToPack(this, pack.id)
+        val hasAccess = !pack.isPremium || PreferencesHelper.hasAccessToPack(this, pack.id)
         val storagePath = pack.storagePath
-
-        // ÖNCELİKLE: Tüm URL'leri hesapla (adapter oluşturmadan ÖNCE!)
+        android.util.Log.d("DetailsDebug", "setupUI pack=${pack.id} stickers.size=${pack.stickers.size} stickers=${pack.stickers.map { it.file }}")
         pack.stickers.forEach { sticker ->
             if (sticker.url.isEmpty()) {
                 sticker.url = StickerRepository.getStickerDirectUrl(pack.id, sticker.file, storagePath)
@@ -276,7 +304,8 @@ class DetailsActivity : AppCompatActivity() {
 
         // KRITIK: Tüm çıkartmaları Glide ile preload et (anında görünmeleri için)
         // Bu sayede RecyclerView bind olduğunda görseller zaten memory cache'de olacak
-        preloadAllStickers(pack, displayStickers)
+        // Preload'u devre dışı bırak — Glide onBind'de zaten async yüklüyor
+        // preloadAllStickers(pack, displayStickers)
 
         // Şimdi adapter oluştur - URL'ler HAZIR
         adapter = StickerAdapter(
@@ -305,8 +334,9 @@ class DetailsActivity : AppCompatActivity() {
         rv.adapter = adapter
         isPackReady = true
 
-        // Arka planda cache'e indir (WhatsApp için gerekli)
+        // Arka planda cache'e indir (WhatsApp için gerekli) — preload bittikten sonra
         lifecycleScope.launch(Dispatchers.IO) {
+            kotlinx.coroutines.delay(1500) // Preload'un bitmesini bekle
             pack.stickers.forEach { sticker ->
                 try {
                     StickerRepository.downloadStickerToCache(this@DetailsActivity, pack.id, sticker.file, storagePath)
@@ -317,8 +347,8 @@ class DetailsActivity : AppCompatActivity() {
         // Butonları ayarla
         setupButtons(pack, hasAccess)
 
-        // Eski FAB gizle
-        findViewById<View>(R.id.fabAddSticker).visibility = View.GONE
+        // İlgili paketleri gecikmeli yükle (ilk render'ı bloklamasın)
+        rv.post { setupRelatedPacks(pack) }
     }
 
     private fun toggleDeleteMode() {
@@ -350,8 +380,8 @@ class DetailsActivity : AppCompatActivity() {
             val glide = Glide.with(applicationContext)
             val storagePath = pack.storagePath
 
-            // İlk 9 çıkartmayı öncelikli yükle (görünen alan)
-            val priorityStickers = stickers.take(9)
+            // İlk 6 çıkartmayı öncelikli yükle (görünen 2 satır)
+            val priorityStickers = stickers.take(6)
             val restStickers = stickers.drop(9)
 
             // Öncelikli olanları paralel yükle
@@ -384,7 +414,7 @@ class DetailsActivity : AppCompatActivity() {
                 if (customFile.exists()) {
                     glide.load(customFile)
                         .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.NONE)
-                        .submit(256, 256).get()
+                        .submit(192, 192).get()
                 }
             }
             else -> {
@@ -393,18 +423,18 @@ class DetailsActivity : AppCompatActivity() {
                     cachedFile.exists() && cachedFile.length() > 0 -> {
                         glide.load(cachedFile)
                             .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.NONE)
-                            .submit(256, 256).get()
+                            .submit(192, 192).get()
                     }
                     sticker.url.isNotEmpty() -> {
                         glide.load(sticker.url)
                             .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.DATA)
-                            .submit(256, 256).get()
+                            .submit(192, 192).get()
                     }
                     storagePath.isNotEmpty() -> {
                         val directUrl = StickerRepository.getStickerDirectUrl(pack.id, sticker.file, storagePath)
                         glide.load(directUrl)
                             .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.DATA)
-                            .submit(256, 256).get()
+                            .submit(192, 192).get()
                     }
                 }
             }
@@ -416,25 +446,23 @@ class DetailsActivity : AppCompatActivity() {
      * @param isLoading true ise loading göster, false ise gizle
      */
     private fun showLoadingState(isLoading: Boolean) {
-        if (!::professionalLoadingOverlay.isInitialized) return
+        if (isLoading) ensureLoadingOverlay()
+        val overlay = professionalLoadingOverlay ?: return
 
         if (isLoading) {
-            if (::circularProgress.isInitialized) {
-                circularProgress.progress = 0
+            circularProgress?.progress = 0
+            tvOverlayLoadingText?.text = "0%"
+            tvDynamicStatus?.let {
+                it.text = ""
+                it.visibility = View.VISIBLE
             }
-            tvOverlayLoadingText.text = "0%"
-            if (::tvDynamicStatus.isInitialized) {
-                tvDynamicStatus.text = ""
-            }
-            // Eger premium pakette isek arkadaki karartma %100 siyah olsun
             if (currentPack?.isPremium == true) {
-                professionalLoadingOverlay.setBackgroundColor(Color.parseColor("#F2000000")) // %95 Siyah
-            } else {
-                professionalLoadingOverlay.setBackgroundColor(Color.parseColor("#E6000000")) // %90 Siyah
+                circularProgress?.setIndicatorColor(ContextCompat.getColor(this, R.color.premium_gold))
             }
-            professionalLoadingOverlay.visibility = View.VISIBLE
+            overlay.setBackgroundColor(Color.parseColor("#80000000"))
+            overlay.visibility = View.VISIBLE
         } else {
-            professionalLoadingOverlay.visibility = View.GONE
+            overlay.visibility = View.GONE
         }
     }
 
@@ -445,26 +473,38 @@ class DetailsActivity : AppCompatActivity() {
             return
         }
 
-        com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
-            .setTitle(R.string.delete_mode)
-            .setMessage("Are you sure you want to delete ${selectedIndices.size} stickers?\n\nThis will also update WhatsApp.")
-            .setPositiveButton(R.string.yes) { _, _ ->
-                if (CustomStickerManager.removeStickersFromPack(this, packId, selectedIndices)) {
-                    Toast.makeText(this, getString(R.string.stickers_deleted), Toast.LENGTH_SHORT).show()
+        val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_delete_sticker, null)
+        val dialog = android.app.Dialog(this)
+        dialog.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE)
+        dialog.setContentView(dialogView)
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        dialog.window?.setLayout(
+            (resources.displayMetrics.widthPixels * 0.90).toInt(),
+            android.view.WindowManager.LayoutParams.WRAP_CONTENT
+        )
 
-                    // Silme modunu kapat
-                    toggleDeleteMode()
+        dialogView.findViewById<TextView>(R.id.tvDeleteTitle).text = getString(R.string.delete_mode)
+        dialogView.findViewById<TextView>(R.id.tvDeleteMsg).text =
+            "Are you sure you want to delete ${selectedIndices.size} stickers? This will also update WhatsApp."
 
-                    // Paketi yeniden yükle
-                    loadPackFromFirebase()
-
-                } else {
-                    Toast.makeText(this, getString(R.string.error_delete_failed), Toast.LENGTH_SHORT).show()
-                    toggleDeleteMode()
-                }
+        dialogView.findViewById<View>(R.id.btnConfirmDelete).setOnClickListener {
+            dialog.dismiss()
+            if (CustomStickerManager.removeStickersFromPack(this, packId, selectedIndices)) {
+                Toast.makeText(this, getString(R.string.stickers_deleted), Toast.LENGTH_SHORT).show()
+                toggleDeleteMode()
+                loadPackFromFirebase()
+            } else {
+                Toast.makeText(this, getString(R.string.error_delete_failed), Toast.LENGTH_SHORT).show()
+                toggleDeleteMode()
             }
-            .setNegativeButton(R.string.no) { _, _ -> toggleDeleteMode() }
-            .show()
+        }
+
+        dialogView.findViewById<View>(R.id.btnCancelDelete).setOnClickListener {
+            dialog.dismiss()
+            toggleDeleteMode()
+        }
+
+        dialog.show()
     }
 
     private fun showDeletePackDialog(pack: Pack) {
@@ -542,20 +582,31 @@ class DetailsActivity : AppCompatActivity() {
     }
 
     private fun showDeleteStickerDialog(packId: String, index: Int) {
-        com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
-            .setTitle("Delete Sticker")
-            .setMessage("Are you sure you want to delete this sticker?\n\n(This will also trigger removal from WhatsApp)")
-            .setPositiveButton(R.string.yes) { _, _ ->
-                if (CustomStickerManager.removeStickerFromPack(this, packId, index + 1)) {
-                    Toast.makeText(this, getString(R.string.sticker_deleted_whatsapp_triggered), Toast.LENGTH_SHORT).show()
-                    // Sayfayı yenile
-                    recreate()
-                } else {
-                    Toast.makeText(this, getString(R.string.sticker_delete_failed), Toast.LENGTH_SHORT).show()
-                }
+        val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_delete_sticker, null)
+        val dialog = android.app.Dialog(this)
+        dialog.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE)
+        dialog.setContentView(dialogView)
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        dialog.window?.setLayout(
+            (resources.displayMetrics.widthPixels * 0.90).toInt(),
+            android.view.WindowManager.LayoutParams.WRAP_CONTENT
+        )
+
+        dialogView.findViewById<View>(R.id.btnConfirmDelete).setOnClickListener {
+            dialog.dismiss()
+            if (CustomStickerManager.removeStickerFromPack(this, packId, index + 1)) {
+                Toast.makeText(this, getString(R.string.sticker_deleted), Toast.LENGTH_SHORT).show()
+                loadPackFromFirebase()
+            } else {
+                Toast.makeText(this, getString(R.string.sticker_delete_failed), Toast.LENGTH_SHORT).show()
             }
-            .setNegativeButton(R.string.no, null)
-            .show()
+        }
+
+        dialogView.findViewById<View>(R.id.btnCancelDelete).setOnClickListener {
+            dialog.dismiss()
+        }
+
+        dialog.show()
     }
 
     /**
@@ -619,6 +670,15 @@ class DetailsActivity : AppCompatActivity() {
             handleButtonClick(pack)
         }
 
+        // For custom packs, use the fixed bottom WhatsApp button
+        if (isCustom) {
+            btnFixedWhatsApp?.visibility = View.VISIBLE
+            btnFixedWhatsApp?.setOnClickListener {
+                // Always send to WhatsApp (both add and update use the same intent)
+                addToWhatsApp(pack)
+            }
+        }
+
         if (isCustom) {
             installedIcon.visibility = View.GONE // Custom packs don't use this icon
 
@@ -648,6 +708,52 @@ class DetailsActivity : AppCompatActivity() {
         updateButton()
         btnAction.isEnabled = true
         showLoadingState(false)
+    }
+
+    private fun setupRelatedPacks(currentPack: Pack) {
+        val section = findViewById<View>(R.id.relatedPacksSection)
+        val rvRelated = findViewById<RecyclerView>(R.id.rvRelatedPacks)
+
+        // Custom paketlerde ilgili paketleri gösterme
+        if (currentPack.id.startsWith("custom_")) {
+            section.visibility = View.GONE
+            return
+        }
+
+        val allPacks = StickerRepository.allPacksCache
+        if (allPacks.isEmpty()) {
+            section.visibility = View.GONE
+            return
+        }
+
+        // Rastgele 25 paket göster (mevcut paket hariç)
+        val relatedPacks = allPacks.filter {
+            it.id != currentPack.id && it.isActive && !it.id.startsWith("custom_") &&
+            it.stickers.isNotEmpty()
+        }.shuffled().take(25)
+
+        if (relatedPacks.isEmpty()) {
+            section.visibility = View.GONE
+            return
+        }
+
+        section.visibility = View.VISIBLE
+        val tvRelatedTitle = findViewById<TextView>(R.id.tvRelatedTitle)
+        tvRelatedTitle?.text = "You May Also Like"
+        rvRelated.layoutManager = androidx.recyclerview.widget.LinearLayoutManager(this)
+        rvRelated.setHasFixedSize(false)
+        rvRelated.itemAnimator = null
+
+        val relatedAdapter = PackAdapter(
+            items = relatedPacks,
+            click = { pack ->
+                startActivity(Intent(this, DetailsActivity::class.java).putExtra("id", pack.id))
+            },
+            onAddClick = { pack ->
+                startActivity(Intent(this, DetailsActivity::class.java).putExtra("id", pack.id))
+            }
+        )
+        rvRelated.adapter = relatedAdapter
     }
 
     private fun launchPremiumPurchase() {
@@ -730,8 +836,16 @@ class DetailsActivity : AppCompatActivity() {
         val isCustom = pack != null && (pack.category == "custom" || pack.id.startsWith("custom_"))
 
         if (isInstalled) {
-            // Eğer WhatsApp'ta zaten yüklü ise: Kilit mekanizmasını gizle, Paylaş butonunu göster
-            btnAction.visibility = View.VISIBLE
+            // Eğer WhatsApp'ta zaten yüklü ise
+            if (isCustom) {
+                btnAction.visibility = View.GONE
+                btnFixedWhatsApp?.visibility = View.VISIBLE
+                btnFixedWhatsApp?.text = getString(R.string.update_on_whatsapp)
+                btnFixedWhatsApp?.setIconResource(R.drawable.ic_whatsapp_small)
+                btnFixedWhatsApp?.alpha = 1f
+            } else {
+                btnAction.visibility = View.VISIBLE
+            }
             premiumButtonsContainer.visibility = View.GONE
             customButtonsContainer.visibility = if (isCustom) View.VISIBLE else View.GONE
             
@@ -743,18 +857,43 @@ class DetailsActivity : AppCompatActivity() {
             btnAction.cornerRadius = cornerRadius
             if (!isCustom) installedIcon.visibility = View.VISIBLE
         } else {
-            val hasAccess = pack != null && PreferencesHelper.hasAccessToPack(this, pack.id)
+            val hasAccess = pack != null && (
+                !pack.isPremium || PreferencesHelper.hasAccessToPack(this, pack.id)
+            )
 
             if (!hasAccess) {
-                // Kilitli durum: btnAction gizli kalsın, premiumButtonsContainer görünür
+                // Kilitli durum: btnAction gizli kalsın, premiumButtonsContainer görünür (sadece premium paketler)
                 btnAction.visibility = View.GONE
                 premiumButtonsContainer.visibility = View.VISIBLE
                 customButtonsContainer.visibility = if (isCustom) View.VISIBLE else View.GONE
+                if (isCustom) btnFixedWhatsApp?.visibility = View.GONE
+            } else if (pack != null && pack.isPremium && !PreferencesHelper.isPremium(this)) {
+                // Premium paket, reklam ile açılmış ama kullanıcı premium üye değil — iki buton göster
+                btnAction.visibility = View.GONE
+                premiumButtonsContainer.visibility = View.VISIBLE
+                customButtonsContainer.visibility = if (isCustom) View.VISIBLE else View.GONE
+
+                // Sol buton: WhatsApp'a ekle
+                val btnLeft = findViewById<MaterialButton>(R.id.btnWatchAd)
+                btnLeft.text = getString(R.string.add_short)
+                btnLeft.setIconResource(R.drawable.ic_whatsapp_small)
+                btnLeft.iconTint = ContextCompat.getColorStateList(this, R.color.white)
+                btnLeft.setTextColor(ContextCompat.getColor(this, R.color.white))
+                btnLeft.backgroundTintList = ContextCompat.getColorStateList(this, R.color.primary)
+                btnLeft.setOnClickListener { handleButtonClick(pack) }
             } else {
-                // Açılmış ama henüz WhatsApp'a eklenmemiş durum
+                // Normal paket, henüz WhatsApp'a eklenmemiş durum
                 premiumButtonsContainer.visibility = View.GONE
                 
-                btnAction.visibility = View.VISIBLE
+                if (isCustom) {
+                    btnAction.visibility = View.GONE
+                    btnFixedWhatsApp?.visibility = View.VISIBLE
+                    btnFixedWhatsApp?.text = getString(R.string.add_to_whatsapp)
+                    btnFixedWhatsApp?.setIconResource(R.drawable.ic_whatsapp_small)
+                    btnFixedWhatsApp?.alpha = 1f
+                } else {
+                    btnAction.visibility = View.VISIBLE
+                }
                 customButtonsContainer.visibility = if (isCustom) View.VISIBLE else View.GONE
                 
                 btnAction.text = getString(R.string.add_to_whatsapp)
@@ -801,9 +940,21 @@ class DetailsActivity : AppCompatActivity() {
         lockOverlay?.visibility = View.GONE
         unlockHint?.visibility = View.GONE
 
+        // Custom sticker: load from local file
+        if (packId.startsWith("custom_")) {
+            val customFile = CustomStickerManager.getCustomStickerPath(this, packId, sticker.file)
+            if (customFile.exists()) {
+                Glide.with(this)
+                    .asDrawable()
+                    .load(customFile)
+                    .signature(com.bumptech.glide.signature.ObjectKey(customFile.lastModified()))
+                    .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.NONE)
+                    .into(imageView)
+            } else {
+                imageView.setImageResource(R.drawable.transparent_placeholder)
+            }
+        } else {
         val cachedFile = StickerRepository.getCachedStickerPath(this, packId, sticker.file)
-
-
 
         when {
             cachedFile.exists() && cachedFile.length() > 0 -> {
@@ -835,6 +986,7 @@ class DetailsActivity : AppCompatActivity() {
                     imageView.setImageResource(R.drawable.transparent_placeholder)
                 }
             }
+        }
         }
 
         // Tasarımdaki animasyonlu açılış
@@ -896,7 +1048,7 @@ class DetailsActivity : AppCompatActivity() {
             return
         }
 
-        val hasAccess = PreferencesHelper.hasAccessToPack(this, pack.id)
+        val hasAccess = !pack.isPremium || PreferencesHelper.hasAccessToPack(this, pack.id)
 
         if (!hasAccess) {
             // KİLİTLİ → Rewarded Video göster
@@ -918,7 +1070,7 @@ class DetailsActivity : AppCompatActivity() {
             
             // 3 saniye bekle, hazır olursa göster
             showLoadingState(true)
-            tvOverlayLoadingText.text = getString(R.string.ad_preparing)
+            tvOverlayLoadingText?.text = getString(R.string.ad_preparing)
             lifecycleScope.launch {
                 var waited = 0
                 while (!AdManager.isRewardedReady() && waited < 12) {
@@ -962,12 +1114,12 @@ class DetailsActivity : AppCompatActivity() {
      */
     private fun proceedToWhatsApp(pack: Pack) {
         showLoadingState(true)
-        if (::circularProgress.isInitialized) {
-            circularProgress.setIndicatorColor(ContextCompat.getColor(this, R.color.primary))
-            circularProgress.progress = 0
+        if (circularProgress != null) {
+            circularProgress?.setIndicatorColor(ContextCompat.getColor(this, R.color.primary))
+            circularProgress?.progress = 0
         }
-        tvOverlayLoadingText.text = "0%"
-        tvDynamicStatus.text = getString(R.string.stickers_preparing)
+        tvOverlayLoadingText?.text = "0%"
+        tvDynamicStatus?.text = getString(R.string.stickers_preparing)
 
         lifecycleScope.launch {
             val totalFiles = pack.stickers.size + 1
@@ -981,9 +1133,9 @@ class DetailsActivity : AppCompatActivity() {
                     if (displayedProgress < actualProgress) {
                         // Smoothly increment displayed progress
                         displayedProgress += (actualProgress - displayedProgress).coerceAtLeast(1).coerceAtMost(5)
-                        tvOverlayLoadingText.text = "$displayedProgress%"
-                        if (::circularProgress.isInitialized) {
-                            circularProgress.progress = displayedProgress
+                        tvOverlayLoadingText?.text = "$displayedProgress%"
+                        if (circularProgress != null) {
+                            circularProgress?.progress = displayedProgress
                         }
                     }
                     if (actualProgress == 100 && displayedProgress >= 100) break
@@ -1038,7 +1190,7 @@ class DetailsActivity : AppCompatActivity() {
                     // Short delay for the user to see 100%
                     delay(300)
                     showLoadingState(false)
-                    launchWhatsAppIntentImmediately(pack)
+                    sendToWhatsApp(pack)
                 }
             } catch (e: Exception) {
                 showLoadingState(false)
@@ -1228,9 +1380,9 @@ class DetailsActivity : AppCompatActivity() {
         // Butonu yükleniyor moduna al (üstüne overlay gelecek)
         btnAction.isEnabled = false
         showLoadingState(true)
-        tvDynamicStatus.text = getString(R.string.downloading_assets)
-        if (::circularProgress.isInitialized) {
-            circularProgress.setIndicatorColor(ContextCompat.getColor(this, R.color.primary))
+        tvDynamicStatus?.text = getString(R.string.downloading_assets)
+        if (circularProgress != null) {
+            circularProgress?.setIndicatorColor(ContextCompat.getColor(this, R.color.primary))
         }
 
         val totalFiles = pack.stickers.size + 1
@@ -1267,10 +1419,10 @@ class DetailsActivity : AppCompatActivity() {
 
                 // %100 göster ve kısa bir süre bekle
                 runOnUiThread {
-                    tvOverlayLoadingText.text = "100%"
-                    tvDynamicStatus.text = getString(R.string.pack_ready)
-                    if (::circularProgress.isInitialized) {
-                        ObjectAnimator.ofInt(circularProgress, "progress", circularProgress.progress, 100).apply {
+                    tvOverlayLoadingText?.text = "100%"
+                    tvDynamicStatus?.text = getString(R.string.pack_ready)
+                    circularProgress?.let { cp ->
+                        ObjectAnimator.ofInt(cp, "progress", cp.progress, 100).apply {
                             duration = 150
                             start()
                         }
@@ -1305,12 +1457,12 @@ class DetailsActivity : AppCompatActivity() {
     private fun updateProgressText(count: Int, total: Int) {
         val percent = (count * 100) / total
         runOnUiThread {
-            tvOverlayLoadingText.text = "$percent%"
-            if (::tvDynamicStatus.isInitialized && tvDynamicStatus.text.isEmpty()) {
-                tvDynamicStatus.text = getString(R.string.downloading_assets)
+            tvOverlayLoadingText?.text = "$percent%"
+            if (tvDynamicStatus?.text.isNullOrEmpty()) {
+                tvDynamicStatus?.text = getString(R.string.downloading_assets)
             }
-            if (::circularProgress.isInitialized) {
-                ObjectAnimator.ofInt(circularProgress, "progress", circularProgress.progress, percent).apply {
+            circularProgress?.let { cp ->
+                ObjectAnimator.ofInt(cp, "progress", cp.progress, percent).apply {
                     duration = 200
                     start()
                 }
@@ -1343,11 +1495,11 @@ class DetailsActivity : AppCompatActivity() {
         // Hazır değilse ve indirme de başlamamışsa, indirmeyi başlat ve tamamlanınca gönder
         btnAction.isEnabled = false
         currentProgress = 0
-        tvOverlayLoadingText.text = "0%"
-        tvDynamicStatus.text = getString(R.string.downloading_assets)
+        tvOverlayLoadingText?.text = "0%"
+        tvDynamicStatus?.text = getString(R.string.downloading_assets)
         showLoadingState(true)
-        if (::circularProgress.isInitialized) {
-            circularProgress.setIndicatorColor(ContextCompat.getColor(this, R.color.primary))
+        if (circularProgress != null) {
+            circularProgress?.setIndicatorColor(ContextCompat.getColor(this, R.color.primary))
         }
 
         val totalFiles = pack.stickers.size + 1
@@ -1364,14 +1516,14 @@ class DetailsActivity : AppCompatActivity() {
                             // Step smoothly up to actual progress
                             val step = (actualProgress - displayedProgress).coerceAtLeast(1).coerceAtMost(3)
                             displayedProgress += step
-                            tvOverlayLoadingText.text = "$displayedProgress%"
-                            if (::circularProgress.isInitialized) {
-                                circularProgress.progress = displayedProgress
+                            tvOverlayLoadingText?.text = "$displayedProgress%"
+                            if (circularProgress != null) {
+                                circularProgress?.progress = displayedProgress
                             }
                         }
                         if (displayedProgress == 100 || (actualProgress == 100 && displayedProgress >= 99)) {
-                            tvOverlayLoadingText.text = "100%"
-                            if (::circularProgress.isInitialized) circularProgress.progress = 100
+                            tvOverlayLoadingText?.text = "100%"
+                            circularProgress?.progress = 100
                             break
                         }
                         delay(16) // roughly 60 FPS
@@ -1436,9 +1588,43 @@ class DetailsActivity : AppCompatActivity() {
     private fun sendToWhatsApp(pack: Pack) {
         // Loading overlay'i kapat - WhatsApp hemen açılacak
         showLoadingState(false)
+        Log.d("DetailsActivity", "sendToWhatsApp called for pack=${pack.id}, isPremium=${pack.isPremium}")
 
-        // WhatsApp intent'ini hemen tetikle
-        launchWhatsAppIntent(pack)
+        // Premium kullanıcılar hiç reklam görmez, non-premium paketlerde interstitial göster (her 2 indirmede bir)
+        if (!pack.isPremium && !PreferencesHelper.isPremium(this)) {
+            // Prepare WhatsApp intent in background WHILE ad is showing
+            val intentDeferred = lifecycleScope.async(Dispatchers.IO) {
+                val currentPacks = StickerRepository.allPacksCache
+                val packsToSave = if (currentPacks.any { it.id == pack.id }) {
+                    currentPacks
+                } else {
+                    currentPacks + pack
+                }
+                StickerRepository.saveCacheToDisk(this@DetailsActivity, packsToSave)
+                Intent().apply {
+                    action = "com.whatsapp.intent.action.ENABLE_STICKER_PACK"
+                    putExtra("sticker_pack_id", pack.id)
+                    putExtra("sticker_pack_authority", "${packageName}.stickers")
+                    putExtra("sticker_pack_name", pack.localizedName)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+            }
+
+            AdManager.showInterstitialIfNeeded(this) {
+                // Ad dismissed — launch WhatsApp instantly
+                lifecycleScope.launch {
+                    try {
+                        val intent = intentDeferred.await()
+                        addPackLauncher.launch(intent)
+                    } catch (e: Exception) {
+                        Log.e("DetailsActivity", "Intent error: ${e.message}", e)
+                        Toast.makeText(this@DetailsActivity, R.string.whatsapp_not_available_title, Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        } else {
+            launchWhatsAppIntent(pack)
+        }
     }
 
     private fun launchWhatsAppIntent(pack: Pack) {
@@ -1527,6 +1713,9 @@ class DetailsActivity : AppCompatActivity() {
                         // Eklendi ama kaydetmemişiz
                         PreferencesHelper.addInstalledPack(this@DetailsActivity, packId)
                         updateButtonUI(true)
+
+                        // Promo sayacını artır (WhatsApp RESULT_OK döndürmeden ekleme)
+                        PreferencesHelper.incrementPacksSincePromo(this@DetailsActivity)
                     }
                 }
             }

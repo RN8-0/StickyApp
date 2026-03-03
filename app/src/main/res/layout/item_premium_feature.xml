@@ -21,7 +21,7 @@
             android:layout_height="32dp"
             android:layout_gravity="center"
             android:src="@drawable/ic_premium"
-            app:tint="@color/premium_gold_dark" />
+            app:tint="@color/primary" />
 
     </androidx.cardview.widget.CardView>
 

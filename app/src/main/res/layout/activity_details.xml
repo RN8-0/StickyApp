@@ -58,9 +58,21 @@
             <!-- Installed Icon - WhatsApp'a eklenmiş paketi gösterir -->
             <ImageView
                 android:id="@+id/installedIcon"
-                android:layout_width="32dp"
-                android:layout_height="32dp"
-                android:src="@drawable/ic_check"
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:padding="2dp"
+                android:src="@drawable/ic_check_circle"
+                android:visibility="gone" />
+
+            <!-- Premium Icon - Toolbar'da -->
+            <ImageView
+                android:id="@+id/premiumIconToolbar"
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:layout_marginEnd="4dp"
+                android:padding="2dp"
+                android:src="@drawable/ic_gem"
+                app:tint="@color/premium_gold"
                 android:visibility="gone" />
 
             <!-- Toplu Silme Onay Butonu (Toolbar'da) -->
@@ -73,17 +85,6 @@
                 app:tint="@color/delete_red"
                 android:visibility="gone"
                 android:contentDescription="Seçilenleri Sil" />
-
-            <!-- Home butonu - En sağda -->
-            <ImageButton
-                android:id="@+id/btnHome"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:layout_marginEnd="4dp"
-                android:background="?selectableItemBackgroundBorderless"
-                android:src="@drawable/ic_home"
-                app:tint="@color/text_on_primary"
-                android:contentDescription="Ana Sayfa" />
 
         </LinearLayout>
 
@@ -100,240 +101,234 @@
 
     </LinearLayout>
 
-    <!-- Stickers Grid with FAB -->
-    <FrameLayout
+    <!-- Scrollable content area -->
+    <androidx.core.widget.NestedScrollView
+        android:id="@+id/scrollContent"
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1">
+        android:layout_weight="1"
+        android:fillViewport="true">
 
-        <androidx.recyclerview.widget.RecyclerView
-            android:id="@+id/rv"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:background="@drawable/chat_wallpaper_pattern"
-            android:padding="8dp"
-            android:clipToPadding="false" />
-
-        <!-- FAB: Çıkartma Ekle (sadece custom paketlerde görünür) -->
-        <com.google.android.material.floatingactionbutton.FloatingActionButton
-            android:id="@+id/fabAddSticker"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="bottom|end"
-            android:layout_margin="16dp"
-            android:src="@drawable/ic_add"
-            android:contentDescription="Çıkartma Ekle"
-            android:visibility="gone"
-            app:tint="@color/fab_content_color"
-            app:backgroundTint="@color/primary"
-            app:fabSize="normal"
-            android:elevation="8dp" />
-
-    </FrameLayout>
-
-    <!-- Button container -->
-    <LinearLayout
-        android:id="@+id/bottomContainer"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:padding="16dp"
-        android:background="?android:colorBackground">
-
-        <!-- 2x2 Circular Buttons Grid -->
         <LinearLayout
-            android:id="@+id/customButtonsContainer"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:visibility="gone">
+            android:orientation="vertical">
 
-
-
-            <!-- Row 2 -->
-            <LinearLayout
+            <!-- Stickers Grid -->
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/rv"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center">
+                android:background="@drawable/chat_wallpaper_pattern"
+                android:padding="8dp"
+                android:clipToPadding="false"
+                android:nestedScrollingEnabled="false" />
 
-                <!-- Add Sticker -->
+            <!-- Button container (scrollable, after stickers) -->
+            <LinearLayout
+                android:id="@+id/bottomContainer"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp"
+                android:background="?android:colorBackground">
+
+                <!-- Action Button (Add to WhatsApp / Share) -->
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnAction"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:text="@string/add_to_whatsapp"
+                    android:textColor="@color/white"
+                    android:textSize="15sp"
+                    android:textAllCaps="false"
+                    app:backgroundTint="@color/primary"
+                    app:cornerRadius="12dp"
+                    app:icon="@drawable/ic_add"
+                    app:iconGravity="textStart"
+                    app:iconTint="@color/white"
+                    app:iconSize="20dp"
+                    app:iconPadding="8dp" />
+
+                <!-- Premium Button Container -->
                 <LinearLayout
-                    android:layout_width="0dp"
+                    android:id="@+id/premiumButtonsContainer"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:orientation="vertical"
-                    android:gravity="center"
-                    android:padding="8dp">
+                    android:orientation="horizontal"
+                    android:visibility="gone"
+                    android:layout_marginTop="8dp">
+
                     <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btnGridAddSticker"
-                        style="@style/CircleButton"
-                        android:layout_width="64dp"
-                        android:layout_height="64dp"
-                        app:icon="@drawable/ic_add"
-                        app:iconSize="32dp"
+                        android:id="@+id/btnWatchAd"
+                        android:layout_width="0dp"
+                        android:layout_height="48dp"
+                        android:layout_weight="1"
+                        android:layout_marginEnd="8dp"
+                        android:text="@string/watch_ad_button"
+                        android:textColor="@color/white"
+                        android:textSize="14sp"
+                        android:textAllCaps="false"
+                        app:backgroundTint="@color/primary"
+                        app:cornerRadius="12dp"
+                        app:icon="@drawable/ic_whatsapp_small"
                         app:iconGravity="textStart"
-                        app:iconPadding="0dp"
-                        app:backgroundTint="@color/purple_accent" />
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="4dp"
-                        android:text="@string/add_sticker"
-                        android:textSize="12sp"
-                        android:gravity="center" />
+                        app:iconTint="@color/white"
+                        app:iconSize="20dp"
+                        app:iconPadding="8dp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnPremiumBadge"
+                        android:layout_width="0dp"
+                        android:layout_height="48dp"
+                        android:layout_weight="1"
+                        android:text="@string/get_premium_access"
+                        android:textColor="@color/white"
+                        android:textSize="14sp"
+                        android:textAllCaps="false"
+                        app:backgroundTint="@color/premium_gold"
+                        app:cornerRadius="12dp"
+                        app:icon="@drawable/ic_gem"
+                        app:iconGravity="textStart"
+                        app:iconTint="@color/white"
+                        app:iconSize="18dp" />
+
                 </LinearLayout>
 
-                <!-- Delete Mode -->
-                <LinearLayout
-                    android:layout_width="0dp"
+            </LinearLayout>
+
+            <!-- Related Packs Section -->
+            <LinearLayout
+                android:id="@+id/relatedPacksSection"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:background="?android:colorBackground"
+                android:visibility="gone">
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:background="@color/divider" />
+
+                <TextView
+                    android:id="@+id/tvRelatedTitle"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:orientation="vertical"
-                    android:gravity="center"
-                    android:padding="8dp">
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btnGridDeleteMode"
-                        style="@style/CircleButton"
-                        android:layout_width="64dp"
-                        android:layout_height="64dp"
-                        app:icon="@drawable/ic_delete"
-                        app:iconSize="32dp"
-                        app:iconGravity="textStart"
-                        app:iconPadding="0dp"
-                        app:backgroundTint="@color/delete_red" />
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="4dp"
-                        android:text="@string/delete_mode"
-                        android:textSize="12sp"
-                        android:gravity="center" />
-                </LinearLayout>
+                    android:paddingHorizontal="16dp"
+                    android:paddingTop="16dp"
+                    android:paddingBottom="8dp"
+                    android:text="@string/related_packs"
+                    android:textSize="16sp"
+                    android:textStyle="bold"
+                    android:textColor="@color/text_primary"
+                    android:fontFamily="sans-serif-medium" />
+
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/rvRelatedPacks"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:nestedScrollingEnabled="false"
+                    android:clipToPadding="false"
+                    android:paddingHorizontal="8dp"
+                    android:paddingBottom="16dp" />
 
             </LinearLayout>
 
         </LinearLayout>
 
-        <!-- Loading Container (shown while stickers are loading) -->
-        <!-- Legacy Button (Firebase packs) -->
+    </androidx.core.widget.NestedScrollView>
+
+    <!-- Fixed bottom bar: custom buttons + Add to WhatsApp -->
+    <LinearLayout
+        android:id="@+id/fixedBottomBar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:background="?android:colorBackground"
+        android:paddingHorizontal="16dp"
+        android:paddingTop="10dp"
+        android:paddingBottom="12dp"
+        android:elevation="4dp">
+
+        <!-- Custom buttons (Add Sticker / Delete) -->
+        <LinearLayout
+            android:id="@+id/customButtonsContainer"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center"
+            android:visibility="gone">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnGridAddSticker"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:layout_width="0dp"
+                android:layout_height="44dp"
+                android:layout_weight="1"
+                android:layout_marginEnd="8dp"
+                android:text="@string/add_sticker"
+                android:textColor="@color/primary"
+                android:textSize="13sp"
+                android:textAllCaps="false"
+                app:cornerRadius="12dp"
+                app:icon="@drawable/ic_add"
+                app:iconGravity="textStart"
+                app:iconTint="@color/primary"
+                app:iconSize="18dp"
+                app:strokeColor="@color/primary"
+                app:strokeWidth="1.5dp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnGridDeleteMode"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:layout_width="0dp"
+                android:layout_height="44dp"
+                android:layout_weight="1"
+                android:text="@string/delete_mode"
+                android:textColor="@color/delete_red"
+                android:textSize="13sp"
+                android:textAllCaps="false"
+                app:cornerRadius="12dp"
+                app:icon="@drawable/ic_delete"
+                app:iconGravity="textStart"
+                app:iconTint="@color/delete_red"
+                app:iconSize="18dp"
+                app:strokeColor="@color/delete_red"
+                app:strokeWidth="1.5dp" />
+
+        </LinearLayout>
+
+        <!-- Fixed Add to WhatsApp button for custom packs -->
         <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnAction"
+            android:id="@+id/btnFixedWhatsApp"
             android:layout_width="match_parent"
             android:layout_height="48dp"
+            android:layout_marginTop="8dp"
             android:text="@string/add_to_whatsapp"
             android:textColor="@color/white"
             android:textSize="15sp"
             android:textAllCaps="false"
             app:backgroundTint="@color/primary"
             app:cornerRadius="12dp"
-            app:icon="@drawable/ic_add"
+            app:icon="@drawable/ic_whatsapp_small"
             app:iconGravity="textStart"
             app:iconTint="@color/white"
             app:iconSize="20dp"
-            app:iconPadding="8dp" />
-
-        <!-- Premium Button Container - Yan yana butonlar -->
-        <LinearLayout
-            android:id="@+id/premiumButtonsContainer"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:visibility="gone"
-            android:layout_marginTop="8dp">
-
-            <!-- Watch Ad Button (Uygulama Yeşili) -->
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnWatchAd"
-                android:layout_width="0dp"
-                android:layout_height="48dp"
-                android:layout_weight="1"
-                android:layout_marginEnd="8dp"
-                android:text="@string/watch_ad_button"
-                android:textColor="@color/white"
-                android:textSize="14sp"
-                android:textAllCaps="false"
-                app:backgroundTint="@color/primary"
-                app:cornerRadius="12dp"
-                app:icon="@drawable/ic_play_circle"
-                app:iconGravity="textStart"
-                app:iconTint="@color/white"
-                app:iconSize="20dp"
-                app:iconPadding="8dp" />
-
-            <!-- Get Premium Button (Altın Sarısı) -->
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnPremiumBadge"
-                android:layout_width="0dp"
-                android:layout_height="48dp"
-                android:layout_weight="1"
-                android:text="@string/get_premium_access"
-                android:textColor="@color/white"
-                android:textSize="14sp"
-                android:textAllCaps="false"
-                app:backgroundTint="@color/premium_gold"
-                app:cornerRadius="12dp"
-                app:icon="@drawable/ic_gem"
-                app:iconGravity="textStart"
-                app:iconTint="@color/white"
-                app:iconSize="18dp" />
-
-        </LinearLayout>
+            app:iconPadding="8dp"
+            android:visibility="gone" />
 
     </LinearLayout>
 
     </LinearLayout>
 
-    <!-- Simplified Loading Overlay -->
-    <FrameLayout
-        android:id="@+id/professionalLoadingOverlay"
+    <!-- FAB kaldırıldı — custom butonlar artık bottomContainer'da -->
+
+    <!-- Loading Overlay - ViewStub ile lazy inflate -->
+    <ViewStub
+        android:id="@+id/loadingOverlayStub"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:background="#D9000000"
-        android:clickable="true"
-        android:focusable="true"
-        android:elevation="99dp"
-        android:visibility="gone">
-
-        <LinearLayout
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center"
-            android:orientation="vertical"
-            android:gravity="center">
-
-            <com.google.android.material.progressindicator.CircularProgressIndicator
-                android:id="@+id/circularProgress"
-                android:layout_width="64dp"
-                android:layout_height="64dp"
-                app:indicatorColor="@color/primary"
-                app:trackColor="#20FFFFFF"
-                app:trackThickness="6dp"
-                app:indicatorSize="64dp"
-                app:trackCornerRadius="0dp"
-                android:max="100"
-                android:progress="0" />
-
-            <TextView
-                android:id="@+id/tvOverlayLoadingText"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="16dp"
-                android:text="0%"
-                android:textColor="#FFFFFF"
-                android:textSize="18sp"
-                android:textStyle="bold"
-                android:fontFamily="sans-serif-medium" />
-
-            <!-- Hidden but kept for logic consistency if needed -->
-            <TextView
-                android:id="@+id/tvDynamicStatus"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:visibility="gone" />
-
-        </LinearLayout>
-
-    </FrameLayout>
+        android:layout="@layout/stub_loading_overlay" />
 
 </FrameLayout>

@@ -18,7 +18,7 @@
     <!-- Palette hole (thumb) -->
     <path
         android:pathData="M130,195 m-18,0 a18,18 0,1 1,36 0 a18,18 0,1 1,-36 0"
-        android:fillColor="#00C896" />
+        android:fillColor="#6C5CE7" />
 
     <!-- Color dot 1 - Red -->
     <path

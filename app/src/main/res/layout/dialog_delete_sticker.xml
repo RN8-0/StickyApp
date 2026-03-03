@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="28dp"
+    android:gravity="center_horizontal"
+    android:background="@drawable/bg_editor_container">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="🗑️"
+        android:textSize="48sp"
+        android:layout_marginBottom="12dp" />
+
+    <TextView
+        android:id="@+id/tvDeleteTitle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/delete_sticker_title"
+        android:textSize="20sp"
+        android:textStyle="bold"
+        android:textColor="@color/text_primary"
+        android:gravity="center"
+        android:layout_marginBottom="8dp" />
+
+    <TextView
+        android:id="@+id/tvDeleteMsg"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/delete_sticker_message"
+        android:textSize="14sp"
+        android:textColor="@color/text_secondary"
+        android:gravity="center"
+        android:lineSpacingExtra="3dp"
+        android:layout_marginBottom="24dp" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnConfirmDelete"
+        android:layout_width="match_parent"
+        android:layout_height="52dp"
+        app:cornerRadius="26dp"
+        android:text="🗑️ Delete"
+        android:textColor="#FFFFFF"
+        android:textSize="15sp"
+        android:textStyle="bold"
+        android:textAllCaps="false"
+        app:backgroundTint="#FF4444"
+        app:elevation="4dp" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnCancelDelete"
+        style="@style/Widget.MaterialComponents.Button.TextButton"
+        android:layout_width="match_parent"
+        android:layout_height="44dp"
+        android:text="@string/cancel"
+        android:textColor="@color/text_secondary"
+        android:textSize="13sp"
+        android:textAllCaps="false"
+        android:layout_marginTop="4dp" />
+
+</LinearLayout>

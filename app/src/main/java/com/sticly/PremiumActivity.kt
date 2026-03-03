@@ -120,7 +120,15 @@ class PremiumActivity : AppCompatActivity() {
             R.string.feature_premium_desc
         )
 
-        // Feature 3: AI Background Removal
+        // Feature 3: Unlimited AI Stickers
+        setupFeature(
+            R.id.featureAISticker,
+            R.drawable.ic_ai_robot,
+            R.string.feature_ai_sticker_title,
+            R.string.feature_ai_sticker_desc
+        )
+
+        // Feature 4: AI Background Removal
         setupFeature(
             R.id.featureAIBg,
             R.drawable.ic_ai_bg,
@@ -336,22 +344,60 @@ class PremiumActivity : AppCompatActivity() {
         }
     }
 
-    private fun restorePurchases() {
-        if (billingManager == null) {
-            Toast.makeText(this, R.string.restore_error, Toast.LENGTH_SHORT).show()
-            return
-        }
-        Toast.makeText(this, R.string.restoring, Toast.LENGTH_SHORT).show()
-        billingManager?.restorePurchases { result ->
-            val messageRes = when (result) {
-                BillingManager.RestoreResult.SUCCESS -> {
-                    updateUI()
-                    R.string.restore_success
+    private val restoreSignInLauncher = registerForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        try {
+            val task = com.google.android.gms.auth.api.signin.GoogleSignIn.getSignedInAccountFromIntent(result.data)
+            val account = task.getResult(com.google.android.gms.common.api.ApiException::class.java)
+            val credential = com.google.firebase.auth.GoogleAuthProvider.getCredential(account.idToken, null)
+            FirebaseAuth.getInstance().signInWithCredential(credential)
+                .addOnCompleteListener(this) { authTask ->
+                    if (authTask.isSuccessful) {
+                        Toast.makeText(this, "Signed in as ${account.email}. Restoring purchases...", Toast.LENGTH_SHORT).show()
+                        billingManager?.restorePurchases { restoreResult ->
+                            val msg = when (restoreResult) {
+                                BillingManager.RestoreResult.SUCCESS -> { updateUI(); R.string.restore_success }
+                                BillingManager.RestoreResult.NOT_FOUND -> R.string.restore_not_found
+                                BillingManager.RestoreResult.ERROR -> R.string.restore_error
+                            }
+                            Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+                        }
+                    } else {
+                        Toast.makeText(this, R.string.restore_error, Toast.LENGTH_SHORT).show()
+                    }
                 }
-                BillingManager.RestoreResult.NOT_FOUND -> R.string.restore_not_found
-                BillingManager.RestoreResult.ERROR -> R.string.restore_error
+        } catch (e: Exception) {
+            Toast.makeText(this, R.string.restore_error, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun restorePurchases() {
+        val currentUser = FirebaseAuth.getInstance().currentUser
+        if (currentUser != null) {
+            if (billingManager == null) {
+                Toast.makeText(this, R.string.restore_error, Toast.LENGTH_SHORT).show()
+                return
             }
-            Toast.makeText(this, messageRes, Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Signed in as ${currentUser.email ?: currentUser.displayName}. Restoring...", Toast.LENGTH_SHORT).show()
+            billingManager?.restorePurchases { result ->
+                val messageRes = when (result) {
+                    BillingManager.RestoreResult.SUCCESS -> { updateUI(); R.string.restore_success }
+                    BillingManager.RestoreResult.NOT_FOUND -> {
+                        try { startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://play.google.com/store/account/subscriptions?package=${packageName}"))) } catch (_: Exception) {}
+                        R.string.restore_not_found
+                    }
+                    BillingManager.RestoreResult.ERROR -> R.string.restore_error
+                }
+                Toast.makeText(this, messageRes, Toast.LENGTH_SHORT).show()
+            }
+        } else {
+            val gso = com.google.android.gms.auth.api.signin.GoogleSignInOptions.Builder(com.google.android.gms.auth.api.signin.GoogleSignInOptions.DEFAULT_SIGN_IN)
+                .requestIdToken(getString(R.string.default_web_client_id))
+                .requestEmail()
+                .build()
+            val client = com.google.android.gms.auth.api.signin.GoogleSignIn.getClient(this, gso)
+            restoreSignInLauncher.launch(client.signInIntent)
         }
     }
 

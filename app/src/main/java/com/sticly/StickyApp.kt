@@ -8,6 +8,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 class StickyApp : Application() {
+    companion object {
+        var appOpenAdInstance: AppOpenAdManager? = null
+    }
+
     override fun attachBaseContext(base: Context) {
         super.attachBaseContext(LocaleHelper.onAttach(base))
     }
@@ -18,44 +22,38 @@ class StickyApp : Application() {
         // Karanlık temayı tamamen devre dışı bırak (Hep açık tema)
         androidx.appcompat.app.AppCompatDelegate.setDefaultNightMode(androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_NO)
 
-        // Reklam sistemini başlat
-        try {
-            Log.d("StickyApp", "Starting AdManager initialization...")
-            AdManager.initialize(this)
-            Log.d("StickyApp", "AdManager.initialize() called successfully")
+        // Reklam sistemini gecikmeli başlat (ilk karelerin hızlı render olması için)
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+            try {
+                Log.d("StickyApp", "Starting AdManager initialization...")
+                AdManager.initialize(this)
+                Log.d("StickyApp", "AdManager.initialize() called successfully")
 
-            // App Open Ad — uygulamaya her dönüşte reklam gösterir
-            AppOpenAdManager(this).init()
-            Log.d("StickyApp", "AppOpenAdManager initialized")
-        } catch (e: Exception) {
-            Log.e("StickyApp", "AdMob initialization failed: ${e.message}", e)
-        }
-
-        // PRE-WARM: Load disk cache synchronously so MainActivity has data instantly
-        // This is fast (~10-50ms for JSON read) and eliminates the loading screen on warm starts
-        try {
-            val diskPacks = StickerRepository.loadCacheFromDisk(this)
-            if (diskPacks.isNotEmpty()) {
-                StickerRepository.allPacksCache = diskPacks
-                Log.d("StickyApp", "Disk cache pre-warmed: ${diskPacks.size} packs")
+                // App Open Ad — günde bir kez, 3. paket açılışında
+                val adMgr = AppOpenAdManager(this)
+                adMgr.init()
+                appOpenAdInstance = adMgr
+            } catch (e: Exception) {
+                Log.e("StickyApp", "AdMob initialization failed: ${e.message}", e)
             }
-        } catch (e: Exception) {
-            Log.e("StickyApp", "Disk cache pre-warm error: ${e.message}")
-        }
+        }, 800)
 
-        // Firebase paketlerini EN ERKEN ANDA yüklemeye başla
-        // Kullanıcı onboarding/login ekranlarındayken veriler arka planda inecek
+        // PRE-WARM: Load disk cache first, then Firebase in sequence
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                Log.d("StickyApp", "Starting early pack preload...")
-                val packs = StickerRepository.loadPacks(this@StickyApp, forceRefresh = false)
-                Log.d("StickyApp", "Early preload done: ${packs.size} packs loaded")
-                if (packs.isNotEmpty()) {
-                    StickyGlideModule.preloadStickerPreviews(this@StickyApp, packs, packCount = 10, stickersPerPack = 3)
+                val diskPacks = StickerRepository.loadCacheFromDisk(this@StickyApp)
+                if (diskPacks.isNotEmpty()) {
+                    StickerRepository.allPacksCache = diskPacks
                 }
-            } catch (e: Exception) {
-                Log.e("StickyApp", "Early preload error: ${e.message}")
-            }
+            } catch (_: Exception) {}
+
+            // After disk cache, load from Firebase (updates cache if newer data available)
+            try {
+                val packs = StickerRepository.loadPacks(this@StickyApp, forceRefresh = false)
+                if (packs.isNotEmpty()) {
+                    StickyGlideModule.preloadStickerPreviews(this@StickyApp, packs, packCount = 8, stickersPerPack = 2)
+                }
+            } catch (_: Exception) {}
         }
     }
 }

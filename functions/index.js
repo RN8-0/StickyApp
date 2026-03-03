@@ -3,6 +3,7 @@ const { onRequest } = require('firebase-functions/v2/https');
 const { setGlobalOptions } = require('firebase-functions/v2');
 const admin = require('firebase-admin');
 const { klipyProxy } = require('./klipyProxy');
+const { telegramProxy } = require('./telegramProxy');
 
 admin.initializeApp();
 
@@ -116,3 +117,6 @@ exports.giphyProxy = onRequest({ cors: true }, async (req, res) => {
 
 // Export klipyProxy
 exports.klipyProxy = klipyProxy;
+
+// Export telegramProxy
+exports.telegramProxy = telegramProxy;

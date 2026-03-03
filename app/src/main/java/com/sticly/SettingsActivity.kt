@@ -157,48 +157,17 @@ class SettingsActivity : AppCompatActivity() {
 
         // Restore Purchases
         findViewById<View>(R.id.btnRestore).setOnClickListener {
-            val loadingToast = Toast.makeText(this, R.string.restoring, Toast.LENGTH_SHORT)
-            loadingToast.show()
+            val currentUser = auth.currentUser
+            val isGoogleUser = currentUser?.providerData?.any { it.providerId == "google.com" } == true
 
-            if (billingUIManager == null) {
-                billingUIManager = BillingManager(this, onPurchaseComplete = { isPremium ->
-                    if (isPremium) {
-                        // Premium restore edildi, UI güncelle
-                        runOnUiThread {
-                            updatePremiumStatus() // Helper method to check and update UI
-                        }
-                    }
-                })
-            }
-            
-            billingUIManager?.restorePurchases { result ->
-                runOnUiThread {
-                    loadingToast.cancel()
-                    when (result) {
-                        BillingManager.RestoreResult.SUCCESS -> {
-                           // Check if we actually have premium now
-                           if (PreferencesHelper.isPremium(this)) {
-                               Toast.makeText(this, R.string.restore_success, Toast.LENGTH_SHORT).show()
-                               // Force sync to Firebase
-                               val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
-                               if (user != null) {
-                                   PreferencesHelper.syncUserDataWithFirebase(this, user.uid)
-                               }
-                               // Update UI
-                               updatePremiumStatus()
-                           } else {
-                               // Purchases found (likely packs) but no active premium
-                               Toast.makeText(this, "Satın alınan paketler geri yüklendi.", Toast.LENGTH_LONG).show()
-                           }
-                        }
-                        BillingManager.RestoreResult.NOT_FOUND -> {
-                            Toast.makeText(this, R.string.restore_not_found, Toast.LENGTH_SHORT).show()
-                        }
-                        BillingManager.RestoreResult.ERROR -> {
-                            Toast.makeText(this, R.string.restore_error, Toast.LENGTH_SHORT).show()
-                        }
-                    }
-                }
+            if (isGoogleUser) {
+                // Already signed in with Google - show notification and restore
+                Toast.makeText(this, R.string.google_already_signed_in, Toast.LENGTH_SHORT).show()
+                performRestore()
+            } else {
+                // Not signed in with Google - start Google sign-in, then restore
+                restoreAfterGoogleLogin = true
+                loginWithGoogle()
             }
         }
 
@@ -228,7 +197,7 @@ class SettingsActivity : AppCompatActivity() {
             if (isGoogleUser) {
                 // Already connected, user tried to click it -> Prevent change
                 switchG.isChecked = true // Force back to checked
-                Toast.makeText(this, "Hesabınız Google ile bağlı (Bağlantı kesilemez)", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, R.string.google_account_connected, Toast.LENGTH_SHORT).show()
             } else {
                 // Not connected, user clicked it -> Start login
                 // Note: switch toggle logic fires before click, so 'isChecked' might be true now.
@@ -290,15 +259,62 @@ class SettingsActivity : AppCompatActivity() {
                 }
                 Toast.makeText(this, "Signed in with Google", Toast.LENGTH_SHORT).show()
                 updateLoginSwitches()
+                if (restoreAfterGoogleLogin) {
+                    restoreAfterGoogleLogin = false
+                    performRestore()
+                }
             } else {
                 Toast.makeText(this, "Auth failed", Toast.LENGTH_SHORT).show()
                 findViewById<androidx.appcompat.widget.SwitchCompat>(R.id.switchGoogle).isChecked = false
                 updateLoginSwitches()
+                restoreAfterGoogleLogin = false
             }
         }
     }
 
     private var billingUIManager: BillingManager? = null
+    private var restoreAfterGoogleLogin = false
+
+    private fun performRestore() {
+        val loadingToast = Toast.makeText(this, R.string.restoring, Toast.LENGTH_SHORT)
+        loadingToast.show()
+
+        if (billingUIManager == null) {
+            billingUIManager = BillingManager(this, onPurchaseComplete = { isPremium ->
+                if (isPremium) {
+                    runOnUiThread {
+                        updatePremiumStatus()
+                    }
+                }
+            })
+        }
+
+        billingUIManager?.restorePurchases { result ->
+            runOnUiThread {
+                loadingToast.cancel()
+                when (result) {
+                    BillingManager.RestoreResult.SUCCESS -> {
+                        if (PreferencesHelper.isPremium(this)) {
+                            Toast.makeText(this, R.string.restore_success, Toast.LENGTH_SHORT).show()
+                            val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+                            if (user != null) {
+                                PreferencesHelper.syncUserDataWithFirebase(this, user.uid)
+                            }
+                            updatePremiumStatus()
+                        } else {
+                            Toast.makeText(this, R.string.purchased_packs_restored, Toast.LENGTH_LONG).show()
+                        }
+                    }
+                    BillingManager.RestoreResult.NOT_FOUND -> {
+                        Toast.makeText(this, R.string.restore_not_found, Toast.LENGTH_SHORT).show()
+                    }
+                    BillingManager.RestoreResult.ERROR -> {
+                        Toast.makeText(this, R.string.restore_error, Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        }
+    }
 
     override fun onDestroy() {
         super.onDestroy()

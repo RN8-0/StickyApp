@@ -24,6 +24,11 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.concurrent.TimeUnit
+import com.google.android.gms.ads.AdListener
+import com.google.android.gms.ads.AdLoader
+import com.google.android.gms.ads.AdRequest
+import com.google.android.gms.ads.AdView
+import com.google.android.gms.ads.LoadAdError
 import com.google.android.gms.ads.nativead.NativeAd
 import com.google.android.gms.ads.nativead.NativeAdView
 import com.google.android.gms.ads.nativead.MediaView
@@ -67,7 +72,14 @@ class PackAdapter(
     private fun ensureDensityInit(context: android.content.Context) {
         if (densityInitialized) return
         val density = context.resources.displayMetrics.density
-        stickerSizePx = (64 * density).toInt()
+        // Calculate sticker size to fit exactly STICKER_PREVIEW_COUNT in screen width
+        // Account for: RecyclerView paddingHorizontal=8dp (16dp total) + item paddingHorizontal=16dp (32dp total)
+        val screenWidthDp = context.resources.displayMetrics.widthPixels / density
+        val totalPaddingDp = 48f // 16dp RV padding + 32dp item padding
+        val totalMarginDp = (STICKER_PREVIEW_COUNT - 1) * 8f
+        val availableDp = screenWidthDp - totalPaddingDp - totalMarginDp
+        val stickerDp = (availableDp / STICKER_PREVIEW_COUNT).coerceIn(40f, 72f)
+        stickerSizePx = (stickerDp * density).toInt()
         stickerMarginPx = (8 * density).toInt()
         btnAdd36Px = (36 * density).toInt()
         btnAdd32Px = (32 * density).toInt()
@@ -80,8 +92,12 @@ class PackAdapter(
     }
 
     override fun getItemId(position: Int): Long {
-        val item = items.getOrNull(position) as? Pack ?: return position.toLong()
-        return item.id.hashCode().toLong()
+        val item = items.getOrNull(position)
+        return when (item) {
+            is Pack -> item.id.hashCode().toLong()
+            is BannerAdPlaceholder -> -(item.slotIndex.toLong() + 1)
+            else -> position.toLong()
+        }
     }
 
     companion object {
@@ -93,35 +109,95 @@ class PackAdapter(
     }
 
     class VH(v: View) : RecyclerView.ViewHolder(v) {
-        val tray: ImageView = v.findViewById(R.id.tray)
-        val name: TextView = v.findViewById(R.id.name)
-        val pub: TextView = v.findViewById(R.id.pub)
-        val count: TextView = v.findViewById(R.id.count)
-        val checkIcon: ImageView = v.findViewById(R.id.checkIcon)
-        val crownIcon: ImageView = v.findViewById(R.id.crownIcon)
-        val installedBadge: TextView = v.findViewById(R.id.installedBadge)
-        val premiumContainer: View = v.findViewById(R.id.premiumContainer)
-        val packTypeBadge: TextView = v.findViewById(R.id.packTypeBadge)
-        val newBadge: TextView = v.findViewById(R.id.newBadge)
-        val btnFavorite: ImageButton = v.findViewById(R.id.btnFavorite)
-        val btnFavoriteNew: ImageButton = v.findViewById(R.id.btnFavoriteNew)
-        val btnDelete: ImageButton = v.findViewById(R.id.btnDelete)
-        val btnDeletePack: ImageButton = v.findViewById(R.id.btnDeletePack)
-        val downloadCount: TextView = v.findViewById(R.id.downloadCount)
-        val timeAgo: TextView = v.findViewById(R.id.timeAgo)
-        val btnAdd: MaterialButton = v.findViewById(R.id.btnAdd)
-        val stickerPreviewContainer: LinearLayout = v.findViewById(R.id.stickerPreviewContainer)
+        val tray: ImageView? = v.findViewById(R.id.tray)
+        val name: TextView? = v.findViewById(R.id.name)
+        val pub: TextView? = v.findViewById(R.id.pub)
+        val count: TextView? = v.findViewById(R.id.count)
+        val checkIcon: ImageView? = v.findViewById(R.id.checkIcon)
+        val crownIcon: ImageView? = v.findViewById(R.id.crownIcon)
+        val installedBadge: TextView? = v.findViewById(R.id.installedBadge)
+        val premiumContainer: View? = v.findViewById(R.id.premiumContainer)
+        val packTypeBadge: TextView? = v.findViewById(R.id.packTypeBadge)
+        val newBadge: TextView? = v.findViewById(R.id.newBadge)
+        val btnFavorite: ImageButton? = v.findViewById(R.id.btnFavorite)
+        val btnFavoriteNew: ImageButton? = v.findViewById(R.id.btnFavoriteNew)
+        val btnDelete: ImageButton? = v.findViewById(R.id.btnDelete)
+        val btnDeletePack: ImageButton? = v.findViewById(R.id.btnDeletePack)
+        val downloadCount: TextView? = v.findViewById(R.id.downloadCount)
+        val timeAgo: TextView? = v.findViewById(R.id.timeAgo)
+        val btnAdd: MaterialButton? = v.findViewById(R.id.btnAdd)
+        val stickerPreviewContainer: LinearLayout? = v.findViewById(R.id.stickerPreviewContainer)
     }
 
 
 
-    override fun getItemViewType(position: Int): Int = 0
+    override fun getItemViewType(position: Int): Int {
+        return when (items[position]) {
+            is BannerAdPlaceholder -> 1
+            else -> 0
+        }
+    }
 
     override fun onCreateViewHolder(p: ViewGroup, vt: Int): VH {
-        return VH(LayoutInflater.from(p.context).inflate(R.layout.item_pack, p, false))
+        return if (vt == 1) {
+            VH(LayoutInflater.from(p.context).inflate(R.layout.item_ad_banner, p, false))
+        } else {
+            VH(LayoutInflater.from(p.context).inflate(R.layout.item_pack, p, false))
+        }
     }
 
     override fun onBindViewHolder(holder: VH, pos: Int) {
+        val item = items[pos]
+        if (item is BannerAdPlaceholder) {
+            val adView = holder.itemView as? NativeAdView ?: return
+            val content = adView.findViewById<View>(R.id.adContent)
+            val placeholder = adView.findViewById<View>(R.id.adPlaceholder)
+            val currentTag = adView.tag
+            if (currentTag == "loaded" || currentTag == "loading") {
+                // Already loaded or loading — don't reload
+                return
+            }
+            // New slot or previously failed — (re)load
+            adView.tag = "loading"
+            content?.visibility = View.GONE
+            placeholder?.visibility = View.VISIBLE
+            adView.visibility = View.VISIBLE
+            val lp = adView.layoutParams
+            lp.height = ViewGroup.LayoutParams.WRAP_CONTENT
+            adView.layoutParams = lp
+
+            val adLoader = AdLoader.Builder(holder.itemView.context, AdManager.FEED_AD_ID)
+                .forNativeAd { nativeAd ->
+                    adView.headlineView = adView.findViewById(R.id.ad_headline)
+                    adView.bodyView = adView.findViewById(R.id.ad_body)
+                    adView.callToActionView = adView.findViewById(R.id.ad_call_to_action)
+                    adView.iconView = adView.findViewById(R.id.ad_app_icon)
+                    adView.mediaView = adView.findViewById<MediaView>(R.id.ad_media)
+
+                    (adView.headlineView as? TextView)?.text = nativeAd.headline
+                    (adView.bodyView as? TextView)?.text = nativeAd.body
+                    (adView.callToActionView as? Button)?.text = nativeAd.callToAction
+                    nativeAd.icon?.drawable?.let { (adView.iconView as? ImageView)?.setImageDrawable(it) }
+                    nativeAd.mediaContent?.let { adView.mediaView?.setMediaContent(it) }
+
+                    adView.setNativeAd(nativeAd)
+                    placeholder?.visibility = View.GONE
+                    content?.visibility = View.VISIBLE
+                    adView.tag = "loaded"
+                }
+                .withAdListener(object : AdListener() {
+                    override fun onAdFailedToLoad(error: LoadAdError) {
+                        adView.tag = null
+                        adView.visibility = View.GONE
+                        val failLp = adView.layoutParams
+                        failLp.height = 0
+                        adView.layoutParams = failLp
+                    }
+                })
+                .build()
+            adLoader.loadAd(AdRequest.Builder().build())
+            return
+        }
         val context = holder.itemView.context
         ensureDensityInit(context)
         val pack = items[pos] as Pack
@@ -130,8 +206,9 @@ class PackAdapter(
 
     override fun onViewRecycled(holder: VH) {
         super.onViewRecycled(holder)
-        // Cancel all pending Glide requests to free memory and CPU
-        val container = holder.stickerPreviewContainer
+        // Don't touch ad views — keep loaded ads intact
+        if (holder.itemView is NativeAdView) return
+        val container = holder.stickerPreviewContainer ?: return
         val context = holder.itemView.context
         try {
             val glide = getGlide(context)
@@ -142,15 +219,16 @@ class PackAdapter(
                     child.setImageDrawable(null)
                 }
             }
-            glide.clear(holder.tray)
-            holder.tray.setImageDrawable(null)
+            holder.tray?.let { glide.clear(it); it.setImageDrawable(null) }
         } catch (_: Exception) { }
     }
+
+    private val timeAgoCache = java.util.concurrent.ConcurrentHashMap<String, String>(64)
 
     private fun bindPack(h: VH, pack: Pack) {
         val context = h.itemView.context
 
-        h.name.text = pack.localizedName
+        h.name?.text = pack.localizedName
 
         // Yayıncı + çıkartma sayısı + indirme sayısı tek satırda
         val stickerCount = pack.stickers.size
@@ -161,144 +239,115 @@ class PackAdapter(
         if (displayDownloadCount > 0) {
             pubText.append(" • ").append(formatDownloadCount(displayDownloadCount)).append(" downloads")
         }
-        h.pub.text = pubText
+        h.pub?.text = pubText
 
-        h.count.text = context.getString(R.string.sticker_count, stickerCount)
         h.itemView.setOnClickListener { click(pack) }
 
-        // Read SharedPreferences ONCE, not 4 separate disk reads
-        val hasAccess = PreferencesHelper.hasAccessToPack(context, pack.id)
-        val isInstalled = PreferencesHelper.isPackInstalled(context, pack.id) && hasAccess
+        val isInstalled = PreferencesHelper.isPackInstalled(context, pack.id)
         val isCustomPack = pack.category == "custom"
         
-        h.checkIcon.visibility = if (isInstalled) View.VISIBLE else View.GONE
-        h.installedBadge.visibility = if (isInstalled) View.VISIBLE else View.GONE
+        h.checkIcon?.visibility = if (isInstalled) View.VISIBLE else View.GONE
+        h.installedBadge?.visibility = if (isInstalled) View.VISIBLE else View.GONE
 
         if (isCustomPack) {
-            h.btnFavorite.visibility = View.GONE
-            h.btnDelete.visibility = View.GONE
-            h.btnDeletePack.visibility = View.VISIBLE
-            h.btnDeletePack.setColorFilter(0xFFFF6B6B.toInt())
-            h.btnDeletePack.setOnClickListener { onDeleteClick?.invoke(pack) }
+            h.btnFavorite?.visibility = View.GONE
+            h.btnDelete?.visibility = View.GONE
+            h.btnDeletePack?.visibility = View.VISIBLE
+            h.btnDeletePack?.setColorFilter(0xFFFF6B6B.toInt())
+            h.btnDeletePack?.setOnClickListener { onDeleteClick?.invoke(pack) }
         } else {
-            h.btnFavorite.visibility = View.VISIBLE
-            h.btnDelete.visibility = View.GONE
-            h.btnDeletePack.visibility = View.GONE
+            h.btnFavorite?.visibility = View.GONE
+            h.btnDelete?.visibility = View.GONE
+            h.btnDeletePack?.visibility = View.GONE
         }
 
-        h.crownIcon.visibility = View.GONE
-        h.premiumContainer.visibility = View.GONE
+        h.crownIcon?.visibility = if (pack.isPremium) View.VISIBLE else View.GONE
+        h.premiumContainer?.visibility = View.GONE
 
-        // Pack type badge
         if (isCustomPack) {
-            h.packTypeBadge.visibility = View.VISIBLE
+            h.packTypeBadge?.visibility = View.VISIBLE
             if (pack.isAnimated) {
-                h.packTypeBadge.text = "ANIMATED"
-                h.packTypeBadge.setBackgroundColor(0xFFFF6B35.toInt())
+                h.packTypeBadge?.text = "ANIMATED"
+                h.packTypeBadge?.setBackgroundColor(0xFFFF6B35.toInt())
             } else {
-                h.packTypeBadge.text = "STATIC"
-                h.packTypeBadge.setBackgroundColor(0xFF4ECDC4.toInt())
+                h.packTypeBadge?.text = "STATIC"
+                h.packTypeBadge?.setBackgroundColor(0xFF4ECDC4.toInt())
             }
         } else {
-            h.packTypeBadge.visibility = View.GONE
+            h.packTypeBadge?.visibility = View.GONE
         }
 
-        // Yeni badge
-        h.newBadge.visibility = if (isPackNew(pack.createdAt)) View.VISIBLE else View.GONE
+        h.newBadge?.visibility = if (isPackNew(pack.createdAt)) View.VISIBLE else View.GONE
+        h.timeAgo?.text = timeAgoCache.getOrPut(pack.id) { getTimeAgo(pack.createdAt, context) }
 
-        // Zaman bilgisi
-        h.timeAgo.text = getTimeAgo(pack.createdAt, context)
-
-        // Ekle / Paylaş butonu — minimize layout changes
-        if (isInstalled) {
-            if (h.btnAdd.layoutParams.width != btnAdd36Px || h.btnAdd.text != "") {
-                h.btnAdd.text = ""
-                h.btnAdd.setIconResource(R.drawable.ic_share)
-                h.btnAdd.iconTint = androidx.core.content.ContextCompat.getColorStateList(context, R.color.share_blue)
-                h.btnAdd.background = null
-                h.btnAdd.backgroundTintList = null
-                h.btnAdd.iconPadding = 0
-                h.btnAdd.iconGravity = com.google.android.material.button.MaterialButton.ICON_GRAVITY_TEXT_START
-                h.btnAdd.minWidth = 0
-                h.btnAdd.layoutParams.width = btnAdd36Px
-                h.btnAdd.layoutParams.height = btnAdd36Px
-            }
-        } else {
-            // Tüm paketler için standart "ADD" görümü
-            val textStr = context.getString(R.string.btn_add_short)
-            val colorRes = R.color.accent
-            
-            if (h.btnAdd.text != textStr || h.btnAdd.layoutParams.width == btnAdd36Px) {
-                h.btnAdd.text = textStr
-                h.btnAdd.setIconResource(R.drawable.ic_whatsapp_small)
-                val resolvedColor = androidx.core.content.ContextCompat.getColor(context, colorRes)
-                h.btnAdd.iconTint = android.content.res.ColorStateList.valueOf(resolvedColor)
-                h.btnAdd.setTextColor(resolvedColor)
-                h.btnAdd.setStrokeColorResource(colorRes)
-                h.btnAdd.background = null 
-                h.btnAdd.backgroundTintList = null
-                h.btnAdd.iconPadding = iconPadding6Px
-                h.btnAdd.iconGravity = com.google.android.material.button.MaterialButton.ICON_GRAVITY_TEXT_START
-                h.btnAdd.layoutParams.width = android.view.ViewGroup.LayoutParams.WRAP_CONTENT
-                h.btnAdd.layoutParams.height = btnAdd32Px
-            } else {
-                val resolvedColor = androidx.core.content.ContextCompat.getColor(context, colorRes)
-                if (h.btnAdd.currentTextColor != resolvedColor) {
-                    h.btnAdd.iconTint = android.content.res.ColorStateList.valueOf(resolvedColor)
-                    h.btnAdd.setTextColor(resolvedColor)
-                    h.btnAdd.setStrokeColorResource(colorRes)
-                }
-            }
-        }
-
-        h.btnAdd.setOnClickListener {
+        // Ekle / Paylaş butonu
+        val btn = h.btnAdd
+        if (btn != null) {
             if (isInstalled) {
-                val shareText = "Check out this '${pack.localizedName}' sticker pack! \n\nDownload Sticky app: https://play.google.com/store/apps/details?id=${context.packageName}"
-                val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-                    type = "text/plain"
-                    putExtra(android.content.Intent.EXTRA_SUBJECT, pack.localizedName)
-                    putExtra(android.content.Intent.EXTRA_TEXT, shareText)
-                }
-                context.startActivity(android.content.Intent.createChooser(intent, context.getString(R.string.share_pack)))
+                btn.text = ""
+                btn.setIconResource(R.drawable.ic_share)
+                btn.iconTint = androidx.core.content.ContextCompat.getColorStateList(context, R.color.share_blue)
+                btn.background = null
+                btn.backgroundTintList = null
+                btn.iconPadding = 0
+                btn.minWidth = 0
+                btn.layoutParams?.width = btnAdd36Px
+                btn.layoutParams?.height = btnAdd36Px
             } else {
-                if (onAddClick != null) {
-                    onAddClick.invoke(pack)
+                val colorRes = if (pack.isPremium) R.color.premium_gold else R.color.accent
+                val resolvedColor = androidx.core.content.ContextCompat.getColor(context, colorRes)
+                btn.text = context.getString(R.string.btn_add_short)
+                btn.setIconResource(R.drawable.ic_whatsapp_small)
+                btn.iconTint = android.content.res.ColorStateList.valueOf(resolvedColor)
+                btn.setTextColor(resolvedColor)
+                btn.setStrokeColorResource(colorRes)
+                btn.background = null
+                btn.backgroundTintList = null
+                btn.iconPadding = iconPadding6Px
+                btn.layoutParams?.width = android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+                btn.layoutParams?.height = btnAdd32Px
+            }
+            btn.setOnClickListener {
+                if (isInstalled) {
+                    val shareText = "Check out this '${pack.localizedName}' sticker pack! \n\nDownload Sticky app: https://play.google.com/store/apps/details?id=${context.packageName}"
+                    val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(android.content.Intent.EXTRA_SUBJECT, pack.localizedName)
+                        putExtra(android.content.Intent.EXTRA_TEXT, shareText)
+                    }
+                    context.startActivity(android.content.Intent.createChooser(intent, context.getString(R.string.share_pack)))
                 } else {
-                    click(pack)
+                    if (onAddClick != null) onAddClick.invoke(pack) else click(pack)
                 }
             }
         }
 
-        h.downloadCount.visibility = View.GONE
+        h.downloadCount?.visibility = View.GONE
 
         // Favori butonu
         if (!isCustomPack) {
             val isFavorite = PreferencesHelper.isPackFavorite(context, pack.id)
-            h.btnFavoriteNew.visibility = View.VISIBLE
-            h.btnFavoriteNew.setImageResource(
+            h.btnFavoriteNew?.visibility = View.VISIBLE
+            h.btnFavoriteNew?.setImageResource(
                 if (isFavorite) R.drawable.ic_favorite_filled else R.drawable.ic_favorite_border
             )
-            h.btnFavoriteNew.setOnClickListener {
+            h.btnFavoriteNew?.setOnClickListener {
                 val newFavState = PreferencesHelper.toggleFavorite(context, pack.id)
-                h.btnFavoriteNew.setImageResource(
+                h.btnFavoriteNew?.setImageResource(
                     if (newFavState) R.drawable.ic_favorite_filled else R.drawable.ic_favorite_border
                 )
-
                 if (newFavState) {
                     StickerRepository.incrementFavoriteCount(pack.id, pack.isPremium)
                 } else {
                     StickerRepository.decrementFavoriteCount(pack.id, pack.isPremium)
                 }
-
                 val msg = if (newFavState) R.string.added_to_favorites else R.string.removed_from_favorites
                 Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
                 onFavoriteChanged?.invoke()
             }
         } else {
-            h.btnFavoriteNew.visibility = View.GONE
+            h.btnFavoriteNew?.visibility = View.GONE
         }
-
-        h.btnFavorite.visibility = View.GONE
 
         // Çıkartma önizlemeleri yükle
         loadStickerPreviews(h, pack, isCustomPack)
@@ -307,12 +356,13 @@ class PackAdapter(
     private fun loadStickerPreviews(h: VH, pack: Pack, isCustomPack: Boolean) {
         val context = h.itemView.context
         val container = h.stickerPreviewContainer
+        val isAnimatedPack = pack.isAnimated
 
         val stickersToShow = pack.stickers.take(STICKER_PREVIEW_COUNT)
         val neededCount = stickersToShow.size
         
         // Always ensure container has exactly STICKER_PREVIEW_COUNT views
-        val currentChildCount = container.childCount
+        val currentChildCount = container?.childCount ?: 0
         if (currentChildCount < STICKER_PREVIEW_COUNT) {
             for (i in currentChildCount until STICKER_PREVIEW_COUNT) {
                 val previewView = ImageView(context).apply {
@@ -321,21 +371,21 @@ class PackAdapter(
                     }
                     scaleType = ImageView.ScaleType.CENTER_CROP
                 }
-                container.addView(previewView)
+                container?.addView(previewView)
             }
         }
 
         if (stickersToShow.isEmpty()) {
-            container.visibility = View.GONE
+            container?.visibility = View.GONE
             return
         }
-        container.visibility = View.VISIBLE
+        container?.visibility = View.VISIBLE
 
         val glide = getGlide(context)
 
         // Loop over all STICKER_PREVIEW_COUNT views
         for (i in 0 until STICKER_PREVIEW_COUNT) {
-            val previewView = container.getChildAt(i) as? ImageView ?: continue
+            val previewView = container?.getChildAt(i) as? ImageView ?: continue
             
             if (i >= neededCount) {
                 previewView.visibility = View.GONE
@@ -355,18 +405,20 @@ class PackAdapter(
             }
 
             previewView.setBackgroundResource(R.drawable.ic_sticker_placeholder)
-            previewView.setOnClickListener { click(pack) }
 
             if (isCustomPack) {
                 val stickerFile = CustomStickerManager.getCustomStickerPath(context, pack.id, sticker.file)
-                glide.load(stickerFile)
+                val req = glide.load(stickerFile)
                     .override(GLIDE_OVERRIDE_SIZE)
+                    .thumbnail(0.25f)
                     .priority(Priority.NORMAL)
-                    .diskCacheStrategy(DiskCacheStrategy.DATA)
+                    .diskCacheStrategy(DiskCacheStrategy.NONE)
+                    .skipMemoryCache(true)
+                    .signature(com.bumptech.glide.signature.ObjectKey("${pack.id}_${pack.version}_${sticker.file}"))
                     .dontTransform()
-                    .dontAnimate()
                     .listener(clearBgListener)
-                    .into(previewView)
+                if (!isAnimatedPack) req.dontAnimate()
+                req.into(previewView)
             } else {
                 var urlToLoad = sticker.url
                 if (urlToLoad.isEmpty() && pack.storagePath.isNotEmpty()) {
@@ -374,24 +426,25 @@ class PackAdapter(
                 }
 
                 if (urlToLoad.isNotEmpty()) {
-                    glide.load(urlToLoad)
+                    val req = glide.load(urlToLoad)
                         .override(GLIDE_OVERRIDE_SIZE)
+                        .thumbnail(0.25f)
                         .priority(Priority.NORMAL)
                         .diskCacheStrategy(DiskCacheStrategy.DATA)
                         .dontTransform()
-                        .dontAnimate()
                         .listener(clearBgListener)
-                        .into(previewView)
+                    if (!isAnimatedPack) req.dontAnimate()
+                    req.into(previewView)
                 } else {
                     val cachedSticker = StickerRepository.getCachedStickerPath(context, pack.id, sticker.file)
                     val assetPath = "file:///android_asset/${pack.id}/${sticker.file}"
                     
-                    glide.load(cachedSticker)
+                    val req = glide.load(cachedSticker)
                         .override(GLIDE_OVERRIDE_SIZE)
+                        .thumbnail(0.25f)
                         .priority(Priority.NORMAL)
                         .diskCacheStrategy(DiskCacheStrategy.DATA)
                         .dontTransform()
-                        .dontAnimate()
                         .listener(clearBgListener)
                         .error(
                             glide.load(android.net.Uri.parse(assetPath))
@@ -399,10 +452,10 @@ class PackAdapter(
                                 .priority(Priority.LOW)
                                 .diskCacheStrategy(DiskCacheStrategy.DATA)
                                 .dontTransform()
-                                .dontAnimate()
                                 .listener(clearBgListener)
                         )
-                        .into(previewView)
+                    if (!isAnimatedPack) req.dontAnimate()
+                    req.into(previewView)
                 }
             }
         }
@@ -444,10 +497,14 @@ class PackAdapter(
                 val old = items[oldItemPosition]
                 val new = newList[newItemPosition]
                 if (old is Pack && new is Pack) return old.id == new.id
-                return old == new
+                if (old is BannerAdPlaceholder && new is BannerAdPlaceholder) return old.slotIndex == new.slotIndex
+                return false
             }
             override fun areContentsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
-                return items[oldItemPosition] == newList[newItemPosition]
+                val old = items[oldItemPosition]
+                val new = newList[newItemPosition]
+                if (old is BannerAdPlaceholder && new is BannerAdPlaceholder) return true
+                return old == new
             }
         })
         items = newList

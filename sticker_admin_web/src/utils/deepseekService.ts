@@ -219,7 +219,8 @@ const CATEGORY_DESCRIPTIONS: Record<string, string> = {
 export async function generateSearchTerms(
     count: number = 50,
     existingTerms: string[] = [],
-    selectedCategories: string[] = []
+    selectedCategories: string[] = [],
+    categoryStats?: Record<string, number>
 ): Promise<ThemeSuggestion[]> {
     const existingNote = existingTerms.length > 0
         ? `\n\n⚠️ ALREADY EXISTING (DO NOT generate these or anything too similar): ${existingTerms.join(', ')}`
@@ -233,49 +234,57 @@ export async function generateSearchTerms(
         categoryNote = `\n\n🎯 FOCUS YOUR CREATIVITY STRICTLY ON THESE CATEGORIES:\n- ${categoryDescriptions}`;
     }
 
+    // Category balancing: tell AI which categories need more packs
+    let balancingNote = '';
+    if (categoryStats && Object.keys(categoryStats).length > 0) {
+        const sorted = Object.entries(categoryStats).sort((a, b) => a[1] - b[1]);
+        const lowest = sorted.slice(0, 5).map(([cat, cnt]) => `${cat} (${cnt} packs)`).join(', ');
+        const highest = sorted.slice(-3).map(([cat, cnt]) => `${cat} (${cnt} packs)`).join(', ');
+        balancingNote = `\n\n📊 CATEGORY BALANCE — Prioritize underrepresented categories:\n- NEED MORE: ${lowest}\n- ALREADY FULL: ${highest}\nGenerate more terms for categories that NEED MORE.`;
+    }
+
     const requestCount = Math.max(10, count * 2);
 
     const messages: DeepSeekMessage[] = [
         {
             role: 'system',
-            content: `You are an elite content strategist for a massively popular, global WhatsApp sticker application. Your sole purpose is to invent highly engaging, imaginative, and highly searchable sticker pack topics.
+            content: `You are an expert content curator for a popular WhatsApp sticker app. Your job is to generate HIGHLY SPECIFIC search terms that will find AMAZING, POPULAR, VISUALLY STUNNING stickers on Giphy and Tenor.
 
-You are interacting with Giphy and Tenor's search engines. You must generate terms that will yield visually distinct, highly expressive GIF/Sticker results.
+YOUR EXPERTISE AREAS (generate terms from ALL of these):
+- 🎬 MOVIES & TV: Iconic characters, famous scenes, beloved franchises (Marvel, Star Wars, Disney, Pixar, The Office, Friends, Breaking Bad, Squid Game, etc.)
+- 🎌 ANIME & MANGA: Popular series reactions, chibi characters, kawaii expressions (Naruto, One Piece, Dragon Ball, Attack on Titan, Demon Slayer, Jujutsu Kaisen, Spy x Family, etc.)
+- 😀 EMOJI & EXPRESSIONS: Animated emoji faces, emoticon reactions, expression packs, smiley variations, heart animations
+- 🎮 GAMING: Game characters, gaming reactions, victory dances, rage moments (Minecraft, Fortnite, Among Us, Mario, Pokémon, etc.)
+- 🐱 VIRAL ANIMALS: Famous internet cats, funny dogs, adorable pets doing specific things
+- 🔥 TRENDING MEMES: Current viral memes, reaction GIFs, internet culture staples
+- 💕 LOVE & ROMANCE: Cute couple animations, heart effects, romantic gestures, Valentine themes
+- 🎉 CELEBRATIONS: Birthday animations, confetti, party themes, congratulations
+- 😂 COMEDY: Slapstick, face reactions, dramatic overreactions, situational comedy
+- ✨ AESTHETIC: Neon art, vaporwave, retro pixel, glitter effects, sparkle animations
+- 🏀 SPORTS: Goal celebrations, slam dunks, victory poses, team spirit
+- 🎵 MUSIC: Dancing animations, music vibes, concert energy, DJ effects
 
-CRITICAL DIRECTIVES:
-1. MAXIMAL CREATIVE FREEDOM: Do not limit yourself. Think of every possible human emotion, internet subculture, daily struggle, universally recognizable situation, gaming moment, or abstract aesthetic. 
-2. NO GEOGRAPHY/NATIONALITIES: Do NOT ever use country names, nationalities, or specific geographic regions (e.g., NEVER use "Turkish", "American", "Brazilian", "Indian", "Arabic", "African"). Stick to universal human experiences.
-3. VISUAL ACTION/EMOTION: Every term must describe something visual. "Sad" is bad. "Crying loudly in bed" is great. "Happy" is bad. "Jumping with joy celebration" is great.
-4. FORMAT: Exactly 2 to 4 words per term. English only.
-
-Think about what users actually send to their friends, families, and coworkers:
-- Intense reactions and dramatic emotions
-- Relatable daily annoyances and victories (work, school, home)
-- Trending internet humor and surreal abstract memes
-- Cute, funny, or chaotic animal behaviors
-- Specific social situations (flirting, ignoring, apologizing, celebrating)
-- Pop culture archetypes (anime reactions, gaming rage, cinematic drama)
-
-Return ONLY a valid JSON array. Zero markdown formatting. Zero explanation.`
+CRITICAL RULES:
+1. Each term must be 2-4 words, in English
+2. Terms must be SPECIFIC enough to find consistent, high-quality results (e.g., "chibi cat emoji" not just "cat")
+3. AVOID vague terms like "happy day", "nice weather", "daily routine" — these return garbage
+4. PREFER: character names, specific emotions, specific actions, specific art styles
+5. EVERY term should make someone think "oh cool, I want that sticker pack!"
+6. NO countries, nationalities, or geographic references
+7. Return ONLY a valid JSON array, no markdown, no explanation`
         },
         {
             role: 'user',
-            content: `Generate exactly ${requestCount} completely UNIQUE, visually descriptive sticker search terms.${categoryNote}${existingNote}
+            content: `Generate exactly ${requestCount} search terms for finding AMAZING sticker packs.${categoryNote}${balancingNote}${existingNote}
 
-RULES:
-- Exactly 2 to 4 words
-- NO countries, NO nationalities, NO geographic locations
-- Must yield great Giphy/Tenor visual results
-- Every term must be conceptually distinct from the others
+Return AS RAW JSON ARRAY ONLY:
+[{"searchTerm": "specific visual term", "category": "category_id", "description": "Brief description"}]
 
-Return AS A RAW JSON ARRAY ONLY:
-[{"searchTerm": "specific visual term", "category": "category_id", "description": "Brief description of the vibe"}]
-
-${selectedCategories.length > 0 ? `MUST use these category IDs: ${selectedCategories.join(', ')}` : 'You may use any of these valid category IDs: humor, love, religious, entertainment, morning, night, birthday, congrats, animals, sports, gaming, movie, music, food, emoji, cars, motivation, cute, text, anime, memes, nature, other'}`
+${selectedCategories.length > 0 ? `MUST use these category IDs: ${selectedCategories.join(', ')}` : 'Use any of these valid category IDs: humor, love, religious, entertainment, morning, night, birthday, congrats, animals, sports, gaming, movie, music, food, emoji, cars, motivation, cute, text, anime, memes, nature, other'}`
         }
     ];
 
-    const result = await callDeepSeek(messages, 1.2); // High temperature for maximum creativity
+    const result = await callDeepSeek(messages, 1.1);
 
     try {
         const jsonMatch = result.match(/\[[\s\S]*\]/);

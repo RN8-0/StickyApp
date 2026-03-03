@@ -26,125 +26,145 @@ class RegionalAdapter(
     private val onAddClick: (Pack) -> Unit
 ) : RecyclerView.Adapter<RegionalAdapter.VH>() {
 
+    private var density = 0f
+    private var btn36Px = 0
+    private var btn32Px = 0
+    private var iconPad6Px = 0
+    private var stickerSizePx = 0
+    private var stickerMarginPx = 0
+
+    // Reusable listener to avoid allocation in onBind
+    private val clearBgListener = object : RequestListener<Drawable> {
+        override fun onLoadFailed(e: GlideException?, model: Any?, target: Target<Drawable>, isFirstResource: Boolean): Boolean = false
+        override fun onResourceReady(resource: Drawable, model: Any, target: Target<Drawable>, dataSource: DataSource, isFirstResource: Boolean): Boolean {
+            (target as? com.bumptech.glide.request.target.ImageViewTarget<*>)?.view?.background = null
+            return false
+        }
+    }
+
+    private fun ensureDensity(context: android.content.Context) {
+        if (density > 0f) return
+        density = context.resources.displayMetrics.density
+        btn36Px = (36 * density).toInt()
+        btn32Px = (32 * density).toInt()
+        iconPad6Px = (6 * density).toInt()
+        stickerSizePx = (52 * density).toInt()
+        stickerMarginPx = (6 * density).toInt()
+    }
+
+    override fun getItemCount(): Int = packs.size
+
+    fun getRealCount(): Int = packs.size
+
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
         val v = LayoutInflater.from(parent.context).inflate(R.layout.item_popular_card, parent, false)
-        // Kart görünümü için genişlik ayarı (~%85-88)
         val displayMetrics = parent.context.resources.displayMetrics
         val parentWidth = if (parent.width > 0) parent.width else displayMetrics.widthPixels
-        v.layoutParams.width = (parentWidth * 0.88).toInt()
+        v.layoutParams.width = (parentWidth * 0.72).toInt()
         return VH(v)
     }
 
     class VH(v: View) : RecyclerView.ViewHolder(v) {
-        val packTop: View = v // Root view is the card itself
+        val name: TextView = v.findViewById(R.id.name)
+        val pub: TextView = v.findViewById(R.id.pub)
+        val btnAdd: MaterialButton = v.findViewById(R.id.btnAdd)
+        val rankNumber: TextView = v.findViewById(R.id.rankNumber)
+        val stickerPreviewContainer: LinearLayout = v.findViewById(R.id.stickerPreviewContainer)
+        val checkIcon: ImageView = v.findViewById(R.id.checkIcon)
+        val installedBadge: TextView = v.findViewById(R.id.installedBadge)
+        val downloadCount: TextView = v.findViewById(R.id.downloadCount)
+        val crownIcon: ImageView = v.findViewById(R.id.crownIcon)
+        val premiumContainer: View = v.findViewById(R.id.premiumContainer)
     }
 
     override fun onBindViewHolder(holder: VH, position: Int) {
+        if (packs.isEmpty()) return
+        ensureDensity(holder.itemView.context)
         val pack = packs[position]
-        bindPack(holder.packTop, pack, position + 1)
+        bindPack(holder, pack, position)
     }
 
-    override fun getItemCount(): Int = packs.size
+    override fun onViewRecycled(holder: VH) {
+        super.onViewRecycled(holder)
+        val container = holder.stickerPreviewContainer
+        try {
+            val glide = Glide.with(holder.itemView.context)
+            for (i in 0 until container.childCount) {
+                val child = container.getChildAt(i)
+                if (child is ImageView) {
+                    glide.clear(child)
+                    child.setImageDrawable(null)
+                }
+            }
+        } catch (_: Exception) { }
+    }
 
     fun updateData(newPacks: List<Pack>) {
         packs = newPacks
         notifyDataSetChanged()
     }
 
-    private fun bindPack(view: View, pack: Pack, rank: Int) {
-        val context = view.context
+    private fun bindPack(h: VH, pack: Pack, position: Int) {
+        val context = h.itemView.context
         
-        val name: TextView = view.findViewById(R.id.name)
-        val pub: TextView = view.findViewById(R.id.pub)
-        val btnAdd: MaterialButton = view.findViewById(R.id.btnAdd)
-        val rankNumber: TextView = view.findViewById(R.id.rankNumber)
-        val stickerPreviewContainer: LinearLayout = view.findViewById(R.id.stickerPreviewContainer)
-        val checkIcon: ImageView = view.findViewById(R.id.checkIcon)
-        val installedBadge: TextView = view.findViewById(R.id.installedBadge)
-        val downloadCount: TextView = view.findViewById(R.id.downloadCount)
-        val crownIcon: ImageView = view.findViewById(R.id.crownIcon)
-        val premiumContainer: View = view.findViewById(R.id.premiumContainer)
-        // btnFavoriteNew removed/hidden in this layout context
-
-        // Basit Bilgiler
-        name.text = pack.localizedName
-        pub.text = pack.pub
-        rankNumber.text = rank.toString()
-        rankNumber.visibility = View.VISIBLE
+        h.name.text = pack.localizedName
+        h.pub.text = pack.pub
+        
+        // Show rank number (1-based position)
+        h.rankNumber.text = "${position + 1}"
+        h.rankNumber.visibility = View.VISIBLE
 
         // İndirme sayısı
         val displayDownloadCount = pack.fakeDownloadBase + pack.downloadCount
-        downloadCount.text = if (displayDownloadCount > 0) {
-            formatDownloadValue(displayDownloadCount)
+        h.downloadCount.text = if (displayDownloadCount > 0) {
+            "↓ ${formatDownloadValue(displayDownloadCount)}"
         } else {
-            context.getString(R.string.sticker_count, pack.stickers.size)
+            "${pack.stickers.size} stickers"
         }
 
         // Durumlar
-        val hasAccess = PreferencesHelper.hasAccessToPack(context, pack.id)
-        val isInstalled = PreferencesHelper.isPackInstalled(context, pack.id) && hasAccess
+        val isInstalled = PreferencesHelper.isPackInstalled(context, pack.id)
         
-        checkIcon.visibility = if (isInstalled) View.VISIBLE else View.GONE
-        installedBadge.visibility = if (isInstalled) View.VISIBLE else View.GONE
-        crownIcon.visibility = View.GONE
-        premiumContainer.visibility = View.GONE
+        h.checkIcon.visibility = if (isInstalled) View.VISIBLE else View.GONE
+        h.installedBadge.visibility = if (isInstalled) View.VISIBLE else View.GONE
+        h.crownIcon.visibility = if (pack.isPremium) View.VISIBLE else View.GONE
+        h.premiumContainer.visibility = View.GONE
 
         // Buton Ayarı
-        btnAdd.visibility = View.VISIBLE
         if (isInstalled) {
-            btnAdd.text = ""
-            btnAdd.setIconResource(R.drawable.ic_share)
-            btnAdd.iconTint = androidx.core.content.ContextCompat.getColorStateList(context, R.color.share_blue)
-            btnAdd.background = null
-            btnAdd.backgroundTintList = null
-            btnAdd.iconPadding = 0
-            val params = btnAdd.layoutParams
-            params.width = (36 * context.resources.displayMetrics.density).toInt()
-            params.height = (36 * context.resources.displayMetrics.density).toInt()
-            btnAdd.layoutParams = params
+            h.btnAdd.visibility = View.GONE
         } else {
-            btnAdd.text = context.getString(R.string.btn_add_short)
-            btnAdd.setIconResource(R.drawable.ic_whatsapp_small)
-            val colorRes = R.color.accent
-            val color = androidx.core.content.ContextCompat.getColorStateList(context, colorRes)
-            
-            btnAdd.setTextColor(color)
-            btnAdd.iconTint = color
-            btnAdd.background = null
-            btnAdd.backgroundTintList = null
-            
-            btnAdd.iconPadding = (6 * context.resources.displayMetrics.density).toInt()
-            val params = btnAdd.layoutParams
+            h.btnAdd.visibility = View.VISIBLE
+            h.btnAdd.text = context.getString(R.string.btn_add_short)
+            h.btnAdd.setIconResource(R.drawable.ic_whatsapp_small)
+            h.btnAdd.iconTint = android.content.res.ColorStateList.valueOf(0xFFFFFFFF.toInt())
+            h.btnAdd.setTextColor(0xFFFFFFFF.toInt())
+            h.btnAdd.backgroundTintList = androidx.core.content.ContextCompat.getColorStateList(context, R.color.accent)
+            h.btnAdd.iconPadding = (3 * density).toInt()
+            val params = h.btnAdd.layoutParams
             params.width = ViewGroup.LayoutParams.WRAP_CONTENT
-            params.height = (32 * context.resources.displayMetrics.density).toInt()
-            btnAdd.layoutParams = params
+            params.height = (28 * density).toInt()
+            h.btnAdd.layoutParams = params
         }
 
-        view.setOnClickListener { onClick(pack) }
-        btnAdd.setOnClickListener { onAddClick(pack) }
+        h.itemView.setOnClickListener { onClick(pack) }
+        h.btnAdd.setOnClickListener { onAddClick(pack) }
 
-        // Stickerlar (5 ADET - Daha büyük ve net)
-        loadStickerPreviews(stickerPreviewContainer, pack)
+        loadStickerPreviews(h.stickerPreviewContainer, pack)
     }
 
     private fun loadStickerPreviews(container: LinearLayout, pack: Pack) {
         val context = container.context
 
-        val displayMetrics = context.resources.displayMetrics
-        val stickerSize = (52 * displayMetrics.density).toInt()
-        val stickerMargin = (6 * displayMetrics.density).toInt()
-        val glideOverrideSize = 150
-
-        val stickersToShow = pack.stickers.take(5)
+        val stickersToShow = pack.stickers.take(4)
         val currentChildCount = container.childCount
         val neededCount = stickersToShow.size
 
-        // View'ları yeniden kullan - sadece gerekirse yeni oluştur
         if (neededCount > currentChildCount) {
             for (i in currentChildCount until neededCount) {
                 val previewView = ImageView(context).apply {
-                    val params = LinearLayout.LayoutParams(0, stickerSize, 1f)
-                    params.marginEnd = stickerMargin
+                    val params = LinearLayout.LayoutParams(stickerSizePx, stickerSizePx)
+                    params.marginEnd = stickerMarginPx
                     layoutParams = params
                     scaleType = ImageView.ScaleType.FIT_CENTER
                 }
@@ -154,19 +174,10 @@ class RegionalAdapter(
             container.removeViews(neededCount, currentChildCount - neededCount)
         }
 
-        // Son elemanın margin'ını kaldır
         for (i in 0 until container.childCount) {
             val child = container.getChildAt(i) as? ImageView ?: continue
             (child.layoutParams as? LinearLayout.LayoutParams)?.marginEnd =
-                if (i == container.childCount - 1) 0 else stickerMargin
-        }
-
-        val clearBgListener = object : RequestListener<Drawable> {
-            override fun onLoadFailed(e: GlideException?, model: Any?, target: Target<Drawable>, isFirstResource: Boolean): Boolean = false
-            override fun onResourceReady(resource: Drawable, model: Any, target: Target<Drawable>, dataSource: DataSource, isFirstResource: Boolean): Boolean {
-                (target as? com.bumptech.glide.request.target.ImageViewTarget<*>)?.view?.background = null
-                return false
-            }
+                if (i == container.childCount - 1) 0 else stickerMarginPx
         }
 
         val glide = Glide.with(context)
@@ -183,10 +194,10 @@ class RegionalAdapter(
             when {
                 urlToLoad.isNotEmpty() -> {
                     glide.load(urlToLoad)
-                        .override(glideOverrideSize)
+                        .override(GLIDE_OVERRIDE)
+                        .thumbnail(0.25f)
                         .priority(Priority.HIGH)
                         .diskCacheStrategy(DiskCacheStrategy.DATA)
-                        .dontAnimate()
                         .listener(clearBgListener)
                         .into(previewView)
                 }
@@ -194,26 +205,30 @@ class RegionalAdapter(
                     val cachedSticker = StickerRepository.getCachedStickerPath(context, pack.id, sticker.file)
                     if (cachedSticker.exists() && cachedSticker.length() > 0) {
                         glide.load(cachedSticker)
-                            .override(glideOverrideSize)
+                            .override(GLIDE_OVERRIDE)
+                            .thumbnail(0.25f)
                             .priority(Priority.HIGH)
                             .diskCacheStrategy(DiskCacheStrategy.DATA)
                             .signature(ObjectKey(cachedSticker.lastModified()))
-                            .dontAnimate()
                             .listener(clearBgListener)
                             .into(previewView)
                     } else {
                         val assetPath = "file:///android_asset/${pack.id}/${sticker.file}"
                         glide.load(android.net.Uri.parse(assetPath))
-                            .override(glideOverrideSize)
+                            .override(GLIDE_OVERRIDE)
+                            .thumbnail(0.25f)
                             .priority(Priority.HIGH)
                             .diskCacheStrategy(DiskCacheStrategy.DATA)
-                            .dontAnimate()
                             .listener(clearBgListener)
                             .into(previewView)
                     }
                 }
             }
         }
+    }
+
+    companion object {
+        private const val GLIDE_OVERRIDE = 200
     }
 
     private fun formatDownloadValue(count: Int): String {

@@ -6,6 +6,6 @@
         android:centerX="50%"
         android:centerY="50%"
         android:gradientRadius="50%p"
-        android:startColor="#4000A884"
+        android:startColor="#405A4BD1"
         android:endColor="#00000000" />
 </shape>

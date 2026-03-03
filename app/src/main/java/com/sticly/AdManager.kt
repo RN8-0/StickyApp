@@ -29,7 +29,9 @@ object AdManager {
 
     // REKLAM KIMLIKLERI
     private const val REWARDED_AD_ID = "ca-app-pub-1522897791319993/7893209835"
-    private const val MAKER_NATIVE_AD_ID = "ca-app-pub-1522897791319993/2892861725"
+    private const val MAKER_NATIVE_AD_ID = "" // Removed: ad unit does not exist in AdMob console
+    const val FEED_AD_ID = "ca-app-pub-1522897791319993/6812028035"
+    private const val INTERSTITIAL_AD_ID = "ca-app-pub-1522897791319993/8532303812"
 
     // Rewarded Video
     private var rewardedAd: RewardedAd? = null
@@ -41,9 +43,32 @@ object AdManager {
     private var preloadedMakerAd: NativeAd? = null
     private var isPreloadingMaker = false
 
+    // Interstitial
+    private var interstitialAd: com.google.android.gms.ads.interstitial.InterstitialAd? = null
+    private var isInterstitialLoading = false
+    private var downloadCount = 0
+
+    // Track if any fullscreen ad was shown this session (for promo dialog)
+    var adShownThisSession = false
+        private set
+
     fun initialize(context: Context) {
         if (isInitialized) return
         Log.d(TAG, "Initializing AdMob SDK...")
+
+        // Register test device for debug builds
+        val isDebug = (context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
+        if (isDebug) {
+            val testDeviceIds = listOf(
+                "0E598C3296B3C1F5D232CD49C5503D13",
+                "032EFB18755DD82041691B320FD89A65"
+            )
+            val configuration = com.google.android.gms.ads.RequestConfiguration.Builder()
+                .setTestDeviceIds(testDeviceIds)
+                .build()
+            MobileAds.setRequestConfiguration(configuration)
+            Log.d(TAG, "Test device IDs registered for debug build")
+        }
 
         MobileAds.initialize(context) { initStatus ->
             isInitialized = true
@@ -61,6 +86,7 @@ object AdManager {
             android.os.Handler(android.os.Looper.getMainLooper()).post {
                 loadRewardedAd(context)
                 preloadMakerNativeAd(context)
+                loadInterstitialAd(context)
             }
         }
     }
@@ -140,29 +166,15 @@ object AdManager {
         ad.show(activity) { _ ->
             Log.d(TAG, "User earned reward")
             rewardEarned = true
+            adShownThisSession = true
         }
     }
 
     // ========== MAKER NATIVE AD ==========
 
     fun preloadMakerNativeAd(context: Context) {
-        if (PreferencesHelper.isPremium(context) || preloadedMakerAd != null || isPreloadingMaker) return
-        
-        isPreloadingMaker = true
-        val adLoader = AdLoader.Builder(context, MAKER_NATIVE_AD_ID)
-            .forNativeAd { ad ->
-                preloadedMakerAd = ad
-                isPreloadingMaker = false
-                Log.d(TAG, "Maker Native Ad preloaded")
-            }
-            .withAdListener(object : AdListener() {
-                override fun onAdFailedToLoad(e: LoadAdError) {
-                    isPreloadingMaker = false
-                    Log.e(TAG, "Preload Maker Ad Failed: ${e.message}")
-                }
-            })
-            .build()
-        adLoader.loadAd(AdRequest.Builder().build())
+        // Disabled: MAKER_NATIVE_AD_ID does not exist in AdMob console
+        return
     }
 
     fun getPreloadedMakerAd(): NativeAd? {
@@ -178,37 +190,8 @@ object AdManager {
     }
 
     fun loadNativeAd(context: Context, type: NativeAdType = NativeAdType.MAKER, onLoaded: (NativeAd) -> Unit) {
-        if (PreferencesHelper.isPremium(context)) return
-
-        if (!isInitialized) {
-            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                loadNativeAd(context, type, onLoaded)
-            }, 1000)
-            return
-        }
-
-        // Maker ekranıysa önceden yüklenmiş reklamı kullan
-        val preloaded = getPreloadedMakerAd()
-        if (preloaded != null) {
-            onLoaded(preloaded)
-            return
-        }
-
-        val adLoader = AdLoader.Builder(context, MAKER_NATIVE_AD_ID)
-            .forNativeAd { nativeAd ->
-                onLoaded(nativeAd)
-            }
-            .withAdListener(object : AdListener() {
-                override fun onAdFailedToLoad(e: LoadAdError) {
-                    Log.e(TAG, "Native Ad Error: ${e.message}")
-                }
-            })
-            .withNativeAdOptions(NativeAdOptions.Builder()
-                .setMediaAspectRatio(NativeAdOptions.NATIVE_MEDIA_ASPECT_RATIO_SQUARE)
-                .setVideoOptions(VideoOptions.Builder().setStartMuted(true).build())
-                .build())
-            .build()
-        adLoader.loadAd(AdRequest.Builder().build())
+        // Disabled: MAKER_NATIVE_AD_ID does not exist in AdMob console
+        return
     }
 
     fun populateNativeAdView(nativeAd: NativeAd, adView: NativeAdView) {
@@ -250,5 +233,74 @@ object AdManager {
         }
 
         adView.setNativeAd(nativeAd)
+    }
+
+    // ========== INTERSTITIAL AD ==========
+
+    fun loadInterstitialAd(context: Context) {
+        if (isInterstitialLoading || interstitialAd != null) return
+        if (PreferencesHelper.isPremium(context)) return
+
+        isInterstitialLoading = true
+        com.google.android.gms.ads.interstitial.InterstitialAd.load(
+            context, INTERSTITIAL_AD_ID, AdRequest.Builder().build(),
+            object : com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback() {
+                override fun onAdLoaded(ad: com.google.android.gms.ads.interstitial.InterstitialAd) {
+                    interstitialAd = ad
+                    isInterstitialLoading = false
+                    Log.d(TAG, "Interstitial ad loaded")
+                }
+                override fun onAdFailedToLoad(error: LoadAdError) {
+                    interstitialAd = null
+                    isInterstitialLoading = false
+                    Log.e(TAG, "Interstitial ad failed: ${error.message}")
+                }
+            })
+    }
+
+    /**
+     * Her 2 pakette bir interstitial göster (2., 4., 6. indirme).
+     * @param onComplete Reklam bittikten veya gösterilemezse çağrılır
+     */
+    fun showInterstitialIfNeeded(activity: Activity, onComplete: () -> Unit) {
+        if (PreferencesHelper.isPremium(activity)) {
+            Log.d(TAG, "Interstitial skip: premium user")
+            onComplete()
+            return
+        }
+
+        downloadCount++
+        Log.d(TAG, "Interstitial check: downloadCount=$downloadCount")
+        if (downloadCount % 2 != 0) {
+            Log.d(TAG, "Interstitial skip: not every 2nd (count=$downloadCount)")
+            onComplete()
+            return
+        }
+
+        val ad = interstitialAd
+        if (ad == null) {
+            Log.e(TAG, "Interstitial null! Loading new one...")
+            loadInterstitialAd(activity)
+            onComplete()
+            return
+        }
+
+        Log.d(TAG, "Showing interstitial ad now!")
+        adShownThisSession = true
+        ad.fullScreenContentCallback = object : FullScreenContentCallback() {
+            override fun onAdDismissedFullScreenContent() {
+                Log.d(TAG, "Interstitial dismissed")
+                interstitialAd = null
+                loadInterstitialAd(activity)
+                onComplete()
+            }
+            override fun onAdFailedToShowFullScreenContent(error: AdError) {
+                Log.e(TAG, "Interstitial show failed: ${error.message}")
+                interstitialAd = null
+                loadInterstitialAd(activity)
+                onComplete()
+            }
+        }
+        ad.show(activity)
     }
 }

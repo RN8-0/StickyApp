@@ -117,7 +117,7 @@ class StickyMessagingService : FirebaseMessagingService() {
                 CHANNEL_NAME,
                 NotificationManager.IMPORTANCE_HIGH
             ).apply {
-                description = "Yeni sticker paketleri hakkında bildirimler"
+                description = getString(R.string.notification_channel_desc)
                 enableLights(true)
                 lightColor = ContextCompat.getColor(this@StickyMessagingService, R.color.primary)
                 enableVibration(true)

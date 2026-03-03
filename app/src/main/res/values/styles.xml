@@ -10,7 +10,7 @@
         <item name="android:textColorPrimary">@color/text_primary</item>
         <item name="android:textColorSecondary">@color/text_secondary</item>
         <item name="android:textColorHint">@color/text_hint</item>
-        <item name="android:statusBarColor">@color/primary_dark</item>
+        <item name="android:statusBarColor">@color/toolbar_bg</item>
         <item name="android:navigationBarColor">@android:color/black</item>
         <item name="android:windowBackground">@color/background</item>
         <item name="materialAlertDialogTheme">@style/MaterialAlertDialogTheme</item>
@@ -20,7 +20,7 @@
     <!-- Splash theme: shown INSTANTLY by the system while Activity initializes -->
     <style name="SplashTheme" parent="AppTheme">
         <item name="android:windowBackground">@drawable/splash_background</item>
-        <item name="android:statusBarColor">@color/primary_dark</item>
+        <item name="android:statusBarColor">@color/toolbar_bg</item>
         <item name="android:navigationBarColor">@android:color/black</item>
     </style>
 
@@ -79,6 +79,27 @@
 
     <style name="TransparentBottomSheetStyle" parent="Widget.MaterialComponents.BottomSheet.Modal">
         <item name="android:background">@android:color/transparent</item>
+        <item name="backgroundTint">@android:color/transparent</item>
+        <item name="shapeAppearanceOverlay">@style/BottomSheetNoCorners</item>
+    </style>
+
+    <style name="BottomSheetNoCorners" parent="">
+        <item name="cornerSizeTopLeft">0dp</item>
+        <item name="cornerSizeTopRight">0dp</item>
+    </style>
+
+    <style name="RoundedBottomSheetDialog" parent="Theme.MaterialComponents.Light.BottomSheetDialog">
+        <item name="bottomSheetStyle">@style/RoundedBottomSheetStyle</item>
+    </style>
+
+    <style name="RoundedBottomSheetStyle" parent="Widget.MaterialComponents.BottomSheet.Modal">
+        <item name="shapeAppearanceOverlay">@style/RoundedBottomSheetCorners</item>
+    </style>
+
+    <style name="RoundedBottomSheetCorners" parent="">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSizeTopLeft">28dp</item>
+        <item name="cornerSizeTopRight">28dp</item>
     </style>
 
     <!-- UCrop Theme with proper navigation bar handling -->
@@ -109,7 +130,7 @@
         <item name="colorPrimaryDark">@color/primary_dark</item>
         <item name="colorAccent">@color/accent</item>
         <item name="colorSecondary">@color/accent</item>
-        <item name="android:statusBarColor">@color/primary_dark</item>
+        <item name="android:statusBarColor">@color/toolbar_bg</item>
         <item name="android:navigationBarColor">@android:color/black</item>
         <item name="android:colorBackground">@color/background</item>
         <item name="android:windowBackground">@color/background</item>

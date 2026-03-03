@@ -1,0 +1,317 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/aiContentContainer"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:visibility="gone"
+    android:background="#F5F2FF"
+    android:fillViewport="true"
+    android:clipToPadding="false">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingHorizontal="16dp"
+        android:paddingTop="12dp"
+        android:paddingBottom="16dp">
+
+        <!-- Header row: Inspire Me + Daily counter -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="12dp">
+
+            <!-- Inspire Me button with purple bg -->
+            <LinearLayout
+                android:id="@+id/aiBtnInspireMe"
+                android:layout_width="wrap_content"
+                android:layout_height="36dp"
+                android:orientation="horizontal"
+                android:gravity="center"
+                android:paddingHorizontal="14dp"
+                android:background="@drawable/bg_inspire_me_btn"
+                android:clickable="true"
+                android:focusable="true"
+                android:foreground="?attr/selectableItemBackground">
+
+                <ImageView
+                    android:layout_width="18dp"
+                    android:layout_height="18dp"
+                    android:src="@drawable/ic_auto_fix"
+                    app:tint="@color/white" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Inspire Me"
+                    android:textColor="@color/white"
+                    android:textSize="12sp"
+                    android:textStyle="bold"
+                    android:layout_marginStart="6dp" />
+
+                <ProgressBar
+                    android:id="@+id/aiInspireSpinner"
+                    style="?android:attr/progressBarStyleSmall"
+                    android:layout_width="18dp"
+                    android:layout_height="18dp"
+                    android:layout_marginStart="8dp"
+                    android:visibility="gone"
+                    android:indeterminateTint="@color/white" />
+
+            </LinearLayout>
+
+            <View
+                android:layout_width="0dp"
+                android:layout_height="0dp"
+                android:layout_weight="1" />
+
+            <!-- Daily counter -->
+            <TextView
+                android:id="@+id/tvAiDailyCounter"
+                android:layout_width="wrap_content"
+                android:layout_height="24dp"
+                android:gravity="center"
+                android:paddingHorizontal="10dp"
+                android:background="@drawable/bg_ai_counter_badge"
+                android:textColor="@color/white"
+                android:textSize="11sp"
+                android:textStyle="bold" />
+
+        </LinearLayout>
+
+        <!-- Prompt Input Card -->
+        <androidx.cardview.widget.CardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:cardCornerRadius="20dp"
+            app:cardElevation="3dp"
+            app:cardBackgroundColor="@color/white"
+            android:layout_marginBottom="12dp">
+
+            <EditText
+                android:id="@+id/aiEtPrompt"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="textMultiLine"
+                android:minLines="3"
+                android:maxLines="5"
+                android:textSize="14sp"
+                android:padding="18dp"
+                android:background="@android:color/transparent"
+                android:textColor="#333333"
+                android:textColorHint="#AAAAAA"
+                android:hint="@string/ai_prompt_hint"
+                android:fontFamily="sans-serif"
+                android:lineSpacingExtra="3dp" />
+
+        </androidx.cardview.widget.CardView>
+
+        <!-- Style chips -->
+        <HorizontalScrollView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:scrollbars="none"
+            android:layout_marginBottom="12dp">
+
+            <com.google.android.material.chip.ChipGroup
+                android:id="@+id/aiStyleChipGroup"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                app:singleSelection="true"
+                app:selectionRequired="true">
+
+                <com.google.android.material.chip.Chip android:id="@+id/aiChipCartoon" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="🎨 Cartoon" android:checked="true" style="@style/Widget.MaterialComponents.Chip.Choice" app:chipBackgroundColor="@color/chip_ai_bg" app:checkedIconEnabled="false" android:textColor="@color/chip_ai_text" />
+                <com.google.android.material.chip.Chip android:id="@+id/aiChipKawaii" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="🌸 Kawaii" style="@style/Widget.MaterialComponents.Chip.Choice" app:chipBackgroundColor="@color/chip_ai_bg" app:checkedIconEnabled="false" android:textColor="@color/chip_ai_text" />
+                <com.google.android.material.chip.Chip android:id="@+id/aiChipPixel" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="👾 Pixel" style="@style/Widget.MaterialComponents.Chip.Choice" app:chipBackgroundColor="@color/chip_ai_bg" app:checkedIconEnabled="false" android:textColor="@color/chip_ai_text" />
+                <com.google.android.material.chip.Chip android:id="@+id/aiChipRealistic" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="📸 Real" style="@style/Widget.MaterialComponents.Chip.Choice" app:chipBackgroundColor="@color/chip_ai_bg" app:checkedIconEnabled="false" android:textColor="@color/chip_ai_text" />
+                <com.google.android.material.chip.Chip android:id="@+id/aiChipAnime" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="⛩️ Anime" style="@style/Widget.MaterialComponents.Chip.Choice" app:chipBackgroundColor="@color/chip_ai_bg" app:checkedIconEnabled="false" android:textColor="@color/chip_ai_text" />
+                <com.google.android.material.chip.Chip android:id="@+id/aiChipComic" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="💥 Comic" style="@style/Widget.MaterialComponents.Chip.Choice" app:chipBackgroundColor="@color/chip_ai_bg" app:checkedIconEnabled="false" android:textColor="@color/chip_ai_text" />
+                <com.google.android.material.chip.Chip android:id="@+id/aiChipDoodle" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="✏️ Doodle" style="@style/Widget.MaterialComponents.Chip.Choice" app:chipBackgroundColor="@color/chip_ai_bg" app:checkedIconEnabled="false" android:textColor="@color/chip_ai_text" />
+                <com.google.android.material.chip.Chip android:id="@+id/aiChip3d" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="🧊 3D" style="@style/Widget.MaterialComponents.Chip.Choice" app:chipBackgroundColor="@color/chip_ai_bg" app:checkedIconEnabled="false" android:textColor="@color/chip_ai_text" />
+                <com.google.android.material.chip.Chip android:id="@+id/aiChipWatercolor" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="💧 Watercolor" style="@style/Widget.MaterialComponents.Chip.Choice" app:chipBackgroundColor="@color/chip_ai_bg" app:checkedIconEnabled="false" android:textColor="@color/chip_ai_text" />
+                <com.google.android.material.chip.Chip android:id="@+id/aiChipNeon" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="💡 Neon" style="@style/Widget.MaterialComponents.Chip.Choice" app:chipBackgroundColor="@color/chip_ai_bg" app:checkedIconEnabled="false" android:textColor="@color/chip_ai_text" />
+                <com.google.android.material.chip.Chip android:id="@+id/aiChipPop" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="🎉 Pop Art" style="@style/Widget.MaterialComponents.Chip.Choice" app:chipBackgroundColor="@color/chip_ai_bg" app:checkedIconEnabled="false" android:textColor="@color/chip_ai_text" />
+                <com.google.android.material.chip.Chip android:id="@+id/aiChipGraffiti" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="🎤 Graffiti" style="@style/Widget.MaterialComponents.Chip.Choice" app:chipBackgroundColor="@color/chip_ai_bg" app:checkedIconEnabled="false" android:textColor="@color/chip_ai_text" />
+
+            </com.google.android.material.chip.ChipGroup>
+
+        </HorizontalScrollView>
+
+        <!-- Generate Button -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/aiBtnGenerate"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:text="✨ Generate Sticker"
+            android:textSize="16sp"
+            android:textAllCaps="false"
+            android:textStyle="bold"
+            app:backgroundTint="@color/primary"
+            app:cornerRadius="16dp"
+            android:layout_marginBottom="16dp" />
+
+        <!-- Preview Card -->
+        <androidx.cardview.widget.CardView
+            android:id="@+id/aiPreviewCard"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:visibility="gone"
+            app:cardCornerRadius="20dp"
+            app:cardElevation="4dp"
+            app:cardBackgroundColor="@color/white"
+            android:layout_marginBottom="16dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:gravity="center_horizontal"
+                android:padding="16dp">
+
+                <!-- Close preview button -->
+                <ImageView
+                    android:id="@+id/aiBtnClosePreview"
+                    android:layout_width="28dp"
+                    android:layout_height="28dp"
+                    android:layout_gravity="end"
+                    android:layout_marginBottom="4dp"
+                    android:src="@drawable/ic_close"
+                    android:background="@drawable/bg_close_circle"
+                    android:padding="6dp"
+                    android:visibility="gone"
+                    app:tint="@color/white" />
+
+                <!-- Preview Image -->
+                <FrameLayout
+                    android:layout_width="260dp"
+                    android:layout_height="260dp"
+                    android:layout_marginBottom="14dp">
+
+                    <ImageView
+                        android:id="@+id/aiIvPreview"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:scaleType="fitCenter"
+                        android:background="@drawable/bg_sticker_preview_ai" />
+
+                    <LinearLayout
+                        android:id="@+id/aiLoadingOverlay"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:orientation="vertical"
+                        android:gravity="center"
+                        android:visibility="gone">
+
+                        <com.airbnb.lottie.LottieAnimationView
+                            android:id="@+id/aiLottieLoading"
+                            android:layout_width="80dp"
+                            android:layout_height="80dp"
+                            app:lottie_fileName="material_wave_loading.json"
+                            app:lottie_autoPlay="true"
+                            app:lottie_loop="true" />
+
+                        <TextView
+                            android:id="@+id/aiTvLoadingStatus"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="8dp"
+                            android:text="@string/ai_generating"
+                            android:textColor="@color/primary"
+                            android:textSize="12sp"
+                            android:textStyle="bold" />
+
+                    </LinearLayout>
+
+                </FrameLayout>
+
+                <!-- Action buttons row -->
+                <LinearLayout
+                    android:id="@+id/aiEditButtons"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:visibility="gone"
+                    android:layout_marginBottom="10dp">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/aiBtnTryAgain"
+                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                        android:layout_width="0dp"
+                        android:layout_height="44dp"
+                        android:layout_weight="1"
+                        android:layout_marginEnd="6dp"
+                        android:text="🔄 Regenerate"
+                        android:textAllCaps="false"
+                        android:textSize="12sp"
+                        android:textColor="@color/primary"
+                        app:cornerRadius="12dp"
+                        app:strokeColor="@color/primary" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/aiBtnEdit"
+                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                        android:layout_width="0dp"
+                        android:layout_height="44dp"
+                        android:layout_weight="1"
+                        android:text="✏️ Edit"
+                        android:textAllCaps="false"
+                        android:textSize="12sp"
+                        android:textColor="@color/primary"
+                        app:cornerRadius="12dp"
+                        app:strokeColor="@color/primary" />
+
+                </LinearLayout>
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/aiBtnAddToPack"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:text="📦 Add to Pack"
+                    android:textAllCaps="false"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    android:textColor="@color/white"
+                    app:backgroundTint="@color/primary"
+                    app:cornerRadius="14dp"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/aiTvError"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:visibility="gone"
+                    android:gravity="center"
+                    android:textColor="@color/delete_red"
+                    android:textSize="12sp"
+                    android:layout_marginTop="6dp" />
+
+            </LinearLayout>
+
+        </androidx.cardview.widget.CardView>
+
+        <!-- AI History Gallery -->
+        <TextView
+            android:id="@+id/tvAiHistoryTitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Your Creations"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:textColor="@color/primary"
+            android:visibility="gone"
+            android:layout_marginBottom="8dp" />
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/rvAiHistory"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:visibility="gone"
+            android:nestedScrollingEnabled="false" />
+
+    </LinearLayout>
+
+</ScrollView>

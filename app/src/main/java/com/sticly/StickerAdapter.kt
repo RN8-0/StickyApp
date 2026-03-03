@@ -24,13 +24,22 @@ class StickerAdapter(
     private val isPackPremium: Boolean = false,
     private val hasAccess: Boolean = true,
     private val storagePath: String = "stickers",
-    private val isAnimated: Boolean = false, // Animated sticker pack flag
+    private val isAnimated: Boolean = false,
     var isSelectionMode: Boolean = false,
     val selectedPositions: MutableSet<Int> = mutableSetOf(),
     private val onStickerClick: ((Sticker, Int) -> Unit)? = null,
     private val onStickerLongClick: ((Sticker, Int) -> Unit)? = null,
     private val onSelectionChanged: ((Int) -> Unit)? = null
 ) : RecyclerView.Adapter<StickerAdapter.VH>() {
+
+    // Reusable listener to avoid allocation in onBind
+    private val clearBgListener = object : RequestListener<Drawable> {
+        override fun onLoadFailed(e: GlideException?, model: Any?, target: Target<Drawable>, isFirstResource: Boolean): Boolean = false
+        override fun onResourceReady(resource: Drawable, model: Any, target: Target<Drawable>, dataSource: DataSource, isFirstResource: Boolean): Boolean {
+            (target as? com.bumptech.glide.request.target.ImageViewTarget<*>)?.view?.background = null
+            return false
+        }
+    }
 
     init {
         setHasStableIds(true)
@@ -105,20 +114,11 @@ class StickerAdapter(
         // Cache'de var mı kontrol et (en hızlı)
         val cachedFile = StickerRepository.getCachedStickerPath(context, packId, sticker.file)
 
-        // Glide request manager - animated için asDrawable() kullan
+        // Glide request manager
         val glideManager = Glide.with(context)
 
-        // Tüm durumlar için progressBar gizle (placeholder yeterli)
+        // Hide progressBar (placeholder is enough)
         h.progressBar.visibility = View.GONE
-
-        // Listener to clear background to prevent ghosting
-        val clearBgListener = object : RequestListener<Drawable> {
-            override fun onLoadFailed(e: GlideException?, model: Any?, target: Target<Drawable>, isFirstResource: Boolean): Boolean = false
-            override fun onResourceReady(resource: Drawable, model: Any, target: Target<Drawable>, dataSource: DataSource, isFirstResource: Boolean): Boolean {
-                (target as? com.bumptech.glide.request.target.ImageViewTarget<*>)?.view?.background = null
-                return false
-            }
-        }
 
         when {
             // 0. Özel paket kontrolü
@@ -141,8 +141,10 @@ class StickerAdapter(
                 glideManager.asDrawable()
                     .load(cachedFile)
                     .signature(ObjectKey(cachedFile.lastModified()))
+                    .override(192, 192)
                     .placeholder(R.drawable.sticker_placeholder)
                     .error(R.drawable.sticker_placeholder)
+                    .diskCacheStrategy(DiskCacheStrategy.AUTOMATIC)
                     .listener(clearBgListener)
                     .into(h.img)
             }

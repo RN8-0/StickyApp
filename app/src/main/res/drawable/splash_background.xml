@@ -1,11 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Background color matching toolbar/brand -->
-    <item android:drawable="@color/primary_dark" />
-    <!-- Centered app logo -->
-    <item>
-        <bitmap
-            android:gravity="center"
-            android:src="@mipmap/ic_launcher_round" />
+    <!-- White background -->
+    <item android:drawable="@color/white" />
+    <!-- Small thick purple circle -->
+    <item
+        android:width="56dp"
+        android:height="56dp"
+        android:gravity="center">
+        <shape android:shape="oval">
+            <stroke android:width="10dp" android:color="#6C5CE7" />
+            <solid android:color="@android:color/transparent" />
+        </shape>
     </item>
 </layer-list>

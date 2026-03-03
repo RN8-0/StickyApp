@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:gravity="center_horizontal"
+    android:paddingHorizontal="6dp"
+    android:paddingVertical="4dp">
+
+    <!-- Circle border with gradient effect -->
+    <FrameLayout
+        android:layout_width="64dp"
+        android:layout_height="64dp">
+
+        <!-- Gradient ring background -->
+        <View
+            android:id="@+id/storyRing"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@drawable/story_ring_gradient" />
+
+        <!-- White gap -->
+        <FrameLayout
+            android:layout_width="58dp"
+            android:layout_height="58dp"
+            android:layout_gravity="center"
+            android:background="@drawable/story_white_circle">
+
+            <!-- Tray image (circular clipping via outline) -->
+            <ImageView
+                android:id="@+id/storyImage"
+                android:layout_width="52dp"
+                android:layout_height="52dp"
+                android:layout_gravity="center"
+                android:scaleType="centerCrop"
+                android:clipToOutline="true"
+                android:background="@drawable/story_image_clip" />
+
+        </FrameLayout>
+
+    </FrameLayout>
+
+    <!-- Pack name -->
+    <TextView
+        android:id="@+id/storyName"
+        android:layout_width="68dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:textSize="10sp"
+        android:textColor="@color/text_secondary"
+        android:maxLines="1"
+        android:ellipsize="end"
+        android:gravity="center" />
+
+</LinearLayout>

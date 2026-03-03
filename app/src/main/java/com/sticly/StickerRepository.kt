@@ -175,10 +175,19 @@ object StickerRepository {
         premiumStickersListener = null
     }
 
+    // Debounce real-time refresh to avoid cascading reloads
+    private var lastRefreshTime = 0L
+    private var pendingRefreshJob: Job? = null
+
     private fun triggerRefresh(context: Context) {
-        repositoryScope.launch {
+        pendingRefreshJob?.cancel()
+        pendingRefreshJob = repositoryScope.launch {
+            // Debounce: wait 5 seconds before refreshing (coalesce rapid updates)
+            delay(5000)
+            val now = System.currentTimeMillis()
+            if (now - lastRefreshTime < 10_000) return@launch // Skip if refreshed recently
+            lastRefreshTime = now
             try {
-                // Veriyi her zaman sunucudan (forceRefresh) çekiyoruz ki anlık yansısın
                 val packs = withContext(Dispatchers.IO) {
                     loadPacks(context, forceRefresh = true)
                 }
@@ -318,6 +327,7 @@ object StickerRepository {
                 favoriteCount = (data["favorite_count"] as? Long)?.toInt() ?: 0,
                 isAnimated = (data["is_animated"] as? Boolean) ?: (data["animated_sticker_pack"] as? Boolean) ?: false,
                 isActive = data["is_active"] as? Boolean ?: true,
+                isPopular = data["is_popular"] as? Boolean ?: false,
                 priceTRY = data["price_try"] as? String ?: "",
                 priceUSD = data["price_usd"] as? String ?: "",
                 priceEUR = data["price_eur"] as? String ?: ""
@@ -392,11 +402,17 @@ object StickerRepository {
      * Firebase Storage URL'ini HIZLI hesaplar (API çağrısı yapmaz)
      * Public read izni olan dosyalar için çalışır
      */
+    private val urlCache = java.util.concurrent.ConcurrentHashMap<String, String>(256)
+
     fun getDirectStorageUrl(storagePath: String, packId: String, fileName: String): String {
+        val key = "$packId/$fileName"
+        urlCache[key]?.let { return it }
         val bucket = storage.reference.bucket
         val fullPath = "$storagePath/$packId/$fileName"
         val encodedPath = java.net.URLEncoder.encode(fullPath, "UTF-8")
-        return "https://firebasestorage.googleapis.com/v0/b/$bucket/o/$encodedPath?alt=media"
+        val url = "https://firebasestorage.googleapis.com/v0/b/$bucket/o/$encodedPath?alt=media"
+        urlCache[key] = url
+        return url
     }
 
     /**

@@ -215,19 +215,6 @@ class StickerProvider : ContentProvider() {
             ))
         }
 
-        // WhatsApp strictly requires at least 3 stickers. If we have 1 or 2, 
-        // we can pad the rest with the first sticker so it passes the check.
-        if (stickers.isNotEmpty() && stickers.size < 3) {
-            val firstSticker = stickers[0]
-            val validEmojis = firstSticker.emojis?.filter { it.isNotBlank() }
-            val emojiString = if (validEmojis.isNullOrEmpty()) "😀" else validEmojis.joinToString(",")
-            val missingCount = 3 - stickers.size
-            for (i in 1..missingCount) {
-                val dummyFileName = firstSticker.file.replace(".webp", "_copy$i.webp").replace(".png", "_copy$i.png")
-                cursor.addRow(arrayOf(dummyFileName, emojiString))
-            }
-        }
-
         return cursor
     }
 

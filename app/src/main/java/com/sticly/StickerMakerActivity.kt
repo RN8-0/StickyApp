@@ -189,6 +189,21 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
             showEditor()
             imagePickerLauncher.launch("image/*")
         }
+
+        // Direct image edit from AI sticker generator
+        val editImageUri = intent.getStringExtra("editImageUri")
+        if (editImageUri != null) {
+            showEditor()
+            // Defer image loading until the view is fully laid out to prevent crash
+            photoEditorView.post {
+                try {
+                    loadImageAfterCrop(android.net.Uri.parse(editImageUri))
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    Toast.makeText(this, getString(R.string.error_loading_image), Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
     }
 
 
@@ -538,14 +553,22 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
     private fun loadImageAfterCrop(uri: Uri) {
         try {
             val bitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                val source = ImageDecoder.createSource(contentResolver, uri)
+                val source = if (uri.scheme == "file") {
+                    ImageDecoder.createSource(java.io.File(uri.path!!))
+                } else {
+                    ImageDecoder.createSource(contentResolver, uri)
+                }
                 ImageDecoder.decodeBitmap(source) { decoder, _, _ ->
                     decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
                     decoder.isMutableRequired = true
                 }
             } else {
-                contentResolver.openInputStream(uri)?.use { stream ->
-                    BitmapFactory.decodeStream(stream)
+                if (uri.scheme == "file") {
+                    BitmapFactory.decodeFile(uri.path)
+                } else {
+                    contentResolver.openInputStream(uri)?.use { stream ->
+                        BitmapFactory.decodeStream(stream)
+                    }
                 }
             }
             if (bitmap == null) {
@@ -565,8 +588,13 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
     }
 
     private fun setEditorImage(bitmap: Bitmap) {
-        currentBitmap = bitmap.copy(Bitmap.Config.ARGB_8888, true)
-        photoEditorView.source.setImageBitmap(currentBitmap)
+        try {
+            currentBitmap = bitmap.copy(Bitmap.Config.ARGB_8888, true)
+            photoEditorView.source.setImageBitmap(currentBitmap)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            Toast.makeText(this, getString(R.string.error_loading_image), Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun showEditor() {
@@ -908,8 +936,8 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
 
         colors.forEach { color ->
             val colorView = View(this).apply {
-                layoutParams = LinearLayout.LayoutParams(44.dpToPx(), 44.dpToPx()).apply {
-                    setMargins(0, 0, 10.dpToPx(), 0)
+                layoutParams = LinearLayout.LayoutParams(32.dpToPx(), 32.dpToPx()).apply {
+                    setMargins(0, 0, 8.dpToPx(), 0)
                 }
                 val bg = GradientDrawable()
                 bg.shape = GradientDrawable.OVAL
@@ -1868,26 +1896,33 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
     }
 
     private fun undoSticker() {
-        if (!photoEditor.undo()) {
+        // Try bitmap history first (eraser, bg removal, etc.)
+        if (historyIndex > 0) {
             undoBitmap()
+        } else {
+            // Fall back to PhotoEditor undo (brush strokes, text, stickers)
+            photoEditor.undo()
         }
         updateUndoRedoState()
     }
 
     private fun redoSticker() {
-        if (!photoEditor.redo()) {
+        if (historyIndex < bitmapHistory.size - 1) {
             redoBitmap()
+        } else {
+            photoEditor.redo()
         }
         updateUndoRedoState()
     }
 
     private fun updateUndoRedoState() {
-        // Keep active to allow PhotoEditor's internal undo to catch events
-        btnUndo.alpha = 1f
-        btnUndo.isEnabled = true
-        
-        btnRedo.alpha = 1f
-        btnRedo.isEnabled = true
+        val canUndo = historyIndex > 0
+        btnUndo.alpha = if (canUndo) 1f else 0.35f
+        btnUndo.isEnabled = true // Always enabled to allow PhotoEditor undo
+
+        val canRedo = historyIndex < bitmapHistory.size - 1
+        btnRedo.alpha = if (canRedo) 1f else 0.35f
+        btnRedo.isEnabled = true // Always enabled to allow PhotoEditor redo
     }
 
     private fun clearHistory() {
@@ -1969,18 +2004,14 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
     ) : RecyclerView.Adapter<PackSelectionAdapter.PackViewHolder>() {
 
         inner class PackViewHolder(view: View) : RecyclerView.ViewHolder(view) {
-            val tvPackName: TextView = view.findViewById(R.id.name)
-            val tvStickerCount: TextView = view.findViewById(R.id.count)
-            val ivTray: ImageView = view.findViewById(R.id.tray)
-            val btnFavorite: View = view.findViewById(R.id.btnFavorite)
-            val btnDelete: View = view.findViewById(R.id.btnDelete)
-            val tvPub: View = view.findViewById(R.id.pub)
-            val tvDownloadCount: View = view.findViewById(R.id.downloadCount)
+            val tvPackName: TextView = view.findViewById(R.id.tvPackName)
+            val tvStickerCount: TextView = view.findViewById(R.id.tvPackCount)
+            val ivCover: ImageView = view.findViewById(R.id.ivPackCover)
         }
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): PackViewHolder {
             val view = LayoutInflater.from(parent.context)
-                .inflate(R.layout.item_pack, parent, false)
+                .inflate(R.layout.item_pack_selection, parent, false)
             return PackViewHolder(view)
         }
 
@@ -1988,30 +2019,20 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
             val pack = packs[position]
             holder.tvPackName.text = pack.name
             holder.tvStickerCount.text = "${pack.stickerCount}${getString(R.string.sticker_count_suffix)}"
-            
-            // Hide unwanted views for selection dialog
-            holder.btnFavorite.visibility = View.GONE
-            holder.btnDelete.visibility = View.GONE
-            holder.tvPub.visibility = View.GONE
-            holder.tvDownloadCount.visibility = View.GONE
 
-            // Load a random sticker as the cover image
             if (pack.stickerCount > 0) {
-                // Pick a random sticker index from the pack
-                val randomIndex = (1..pack.stickerCount).random()
                 val stickerFile = CustomStickerManager.getCustomStickerPath(
                     holder.itemView.context, 
                     pack.id, 
-                    "sticker_$randomIndex.webp"
+                    "sticker_1.webp"
                 )
-                
                 Glide.with(holder.itemView.context)
                     .load(stickerFile)
                     .placeholder(R.drawable.ic_sticker_placeholder)
                     .error(R.drawable.ic_sticker_placeholder)
-                    .into(holder.ivTray)
+                    .into(holder.ivCover)
             } else {
-                holder.ivTray.setImageResource(R.drawable.ic_sticker_placeholder)
+                holder.ivCover.setImageResource(R.drawable.ic_sticker_placeholder)
             }
 
             holder.itemView.setOnClickListener { onPackClick(pack) }

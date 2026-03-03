@@ -8,8 +8,8 @@
 
 body {
   margin: 0;
-  background-color: #0B141A;
-  color: #E9EDEF;
+  background-color: #111113;
+  color: #D4D4D8;
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
@@ -21,21 +21,21 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: #0B141A;
+  background: #111113;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #2A3942;
+  background: #333336;
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #34B7F1;
+  background: #7C6CF0;
 }
 
 .glass {
-  background: rgba(31, 44, 52, 0.7);
+  background: rgba(26, 26, 30, 0.8);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.06);
 }

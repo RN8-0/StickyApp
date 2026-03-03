@@ -592,10 +592,20 @@ object CustomStickerManager {
         val stickers = mutableListOf<Sticker>()
         for (i in 1..customPack.stickerCount) {
             val file = File(packDir, "${STICKER_PREFIX}${i}.webp")
-            if (file.exists()) {
+            if (file.exists() && file.length() > 0) {
                 stickers.add(Sticker(file = file.name, emojis = listOf("😊")))
             }
         }
+
+        // Fix stickerCount if it doesn't match actual files
+        if (stickers.size != customPack.stickerCount) {
+            customPack.stickerCount = stickers.size
+            try {
+                val infoFile = File(packDir, PACK_INFO_FILE)
+                infoFile.writeText(gson.toJson(customPack))
+            } catch (_: Exception) {}
+        }
+        android.util.Log.d("CustomStickerManager", "toWhatsAppPack packId=$packId stickerCount=${customPack.stickerCount} actualStickers=${stickers.size} files=${stickers.map { it.file }}")
         
         // Tray dosyası var mı kontrol et, yoksa ilk sticker'ı kullan
         val trayFile = File(packDir, TRAY_FILE)

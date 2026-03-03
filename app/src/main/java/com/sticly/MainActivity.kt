@@ -1,6 +1,9 @@
 package com.sticly
 
 import android.Manifest
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Color
 import android.util.Log
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -12,6 +15,7 @@ import android.os.Looper
 import android.text.Editable
 import android.text.TextWatcher
 import android.view.LayoutInflater
+import android.view.ViewGroup
 import android.view.View
 import android.widget.*
 import androidx.activity.result.contract.ActivityResultContracts
@@ -39,6 +43,7 @@ import com.google.firebase.messaging.FirebaseMessaging
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -47,6 +52,16 @@ import java.util.Date
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.BufferedReader
+import java.io.InputStreamReader
+import java.io.OutputStreamWriter
+import java.net.HttpURLConnection
+import java.net.URL
+import android.view.inputmethod.InputMethodManager
+import com.google.android.material.button.MaterialButton
+import androidx.cardview.widget.CardView
 
 class MainActivity : AppCompatActivity() {
 
@@ -72,18 +87,39 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tabExplore: View
     private lateinit var tabFavorites: View
     private lateinit var tabMyStickers: LinearLayout
+    private lateinit var tabAICreate: View
     private lateinit var iconExplore: ImageView
     private lateinit var iconFavorites: ImageView
     private lateinit var iconMyStickers: ImageView
+    private lateinit var iconAICreate: ImageView
     private lateinit var textExplore: TextView
     private lateinit var textFavorites: TextView
     private lateinit var textMyStickers: TextView
+    private lateinit var textAICreate: TextView
+    private var searchBarLayoutCached: View? = null
+    private var btnPremiumHeaderCached: View? = null
+    private var navActiveColor = 0
+    private var navInactiveColor = 0
 
     // Regional Popular
     private lateinit var regionalPopularContainer: View
     private lateinit var regionalPopularTitle: TextView
     private lateinit var rvRegional: RecyclerView
     private var regionalAdapter: RegionalAdapter? = null
+
+    // New Packs & Trending → Story Circles
+    private lateinit var storyContainer: View
+    private lateinit var rvStories: RecyclerView
+    private var storyAdapter: StoryAdapter? = null
+
+    // AI Inline
+    private var aiContentContainer: View? = null
+    private var aiSetupDone = false
+    private var aiGeneratedBitmap: Bitmap? = null
+    private var aiRawBitmap: Bitmap? = null
+    private var aiGenerateJob: Job? = null
+    private var aiHistoryAdapter: AiHistoryAdapter? = null
+    private var aiUpdateGenerateButton: (() -> Unit)? = null
 
 
     // Category Chips
@@ -97,6 +133,8 @@ class MainActivity : AppCompatActivity() {
     private var pendingDeletePackId: String? = null
     private var wasPackInWhatsAppBeforeDelete = false
     private var waitingForWhatsAppReturn = false
+    private var sessionPackOpenCount = 0
+    private var promoShownThisSession = false
 
     // Dinamik kategoriler - Firebase'den paketlerdeki kategorilerden oluşturulur
     private var dynamicCategories = mutableListOf<String>()
@@ -108,6 +146,9 @@ class MainActivity : AppCompatActivity() {
 
     // Session-based rank caching to prevent jumping list order when favorites update
     private val sessionRankScores = mutableMapOf<String, Double>()
+    
+    // Debounce applyFilters to prevent excessive calls
+    private var filterJob: Job? = null
     
     // Deterministic Random Seed for Session
     private val sessionSeed = System.currentTimeMillis()
@@ -151,6 +192,60 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private val restoreSignInLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        try {
+            val task = com.google.android.gms.auth.api.signin.GoogleSignIn.getSignedInAccountFromIntent(result.data)
+            val account = task.getResult(com.google.android.gms.common.api.ApiException::class.java)
+            val credential = com.google.firebase.auth.GoogleAuthProvider.getCredential(account.idToken, null)
+            com.google.firebase.auth.FirebaseAuth.getInstance().signInWithCredential(credential)
+                .addOnCompleteListener(this) { authTask ->
+                    if (authTask.isSuccessful) {
+                        Toast.makeText(this, "Signed in as ${account.email}. Restoring purchases...", Toast.LENGTH_SHORT).show()
+                        billingManager?.restorePurchases { restoreResult ->
+                            val msg = when (restoreResult) {
+                                BillingManager.RestoreResult.SUCCESS -> { loadPacksFromFirebase(forceRefresh = true); R.string.restore_success }
+                                BillingManager.RestoreResult.NOT_FOUND -> R.string.restore_not_found
+                                BillingManager.RestoreResult.ERROR -> R.string.restore_error
+                            }
+                            Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+                        }
+                    } else {
+                        Toast.makeText(this, R.string.restore_error, Toast.LENGTH_SHORT).show()
+                    }
+                }
+        } catch (e: Exception) {
+            Toast.makeText(this, R.string.restore_error, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // AI sign-in: after successful sign-in, sync count from Firebase and allow generation
+    private val aiSignInLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        try {
+            val task = com.google.android.gms.auth.api.signin.GoogleSignIn.getSignedInAccountFromIntent(result.data)
+            val account = task.getResult(com.google.android.gms.common.api.ApiException::class.java)
+            val credential = com.google.firebase.auth.GoogleAuthProvider.getCredential(account.idToken, null)
+            com.google.firebase.auth.FirebaseAuth.getInstance().signInWithCredential(credential)
+                .addOnCompleteListener(this) { authTask ->
+                    if (authTask.isSuccessful) {
+                        Toast.makeText(this, "✅ Signed in as ${account.email}", Toast.LENGTH_SHORT).show()
+                        // Sync premium status from Firebase first, then update UI
+                        syncPremiumFromFirebase {
+                            aiRestoreCountFromFirebase()
+                            aiUpdateGenerateButton?.invoke()
+                        }
+                    } else {
+                        Toast.makeText(this, "Sign-in failed", Toast.LENGTH_SHORT).show()
+                    }
+                }
+        } catch (e: Exception) {
+            Toast.makeText(this, "Sign-in failed", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     override fun onCreate(s: Bundle?) {
         // Switch from SplashTheme to normal AppTheme BEFORE setContentView
         setTheme(R.style.AppTheme)
@@ -169,30 +264,44 @@ class MainActivity : AppCompatActivity() {
         if (StickerRepository.allPacksCache.isNotEmpty()) {
             displayPacks(StickerRepository.allPacksCache)
         } else {
-            // Try disk cache inline for fastest possible display
-            val diskPacks = StickerRepository.loadCacheFromDisk(this)
-            if (diskPacks.isNotEmpty()) {
-                StickerRepository.allPacksCache = diskPacks
-                displayPacks(diskPacks)
-            } else {
-                // Cold start: Show loading animation (branded splash is already visible)
-                loadingAnimation.visibility = View.VISIBLE
-                loadingAnimation.repeatCount = com.airbnb.lottie.LottieDrawable.INFINITE
-                loadingAnimation.playAnimation()
+            // Disk cache'i arka planda oku — main thread'i bloklama
+            lifecycleScope.launch {
+                val diskPacks = withContext(Dispatchers.IO) {
+                    StickerRepository.loadCacheFromDisk(this@MainActivity)
+                }
+                if (diskPacks.isNotEmpty() && StickerRepository.allPacksCache.isEmpty()) {
+                    StickerRepository.allPacksCache = diskPacks
+                    displayPacks(diskPacks)
+                } else if (StickerRepository.allPacksCache.isNotEmpty()) {
+                    displayPacks(StickerRepository.allPacksCache)
+                } else {
+                    // Cold start: Show loading animation but auto-dismiss after 500ms
+                    loadingAnimation.visibility = View.VISIBLE
+                    loadingAnimation.repeatCount = com.airbnb.lottie.LottieDrawable.INFINITE
+                    loadingAnimation.playAnimation()
+                }
             }
+            // Failsafe: show content after 500ms even if data hasn't loaded
+            lifecycleScope.launch {
+                delay(500)
+                if (!contentShown) showContent()
+            }
+        }
+
+        // Show blocking bottom sheet if no internet
+        if (!NetworkUtils.isOnline(this)) {
+            showNoInternetBottomSheet()
         }
 
         // Setup essential UI components
         setupBottomNav()
+        setupSearch()
         setupCategoryChips()
         setupDrawerMenu()
-        setupSearch()
 
-        // Defer heavy non-UI initialization so the first frame renders faster
+        // Defer heavier UI setup to after first frame
         window.decorView.post {
-            if (!NetworkUtils.isOnline(this)) {
-                showNoInternetDialog()
-            }
+            aiRestoreCountFromFirebase()
 
             try {
                 billingManager = BillingManager(
@@ -224,16 +333,20 @@ class MainActivity : AppCompatActivity() {
             val favs = PreferencesHelper.getFavoritePacks(this)
             favs.filter { it.startsWith("custom_") }.forEach { PreferencesHelper.removeFavoritePack(this, it) }
 
-            // Üretime geçmeden önce: Reklam açıklaması diyaloğunu göster (Eğer gerekliyse)
-            if (PreferencesHelper.shouldShowSupportPromo(this)) {
-                showPremiumPromoDialog()
-            }
+            // Premium promo artık indirme sonrası gösteriliyor (2. paketten sonra)
         }
 
         // Start Firebase data loading (will update UI when complete)
-        loadPacksFromFirebase()
-        StickerRepository.startObservingPacks(this)
-        observePacksUpdateFlow()
+        if (NetworkUtils.isOnline(this)) {
+            loadPacksFromFirebase()
+            observePacksUpdateFlow()
+        }
+        
+        // Delay real-time observer start to avoid cascading reloads during initial load
+        lifecycleScope.launch {
+            delay(10_000)
+            StickerRepository.startObservingPacks(this@MainActivity)
+        }
     }
 
     private fun setupEdgeToEdge() {
@@ -252,6 +365,9 @@ class MainActivity : AppCompatActivity() {
 
     private fun initViews() {
         drawer = findViewById(R.id.drawer)
+        // Ensure status bar matches toolbar color
+        window.statusBarColor = androidx.core.content.ContextCompat.getColor(this, R.color.toolbar_bg)
+        drawer.setStatusBarBackgroundColor(androidx.core.content.ContextCompat.getColor(this, R.color.toolbar_bg))
         rv = findViewById(R.id.rv)
         loadingOverlay = findViewById(R.id.loadingOverlay)
         loadingAnimation = findViewById(R.id.loadingAnimation)
@@ -263,6 +379,7 @@ class MainActivity : AppCompatActivity() {
 
         mainContent = findViewById(R.id.mainContent)
         emptyStateView = findViewById(R.id.emptyStateView)
+        aiContentContainer = findViewById(R.id.aiContentContainer) // null until ViewStub inflated
         btnCreateFirstSticker = findViewById(R.id.btnCreateFirstSticker)
         btnAddStickerHeader = findViewById(R.id.btnAddStickerHeader)
         
@@ -277,28 +394,44 @@ class MainActivity : AppCompatActivity() {
         rvRegional = findViewById(R.id.rvRegional)
         setupRegionalSection()
 
+        storyContainer = findViewById(R.id.storyContainer)
+        rvStories = findViewById(R.id.rvStories)
+        setupStorySection()
+
         // Bottom Nav
         tabExplore = findViewById(R.id.tabExplore)
         tabFavorites = findViewById(R.id.tabFavorites)
         tabMyStickers = findViewById(R.id.tabMyStickers)
+        tabAICreate = findViewById(R.id.tabAICreate)
         iconExplore = findViewById(R.id.iconExplore)
         iconFavorites = findViewById(R.id.iconFavorites)
         iconMyStickers = findViewById(R.id.iconMyStickers)
+        iconAICreate = findViewById(R.id.iconAICreate)
         textExplore = findViewById(R.id.textExplore)
         textFavorites = findViewById(R.id.textFavorites)
         textMyStickers = findViewById(R.id.textMyStickers)
+        textAICreate = findViewById(R.id.textAICreate)
+        searchBarLayoutCached = findViewById(R.id.searchBarLayout)
+        btnPremiumHeaderCached = findViewById(R.id.btnPremiumHeader)
+        navActiveColor = ContextCompat.getColor(this, R.color.bottom_nav_active)
+        navInactiveColor = ContextCompat.getColor(this, R.color.bottom_nav_inactive)
 
         swipeRefresh.isEnabled = false
 
         rv.layoutManager = LinearLayoutManager(this)
         rv.setHasFixedSize(true)
-        rv.setItemViewCacheSize(30)
+        rv.setItemViewCacheSize(6)
         rv.itemAnimator = null // Performans: Animasyonları kapat
-        (rv.layoutManager as LinearLayoutManager).initialPrefetchItemCount = 8
+        (rv.layoutManager as LinearLayoutManager).initialPrefetchItemCount = 4
         val viewPool = RecyclerView.RecycledViewPool()
         viewPool.setMaxRecycledViews(0, 15) // TYPE_PACK
+        viewPool.setMaxRecycledViews(1, 5)  // TYPE_AD
         rv.setRecycledViewPool(viewPool)
         adapter = PackAdapter(allPacks, { pack ->
+            sessionPackOpenCount++
+            if (sessionPackOpenCount == 3) {
+                StickyApp.appOpenAdInstance?.tryShowAd()
+            }
             startActivity(Intent(this, DetailsActivity::class.java).putExtra("id", pack.id))
         }, {
             if (currentFilter == FilterType.FAVORITES) applyFilters()
@@ -314,8 +447,7 @@ class MainActivity : AppCompatActivity() {
 
 
 
-        val btnPremiumHeader = findViewById<View>(R.id.btnPremiumHeader)
-        btnPremiumHeader.setOnClickListener {
+        btnPremiumHeaderCached?.setOnClickListener {
             startActivity(Intent(this, PremiumActivity::class.java))
             overridePendingTransition(R.anim.fade_in, R.anim.fade_out)
         }
@@ -333,15 +465,21 @@ class MainActivity : AppCompatActivity() {
             updateBottomNavUI()
             updateCategoryChipSelection()
             categoryChipGroup.visibility = View.VISIBLE
-            regionalPopularContainer.visibility = if (regionalAdapter?.itemCount ?: 0 > 0) View.VISIBLE else View.GONE
+            showHomeSections()
         }
 
         tabFavorites.setOnClickListener {
             currentFilter = FilterType.FAVORITES
             applyFilters()
             updateBottomNavUI()
-            categoryChipGroup.visibility = View.GONE
-            regionalPopularContainer.visibility = View.GONE
+        }
+
+        tabAICreate.setOnClickListener {
+            currentFilter = FilterType.AI
+            // Inflate AI content ViewStub on first use (before updateBottomNavUI accesses it)
+            ensureAiInflated()
+            updateBottomNavUI()
+            aiContentContainer?.post { aiLoadHistory() }
         }
 
         tabMyStickers.setOnClickListener {
@@ -349,15 +487,15 @@ class MainActivity : AppCompatActivity() {
             applyFilters()
             updateBottomNavUI()
             categoryChipGroup.visibility = View.GONE
-            regionalPopularContainer.visibility = View.GONE
+            hideHomeSections()
         }
 
         updateBottomNavUI()
     }
 
     private fun updateBottomNavUI() {
-        val activeColor = ContextCompat.getColor(this, R.color.bottom_nav_active)
-        val inactiveColor = ContextCompat.getColor(this, R.color.bottom_nav_inactive)
+        val activeColor = navActiveColor
+        val inactiveColor = navInactiveColor
 
         // Reset all
         iconExplore.setColorFilter(inactiveColor)
@@ -366,19 +504,49 @@ class MainActivity : AppCompatActivity() {
         iconFavorites.setColorFilter(inactiveColor)
         textFavorites.setTextColor(inactiveColor)
 
+        iconAICreate.setColorFilter(inactiveColor)
+        textAICreate.setTextColor(inactiveColor)
+
         iconMyStickers.setColorFilter(inactiveColor)
         textMyStickers.setTextColor(inactiveColor)
 
+        if (currentFilter == FilterType.AI) {
+            // Show AI content, hide everything else
+            mainContent.visibility = View.GONE
+            emptyStateView.visibility = View.GONE
+            searchBarLayoutCached?.visibility = View.GONE
+            categoryChipGroup.visibility = View.GONE
+            hideHomeSections()
+            btnAddStickerHeader.visibility = View.GONE
+            btnPremiumHeaderCached?.visibility = View.VISIBLE
+            menuBtn.visibility = View.VISIBLE
+            toolbarTitle.text = "✨ Sticky AI"
+            toolbarSubtitle.visibility = View.GONE
+            aiContentContainer?.visibility = View.VISIBLE
+
+            iconAICreate.setColorFilter(activeColor)
+            textAICreate.setTextColor(activeColor)
+            return
+        }
+
+        // Non-AI tabs: restore normal UI
+        aiContentContainer?.visibility = View.GONE
+        mainContent.visibility = View.VISIBLE
+        searchBarLayoutCached?.visibility = View.VISIBLE
+        btnPremiumHeaderCached?.visibility = View.VISIBLE
+        menuBtn.visibility = View.VISIBLE
+        toolbarTitle.text = getString(R.string.app_name)
+
         // Activate selected
         when (currentFilter) {
-            FilterType.ALL, FilterType.INSTALLED, FilterType.PREMIUM, FilterType.PURCHASED -> {
+            FilterType.ALL, FilterType.PREMIUM, FilterType.PURCHASED -> {
                 iconExplore.setColorFilter(activeColor)
                 textExplore.setTextColor(activeColor)
                 
                 menuBtn.setImageResource(R.drawable.ic_menu)
                 toolbarSubtitle.visibility = View.GONE
                 categoryChipGroup.visibility = View.VISIBLE
-                regionalPopularContainer.visibility = if (regionalAdapter?.itemCount ?: 0 > 0) View.VISIBLE else View.GONE
+                showHomeSections()
             }
             FilterType.FAVORITES -> {
                 iconFavorites.setColorFilter(activeColor)
@@ -388,7 +556,17 @@ class MainActivity : AppCompatActivity() {
                 toolbarSubtitle.visibility = View.VISIBLE
                 toolbarSubtitle.text = getString(R.string.filter_favorites)
                 categoryChipGroup.visibility = View.GONE
-                regionalPopularContainer.visibility = View.GONE
+                hideHomeSections()
+            }
+            FilterType.INSTALLED -> {
+                iconFavorites.setColorFilter(activeColor)
+                textFavorites.setTextColor(activeColor)
+                
+                menuBtn.setImageResource(R.drawable.ic_menu)
+                toolbarSubtitle.visibility = View.VISIBLE
+                toolbarSubtitle.text = getString(R.string.filter_favorites)
+                categoryChipGroup.visibility = View.GONE
+                hideHomeSections()
             }
             FilterType.CUSTOM -> {
                 iconMyStickers.setColorFilter(activeColor)
@@ -398,9 +576,10 @@ class MainActivity : AppCompatActivity() {
                 toolbarSubtitle.visibility = View.VISIBLE
                 toolbarSubtitle.text = getString(R.string.your_stickers)
                 categoryChipGroup.visibility = View.GONE
-                regionalPopularContainer.visibility = View.GONE
+                hideHomeSections()
                 btnAddStickerHeader.visibility = View.VISIBLE
             }
+            else -> {}
         }
         
         if (currentFilter != FilterType.CUSTOM) {
@@ -408,95 +587,1080 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // ─── AI Inline Logic ────────────────────────────────────────────────
 
+    private fun ensureAiInflated() {
+        if (aiContentContainer != null) return
+        try {
+            val stub = findViewById<android.view.ViewStub>(R.id.aiContentStub)
+            stub?.inflate()
+        } catch (_: Exception) { /* already inflated */ }
+        aiContentContainer = findViewById(R.id.aiContentContainer)
+        setupAiInline()
+    }
+
+    private fun setupAiInline() {
+        if (aiSetupDone) return
+        aiSetupDone = true
+
+        val aiEtPrompt = findViewById<EditText>(R.id.aiEtPrompt) ?: return
+        val aiBtnGenerate = findViewById<MaterialButton>(R.id.aiBtnGenerate)
+
+        // Update generate button based on sign-in state
+        fun updateGenerateButton() {
+            val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+            if (user == null) {
+                aiBtnGenerate?.text = "Sign in with Google"
+                aiBtnGenerate?.setIconResource(R.drawable.ic_google)
+            } else {
+                aiBtnGenerate?.text = "✨ ${getString(R.string.ai_generate)}"
+                aiBtnGenerate?.icon = null
+            }
+        }
+        updateGenerateButton()
+        val aiPreviewCard = findViewById<CardView>(R.id.aiPreviewCard)
+        val aiIvPreview = findViewById<ImageView>(R.id.aiIvPreview)
+        val aiLoadingOverlay = findViewById<View>(R.id.aiLoadingOverlay)
+        val aiTvLoadingStatus = findViewById<TextView>(R.id.aiTvLoadingStatus)
+        val aiEditButtons = findViewById<View>(R.id.aiEditButtons)
+        val aiBtnTryAgain = findViewById<MaterialButton>(R.id.aiBtnTryAgain)
+        val aiBtnEdit = findViewById<MaterialButton>(R.id.aiBtnEdit)
+        val aiBtnAddToPack = findViewById<MaterialButton>(R.id.aiBtnAddToPack)
+        val aiTvError = findViewById<TextView>(R.id.aiTvError)
+        val aiTvDailyCounter = findViewById<TextView>(R.id.tvAiDailyCounter)
+        val aiStyleChipGroup = findViewById<ChipGroup>(R.id.aiStyleChipGroup)
+        val aiBtnInspireMe = findViewById<View>(R.id.aiBtnInspireMe)
+        val aiBtnClosePreview = findViewById<ImageView>(R.id.aiBtnClosePreview)
+        fun updateAiDailyCounter() {
+            val remaining = aiGetRemainingCount()
+            aiTvDailyCounter?.text = if (remaining < 0) {
+                "✨ ${getString(R.string.ai_unlimited)}"
+            } else {
+                "⚡ ${getString(R.string.ai_remaining, remaining, AI_DAILY_FREE_LIMIT)}"
+            }
+        }
+
+        // Store references so aiSignInLauncher callback can refresh UI
+        this.aiUpdateGenerateButton = {
+            updateGenerateButton()
+            updateAiDailyCounter()
+        }
+
+        fun getAiSelectedStyle(): String {
+            return when (aiStyleChipGroup?.checkedChipId) {
+                R.id.aiChipCartoon -> "cartoon style, 2D cartoon illustration, bold outlines, flat colors"
+                R.id.aiChipKawaii -> "kawaii cute style, Japanese kawaii art, pastel colors, adorable"
+                R.id.aiChipPixel -> "pixel art style, 8-bit retro pixel art, blocky pixels, retro game"
+                R.id.aiChipRealistic -> "photorealistic style, realistic photograph, highly detailed, photographic"
+                R.id.aiChipAnime -> "anime style, Japanese anime illustration, manga art, cel shading"
+                R.id.aiChipComic -> "comic book style, Marvel DC comic art, halftone dots, action lines"
+                R.id.aiChipDoodle -> "hand drawn doodle style, pencil sketch, notebook doodle, line art"
+                R.id.aiChip3d -> "3D rendered style, 3D CGI render, Pixar style, smooth shading"
+                R.id.aiChipWatercolor -> "watercolor painting style, watercolor wash, soft edges, painted"
+                R.id.aiChipNeon -> "neon glow style, neon lights, glowing edges, dark background, cyberpunk"
+                R.id.aiChipPop -> "pop art style, Andy Warhol pop art, bold primary colors, Ben-Day dots"
+                R.id.aiChipGraffiti -> "street art graffiti style, spray paint, urban wall art, bold tags"
+                else -> "cartoon style, 2D cartoon illustration, bold outlines"
+            }
+        }
+
+        fun setAiGenerating(isGenerating: Boolean) {
+            aiPreviewCard?.visibility = View.VISIBLE
+            aiLoadingOverlay?.visibility = if (isGenerating) View.VISIBLE else View.GONE
+            aiBtnGenerate?.isEnabled = !isGenerating
+            if (isGenerating) {
+                aiEditButtons?.visibility = View.GONE
+                aiBtnAddToPack?.visibility = View.GONE
+                aiIvPreview?.setImageDrawable(null)
+            }
+        }
+
+        fun doGenerate() {
+            // Require Google sign-in for AI generation (prevents daily limit bypass via data clear)
+            val currentUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+            if (currentUser == null) {
+                showAiSignInDialog()
+                return
+            }
+            val prompt = aiEtPrompt.text?.toString()?.trim() ?: ""
+            if (prompt.isEmpty()) {
+                Toast.makeText(this, R.string.ai_empty_prompt, Toast.LENGTH_SHORT).show()
+                return
+            }
+            if (!aiCanGenerate()) {
+                aiShowDailyLimitDialog()
+                return
+            }
+            // Dismiss keyboard
+            currentFocus?.let {
+                val imm = getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager
+                imm.hideSoftInputFromWindow(it.windowToken, 0)
+            }
+            aiGenerateJob?.cancel()
+            aiGenerateJob = lifecycleScope.launch {
+                try {
+                    setAiGenerating(true)
+                    aiTvError?.visibility = View.GONE
+
+                    withContext(Dispatchers.Main) {
+                        aiTvLoadingStatus?.text = getString(R.string.ai_optimizing_prompt)
+                    }
+                    val style = getAiSelectedStyle()
+                    val optimizedPrompt = aiOptimizePrompt(prompt, style)
+
+                    withContext(Dispatchers.Main) {
+                        aiTvLoadingStatus?.text = getString(R.string.ai_generating_image)
+                    }
+                    val bitmap = aiGenerateImage(optimizedPrompt) {
+                        lifecycleScope.launch(Dispatchers.Main) {
+                            aiTvLoadingStatus?.text = getString(R.string.ai_generating_image) + " ⏳"
+                        }
+                    }
+
+                    if (bitmap != null) {
+                        withContext(Dispatchers.Main) {
+                            aiTvLoadingStatus?.text = getString(R.string.ai_processing)
+                        }
+                        aiRawBitmap = Bitmap.createScaledBitmap(bitmap, 512, 512, true)
+                        aiGeneratedBitmap = aiRawBitmap
+
+                        // Save to local history
+                        val savedPath = aiSaveToHistory(aiRawBitmap!!, prompt)
+
+                        withContext(Dispatchers.Main) {
+                            aiIvPreview?.setImageBitmap(aiGeneratedBitmap)
+                            aiEditButtons?.visibility = View.VISIBLE
+                            aiBtnAddToPack?.visibility = View.VISIBLE
+                            aiBtnClosePreview?.visibility = View.VISIBLE
+                            aiIncrementCount()
+                            updateAiDailyCounter()
+                            aiContentContainer?.post { aiLoadHistory() }
+                        }
+
+                        // Sync to Firebase if signed in
+                        if (savedPath != null) aiSyncHistoryToFirebase(prompt, savedPath)
+                    } else {
+                        withContext(Dispatchers.Main) {
+                            aiTvError?.text = getString(R.string.ai_generation_failed)
+                            aiTvError?.visibility = View.VISIBLE
+                        }
+                    }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    withContext(Dispatchers.Main) {
+                        aiTvError?.text = e.message ?: getString(R.string.ai_generation_failed)
+                        aiTvError?.visibility = View.VISIBLE
+                    }
+                } finally {
+                    withContext(Dispatchers.Main) {
+                        setAiGenerating(false)
+                    }
+                }
+            }
+        }
+
+        aiBtnGenerate?.setOnClickListener { doGenerate() }
+        aiBtnTryAgain?.setOnClickListener { doGenerate() }
+
+        aiBtnEdit?.setOnClickListener {
+            val bmp = aiRawBitmap ?: return@setOnClickListener
+            lifecycleScope.launch(Dispatchers.IO) {
+                try {
+                    val tempFile = java.io.File(cacheDir, "ai_edit_temp.png")
+                    java.io.FileOutputStream(tempFile).use { out ->
+                        bmp.compress(Bitmap.CompressFormat.PNG, 100, out)
+                    }
+                    withContext(Dispatchers.Main) {
+                        val intent = Intent(this@MainActivity, StickerMakerActivity::class.java)
+                        intent.putExtra("editImageUri", android.net.Uri.fromFile(tempFile).toString())
+                        startActivity(intent)
+                    }
+                } catch (e: Exception) {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(this@MainActivity, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        }
+
+        aiBtnAddToPack?.setOnClickListener {
+            aiShowPackPickerDialog()
+        }
+
+        // Inspire Me: DeepSeek generates a random creative prompt
+        aiBtnInspireMe?.setOnClickListener {
+            aiBtnInspireMe.isEnabled = false
+            aiBtnInspireMe.alpha = 0.7f
+            val spinner = findViewById<View>(R.id.aiInspireSpinner)
+            spinner?.visibility = View.VISIBLE
+            lifecycleScope.launch {
+                val prompt = aiGenerateRandomPrompt()
+                aiBtnInspireMe.isEnabled = true
+                aiBtnInspireMe.alpha = 1f
+                spinner?.visibility = View.GONE
+                aiEtPrompt.setText(prompt)
+            }
+        }
+
+        // Close preview button
+        aiBtnClosePreview?.setOnClickListener {
+            aiPreviewCard?.visibility = View.GONE
+            aiEditButtons?.visibility = View.GONE
+            aiBtnAddToPack?.visibility = View.GONE
+            aiBtnClosePreview?.visibility = View.GONE
+            aiRawBitmap = null
+            aiGeneratedBitmap = null
+            // Restore Regenerate button for next generation
+            aiBtnTryAgain?.text = "🔄 Regenerate"
+            aiBtnTryAgain?.setTextColor(androidx.core.content.ContextCompat.getColor(this, R.color.primary))
+            aiBtnTryAgain?.strokeColor = android.content.res.ColorStateList.valueOf(androidx.core.content.ContextCompat.getColor(this, R.color.primary))
+            aiBtnTryAgain?.setOnClickListener { doGenerate() }
+        }
+
+        updateAiDailyCounter()
+        // Don't load history here - container is GONE, RecyclerView will have 0 width.
+        // History is loaded when AI tab becomes visible (tab click and onResume).
+    }
+
+    private fun aiCanGenerate(): Boolean {
+        if (PreferencesHelper.isPremium(this)) return true
+        aiResetIfNewDay()
+        return getSharedPreferences("sticky_prefs", MODE_PRIVATE).getInt(AI_PREFS_COUNT, 0) < AI_DAILY_FREE_LIMIT
+    }
+
+    private fun aiGetRemainingCount(): Int {
+        if (PreferencesHelper.isPremium(this)) return -1
+        aiResetIfNewDay()
+        return AI_DAILY_FREE_LIMIT - getSharedPreferences("sticky_prefs", MODE_PRIVATE).getInt(AI_PREFS_COUNT, 0)
+    }
+
+    private fun aiIncrementCount() {
+        if (PreferencesHelper.isPremium(this)) return
+        aiResetIfNewDay()
+        val prefs = getSharedPreferences("sticky_prefs", MODE_PRIVATE)
+        val newCount = prefs.getInt(AI_PREFS_COUNT, 0) + 1
+        prefs.edit()
+            .putInt(AI_PREFS_COUNT, newCount)
+            .putString(AI_PREFS_DATE, aiTodayString())
+            .apply()
+        // Sync to Firebase so count survives app uninstall
+        aiSyncCountToFirebase(newCount)
+    }
+
+    private fun aiResetIfNewDay() {
+        val prefs = getSharedPreferences("sticky_prefs", MODE_PRIVATE)
+        if ((prefs.getString(AI_PREFS_DATE, "") ?: "") != aiTodayString()) {
+            prefs.edit().putInt(AI_PREFS_COUNT, 0).putString(AI_PREFS_DATE, aiTodayString()).apply()
+        }
+    }
+
+    private fun aiSyncCountToFirebase(count: Int) {
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser ?: return@launch
+                com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                    .collection("users").document(user.uid)
+                    .set(mapOf("ai_count" to count, "ai_date" to aiTodayString()), com.google.firebase.firestore.SetOptions.merge())
+            } catch (_: Exception) { }
+        }
+    }
+
+    private fun aiRestoreCountFromFirebase() {
+        try {
+            val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser ?: return
+            com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                .collection("users").document(user.uid).get()
+                .addOnSuccessListener { doc ->
+                    val fbDate = doc.getString("ai_date") ?: return@addOnSuccessListener
+                    val fbCount = doc.getLong("ai_count")?.toInt() ?: return@addOnSuccessListener
+                    val prefs = getSharedPreferences("sticky_prefs", MODE_PRIVATE)
+                    val localDate = prefs.getString(AI_PREFS_DATE, "") ?: ""
+                    val localCount = prefs.getInt(AI_PREFS_COUNT, 0)
+                    if (fbDate == aiTodayString() && fbCount > localCount) {
+                        prefs.edit().putInt(AI_PREFS_COUNT, fbCount).putString(AI_PREFS_DATE, fbDate).apply()
+                    }
+                }
+        } catch (_: Exception) { }
+    }
+
+    private fun aiTodayString(): String = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+
+    private suspend fun aiOptimizePrompt(userPrompt: String, style: String): String =
+        withContext(Dispatchers.IO) {
+            try {
+                val apiKey = BuildConfig.DEEPSEEK_API_KEY
+                if (apiKey.isEmpty()) return@withContext "$style style, $style sticker of $userPrompt, hilarious goofy facial expression, clean white background, thick bold black outline, ultra vibrant neon colors, chibi proportions, huge expressive eyes, exaggerated emotions, cel-shaded, masterpiece, best quality, ultra detailed, sharp crisp lines, professional sticker design, centered, hilarious expression, dramatic pose"
+
+                val systemMessage = """You are an expert AI sticker prompt engineer. Your job is to create the PERFECT image generation prompt.
+CRITICAL RULES:
+- Output ONLY the optimized prompt text, nothing else
+- The art style MUST be: $style - this is NON-NEGOTIABLE, the entire image must look like $style artwork
+- Characters MUST have HILARIOUS, EXAGGERATED facial expressions: impossibly wide crazy eyes, comically huge goofy grins, dramatic shocked mouths, silly tongue sticking out, crossed eyes, sweat drops
+- ALWAYS include these exact keywords: clean white background, thick bold black outline, sticker design, centered composition, single character
+- Add quality: masterpiece, best quality, ultra detailed, sharp lines, high resolution
+- Colors: ultra vibrant, saturated, high contrast
+- Proportions: chibi style with big head and small body, enormous expressive eyes
+- Make the character doing something funny or in a comedic situation
+- Keep it under 120 words
+- IMPORTANT: Start the prompt with "$style style, " to enforce the art style"""
+
+                val body = JSONObject().apply {
+                    put("model", "deepseek-chat")
+                    put("messages", JSONArray().apply {
+                        put(JSONObject().apply { put("role", "system"); put("content", systemMessage) })
+                        put(JSONObject().apply { put("role", "user"); put("content", userPrompt) })
+                    })
+                    put("max_tokens", 150)
+                    put("temperature", 0.7)
+                }
+
+                val conn = URL("https://api.deepseek.com/chat/completions").openConnection() as HttpURLConnection
+                conn.requestMethod = "POST"
+                conn.setRequestProperty("Content-Type", "application/json")
+                conn.setRequestProperty("Authorization", "Bearer $apiKey")
+                conn.connectTimeout = 5000
+                conn.readTimeout = 5000
+                conn.doOutput = true
+                OutputStreamWriter(conn.outputStream).use { it.write(body.toString()) }
+
+                if (conn.responseCode == 200) {
+                    val response = BufferedReader(InputStreamReader(conn.inputStream)).use { it.readText() }
+                    val content = JSONObject(response).getJSONArray("choices")
+                        .getJSONObject(0).getJSONObject("message").getString("content").trim()
+                    conn.disconnect()
+                    content
+                } else {
+                    conn.disconnect()
+                    "$style style, $style sticker of $userPrompt, hilarious goofy facial expression, clean white background, thick bold black outline, ultra vibrant neon colors, chibi proportions, huge expressive eyes, exaggerated emotions, cel-shaded, masterpiece, best quality, ultra detailed, sharp crisp lines, professional sticker design, centered, hilarious expression, dramatic pose"
+                }
+            } catch (e: Exception) {
+                "$style style, $style sticker of $userPrompt, hilarious goofy facial expression, clean white background, thick bold black outline, ultra vibrant neon colors, chibi proportions, huge expressive eyes, exaggerated emotions, cel-shaded, masterpiece, best quality, ultra detailed, sharp crisp lines, professional sticker design, centered, hilarious expression, dramatic pose"
+            }
+        }
+
+    private suspend fun aiGenerateRandomPrompt(): String = withContext(Dispatchers.IO) {
+        try {
+            val apiKey = BuildConfig.DEEPSEEK_API_KEY
+            if (apiKey.isEmpty()) return@withContext randomFallbackPrompt()
+
+            val systemMsg = """You are a creative sticker idea generator. Generate ONE detailed, fun, unique sticker concept description.
+Rules:
+- Output ONLY the sticker description, nothing else (no quotes, no explanation)
+- Write 2-4 sentences describing a vivid, funny sticker scene
+- Include: character description, emotion/expression, action, accessories/props, and setting details
+- Be wildly creative, hilarious, and unexpected
+- Make it visual and descriptive so an AI can generate an amazing sticker from it
+- Examples of good output:
+  "A chubby orange tabby cat wearing a tiny business suit, sitting at a desk piled with coffee cups, looking absolutely exhausted with dark circles under its huge eyes, papers flying everywhere"
+  "A dramatic avocado wearing sunglasses and a gold chain, doing a mic drop on a tiny stage while other vegetables in the audience look shocked with their jaws dropping"
+  "A tiny hamster in a superhero cape standing on top of a mountain of cheese, flexing its muscles with an absurdly confident expression while lightning strikes behind it"
+- Each idea should be completely different and random"""
+
+            val body = JSONObject().apply {
+                put("model", "deepseek-chat")
+                put("messages", JSONArray().apply {
+                    put(JSONObject().apply { put("role", "system"); put("content", systemMsg) })
+                    put(JSONObject().apply { put("role", "user"); put("content", "Give me a random detailed sticker idea. Be creative! Seed: ${System.currentTimeMillis()}") })
+                })
+                put("max_tokens", 100)
+                put("temperature", 1.2)
+            }
+
+            val conn = URL("https://api.deepseek.com/chat/completions").openConnection() as HttpURLConnection
+            conn.requestMethod = "POST"
+            conn.setRequestProperty("Content-Type", "application/json")
+            conn.setRequestProperty("Authorization", "Bearer $apiKey")
+            conn.connectTimeout = 5000
+            conn.readTimeout = 5000
+            conn.doOutput = true
+            OutputStreamWriter(conn.outputStream).use { it.write(body.toString()) }
+
+            if (conn.responseCode == 200) {
+                val response = BufferedReader(InputStreamReader(conn.inputStream)).use { it.readText() }
+                val content = JSONObject(response).getJSONArray("choices")
+                    .getJSONObject(0).getJSONObject("message").getString("content").trim()
+                conn.disconnect()
+                content.replace("\"", "")
+            } else {
+                conn.disconnect()
+                randomFallbackPrompt()
+            }
+        } catch (_: Exception) {
+            randomFallbackPrompt()
+        }
+    }
+
+    private fun randomFallbackPrompt(): String {
+        val ideas = listOf(
+            "A chubby orange cat wearing a tiny business suit, sitting at a desk piled with coffee cups, looking absolutely exhausted with huge dark circles under its eyes",
+            "A dramatic slice of pizza wearing sunglasses and a gold chain, doing a mic drop on stage while other food items in the audience look shocked",
+            "A tiny hamster in a superhero cape standing on top of a mountain of cheese, flexing its muscles with an absurdly confident grin",
+            "A grumpy cloud raining donuts on a confused city, with the cloud wearing a chef hat and looking proud of itself",
+            "An avocado ninja doing a flying kick through the air with a determined expression, wearing a black headband with sparkle effects around it",
+            "A baby penguin in oversized headphones dancing on a disco floor, with colorful lights reflecting in its huge excited eyes",
+            "A sleepy panda in pajamas trying to code on a laptop but falling asleep on the keyboard with Z letters floating above",
+            "A taco doing karate with an intense focused expression, breaking a board in half while other tacos cheer in the background",
+            "A robot dog catching a glowing frisbee in space with stars and planets in the background, tongue sticking out happily",
+            "A dramatic hamster wearing a flowing red cape standing heroically on a cliff edge with wind blowing through its fur",
+            "A shocked octopus trying to juggle eight different objects at once including a fish, umbrella, and rubber duck, looking panicked",
+            "A unicorn shredding an electric guitar on a rainbow stage with flames shooting up and the crowd going wild"
+        )
+        return ideas.random()
+    }
+
+    private suspend fun aiGenerateImage(prompt: String, onPoll: () -> Unit): Bitmap? =
+        withContext(Dispatchers.IO) {
+            // Try Pollinations.ai first (fast, free, no polling needed)
+            try {
+                val result = aiGenerateWithPollinations(prompt)
+                if (result != null) return@withContext result
+            } catch (e: Exception) {
+                android.util.Log.e("AiGenerate", "Pollinations failed: ${e.message}")
+            }
+
+            // Fallback to Stable Horde - Deliberate is best quality for stickers
+            val models = listOf("Deliberate", "Dreamshaper", "stable_diffusion")
+            for (model in models) {
+                try {
+                    val result = aiTryGenerate(prompt, model, onPoll)
+                    if (result != null) return@withContext result
+                } catch (e: Exception) {
+                    android.util.Log.e("AiGenerate", "Horde $model failed: ${e.message}")
+                }
+            }
+            null
+        }
+
+    private suspend fun aiGenerateWithPollinations(prompt: String): Bitmap? =
+        withContext(Dispatchers.IO) {
+            val enhancedPrompt = "$prompt, masterpiece, best quality, ultra detailed"
+            val encodedPrompt = java.net.URLEncoder.encode(enhancedPrompt, "UTF-8")
+            val urlStr = "https://image.pollinations.ai/prompt/$encodedPrompt?width=512&height=512&nologo=true&model=flux&seed=${System.currentTimeMillis()}"
+            android.util.Log.d("AiGenerate", "Pollinations request: $urlStr")
+
+            var currentUrl = urlStr
+            var redirectCount = 0
+            while (redirectCount < 5) {
+                val conn = URL(currentUrl).openConnection() as HttpURLConnection
+                conn.requestMethod = "GET"
+                conn.connectTimeout = 30000
+                conn.readTimeout = 60000
+                conn.instanceFollowRedirects = false
+                conn.setRequestProperty("User-Agent", "StickyApp/1.0")
+
+                val code = conn.responseCode
+                android.util.Log.d("AiGenerate", "Pollinations response: $code")
+                if (code in 301..308) {
+                    currentUrl = conn.getHeaderField("Location") ?: break
+                    conn.disconnect()
+                    redirectCount++
+                    continue
+                }
+                if (code == 200) {
+                    val bitmap = BitmapFactory.decodeStream(conn.inputStream)
+                    conn.disconnect()
+                    android.util.Log.d("AiGenerate", "Pollinations bitmap: ${bitmap != null}")
+                    return@withContext bitmap
+                }
+                conn.disconnect()
+                break
+            }
+            android.util.Log.e("AiGenerate", "Pollinations failed after $redirectCount redirects")
+            null
+        }
+
+    private suspend fun aiTryGenerate(prompt: String, model: String, onPoll: () -> Unit): Bitmap? =
+        withContext(Dispatchers.IO) {
+            val negativePrompt = "blurry, low quality, distorted, ugly, deformed, watermark, text, bad anatomy, bad hands, extra fingers, missing fingers, poorly drawn, out of frame, duplicate, morbid, mutilated"
+            val body = JSONObject().apply {
+                put("prompt", "$prompt ### $negativePrompt")
+                put("params", JSONObject().apply {
+                    put("width", 512)
+                    put("height", 512)
+                    put("steps", 20)
+                    put("cfg_scale", 9.0)
+                    put("sampler_name", "k_euler_a")
+                    put("karras", true)
+                    put("clip_skip", 2)
+                })
+                put("nsfw", false)
+                put("censor_nsfw", true)
+                put("models", JSONArray().apply { put(model) })
+            }
+
+            val submitConn = URL("https://stablehorde.net/api/v2/generate/async").openConnection() as HttpURLConnection
+            submitConn.requestMethod = "POST"
+            submitConn.setRequestProperty("Content-Type", "application/json")
+            submitConn.setRequestProperty("apikey", "0000000000")
+            submitConn.connectTimeout = 10000
+            submitConn.readTimeout = 10000
+            submitConn.doOutput = true
+            OutputStreamWriter(submitConn.outputStream).use { it.write(body.toString()) }
+
+            if (submitConn.responseCode != 202) {
+                val errorBody = try { BufferedReader(InputStreamReader(submitConn.errorStream)).use { it.readText() } } catch (_: Exception) { "" }
+                submitConn.disconnect()
+                val errorMsg = try { JSONObject(errorBody).optString("message", "") } catch (_: Exception) { "" }
+                throw Exception(if (errorMsg.isNotEmpty()) errorMsg else "Server error (${submitConn.responseCode})")
+            }
+
+            val submitResponse = BufferedReader(InputStreamReader(submitConn.inputStream)).use { it.readText() }
+            submitConn.disconnect()
+            val jobId = JSONObject(submitResponse).getString("id")
+            android.util.Log.d("AiGenerate", "Stable Horde job: $jobId model: $model")
+
+            var imageUrl: String? = null
+            for (attempt in 1..20) {
+                delay(2000)
+                onPoll()
+
+                val checkConn = URL("https://stablehorde.net/api/v2/generate/status/$jobId").openConnection() as HttpURLConnection
+                checkConn.requestMethod = "GET"
+                checkConn.connectTimeout = 10000
+                checkConn.readTimeout = 10000
+
+                val statusCode = checkConn.responseCode
+                if (statusCode != 200) { checkConn.disconnect(); continue }
+
+                val statusResponse = BufferedReader(InputStreamReader(checkConn.inputStream)).use { it.readText() }
+                checkConn.disconnect()
+
+                val statusJson = JSONObject(statusResponse)
+                if (statusJson.optBoolean("faulted", false)) return@withContext null
+                if (statusJson.optBoolean("done", false)) {
+                    val generations = statusJson.getJSONArray("generations")
+                    if (generations.length() > 0) {
+                        imageUrl = generations.getJSONObject(0).getString("img")
+                    }
+                    break
+                }
+            }
+
+            if (imageUrl == null) return@withContext null
+
+            val imgConn = URL(imageUrl).openConnection() as HttpURLConnection
+            imgConn.requestMethod = "GET"
+            imgConn.connectTimeout = 10000
+            imgConn.readTimeout = 20000
+            imgConn.instanceFollowRedirects = true
+
+            val bitmap = if (imgConn.responseCode == 200) BitmapFactory.decodeStream(imgConn.inputStream) else null
+            imgConn.disconnect()
+            bitmap
+        }
+
+    private suspend fun aiProcessSticker(source: Bitmap): Bitmap =
+        withContext(Dispatchers.IO) {
+            val scaled = Bitmap.createScaledBitmap(source, 512, 512, true)
+            val result = Bitmap.createBitmap(512, 512, Bitmap.Config.ARGB_8888)
+            val pixels = IntArray(512 * 512)
+            scaled.getPixels(pixels, 0, 512, 0, 0, 512, 512)
+            for (i in pixels.indices) {
+                val r = Color.red(pixels[i]); val g = Color.green(pixels[i]); val b = Color.blue(pixels[i])
+                if (r > 240 && g > 240 && b > 240) {
+                    pixels[i] = Color.TRANSPARENT
+                } else if (r > 220 && g > 220 && b > 220) {
+                    val alpha = ((255 - r) + (255 - g) + (255 - b)) * 255 / (35 * 3)
+                    pixels[i] = Color.argb(alpha.coerceIn(0, 255), r, g, b)
+                }
+            }
+            result.setPixels(pixels, 0, 512, 0, 0, 512, 512)
+            if (!scaled.isRecycled && scaled !== source) scaled.recycle()
+            result
+        }
+
+    private fun aiShowPackPickerDialog() {
+        val bitmap = aiGeneratedBitmap ?: return
+        val view = layoutInflater.inflate(R.layout.dialog_select_pack, null)
+        val rvPacks = view.findViewById<RecyclerView>(R.id.rvPacks)
+        val inputPackName = view.findViewById<com.google.android.material.textfield.TextInputEditText>(R.id.inputPackName)
+        val btnCreatePack = view.findViewById<com.google.android.material.button.MaterialButton>(R.id.btnCreatePack)
+
+        val packs = CustomStickerManager.getCustomPacks(this).filter { !it.isAnimated }
+
+        val dialog = AlertDialog.Builder(this, R.style.MaterialAlertDialogTheme)
+            .setView(view)
+            .create()
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+
+        if (packs.isNotEmpty()) {
+            rvPacks.visibility = View.VISIBLE
+            rvPacks.layoutManager = androidx.recyclerview.widget.LinearLayoutManager(this)
+            rvPacks.adapter = AiPackSelectionAdapter(packs) { pack ->
+                dialog.dismiss()
+                aiSaveStickerToPack(pack.id, bitmap)
+            }
+        }
+
+        btnCreatePack.setOnClickListener {
+            val packName = inputPackName.text?.toString()?.trim() ?: ""
+            if (packName.isEmpty()) {
+                inputPackName.error = getString(R.string.enter_pack_name)
+                return@setOnClickListener
+            }
+            dialog.dismiss()
+            val newPackId = CustomStickerManager.createPack(this, packName, false)
+            aiSaveStickerToPack(newPackId, bitmap)
+        }
+
+        dialog.show()
+    }
+
+    private fun aiSaveStickerToPack(packId: String, bitmap: Bitmap) {
+        val aiEtPrompt = findViewById<EditText>(R.id.aiEtPrompt)
+        val aiPreviewCard = findViewById<CardView>(R.id.aiPreviewCard)
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val success = CustomStickerManager.addStickerToPack(this@MainActivity, packId, bitmap)
+                if (success) {
+                    // Refresh allPacks with updated custom packs before switching tab
+                    val customPacks = CustomStickerManager.getCustomPacks(this@MainActivity).mapNotNull { cp ->
+                        CustomStickerManager.toWhatsAppPack(this@MainActivity, cp.id)?.copy(category = "custom")
+                    }
+                    val firebasePacks = allPacks.filter { !it.id.startsWith("custom_") }
+                    allPacks = firebasePacks + customPacks
+                }
+                withContext(Dispatchers.Main) {
+                    if (success) {
+                        Toast.makeText(this@MainActivity, R.string.ai_saved_success, Toast.LENGTH_SHORT).show()
+                        aiGeneratedBitmap = null
+                        aiRawBitmap = null
+                        aiPreviewCard?.visibility = View.GONE
+                        aiEtPrompt?.text?.clear()
+                        // Navigate to My Stickers tab
+                        currentFilter = FilterType.CUSTOM
+                        applyFilters()
+                        updateBottomNavUI()
+                    } else {
+                        Toast.makeText(this@MainActivity, R.string.ai_generation_failed, Toast.LENGTH_SHORT).show()
+                    }
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@MainActivity, e.message ?: getString(R.string.ai_generation_failed), Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
+    // ─── AI History ─────────────────────────────────────────────────────
+
+    private fun aiGetHistoryDir(): java.io.File {
+        val dir = java.io.File(filesDir, "ai_history")
+        if (!dir.exists()) dir.mkdirs()
+        return dir
+    }
+
+    private suspend fun aiSaveToHistory(bitmap: Bitmap, prompt: String): String? =
+        withContext(Dispatchers.IO) {
+            try {
+                val dir = aiGetHistoryDir()
+                val fileName = "ai_${System.currentTimeMillis()}.webp"
+                val file = java.io.File(dir, fileName)
+                java.io.FileOutputStream(file).use { out ->
+                    bitmap.compress(Bitmap.CompressFormat.WEBP, 90, out)
+                }
+                // Save metadata
+                val metaFile = java.io.File(dir, "history.json")
+                val arr = try {
+                    if (metaFile.exists()) JSONArray(metaFile.readText()) else JSONArray()
+                } catch (_: Exception) { JSONArray() }
+                arr.put(JSONObject().apply {
+                    put("file", fileName)
+                    put("prompt", prompt)
+                    put("time", System.currentTimeMillis())
+                })
+                metaFile.writeText(arr.toString())
+                file.absolutePath
+            } catch (_: Exception) { null }
+        }
+
+    private suspend fun aiSyncHistoryToFirebase(prompt: String, filePath: String) =
+        withContext(Dispatchers.IO) {
+            try {
+                val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser ?: return@withContext
+                val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                db.collection("users").document(user.uid).collection("ai_history")
+                    .add(mapOf(
+                        "prompt" to prompt,
+                        "created_at" to com.google.firebase.Timestamp.now(),
+                        "file_name" to java.io.File(filePath).name
+                    ))
+            } catch (_: Exception) { }
+        }
+
+    private fun aiLoadHistory() {
+        val rvHistory = findViewById<RecyclerView>(R.id.rvAiHistory)
+        val tvTitle = findViewById<TextView>(R.id.tvAiHistoryTitle)
+        if (rvHistory == null || tvTitle == null) return
+
+        lifecycleScope.launch(Dispatchers.IO) {
+            val dir = aiGetHistoryDir()
+            val metaFile = java.io.File(dir, "history.json")
+            val items = mutableListOf<AiHistoryItem>()
+            try {
+                if (metaFile.exists()) {
+                    val arr = JSONArray(metaFile.readText())
+                    for (i in (arr.length() - 1) downTo 0) {
+                        val obj = arr.getJSONObject(i)
+                        val file = java.io.File(dir, obj.getString("file"))
+                        if (file.exists()) {
+                            items.add(AiHistoryItem(file.absolutePath, obj.optString("prompt", ""), obj.optLong("time", 0)))
+                        }
+                    }
+                }
+            } catch (_: Exception) { }
+
+            withContext(Dispatchers.Main) {
+                if (items.isEmpty()) {
+                    tvTitle.visibility = View.GONE
+                    rvHistory.visibility = View.GONE
+                } else {
+                    tvTitle.visibility = View.VISIBLE
+                    rvHistory.visibility = View.VISIBLE
+                    rvHistory.isNestedScrollingEnabled = false
+                    // Always recreate adapter to avoid stale parent.width=0 from GONE state
+                    aiHistoryAdapter = AiHistoryAdapter(items.toMutableList()) { item ->
+                        aiShowHistoryItemOptions(item)
+                    }
+                    val gridLm = androidx.recyclerview.widget.GridLayoutManager(this@MainActivity, 3)
+                    rvHistory.layoutManager = gridLm
+                    rvHistory.adapter = aiHistoryAdapter
+                }
+            }
+        }
+    }
+
+    private fun aiShowHistoryItemOptions(item: AiHistoryItem) {
+        val file = java.io.File(item.path)
+        if (!file.exists()) return
+        val bmp = android.graphics.BitmapFactory.decodeFile(file.absolutePath) ?: return
+
+        // Show the image in the preview area and enable edit/add buttons
+        val aiIvPreview = findViewById<ImageView>(R.id.aiIvPreview)
+        val aiPreviewCard = findViewById<androidx.cardview.widget.CardView>(R.id.aiPreviewCard)
+        val aiEditButtons = findViewById<View>(R.id.aiEditButtons)
+        val aiBtnAddToPack = findViewById<com.google.android.material.button.MaterialButton>(R.id.aiBtnAddToPack)
+        val aiLoadingOverlay = findViewById<View>(R.id.aiLoadingOverlay)
+        val aiBtnClosePreview = findViewById<ImageView>(R.id.aiBtnClosePreview)
+        val aiBtnTryAgain = findViewById<com.google.android.material.button.MaterialButton>(R.id.aiBtnTryAgain)
+
+        aiRawBitmap = bmp
+        aiGeneratedBitmap = bmp
+        aiPreviewCard?.visibility = View.VISIBLE
+        aiLoadingOverlay?.visibility = View.GONE
+        aiIvPreview?.setImageBitmap(bmp)
+        aiEditButtons?.visibility = View.VISIBLE
+        aiBtnAddToPack?.visibility = View.VISIBLE
+        aiBtnClosePreview?.visibility = View.VISIBLE
+
+        // Change "Regenerate" to "Delete" for history items
+        aiBtnTryAgain?.text = " Delete"
+        aiBtnTryAgain?.setTextColor(android.graphics.Color.parseColor("#E74C3C"))
+        aiBtnTryAgain?.strokeColor = android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#E74C3C"))
+        aiBtnTryAgain?.setIconResource(R.drawable.ic_delete)
+        aiBtnTryAgain?.iconTint = android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#E74C3C"))
+        aiBtnTryAgain?.iconGravity = com.google.android.material.button.MaterialButton.ICON_GRAVITY_TEXT_START
+        aiBtnTryAgain?.iconPadding = (4 * resources.displayMetrics.density).toInt()
+        aiBtnTryAgain?.setOnClickListener {
+            aiDeleteHistoryItem(item)
+            aiPreviewCard?.visibility = View.GONE
+            aiBtnClosePreview?.visibility = View.GONE
+            // Restore button for future generates
+            aiBtnTryAgain.text = "🔄 Regenerate"
+            aiBtnTryAgain.icon = null
+            aiBtnTryAgain.setTextColor(androidx.core.content.ContextCompat.getColor(this, R.color.primary))
+            aiBtnTryAgain.strokeColor = android.content.res.ColorStateList.valueOf(androidx.core.content.ContextCompat.getColor(this, R.color.primary))
+        }
+
+        // Scroll to top to show preview
+        findViewById<android.widget.ScrollView>(R.id.aiContentContainer)?.smoothScrollTo(0, 0)
+    }
+
+    private fun aiDeleteHistoryItem(item: AiHistoryItem) {
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                // Delete image file
+                val file = java.io.File(item.path)
+                if (file.exists()) file.delete()
+
+                // Update history.json
+                val dir = aiGetHistoryDir()
+                val metaFile = java.io.File(dir, "history.json")
+                if (metaFile.exists()) {
+                    val arr = JSONArray(metaFile.readText())
+                    val newArr = JSONArray()
+                    for (i in 0 until arr.length()) {
+                        val obj = arr.getJSONObject(i)
+                        if (obj.getString("file") != file.name) {
+                            newArr.put(obj)
+                        }
+                    }
+                    metaFile.writeText(newArr.toString())
+                }
+            } catch (_: Exception) { }
+
+            withContext(Dispatchers.Main) {
+                // Reload the full history grid
+                aiLoadHistory()
+            }
+        }
+    }
+
+    data class AiHistoryItem(val path: String, val prompt: String, val time: Long)
+
+    inner class AiHistoryAdapter(
+        private var items: MutableList<AiHistoryItem>,
+        private val onClick: (AiHistoryItem) -> Unit
+    ) : RecyclerView.Adapter<AiHistoryAdapter.VH>() {
+
+        inner class VH(view: View) : RecyclerView.ViewHolder(view) {
+            val iv: ImageView = view as ImageView
+        }
+
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
+            val spacing = 8 // 4dp margin on each side
+            val parentWidth = if (parent.width > 0) parent.width else (parent.context.resources.displayMetrics.widthPixels - (32 * parent.context.resources.displayMetrics.density).toInt())
+            val itemSize = (parentWidth - spacing * 3 * 2) / 3
+            val iv = ImageView(parent.context).apply {
+                layoutParams = ViewGroup.MarginLayoutParams(itemSize, itemSize).apply {
+                    setMargins(4, 4, 4, 4)
+                }
+                scaleType = ImageView.ScaleType.CENTER_CROP
+                setBackgroundResource(R.drawable.bg_sticker_preview_ai)
+            }
+            return VH(iv)
+        }
+
+        override fun onBindViewHolder(holder: VH, position: Int) {
+            val item = items[position]
+            com.bumptech.glide.Glide.with(holder.iv)
+                .load(java.io.File(item.path))
+                .centerCrop()
+                .into(holder.iv)
+            holder.iv.setOnClickListener { onClick(item) }
+        }
+
+        override fun getItemCount() = items.size
+
+        fun updateItems(newItems: List<AiHistoryItem>) {
+            items = newItems.toMutableList()
+            notifyDataSetChanged()
+        }
+    }
+
+    // Pack selection adapter for AI sticker save dialog
+    inner class AiPackSelectionAdapter(
+        private val packs: List<CustomStickerManager.CustomPack>,
+        private val onPackClick: (CustomStickerManager.CustomPack) -> Unit
+    ) : RecyclerView.Adapter<AiPackSelectionAdapter.VH>() {
+
+        inner class VH(view: View) : RecyclerView.ViewHolder(view) {
+            val tvName: TextView = view.findViewById(R.id.tvPackName)
+            val tvCount: TextView = view.findViewById(R.id.tvPackCount)
+            val ivCover: ImageView = view.findViewById(R.id.ivPackCover)
+        }
+
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
+            return VH(LayoutInflater.from(parent.context).inflate(R.layout.item_pack_selection, parent, false))
+        }
+
+        override fun onBindViewHolder(holder: VH, position: Int) {
+            val pack = packs[position]
+            holder.tvName.text = pack.name
+            holder.tvCount.text = "${pack.stickerCount}${getString(R.string.sticker_count_suffix)}"
+
+            if (pack.stickerCount > 0) {
+                val stickerFile = CustomStickerManager.getCustomStickerPath(
+                    holder.itemView.context, pack.id, "sticker_1.webp"
+                )
+                com.bumptech.glide.Glide.with(holder.itemView.context)
+                    .load(stickerFile)
+                    .placeholder(R.drawable.ic_sticker_placeholder)
+                    .error(R.drawable.ic_sticker_placeholder)
+                    .into(holder.ivCover)
+            } else {
+                holder.ivCover.setImageResource(R.drawable.ic_sticker_placeholder)
+            }
+
+            holder.itemView.setOnClickListener { onPackClick(pack) }
+        }
+
+        override fun getItemCount() = packs.size
+    }
+
+    private fun aiShowDailyLimitDialog() {
+        val view = layoutInflater.inflate(R.layout.dialog_daily_limit, null)
+        view.findViewById<TextView>(R.id.tvLimitMsg).text =
+            getString(R.string.ai_daily_limit_msg, AI_DAILY_FREE_LIMIT)
+
+        val dialog = AlertDialog.Builder(this, R.style.MaterialAlertDialogTheme)
+            .setView(view)
+            .create()
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+
+        view.findViewById<View>(R.id.btnGetPremiumLimit).setOnClickListener {
+            dialog.dismiss()
+            startActivity(Intent(this, PremiumActivity::class.java))
+        }
+        view.findViewById<View>(R.id.btnCancelLimit).setOnClickListener {
+            dialog.dismiss()
+        }
+        dialog.show()
+    }
+
+    private fun showAiSignInDialog() {
+        val gso = com.google.android.gms.auth.api.signin.GoogleSignInOptions.Builder(
+            com.google.android.gms.auth.api.signin.GoogleSignInOptions.DEFAULT_SIGN_IN
+        )
+            .requestIdToken(getString(R.string.default_web_client_id))
+            .requestEmail()
+            .build()
+        val client = com.google.android.gms.auth.api.signin.GoogleSignIn.getClient(this, gso)
+        aiSignInLauncher.launch(client.signInIntent)
+    }
 
     private fun setupRegionalSection() {
         regionalAdapter = RegionalAdapter(
             packs = emptyList(),
             onClick = { pack ->
+                sessionPackOpenCount++
+                if (sessionPackOpenCount == 3) StickyApp.appOpenAdInstance?.tryShowAd()
                 startActivity(Intent(this, DetailsActivity::class.java).putExtra("id", pack.id))
             },
             onAddClick = { pack ->
+                sessionPackOpenCount++
+                if (sessionPackOpenCount == 3) StickyApp.appOpenAdInstance?.tryShowAd()
                 startActivity(Intent(this, DetailsActivity::class.java).putExtra("id", pack.id))
             }
         )
         rvRegional.layoutManager = LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false)
+        rvRegional.setHasFixedSize(true)
+        rvRegional.setItemViewCacheSize(4)
+        rvRegional.itemAnimator = null
         rvRegional.adapter = regionalAdapter
-        
-        // Remove existing helper if any (though usually one instance per RV lifecycle)
-        rvRegional.onFlingListener = null 
+
+        // Snap to card edges for smooth swipe
+        rvRegional.onFlingListener = null
         snapHelper.attachToRecyclerView(rvRegional)
-        
-        rvRegional.addOnScrollListener(object : RecyclerView.OnScrollListener() {
-            override fun onScrollStateChanged(recyclerView: RecyclerView, newState: Int) {
-                super.onScrollStateChanged(recyclerView, newState)
-                if (newState == RecyclerView.SCROLL_STATE_DRAGGING) {
-                    isUserInteractingWithCarousel = true
-                    stopAutoScroll()
-                } else if (newState == RecyclerView.SCROLL_STATE_IDLE) {
-                    isUserInteractingWithCarousel = false
-                    startAutoScroll()
-                }
-            }
-        })
     }
 
     private fun updateRegionalPacks(packs: List<Pack>) {
         regionalPopularTitle.text = getString(R.string.popular_stickers)
 
-        // En popüler 10 paketi al (özel paketler hariç)
-        val regionalTopPacks = packs
-            .filter { it.isActive && it.category != "custom" }
-            .sortedByDescending { it.downloadCount }
+        // First try to get packs marked as popular from admin panel
+        var regionalTopPacks = packs
+            .filter { it.isActive && it.category != "custom" && it.isPopular }
+            .sortedByDescending { it.fakeDownloadBase + it.downloadCount }
             .take(10)
+
+        // Fallback to download-based sorting if no popular packs set
+        if (regionalTopPacks.isEmpty()) {
+            regionalTopPacks = packs
+                .filter { it.isActive && it.category != "custom" }
+                .sortedByDescending { it.fakeDownloadBase + it.downloadCount }
+                .take(10)
+        }
 
         if (regionalTopPacks.isEmpty()) {
             regionalPopularContainer.visibility = View.GONE
             return
         }
 
-        // Popüler paketlerin önizlemelerini EN YÜKSEK öncelikle preload et
-        StickyGlideModule.preloadPopularPacks(this, regionalTopPacks)
+        if (!hasPreloadedPopular) {
+            hasPreloadedPopular = true
+            StickyGlideModule.preloadPopularPacks(this, regionalTopPacks)
+        }
 
-        if (currentFilter == FilterType.ALL && currentCategory == "all") {
+        if (currentFilter == FilterType.ALL || currentFilter == FilterType.PREMIUM) {
             regionalPopularContainer.visibility = View.VISIBLE
         } else {
             regionalPopularContainer.visibility = View.GONE
         }
 
         regionalAdapter?.updateData(regionalTopPacks)
-        startAutoScroll()
     }
 
-    private fun startAutoScroll() {
-        stopAutoScroll()
-        autoScrollJob = lifecycleScope.launch {
-            while (true) {
-                delay(3000)
-                if (!isUserInteractingWithCarousel && regionalPopularContainer.visibility == View.VISIBLE) {
-                    val layoutManager = rvRegional.layoutManager as? LinearLayoutManager ?: continue
-                    val adapter = regionalAdapter ?: continue
-                    
-                    if (adapter.itemCount > 0) {
-                        val centerView = snapHelper.findSnapView(layoutManager)
-                        val currentPos = if (centerView != null) layoutManager.getPosition(centerView) else 0
-                        val nextPos = if (currentPos < adapter.itemCount - 1) currentPos + 1 else 0
-                        rvRegional.smoothScrollToPosition(nextPos)
-                    }
-                }
-            }
-        }
-    }
-
+    private fun startAutoScroll() { /* disabled — manual swipe only */ }
     private fun stopAutoScroll() {
         autoScrollJob?.cancel()
         autoScrollJob = null
+    }
+
+    private fun setupStorySection() {
+        storyAdapter = StoryAdapter(emptyList()) { pack ->
+            sessionPackOpenCount++
+            if (sessionPackOpenCount == 3) StickyApp.appOpenAdInstance?.tryShowAd()
+            startActivity(Intent(this, DetailsActivity::class.java).putExtra("id", pack.id))
+        }
+        rvStories.layoutManager = LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false)
+        rvStories.setHasFixedSize(true)
+        rvStories.setItemViewCacheSize(5)
+        rvStories.itemAnimator = null
+        rvStories.adapter = storyAdapter
+    }
+
+    private fun updateStoryPacks(packs: List<Pack>) {
+        val activePacks = packs.filter { it.isActive && it.category != "custom" }
+
+        // Recently added: sorted by creation date (most recent first), up to 15
+        val recentPacks = activePacks
+            .sortedByDescending { it.createdAt }
+            .take(15)
+
+        if (recentPacks.isNotEmpty() && (currentFilter == FilterType.ALL || currentFilter == FilterType.PREMIUM)) {
+            storyContainer.visibility = View.VISIBLE
+            storyAdapter?.updateData(recentPacks)
+        } else {
+            storyContainer.visibility = View.GONE
+        }
+    }
+
+    private fun hideHomeSections() {
+        regionalPopularContainer.visibility = View.GONE
+        storyContainer.visibility = View.GONE
+    }
+
+    private fun showHomeSections() {
+        if (regionalAdapter?.getRealCount() ?: 0 > 0) regionalPopularContainer.visibility = View.VISIBLE
+        if (storyAdapter?.itemCount ?: 0 > 0) storyContainer.visibility = View.VISIBLE
     }
 
 
 
 
     private fun Int.dpToPx(): Int = (this * resources.displayMetrics.density).toInt()
+
+    private fun getCategoryEmoji(key: String): String {
+        return when (key) {
+            "humor" -> "😂"
+            "love" -> "❤️"
+            "religious" -> "🕌"
+            "entertainment" -> "🎭"
+            "background" -> "🖼️"
+            "morning" -> "🌅"
+            "night" -> "🌙"
+            "birthday" -> "🎂"
+            "congrats" -> "🎉"
+            "animals" -> "🐾"
+            "sports" -> "⚽"
+            "gaming" -> "🎮"
+            "movie" -> "🎬"
+            "music" -> "🎵"
+            "food" -> "🍕"
+            "emoji" -> "😀"
+            "cars" -> "🏎️"
+            "motivation" -> "💪"
+            "cute" -> "🥰"
+            "text" -> "💬"
+            "anime" -> "🎌"
+            "memes" -> "🤣"
+            "nature" -> "🌿"
+            "other" -> "📦"
+            else -> "📁"
+        }
+    }
 
     private fun getCategoryStringRes(key: String): Int {
         return when (key) {
@@ -529,9 +1693,12 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private val categoryKeyCache = HashMap<String, String>(32)
+
     private fun normalizeCategoryKey(key: String): String {
+        categoryKeyCache[key]?.let { return it }
         val k = key.lowercase(Locale.ROOT).trim()
-        return when {
+        val result = when {
             k == "all" || k == "tümü" || k == "todo" || k.contains("tüm kategoriler") || k.contains("all categories") -> "all"
             k.contains("mizah") || k.contains("komik") || k.contains("humor") || k.contains("funny") -> "humor"
             k.contains("aşk") || k.contains("love") || k.contains("amor") -> "love"
@@ -557,32 +1724,42 @@ class MainActivity : AppCompatActivity() {
             k.contains("meme") -> "memes"
             k.contains("doğa") || k.contains("nature") -> "nature"
             else -> {
-                // Eğer key zaten bir id ise (örn: "music"), onu döndür
                 if (getCategoryStringRes(k) != 0) k else k.replace(" ", "_")
             }
         }
+        categoryKeyCache[key] = result
+        return result
     }
+
+    private var lastCategorySet: Set<String> = emptySet()
 
     private fun setupCategoryChips() {
         if (!::categoryChipGroup.isInitialized) return
-        categoryChipGroup.removeAllViews()
 
         // Firebase'den gelen paketlerdeki benzersiz kategorileri al
-        dynamicCategories.clear()
-
         val uniqueCategories = allPacks
             .filter { it.isActive && it.category.isNotBlank() && it.category != "custom" }
             .map { normalizeCategoryKey(it.category) }
             .distinct()
             .sorted()
 
+        // Skip rebuild if categories haven't changed
+        val newSet = uniqueCategories.toSet()
+        if (newSet == lastCategorySet && categoryChipGroup.childCount > 0) {
+            refreshChipStates()
+            return
+        }
+        lastCategorySet = newSet
+
+        categoryChipGroup.removeAllViews()
+        dynamicCategories.clear()
         dynamicCategories.addAll(uniqueCategories)
 
         // === SPECIAL FILTER CHIPS (first in the row) ===
         data class FilterChipInfo(val id: String, val label: String, val filterType: FilterType)
         val filterChips = listOf(
             FilterChipInfo("filter_all", "✨ ${getString(R.string.filter_all)}", FilterType.ALL),
-            FilterChipInfo("filter_installed", "✅ ${getString(R.string.filter_installed)}", FilterType.INSTALLED)
+            FilterChipInfo("filter_premium", "💎 ${getString(R.string.filter_premium)}", FilterType.PREMIUM)
         )
 
         filterChips.forEach { info ->
@@ -592,11 +1769,15 @@ class MainActivity : AppCompatActivity() {
                 isCheckable = true
                 isChecked = isActive
                 tag = info.id
-                chipStartPadding = 8.dpToPx().toFloat()
-                chipEndPadding = 8.dpToPx().toFloat()
+                chipStartPadding = 10.dpToPx().toFloat()
+                chipEndPadding = 10.dpToPx().toFloat()
+                chipCornerRadius = 20.dpToPx().toFloat()
+                chipMinHeight = 30.dpToPx().toFloat()
+                textSize = 13f
                 setChipBackgroundColorResource(if (isActive) R.color.accent else R.color.chip_bg)
                 setTextColor(getColor(if (isActive) R.color.white else R.color.text_primary))
-                chipStrokeWidth = 0f
+                chipStrokeWidth = if (isActive) 0f else 1.dpToPx().toFloat()
+                chipStrokeColor = android.content.res.ColorStateList.valueOf(getColor(R.color.primary_light))
                 setOnClickListener {
                     currentFilter = info.filterType
                     currentCategory = "all"
@@ -613,22 +1794,28 @@ class MainActivity : AppCompatActivity() {
             val isActive = currentFilter == FilterType.ALL && currentCategory == categoryKey
             val chip = Chip(this).apply {
                 val resId = getCategoryStringRes(categoryKey)
-                if (resId != 0) {
-                    text = getString(resId)
+                val emoji = getCategoryEmoji(categoryKey)
+                val label = if (resId != 0) {
+                    getString(resId)
                 } else {
                     val dynResId = resources.getIdentifier("category_$categoryKey", "string", packageName)
-                    text = if (dynResId != 0) getString(dynResId) else {
+                    if (dynResId != 0) getString(dynResId) else {
                         categoryKey.replace("_", " ").split(" ").joinToString(" ") { it.replaceFirstChar { char -> char.uppercase() } }
                     }
                 }
+                text = "$emoji $label"
                 isCheckable = true
                 isChecked = isActive
                 tag = categoryKey
-                chipStartPadding = 8.dpToPx().toFloat()
-                chipEndPadding = 8.dpToPx().toFloat()
+                chipStartPadding = 10.dpToPx().toFloat()
+                chipEndPadding = 10.dpToPx().toFloat()
+                chipCornerRadius = 20.dpToPx().toFloat()
+                chipMinHeight = 30.dpToPx().toFloat()
+                textSize = 13f
                 setChipBackgroundColorResource(if (isActive) R.color.accent else R.color.chip_bg)
                 setTextColor(getColor(if (isActive) R.color.white else R.color.text_primary))
-                chipStrokeWidth = 0f
+                chipStrokeWidth = if (isActive) 0f else 1.dpToPx().toFloat()
+                chipStrokeColor = android.content.res.ColorStateList.valueOf(getColor(R.color.primary_light))
                 setOnClickListener {
                     currentFilter = FilterType.ALL
                     currentCategory = categoryKey
@@ -648,17 +1835,48 @@ class MainActivity : AppCompatActivity() {
             val isActive = when {
                 tag == "filter_all" -> currentFilter == FilterType.ALL && currentCategory == "all"
                 tag == "filter_premium" -> currentFilter == FilterType.PREMIUM
-                tag == "filter_installed" -> currentFilter == FilterType.INSTALLED
                 else -> currentFilter == FilterType.ALL && currentCategory == tag
             }
             chip.isChecked = isActive
             chip.setChipBackgroundColorResource(if (isActive) R.color.accent else R.color.chip_bg)
             chip.setTextColor(getColor(if (isActive) R.color.white else R.color.text_primary))
+            chip.chipStrokeWidth = if (isActive) 0f else 1.dpToPx().toFloat()
         }
     }
 
     private fun updateCategoryChipSelection() {
         refreshChipStates()
+    }
+
+    private fun setupFavoritesChips() {
+        categoryChipGroup.removeAllViews()
+
+        data class FavChipInfo(val id: String, val label: String, val filterType: FilterType)
+        val chips = listOf(
+            FavChipInfo("fav_favorites", "❤️ ${getString(R.string.filter_favorites)}", FilterType.FAVORITES),
+            FavChipInfo("fav_downloads", "📥 ${getString(R.string.filter_downloads)}", FilterType.INSTALLED)
+        )
+
+        chips.forEach { info ->
+            val isActive = currentFilter == info.filterType
+            val chip = Chip(this).apply {
+                text = info.label
+                isCheckable = true
+                isChecked = isActive
+                tag = info.id
+                chipStartPadding = 8.dpToPx().toFloat()
+                chipEndPadding = 8.dpToPx().toFloat()
+                setChipBackgroundColorResource(if (isActive) R.color.accent else R.color.chip_bg)
+                setTextColor(getColor(if (isActive) R.color.white else R.color.text_primary))
+                chipStrokeWidth = 0f
+                setOnClickListener {
+                    currentFilter = info.filterType
+                    applyFilters()
+                    updateBottomNavUI()
+                }
+            }
+            categoryChipGroup.addView(chip)
+        }
     }
 
     private fun setupDrawerMenu() {
@@ -717,25 +1935,30 @@ class MainActivity : AppCompatActivity() {
 
         searchBox.setOnEditorActionListener { _, actionId, _ ->
             if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH) {
-                val query = searchBox.text.toString().trim()
-                if (query.isNotEmpty()) {
-                    PreferencesHelper.addSearchHistory(this, query)
-                }
                 val imm = getSystemService(INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
                 imm.hideSoftInputFromWindow(searchBox.windowToken, 0)
+                searchBox.clearFocus()
                 true
             } else false
         }
 
+        // When search loses focus (keyboard dismissed), clear search and exit
         searchBox.setOnFocusChangeListener { _, hasFocus ->
-            if (hasFocus && searchBox.text.isNullOrEmpty()) {
-                showSearchHistory(searchBox)
+            if (!hasFocus && searchBox.text.isNullOrEmpty()) {
+                currentSearchQuery = ""
+                applyFilters()
             }
         }
 
-        searchBox.setOnClickListener {
-            if (searchBox.text.isNullOrEmpty()) {
-                showSearchHistory(searchBox)
+        // Detect keyboard dismiss and clear search focus
+        val rootView = window.decorView.rootView
+        rootView.viewTreeObserver.addOnGlobalLayoutListener {
+            val rect = android.graphics.Rect()
+            rootView.getWindowVisibleDisplayFrame(rect)
+            val screenHeight = rootView.height
+            val keypadHeight = screenHeight - rect.bottom
+            if (keypadHeight < screenHeight * 0.15 && searchBox.hasFocus()) {
+                searchBox.clearFocus()
             }
         }
 
@@ -775,16 +1998,21 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         
-        // Sticker Maker için reklamı önceden yükle (Anında gelmesi için)
+        // Preload maker ad (deferred to avoid blocking)
         AdManager.preloadMakerNativeAd(this)
 
-        // WhatsApp durumunu güncelle
-        // WhatsApp durumunu güncelle
+        // WhatsApp installation status
         checkInstallationUpdates()
         
         startAutoScroll()
 
-        if (::adapter.isInitialized) {
+        // Reload AI history when on AI tab
+        if (currentFilter == FilterType.AI) {
+            aiContentContainer?.post { aiLoadHistory() }
+        }
+
+        // Only reload custom packs if we have data and user is on a relevant tab
+        if (::adapter.isInitialized && (currentFilter == FilterType.CUSTOM || currentFilter == FilterType.ALL)) {
             lifecycleScope.launch {
                 val updatedPacks = withContext(Dispatchers.IO) {
                     val customPacks = CustomStickerManager.getCustomPacks(this@MainActivity).mapNotNull { cp ->
@@ -798,6 +2026,12 @@ class MainActivity : AppCompatActivity() {
                 applyFilters()
             }
         }
+
+        // Show ad promo once per session after first fullscreen ad is shown
+        if (!promoShownThisSession && !PreferencesHelper.isPremium(this) && AdManager.adShownThisSession) {
+            promoShownThisSession = true
+            showPremiumPromoDialog()
+        }
     }
 
     override fun onPause() {
@@ -805,41 +2039,81 @@ class MainActivity : AppCompatActivity() {
         stopAutoScroll()
     }
 
-    private fun showNoInternetDialog() {
-        AlertDialog.Builder(this)
-            .setTitle(R.string.no_internet_title)
-            .setMessage(R.string.no_internet_warning)
-            .setCancelable(true)
-            .setPositiveButton(R.string.retry) { _, _ ->
-                if (NetworkUtils.isOnline(this)) {
-                    recreate()
+    private var noInternetDialog: com.google.android.material.bottomsheet.BottomSheetDialog? = null
+
+    private fun showNoInternetBottomSheet() {
+        if (noInternetDialog?.isShowing == true) return
+
+        noInternetDialog = com.google.android.material.bottomsheet.BottomSheetDialog(this, R.style.RoundedBottomSheetDialog).apply {
+            setContentView(R.layout.bottom_sheet_no_internet)
+            setCancelable(false)
+            setCanceledOnTouchOutside(false)
+
+            findViewById<View>(R.id.btnRetryConnection)?.setOnClickListener {
+                if (NetworkUtils.isOnline(this@MainActivity)) {
+                    dismiss()
+                    noInternetDialog = null
+                    loadPacksFromFirebase(forceRefresh = true)
                 } else {
-                    Toast.makeText(this, R.string.still_no_internet, Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this@MainActivity, R.string.still_no_internet, Toast.LENGTH_SHORT).show()
                 }
             }
-            .setNegativeButton(R.string.ok) { dialog, _ -> dialog.dismiss() }
-            .show()
+
+            show()
+        }
+    }
+
+    private fun dismissNoInternetDialog() {
+        noInternetDialog?.dismiss()
+        noInternetDialog = null
+    }
+
+    private fun syncPremiumFromFirebase(onComplete: () -> Unit) {
+        val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+        val docId = user?.uid ?: PreferencesHelper.getDeviceId(this)
+
+        if (docId.isEmpty()) {
+            onComplete()
+            return
+        }
+
+        val firestore = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+        firestore.collection("users").document(docId).get()
+            .addOnSuccessListener { doc ->
+                if (doc.exists()) {
+                    val isPremium = doc.getBoolean("is_premium") ?: false
+                    val premiumType = doc.getString("premium_type") ?: "none"
+                    val premiumExpiry = doc.getLong("premium_expiry") ?: 0L
+
+                    if (isPremium) {
+                        PreferencesHelper.updateLocalPremiumStatus(this, true, premiumType, premiumExpiry)
+                    } else {
+                        PreferencesHelper.updateLocalPremiumStatus(this, false, "none", 0L)
+                    }
+                }
+                onComplete()
+            }
+            .addOnFailureListener {
+                onComplete()
+            }
     }
 
     private var hasPreloadedOnce = false
+    private var hasPreloadedPopular = false
 
     private fun displayPacks(packs: List<Pack>) {
         allPacks = packs
         setupCategoryChips()
-        applyFilters()
         updateRegionalPacks(packs)
+        updateStoryPacks(packs)
+        applyFilters()
         showContent()
-        // Preload only once to avoid repeated heavy I/O on every update
-        if (!hasPreloadedOnce) {
-            hasPreloadedOnce = true
-            StickyGlideModule.preloadStickerPreviews(this@MainActivity, packs)
-        }
     }
 
     private fun loadPacksFromFirebase(forceRefresh: Boolean = false) {
         lifecycleScope.launch {
             try {
-                // 1. Memory cache ANINDA göster (thread değişimine gerek yok)
+                // 1. Memory cache ANINDA göster
                 if (StickerRepository.allPacksCache.isNotEmpty()) {
                     if (!contentShown) displayPacks(StickerRepository.allPacksCache)
                 } else {
@@ -848,24 +2122,18 @@ class MainActivity : AppCompatActivity() {
                         StickerRepository.loadCacheFromDisk(this@MainActivity)
                     }
                     if (diskPacks.isNotEmpty()) {
+                        StickerRepository.allPacksCache = diskPacks
                         displayPacks(diskPacks)
                     }
                 }
 
                 // 2. Firebase'den güncel veriyi çek (arka planda)
-                val loadedPacks = StickerRepository.loadPacks(this@MainActivity, forceRefresh)
+                val loadedPacks = withContext(Dispatchers.IO) {
+                    StickerRepository.loadPacks(this@MainActivity, forceRefresh)
+                }
 
                 if (loadedPacks.isNotEmpty()) {
                     displayPacks(loadedPacks)
-
-                    // Ağır IO işlemlerini arka planda yap
-                    lifecycleScope.launch(Dispatchers.IO) {
-                        val firebasePackIds = loadedPacks.filter { it.category != "custom" }.map { it.id }.toSet()
-                        StickerRepository.cleanupInvalidCache(this@MainActivity, firebasePackIds)
-                        loadedPacks.filter { it.category != "custom" }.forEach { pack ->
-                            StickerRepository.updatePackCache(this@MainActivity, pack)
-                        }
-                    }
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -885,14 +2153,21 @@ class MainActivity : AppCompatActivity() {
         swipeRefresh.visibility = View.VISIBLE
     }
 
+    private var lastPacksUpdateTime = 0L
+
     private fun observePacksUpdateFlow() {
         lifecycleScope.launch {
             StickerRepository.packsUpdateFlow.collect { updatedPacks ->
+                // Debounce rapid updates (at most once every 2s)
+                val now = System.currentTimeMillis()
+                if (now - lastPacksUpdateTime < 2000) return@collect
+                lastPacksUpdateTime = now
                 Log.d("MainActivity", "Real-time update received: ${updatedPacks.size} packs")
                 allPacks = updatedPacks
-                setupCategoryChips() // Kategorileri güncelle
+                setupCategoryChips()
                 applyFilters()
                 updateRegionalPacks(updatedPacks)
+                updateStoryPacks(updatedPacks)
             }
         }
     }
@@ -901,10 +2176,11 @@ class MainActivity : AppCompatActivity() {
         loadPacksFromFirebase(forceRefresh = true)
     }
 
-    enum class FilterType { ALL, INSTALLED, PREMIUM, FAVORITES, PURCHASED, CUSTOM }
+    enum class FilterType { ALL, INSTALLED, PREMIUM, FAVORITES, PURCHASED, CUSTOM, AI }
 
     private fun applyFilters() {
-        lifecycleScope.launch(Dispatchers.Default) {
+        filterJob?.cancel()
+        filterJob = lifecycleScope.launch(Dispatchers.Default) {
             var filtered = allPacks
 
             if (currentSearchQuery.isNotEmpty()) {
@@ -928,6 +2204,7 @@ class MainActivity : AppCompatActivity() {
                     result
                 }
                 FilterType.INSTALLED -> filtered.filter { PreferencesHelper.isPackInstalled(this@MainActivity, it.id) }
+                FilterType.PREMIUM -> filtered.filter { it.isPremium && it.category != "custom" && !it.id.startsWith("custom_") }
                 FilterType.FAVORITES -> filtered.filter { PreferencesHelper.isPackFavorite(this@MainActivity, it.id) }
                 FilterType.CUSTOM -> filtered.filter { it.id.startsWith("custom_") && it.stickers.isNotEmpty() }
                 else -> filtered
@@ -936,9 +2213,24 @@ class MainActivity : AppCompatActivity() {
             // Basit sıralama (Çıkartma sayısına veya puana göre)
             val sorted = filtered.sortedByDescending { getOrCalculateRankScore(it) }
 
+            // Insert banner ads every 10 packs (only in ALL/PREMIUM filters, not for premium users)
+            val withAds = mutableListOf<Any>()
+            val userIsPremium = PreferencesHelper.isPremium(this@MainActivity)
+            if (!userIsPremium && (currentFilter == FilterType.ALL || currentFilter == FilterType.PREMIUM)) {
+                var adSlot = 0
+                sorted.forEachIndexed { index, pack ->
+                    withAds.add(pack)
+                    if ((index + 1) % 10 == 0) {
+                        withAds.add(BannerAdPlaceholder(adSlot++))
+                    }
+                }
+            } else {
+                withAds.addAll(sorted)
+            }
+
             // Calculate Diff on Background
             val oldList = if (::adapter.isInitialized) adapter.getItems() else emptyList()
-            val newList = sorted
+            val newList: List<Any> = withAds
             
             val diffResult = DiffUtil.calculateDiff(object : DiffUtil.Callback() {
                  override fun getOldListSize() = oldList.size
@@ -947,10 +2239,14 @@ class MainActivity : AppCompatActivity() {
                      val old = oldList[oldItemPosition]
                      val new = newList[newItemPosition]
                      if (old is Pack && new is Pack) return old.id == new.id
-                     return old == new
+                     if (old is BannerAdPlaceholder && new is BannerAdPlaceholder) return old.slotIndex == new.slotIndex
+                     return false
                  }
                  override fun areContentsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
-                     return oldList[oldItemPosition] == newList[newItemPosition]
+                     val old = oldList[oldItemPosition]
+                     val new = newList[newItemPosition]
+                     if (old is BannerAdPlaceholder && new is BannerAdPlaceholder) return true
+                     return old == new
                  }
             })
 
@@ -983,11 +2279,11 @@ class MainActivity : AppCompatActivity() {
                     if (::adapter.isInitialized) adapter.updateListWithDiff(newList, diffResult)
                 }
 
-                // Popüler bölümün görünürlüğünü güncelle
-                if (currentFilter == FilterType.ALL && currentCategory == "all" && (regionalAdapter?.itemCount ?: 0) > 0) {
-                    regionalPopularContainer.visibility = View.VISIBLE
+                // Update home sections visibility - keep story/popular visible for category/premium changes
+                if (currentFilter == FilterType.ALL || currentFilter == FilterType.PREMIUM) {
+                    showHomeSections()
                 } else {
-                    regionalPopularContainer.visibility = View.GONE
+                    hideHomeSections()
                 }
             }
         }
@@ -1011,30 +2307,7 @@ class MainActivity : AppCompatActivity() {
 
 
 
-    private fun showSearchHistory(searchBox: EditText) {
-        val history = PreferencesHelper.getSearchHistory(this)
-        if (history.isEmpty()) return
 
-        val popup = PopupMenu(this, searchBox)
-        popup.menu.add(0, -1, 0, getString(R.string.recent_searches)).isEnabled = false
-        history.forEachIndexed { index, query -> popup.menu.add(0, index, index + 1, query) }
-        popup.menu.add(0, 999, history.size + 2, getString(R.string.clear_history))
-
-        popup.setOnMenuItemClickListener { item ->
-            when {
-                item.itemId == 999 -> {
-                    PreferencesHelper.clearSearchHistory(this)
-                    Toast.makeText(this, R.string.search_history_cleared, Toast.LENGTH_SHORT).show()
-                }
-                item.itemId >= 0 && item.itemId < history.size -> {
-                    searchBox.setText(history[item.itemId])
-                    searchBox.setSelection(searchBox.text.length)
-                }
-            }
-            true
-        }
-        popup.show()
-    }
 
     private fun showFaqDialog() {
         startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://sticky-privacy-legal.web.app/#faq")))
@@ -1136,21 +2409,38 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun restorePurchases() {
-        if (billingManager == null) {
-            Toast.makeText(this, R.string.restore_error, Toast.LENGTH_SHORT).show()
-            return
-        }
-        Toast.makeText(this, R.string.restoring, Toast.LENGTH_SHORT).show()
-        billingManager?.restorePurchases { result ->
-            val messageRes = when (result) {
-                BillingManager.RestoreResult.SUCCESS -> {
-                    loadPacksFromFirebase(forceRefresh = true)
-                    R.string.restore_success
-                }
-                BillingManager.RestoreResult.NOT_FOUND -> R.string.restore_not_found
-                BillingManager.RestoreResult.ERROR -> R.string.restore_error
+        val currentUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+        if (currentUser != null) {
+            // Already signed in — restore via billing
+            if (billingManager == null) {
+                Toast.makeText(this, R.string.restore_error, Toast.LENGTH_SHORT).show()
+                return
             }
-            Toast.makeText(this, messageRes, Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Signed in as ${currentUser.email ?: currentUser.displayName}. Restoring...", Toast.LENGTH_SHORT).show()
+            billingManager?.restorePurchases { result ->
+                val messageRes = when (result) {
+                    BillingManager.RestoreResult.SUCCESS -> {
+                        loadPacksFromFirebase(forceRefresh = true)
+                        R.string.restore_success
+                    }
+                    BillingManager.RestoreResult.NOT_FOUND -> {
+                        try {
+                            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/account/subscriptions?package=${packageName}")))
+                        } catch (_: Exception) {}
+                        R.string.restore_not_found
+                    }
+                    BillingManager.RestoreResult.ERROR -> R.string.restore_error
+                }
+                Toast.makeText(this, messageRes, Toast.LENGTH_SHORT).show()
+            }
+        } else {
+            // Not signed in — launch Google sign-in
+            val gso = com.google.android.gms.auth.api.signin.GoogleSignInOptions.Builder(com.google.android.gms.auth.api.signin.GoogleSignInOptions.DEFAULT_SIGN_IN)
+                .requestIdToken(getString(R.string.default_web_client_id))
+                .requestEmail()
+                .build()
+            val client = com.google.android.gms.auth.api.signin.GoogleSignIn.getClient(this, gso)
+            restoreSignInLauncher.launch(client.signInIntent)
         }
     }
 
@@ -1194,6 +2484,9 @@ class MainActivity : AppCompatActivity() {
     companion object {
         private const val REQUEST_DELETE_PACK = 2001
         private const val REQUEST_STICKER_MAKER = 2002
+        private const val AI_DAILY_FREE_LIMIT = 5
+        private const val AI_PREFS_COUNT = "ai_gen_count"
+        private const val AI_PREFS_DATE = "ai_gen_date"
     }
 
     private fun deleteCustomPack(pack: Pack) {
@@ -1315,7 +2608,7 @@ class MainActivity : AppCompatActivity() {
                 // Switch to My Stickers tab to show the newly added sticker
                 currentFilter = FilterType.CUSTOM
                 categoryChipGroup.visibility = View.GONE
-                regionalPopularContainer.visibility = View.GONE
+                hideHomeSections()
                 updateBottomNavUI()
                 applyFilters()
             }

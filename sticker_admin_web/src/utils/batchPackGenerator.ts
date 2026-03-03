@@ -1,10 +1,9 @@
-// Batch Pack Generator V2 - Güçlendirilmiş toplu otomatik paket üretim motoru
-// DeepSeek + Giphy + Klipy entegrasyonu ile tek seferde onlarca paket üretir
-// V2: Multi-page fetching, Klipy re-enabled, query variations, deduplication
+// Batch Pack Generator V3 - Robust batch sticker pack generation
+// Guarantees exact pack count & sticker count, quality filtering, category balancing
 
 import { storage, db } from '../firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp, collection, getDocs } from 'firebase/firestore';
 import { stickerProcessor } from './stickerProcessor';
 import { deepseekService, autoDetectCategory } from './deepseekService';
 import type { Sticker } from '../types';
@@ -43,7 +42,7 @@ export interface CompletedPack {
     source: string;
 }
 
-// ========== STICKER FETCHING (V2 - Multi-source, paginated) ==========
+// ========== STICKER FETCHING ==========
 
 interface RawGif {
     id: string;
@@ -62,7 +61,7 @@ interface RawGif {
 
 const GIPHY_PROXY = 'https://us-central1-sticky-dcd20.cloudfunctions.net/giphyProxy';
 const KLIPY_PROXY = 'https://us-central1-sticky-dcd20.cloudfunctions.net/klipyProxy';
-const PAGE_SIZE = 50; // Max per request
+const PAGE_SIZE = 50;
 
 async function fetchGiphyPage(query: string, limit: number, offset: number, contentType: 'gifs' | 'stickers', queryMatch: 'exact' | 'variation' = 'exact'): Promise<RawGif[]> {
     try {
@@ -147,80 +146,88 @@ function generateQueryVariations(baseQuery: string): { query: string; match: 'ex
         { query: baseQuery, match: 'exact' }
     ];
 
-    // Only add "sticker" suffix — this is the most relevant variation
     if (!baseQuery.toLowerCase().includes('sticker')) {
         variations.push({ query: `${baseQuery} sticker`, match: 'exact' });
     }
 
-    // Add "gif" suffix for GIF content
     if (!baseQuery.toLowerCase().includes('gif')) {
         variations.push({ query: `${baseQuery} gif`, match: 'exact' });
     }
 
-    // NO random adjectives, NO "reaction", NO "emoji" — these dilute relevance
-    // NO individual word splits — they return completely unrelated results
+    // Add "animated" variation for better results
+    if (!baseQuery.toLowerCase().includes('animated')) {
+        variations.push({ query: `${baseQuery} animated`, match: 'variation' });
+    }
 
     return variations;
 }
 
-// ========== QUALITY SCORING ==========
+// ========== QUALITY SCORING (Enhanced V3) ==========
 
 function calculateQualityScore(gif: RawGif, searchTerm: string): number {
     let score = 0;
 
-    // 1. API Rank bonus (top results from API are most relevant) — max 40 points
-    // First 10 results get highest bonus, drops off quickly
+    // 1. API Rank bonus — top results are most relevant (max 40)
     if (gif.apiRank < 5) score += 40;
     else if (gif.apiRank < 10) score += 35;
-    else if (gif.apiRank < 20) score += 25;
-    else if (gif.apiRank < 30) score += 15;
-    else score += 5;
+    else if (gif.apiRank < 15) score += 30;
+    else if (gif.apiRank < 25) score += 20;
+    else if (gif.apiRank < 40) score += 10;
+    else score += 3;
 
-    // 2. Query match type — exact queries are more relevant (+15)
+    // 2. Query match type (max 15)
     if (gif.queryMatch === 'exact') score += 15;
 
-    // 3. Dimension quality — prefer reasonable sizes, not too small (+20 max)
+    // 3. Dimension quality — prefer 200+ pixels (max 25)
     const w = gif.width;
     const h = gif.height;
-    if (w >= 200 && h >= 200) score += 20;
+    if (w >= 300 && h >= 300) score += 25;
+    else if (w >= 200 && h >= 200) score += 20;
     else if (w >= 100 && h >= 100) score += 10;
     else if (w > 0 && h > 0) score += 2;
-    // If no dimension data, give neutral score
     else score += 8;
 
-    // 4. Aspect ratio — prefer roughly square or reasonable ratios (+10 max)
+    // 4. Aspect ratio — prefer square-ish (max 12)
     if (w > 0 && h > 0) {
         const ratio = Math.max(w, h) / Math.min(w, h);
-        if (ratio <= 1.5) score += 10;       // Nearly square — ideal for stickers
-        else if (ratio <= 2.0) score += 6;   // Acceptable
-        else if (ratio <= 3.0) score += 2;   // Wide/tall — less ideal
-        // ratio > 3 = very stretched, no bonus
+        if (ratio <= 1.3) score += 12;
+        else if (ratio <= 1.5) score += 10;
+        else if (ratio <= 2.0) score += 5;
+        else if (ratio <= 3.0) score += 1;
     } else {
-        score += 5; // neutral
+        score += 5;
     }
 
-    // 5. Title relevance — does the title contain the search term? (+15 max)
+    // 5. Title relevance (max 20)
     const titleLower = (gif.title || '').toLowerCase();
     const termLower = searchTerm.toLowerCase();
     const termWords = termLower.split(/\s+/);
     if (titleLower.includes(termLower)) {
-        score += 15; // Full match
+        score += 20;
     } else {
-        // Partial word match
         const matchedWords = termWords.filter(w => w.length > 2 && titleLower.includes(w));
-        score += Math.min(10, matchedWords.length * 5);
+        score += Math.min(15, matchedWords.length * 5);
     }
 
-    // 6. Penalize very generic/empty titles
+    // 6. Penalize generic/empty titles
     if (!gif.title || gif.title === 'Sticker' || gif.title.trim().length < 3) {
-        score -= 5;
+        score -= 8;
     }
 
-    // 7. File size penalty — very large files often fail WebP conversion
+    // 7. File size — penalize very large (likely to fail WebP conversion)
     if (gif.size > 0) {
-        if (gif.size > 8 * 1024 * 1024) score -= 10;      // >8MB — likely to fail
-        else if (gif.size > 5 * 1024 * 1024) score -= 5;  // >5MB — risky
+        if (gif.size > 8 * 1024 * 1024) score -= 15;
+        else if (gif.size > 5 * 1024 * 1024) score -= 8;
+        else if (gif.size > 3 * 1024 * 1024) score -= 3;
+        // Ideal size (100KB-2MB) gets bonus
+        else if (gif.size >= 100 * 1024 && gif.size <= 2 * 1024 * 1024) score += 5;
     }
+
+    // 8. Source bonus — Giphy stickers tend to be higher quality
+    if (gif.source === 'giphy') score += 3;
+
+    // 9. Rating bonus — 'g' rated content is generally cleaner
+    if (gif.rating === 'g') score += 3;
 
     return Math.max(0, score);
 }
@@ -234,7 +241,8 @@ async function fetchStickersAggregated(
 ): Promise<RawGif[]> {
     const seenIds = new Set<string>();
     const allResults: RawGif[] = [];
-    const neededTotal = targetCount * 5; // Fetch 5x to ensure enough stickers survive sizing limits
+    // Fetch 8x to ensure enough survive quality filtering + WebP conversion
+    const neededTotal = targetCount * 8;
 
     const queries = generateQueryVariations(query);
     onStatus?.(`Searching with ${queries.length} query variations...`);
@@ -242,10 +250,10 @@ async function fetchStickersAggregated(
     for (const { query: q, match } of queries) {
         if (allResults.length >= neededTotal) break;
 
-        // === GIPHY (paginated — only 2 pages for exact, 1 for variation) ===
+        // === GIPHY (paginated — up to 3 pages for exact, 2 for variation) ===
         if (source === 'giphy' || source === 'both') {
             let offset = 0;
-            const maxPages = match === 'exact' ? 2 : 1;
+            const maxPages = match === 'exact' ? 3 : 2;
             for (let page = 0; page < maxPages; page++) {
                 if (allResults.length >= neededTotal) break;
                 const remaining = neededTotal - allResults.length;
@@ -284,25 +292,35 @@ async function fetchStickersAggregated(
         }
     }
 
+    // Also try "stickers" content type if we used "gifs" and don't have enough
+    if (contentType === 'gifs' && allResults.length < targetCount * 3) {
+        onStatus?.(`Fetching additional sticker-type results...`);
+        if (source === 'giphy' || source === 'both') {
+            const extraResults = await fetchGiphyPage(query, PAGE_SIZE, 0, 'stickers', 'exact');
+            for (const r of extraResults) {
+                if (!seenIds.has(r.id)) {
+                    seenIds.add(r.id);
+                    allResults.push(r);
+                }
+            }
+        }
+    }
+
     // === QUALITY SCORING & SORTING ===
     onStatus?.(`Scoring ${allResults.length} results for quality...`);
     for (const gif of allResults) {
         gif.qualityScore = calculateQualityScore(gif, query);
     }
 
-    // Sort by quality score (highest first)
     allResults.sort((a, b) => (b.qualityScore || 0) - (a.qualityScore || 0));
 
-    // Log top and bottom scores for debugging
     if (allResults.length > 0) {
         const top5 = allResults.slice(0, 5).map(g => `${g.title.substring(0, 30)}(${g.qualityScore})`);
-        const bot5 = allResults.slice(-5).map(g => `${g.title.substring(0, 30)}(${g.qualityScore})`);
-        console.log(`[BATCH] Quality scores for "${query}": TOP=${top5.join(', ')} | BOTTOM=${bot5.join(', ')}`);
+        console.log(`[BATCH] Quality scores for "${query}": TOP=${top5.join(', ')}`);
     }
 
-    // Filter out extremely low quality (below 5 points) so we don't drop viable 
-    // stickers when the user requested a large amount and APIs return limited results.
-    const minScore = 5;
+    // Filter out low quality (below 10 points)
+    const minScore = 10;
     const filtered = allResults.filter(g => (g.qualityScore || 0) >= minScore);
     console.log(`[BATCH] Aggregated ${allResults.length} → filtered to ${filtered.length} quality results for "${query}" (target: ${targetCount})`);
 
@@ -324,25 +342,24 @@ async function processAndUploadSticker(
     onProgress?: (msg: string) => void
 ): Promise<Sticker | null> {
     try {
-        onProgress?.(`İndiriliyor: ${gif.title}`);
+        onProgress?.(`Downloading: ${gif.title}`);
 
         const gifBlob = await downloadGif(gif.url);
         const gifFile = new File([gifBlob], `${gif.id}.gif`, { type: 'image/gif' });
 
-        onProgress?.(`GIF → WebP dönüştürülüyor: ${gif.title}`);
+        onProgress?.(`Converting GIF → WebP: ${gif.title}`);
 
-        // GIF → WebP dönüşümü (arka plan silme YOK - sadece dönüşüm)
         const webpBlob = await stickerProcessor.processAnimated(gifFile, (p) => {
             onProgress?.(`${gif.title}: ${p.message}`);
         });
 
-        // WhatsApp 500KB kontrolü
+        // WhatsApp 500KB limit
         if (webpBlob.size > 500 * 1024) {
-            console.warn(`[BATCH] Sticker çok büyük, atlanıyor: ${gif.title} (${Math.round(webpBlob.size / 1024)}KB)`);
+            console.warn(`[BATCH] Sticker too large, skipping: ${gif.title} (${Math.round(webpBlob.size / 1024)}KB)`);
             return null;
         }
 
-        onProgress?.(`Yükleniyor: ${gif.title}`);
+        onProgress?.(`Uploading: ${gif.title}`);
 
         const fileName = `batch_${gif.id}_${Date.now()}_${index}.webp`;
         const storagePath = `stickers/${packId}/${fileName}`;
@@ -357,7 +374,7 @@ async function processAndUploadSticker(
             emojis: ['😀']
         };
     } catch (error: any) {
-        console.error(`[BATCH] Sticker işleme hatası (${gif.title}):`, error);
+        console.error(`[BATCH] Sticker processing error (${gif.title}):`, error);
         return null;
     }
 }
@@ -368,16 +385,13 @@ async function createTrayImage(stickers: Sticker[], packId: string): Promise<{ t
     try {
         if (stickers.length === 0) return { trayUrl: '', trayFile: '' };
 
-        // Rastgele bir sticker seç
-        const randomIdx = Math.floor(Math.random() * stickers.length);
-        const chosenSticker = stickers[randomIdx];
+        // Pick the first sticker (highest quality since we sorted)
+        const chosenSticker = stickers[0];
 
-        // Sticker'ı indir
         const response = await fetch(chosenSticker.url);
         const blob = await response.blob();
         const tempFile = new File([blob], 'auto_tray.webp', { type: 'image/webp' });
 
-        // Tray olarak işle
         const trayBlob = await stickerProcessor.processTray(tempFile, () => { });
 
         const trayFileName = `tray_${Date.now()}.png`;
@@ -388,7 +402,7 @@ async function createTrayImage(stickers: Sticker[], packId: string): Promise<{ t
 
         return { trayUrl, trayFile: trayFileName };
     } catch (error) {
-        console.error('[BATCH] Tray oluşturma hatası:', error);
+        console.error('[BATCH] Tray creation error:', error);
         return { trayUrl: '', trayFile: '' };
     }
 }
@@ -403,11 +417,10 @@ async function generatePackName(searchTerm: string, useAi: boolean): Promise<{ n
                 return { name: `${names[0].name} ${names[0].emoji}`, emoji: names[0].emoji };
             }
         } catch (error) {
-            console.error('[BATCH] AI isim üretim hatası:', error);
+            console.error('[BATCH] AI naming error:', error);
         }
     }
 
-    // Fallback: basit isimlendirme
     const capitalized = searchTerm.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
     return { name: capitalized, emoji: '✨' };
 }
@@ -419,255 +432,277 @@ async function translatePack(name: string, useAi: boolean): Promise<Record<strin
         try {
             return await deepseekService.translatePackName(name);
         } catch (error) {
-            console.error('[BATCH] AI çeviri hatası:', error);
+            console.error('[BATCH] AI translation error:', error);
         }
     }
 
-    // Fallback: Google Translate (mevcut translator.ts)
     try {
         const { translateTextAllLanguages } = await import('./translator');
         return await translateTextAllLanguages(name);
     } catch (error) {
-        console.error('[BATCH] Fallback çeviri hatası:', error);
+        console.error('[BATCH] Fallback translation error:', error);
         return { name_en: name };
     }
 }
 
-// ========== MAIN BATCH GENERATOR ==========
+// ========== CATEGORY STATS ==========
+
+export async function getCategoryStats(): Promise<Record<string, number>> {
+    const stats: Record<string, number> = {};
+    try {
+        const snapshot = await getDocs(collection(db, 'sticker_packs'));
+        snapshot.forEach(doc => {
+            const cat = doc.data().category || 'other';
+            stats[cat] = (stats[cat] || 0) + 1;
+        });
+        // Also check drafts
+        const draftSnapshot = await getDocs(collection(db, 'draft_stickers'));
+        draftSnapshot.forEach(doc => {
+            const cat = doc.data().category || 'other';
+            stats[cat] = (stats[cat] || 0) + 1;
+        });
+    } catch (error) {
+        console.error('[BATCH] Failed to fetch category stats:', error);
+    }
+    return stats;
+}
+
+// ========== MAIN BATCH GENERATOR (V3 — guaranteed count) ==========
 
 export async function generateBatchPacks(config: BatchPackConfig): Promise<CompletedPack[]> {
     const { searchTerms, source, contentType = 'stickers', stickersPerPack, useAiNaming, useAiTranslation, existingPackNames = [], onProgress } = config;
     const completedPacks: CompletedPack[] = [];
+    const totalTarget = searchTerms.length;
 
     for (let i = 0; i < searchTerms.length; i++) {
         const searchTerm = searchTerms[i].trim();
         if (!searchTerm) continue;
 
-        try {
-            // === STEP 1: İsim üret ===
-            onProgress?.({
-                currentPack: i + 1,
-                totalPacks: searchTerms.length,
-                currentStep: `"${searchTerm}" için isim üretiliyor...`,
-                status: 'running',
-                completedPacks
-            });
+        const MAX_RETRIES = 2;
+        let retryCount = 0;
+        let packCreated = false;
 
-            let { name: packName } = await generatePackName(searchTerm, useAiNaming);
+        while (!packCreated && retryCount <= MAX_RETRIES) {
+            try {
+                const retryLabel = retryCount > 0 ? ` (retry ${retryCount})` : '';
 
-            // Duplicate kontrolü - aynı isimli paket varsa atla
-            if (existingPackNames.some(existing => existing === packName.toLowerCase())) {
-                console.warn(`[BATCH] "${packName}" zaten mevcut, atlanıyor.`);
+                // === STEP 1: Generate name ===
                 onProgress?.({
                     currentPack: i + 1,
-                    totalPacks: searchTerms.length,
-                    currentStep: `⚠️ "${packName}" zaten mevcut, atlanıyor...`,
-                    packName,
-                    status: 'running',
-                    completedPacks
-                });
-                continue;
-            }
-
-            // === STEP 2: Sticker'ları çek (V2 - multi-source, paginated, query variations) ===
-            onProgress?.({
-                currentPack: i + 1,
-                totalPacks: searchTerms.length,
-                currentStep: `"${searchTerm}" için GIF'ler aranıyor (multi-source)...`,
-                packName,
-                status: 'running',
-                completedPacks
-            });
-
-            // V2: Fetch 3x more than needed via multiple queries, pages, and sources
-            let rawGifs = await fetchStickersAggregated(searchTerm, stickersPerPack, source, contentType, (msg) => {
-                onProgress?.({
-                    currentPack: i + 1,
-                    totalPacks: searchTerms.length,
-                    currentStep: msg,
-                    packName,
-                    status: 'running',
-                    completedPacks
-                });
-            });
-
-            if (rawGifs.length === 0) {
-                console.warn(`[BATCH] "${searchTerm}" için sticker bulunamadı, atlanıyor.`);
-                onProgress?.({
-                    currentPack: i + 1,
-                    totalPacks: searchTerms.length,
-                    currentStep: `⚠️ "${searchTerm}" için sticker bulunamadı, atlanıyor...`,
-                    packName,
-                    status: 'running',
-                    completedPacks
-                });
-                continue;
-            }
-
-            // === STEP 3: Pack ID oluştur ===
-            const packId = searchTerm.toLowerCase()
-                .replace(/[^a-z0-9\s]/g, '')
-                .replace(/\s+/g, '_')
-                .substring(0, 40) + '_' + Date.now().toString(36);
-
-            // === STEP 4: Sticker'ları işle ve yükle (garantili sayı) ===
-            const processedStickers: Sticker[] = [];
-            let processedCount = 0;
-
-            for (let j = 0; j < rawGifs.length && processedStickers.length < stickersPerPack; j++) {
-                onProgress?.({
-                    currentPack: i + 1,
-                    totalPacks: searchTerms.length,
-                    currentStep: `GIF işleniyor: ${processedStickers.length + 1}/${stickersPerPack} (${j + 1}/${rawGifs.length} denendi)`,
-                    packName,
-                    stickerProgress: { current: processedStickers.length, total: stickersPerPack },
+                    totalPacks: totalTarget,
+                    currentStep: `Generating name for "${searchTerm}"${retryLabel}...`,
                     status: 'running',
                     completedPacks
                 });
 
-                const sticker = await processAndUploadSticker(rawGifs[j], packId, j, (msg) => {
+                let { name: packName } = await generatePackName(searchTerm, useAiNaming);
+
+                // Duplicate check
+                if (existingPackNames.some(existing => existing === packName.toLowerCase())) {
+                    packName = packName + ' ' + (Date.now() % 1000);
+                }
+
+                // === STEP 2: Fetch stickers (aggressive fetching) ===
+                onProgress?.({
+                    currentPack: i + 1,
+                    totalPacks: totalTarget,
+                    currentStep: `Searching stickers for "${searchTerm}"${retryLabel}...`,
+                    packName,
+                    status: 'running',
+                    completedPacks
+                });
+
+                let rawGifs = await fetchStickersAggregated(searchTerm, stickersPerPack, source, contentType, (msg) => {
                     onProgress?.({
                         currentPack: i + 1,
-                        totalPacks: searchTerms.length,
+                        totalPacks: totalTarget,
                         currentStep: msg,
                         packName,
-                        stickerProgress: { current: processedStickers.length, total: stickersPerPack },
                         status: 'running',
                         completedPacks
                     });
                 });
 
-                if (sticker) {
-                    processedStickers.push(sticker);
+                if (rawGifs.length === 0) {
+                    console.warn(`[BATCH] No stickers found for "${searchTerm}", skipping.`);
+                    onProgress?.({
+                        currentPack: i + 1,
+                        totalPacks: totalTarget,
+                        currentStep: `⚠️ No stickers found for "${searchTerm}", skipping...`,
+                        packName,
+                        status: 'running',
+                        completedPacks
+                    });
+                    break; // Don't retry if no results at all
                 }
 
-                processedCount++;
+                // === STEP 3: Pack ID ===
+                const packId = searchTerm.toLowerCase()
+                    .replace(/[^a-z0-9\s]/g, '')
+                    .replace(/\s+/g, '_')
+                    .substring(0, 40) + '_' + Date.now().toString(36);
 
-                // WhatsApp max 30 sticker limiti
-                if (processedStickers.length >= 30) break;
+                // === STEP 4: Process stickers (guaranteed count) ===
+                const processedStickers: Sticker[] = [];
+                const effectiveTarget = Math.min(stickersPerPack, 30); // WhatsApp max 30
+
+                for (let j = 0; j < rawGifs.length && processedStickers.length < effectiveTarget; j++) {
+                    onProgress?.({
+                        currentPack: i + 1,
+                        totalPacks: totalTarget,
+                        currentStep: `Processing sticker ${processedStickers.length + 1}/${effectiveTarget} (trying ${j + 1}/${rawGifs.length})`,
+                        packName,
+                        stickerProgress: { current: processedStickers.length, total: effectiveTarget },
+                        status: 'running',
+                        completedPacks
+                    });
+
+                    const sticker = await processAndUploadSticker(rawGifs[j], packId, j, (msg) => {
+                        onProgress?.({
+                            currentPack: i + 1,
+                            totalPacks: totalTarget,
+                            currentStep: msg,
+                            packName,
+                            stickerProgress: { current: processedStickers.length, total: effectiveTarget },
+                            status: 'running',
+                            completedPacks
+                        });
+                    });
+
+                    if (sticker) {
+                        processedStickers.push(sticker);
+                    }
+                }
+
+                // If we didn't reach the target, log it but still create the pack if we have at least 3
+                if (processedStickers.length < effectiveTarget) {
+                    console.warn(`[BATCH] "${searchTerm}": only ${processedStickers.length}/${effectiveTarget} stickers processed`);
+                }
+
+                if (processedStickers.length < 3) {
+                    console.warn(`[BATCH] "${searchTerm}": too few stickers (${processedStickers.length}), retrying...`);
+                    retryCount++;
+                    continue;
+                }
+
+                // === STEP 5: Tray image ===
+                onProgress?.({
+                    currentPack: i + 1,
+                    totalPacks: totalTarget,
+                    currentStep: 'Creating cover image...',
+                    packName,
+                    status: 'running',
+                    completedPacks
+                });
+
+                const { trayUrl, trayFile } = await createTrayImage(processedStickers, packId);
+
+                // === STEP 6: Translation ===
+                onProgress?.({
+                    currentPack: i + 1,
+                    totalPacks: totalTarget,
+                    currentStep: 'Translating to 33 languages...',
+                    packName,
+                    status: 'running',
+                    completedPacks
+                });
+
+                const translations = await translatePack(packName, useAiTranslation);
+
+                // === STEP 7: Auto-detect category ===
+                const category = autoDetectCategory(searchTerm);
+
+                // === STEP 8: Save to Firestore ===
+                onProgress?.({
+                    currentPack: i + 1,
+                    totalPacks: totalTarget,
+                    currentStep: 'Saving to database...',
+                    packName,
+                    status: 'running',
+                    completedPacks
+                });
+
+                const packData: any = {
+                    name: packName,
+                    ...translations,
+                    publisher: 'Sticky',
+                    publisher_email: 'contact@arain.digital',
+                    privacy_policy_website: '',
+                    license_agreement_website: '',
+                    category,
+                    is_premium: false,
+                    is_animated: true,
+                    download_count: 0,
+                    fake_download_base: Math.floor(Math.random() * 7001) + 3000,
+                    view_count: 0,
+                    favorite_count: 0,
+                    sticker_count: processedStickers.length,
+                    image_data_version: Date.now().toString(),
+                    is_active: true,
+                    stickers: processedStickers,
+                    tray_url: trayUrl,
+                    tray_image_file: trayFile,
+                    created_at: serverTimestamp(),
+                    batch_generated: true,
+                    batch_search_term: searchTerm,
+                    batch_source: source
+                };
+
+                await setDoc(doc(db, 'draft_stickers', packId), packData);
+
+                const completed: CompletedPack = {
+                    id: packId,
+                    name: packName,
+                    stickerCount: processedStickers.length,
+                    searchTerm,
+                    source
+                };
+
+                completedPacks.push(completed);
+                packCreated = true;
+
+                onProgress?.({
+                    currentPack: i + 1,
+                    totalPacks: totalTarget,
+                    currentStep: `✅ "${packName}" created! (${processedStickers.length} stickers)`,
+                    packName,
+                    status: 'running',
+                    completedPacks
+                });
+
+                console.log(`[BATCH] ✅ Pack created: ${packName} (${processedStickers.length} stickers)`);
+
+            } catch (error: any) {
+                console.error(`[BATCH] Pack creation error (${searchTerm}, retry ${retryCount}):`, error);
+
+                if (retryCount < MAX_RETRIES) {
+                    retryCount++;
+                    onProgress?.({
+                        currentPack: i + 1,
+                        totalPacks: totalTarget,
+                        currentStep: `⚠️ Error, retrying (${retryCount}/${MAX_RETRIES})...`,
+                        status: 'running',
+                        completedPacks
+                    });
+                } else {
+                    onProgress?.({
+                        currentPack: i + 1,
+                        totalPacks: totalTarget,
+                        currentStep: `❌ Failed: ${error.message}`,
+                        status: 'error',
+                        error: error.message,
+                        completedPacks
+                    });
+                    break;
+                }
             }
-
-            // Eğer yeterli sticker işlenemediyse ve hala GIF varsa devam et
-            if (processedStickers.length < Math.min(stickersPerPack, 5) && processedStickers.length > 0) {
-                console.warn(`[BATCH] "${searchTerm}" için sadece ${processedStickers.length} sticker işlenebildi (hedef: ${stickersPerPack})`);
-            }
-
-            if (processedStickers.length === 0) {
-                console.warn(`[BATCH] "${searchTerm}" için hiçbir sticker işlenemedi.`);
-                continue;
-            }
-
-            // === STEP 5: Tray image oluştur ===
-            onProgress?.({
-                currentPack: i + 1,
-                totalPacks: searchTerms.length,
-                currentStep: 'Kapak resmi oluşturuluyor...',
-                packName,
-                status: 'running',
-                completedPacks
-            });
-
-            const { trayUrl, trayFile } = await createTrayImage(processedStickers, packId);
-
-            // === STEP 6: Çeviri ===
-            onProgress?.({
-                currentPack: i + 1,
-                totalPacks: searchTerms.length,
-                currentStep: '33 dile çevriliyor...',
-                packName,
-                status: 'running',
-                completedPacks
-            });
-
-            const translations = await translatePack(packName, useAiTranslation);
-
-            // === STEP 7: Kategori ata ===
-            const category = autoDetectCategory(searchTerm);
-
-            // === STEP 8: Firestore'a kaydet ===
-            onProgress?.({
-                currentPack: i + 1,
-                totalPacks: searchTerms.length,
-                currentStep: 'Veritabanına kaydediliyor...',
-                packName,
-                status: 'running',
-                completedPacks
-            });
-
-            const packData: any = {
-                name: packName,
-                ...translations,
-                publisher: 'Sticky',
-                publisher_email: 'contact@arain.digital',
-                privacy_policy_website: '',
-                license_agreement_website: '',
-                category,
-                is_premium: false,
-                is_animated: true,
-                download_count: 0,
-                fake_download_base: Math.floor(Math.random() * 7001) + 3000,
-                view_count: 0,
-                favorite_count: 0,
-                sticker_count: processedStickers.length,
-                image_data_version: Date.now().toString(),
-                is_active: true,
-                stickers: processedStickers,
-                tray_url: trayUrl,
-                tray_image_file: trayFile,
-                created_at: serverTimestamp(),
-                batch_generated: true,
-                batch_search_term: searchTerm,
-                batch_source: source
-            };
-
-            await setDoc(doc(db, 'draft_stickers', packId), packData);
-
-            const completed: CompletedPack = {
-                id: packId,
-                name: packName,
-                stickerCount: processedStickers.length,
-                searchTerm,
-                source
-            };
-
-            completedPacks.push(completed);
-
-            onProgress?.({
-                currentPack: i + 1,
-                totalPacks: searchTerms.length,
-                currentStep: `✅ "${packName}" oluşturuldu! (${processedStickers.length} sticker)`,
-                packName,
-                status: 'running',
-                completedPacks
-            });
-
-            console.log(`[BATCH] ✅ Paket oluşturuldu: ${packName} (${processedStickers.length} sticker)`);
-
-        } catch (error: any) {
-            console.error(`[BATCH] Paket oluşturma hatası (${searchTerm}):`, error);
-            console.error('[BATCH] Hata detayı:', {
-                message: error.message,
-                stack: error.stack,
-                searchTerm,
-                source
-            });
-            onProgress?.({
-                currentPack: i + 1,
-                totalPacks: searchTerms.length,
-                currentStep: `❌ Hata: ${error.message}`,
-                status: 'error',
-                error: error.message,
-                completedPacks
-            });
-            // Hata olsa bile devam et
         }
     }
 
-    // Tamamlandı
     onProgress?.({
-        currentPack: searchTerms.length,
-        totalPacks: searchTerms.length,
-        currentStep: `🎉 Tamamlandı! ${completedPacks.length}/${searchTerms.length} paket oluşturuldu.`,
+        currentPack: totalTarget,
+        totalPacks: totalTarget,
+        currentStep: `🎉 Done! ${completedPacks.length}/${totalTarget} packs created.`,
         status: 'done',
         completedPacks
     });

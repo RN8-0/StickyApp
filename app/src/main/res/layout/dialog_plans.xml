@@ -3,27 +3,35 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:orientation="vertical"
-    android:background="@drawable/bg_bottom_sheet">
+    android:orientation="vertical">
 
-    <!-- Header with decorative image -->
+    <!-- Gold Gradient Header -->
     <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:paddingHorizontal="20dp"
-        android:paddingTop="24dp"
-        android:paddingBottom="16dp">
+        android:background="@drawable/bg_premium_dialog_header_gold"
+        android:paddingHorizontal="24dp"
+        android:paddingTop="28dp"
+        android:paddingBottom="24dp">
 
         <LinearLayout
-            android:layout_width="wrap_content"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical">
+            android:orientation="vertical"
+            android:gravity="center">
+
+            <ImageView
+                android:layout_width="56dp"
+                android:layout_height="56dp"
+                android:src="@drawable/ic_premium_crown_large"
+                app:tint="@color/white" />
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
                 android:text="@string/free_trial_title"
-                android:textColor="@color/text_primary"
+                android:textColor="@color/white"
                 android:textSize="22sp"
                 android:textStyle="bold" />
 
@@ -33,18 +41,11 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
                 android:text="@string/free_trial_subtitle"
-                android:textColor="@color/text_secondary"
-                android:textSize="14sp" />
+                android:textColor="#CCFFFFFF"
+                android:textSize="13sp"
+                android:gravity="center" />
 
         </LinearLayout>
-
-        <!-- Decorative crown image -->
-        <ImageView
-            android:layout_width="80dp"
-            android:layout_height="80dp"
-            android:layout_gravity="end|center_vertical"
-            android:src="@drawable/ic_premium_crown_large"
-            android:alpha="0.5" />
 
     </FrameLayout>
 
@@ -53,9 +54,11 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:paddingHorizontal="20dp">
+        android:background="@color/background"
+        android:paddingHorizontal="20dp"
+        android:paddingTop="16dp">
 
-        <!-- Yearly Plan Card (Best Value) -->
+        <!-- Yearly Plan Card -->
         <androidx.cardview.widget.CardView
             android:id="@+id/cardYearly"
             android:layout_width="match_parent"
@@ -71,7 +74,7 @@
                 android:orientation="horizontal"
                 android:padding="16dp"
                 android:gravity="center_vertical"
-                android:background="@drawable/bg_plan_card_selected">
+                android:background="@drawable/bg_plan_card_gold_selected">
 
                 <LinearLayout
                     android:layout_width="0dp"
@@ -99,7 +102,7 @@
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:layout_marginStart="8dp"
-                            android:background="@drawable/bg_save_badge"
+                            android:background="@drawable/bg_save_badge_gold"
                             android:paddingHorizontal="8dp"
                             android:paddingVertical="2dp"
                             android:text="@string/save_badge"
@@ -125,7 +128,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="$49.99/yr"
-                    android:textColor="@color/premium_gold_dark"
+                    android:textColor="@color/primary"
                     android:textSize="15sp"
                     android:textStyle="bold" />
 
@@ -175,70 +178,77 @@
 
     </LinearLayout>
 
-    <!-- Continue Button -->
-    <com.google.android.material.button.MaterialButton
-        android:id="@+id/btnContinue"
-        android:layout_width="match_parent"
-        android:layout_height="56dp"
-        android:layout_marginHorizontal="20dp"
-        android:layout_marginTop="16dp"
-        android:text="@string/continue_btn"
-        android:textColor="@color/premium_text_on_gold"
-        android:textSize="16sp"
-        android:textStyle="bold"
-        android:textAllCaps="true"
-        app:backgroundTint="@color/premium_gold"
-        app:cornerRadius="28dp" />
-
-    <!-- Footer Links -->
+    <!-- Bottom section -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
-        android:layout_marginBottom="20dp"
-        android:gravity="center"
-        android:orientation="horizontal">
+        android:orientation="vertical"
+        android:background="@color/background">
 
-        <TextView
-            android:id="@+id/btnDialogTerms"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:padding="8dp"
-            android:text="@string/terms_of_use"
-            android:textColor="@color/text_secondary"
-            android:textSize="12sp" />
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnContinue"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:layout_marginHorizontal="20dp"
+            android:layout_marginTop="16dp"
+            android:text="@string/continue_btn"
+            android:textColor="@color/white"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:textAllCaps="false"
+            app:backgroundTint="@color/primary"
+            app:cornerRadius="26dp" />
 
-        <TextView
-            android:layout_width="wrap_content"
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="•"
-            android:textColor="@color/text_secondary"
-            android:paddingHorizontal="6dp" />
+            android:layout_marginTop="12dp"
+            android:layout_marginBottom="16dp"
+            android:gravity="center"
+            android:orientation="horizontal">
 
-        <TextView
-            android:id="@+id/btnDialogPrivacy"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:padding="8dp"
-            android:text="@string/privacy_policy"
-            android:textColor="@color/text_secondary"
-            android:textSize="12sp" />
+            <TextView
+                android:id="@+id/btnDialogTerms"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:padding="8dp"
+                android:text="@string/terms_of_use"
+                android:textColor="@color/text_secondary"
+                android:textSize="12sp" />
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="•"
-            android:textColor="@color/text_secondary"
-            android:paddingHorizontal="6dp" />
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="•"
+                android:textColor="@color/text_secondary"
+                android:paddingHorizontal="6dp" />
 
-        <TextView
-            android:id="@+id/btnDialogRestore"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:padding="8dp"
-            android:text="@string/restore"
-            android:textColor="@color/text_secondary"
-            android:textSize="12sp" />
+            <TextView
+                android:id="@+id/btnDialogPrivacy"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:padding="8dp"
+                android:text="@string/privacy_policy"
+                android:textColor="@color/text_secondary"
+                android:textSize="12sp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="•"
+                android:textColor="@color/text_secondary"
+                android:paddingHorizontal="6dp" />
+
+            <TextView
+                android:id="@+id/btnDialogRestore"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:padding="8dp"
+                android:text="@string/restore"
+                android:textColor="@color/text_secondary"
+                android:textSize="12sp" />
+
+        </LinearLayout>
 
     </LinearLayout>
 

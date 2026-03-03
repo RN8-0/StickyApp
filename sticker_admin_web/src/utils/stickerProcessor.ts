@@ -334,7 +334,8 @@ class StickerProcessor {
         // WhatsApp limiti (5sn) ile sınırla
         const processingDuration = Math.min(videoDuration, MAX_DURATION);
 
-        const inputName = `input_${Date.now()}.mp4`;
+        const ext = file.name.split('.').pop()?.toLowerCase() || 'mp4';
+        const inputName = `input_${Date.now()}.${ext}`;
         await ffmpeg.writeFile(inputName, await fetchFile(file));
 
         // Eğer arka plan silinecekse, frame-by-frame işlem yap
@@ -466,6 +467,23 @@ class StickerProcessor {
             // Video veya Arka planı silinecek GIF
             return this.processVideo(file, onProgress, removeBg);
         }
+    }
+
+    /**
+     * PNG frame blob'larından animated WebP oluştur (TGS import için)
+     */
+    async processFromPngFrames(pngBlobs: Blob[], fps: number, onProgress?: (p: StickerProgress) => void): Promise<Blob> {
+        await this.load();
+        const ffmpeg = this.ffmpeg!;
+
+        onProgress?.({ message: `${pngBlobs.length} kare yazılıyor...`, percentage: 40 });
+
+        for (let i = 0; i < pngBlobs.length; i++) {
+            const frameName = `frame_${(i + 1).toString().padStart(4, '0')}.png`;
+            await ffmpeg.writeFile(frameName, await fetchFile(pngBlobs[i]));
+        }
+
+        return this.createWebPFromFrames(pngBlobs.length, onProgress, fps);
     }
 
     /**

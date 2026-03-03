@@ -31,8 +31,11 @@ export interface StickerPack {
     sticker_count: number;
     image_data_version: string;
     is_active: boolean;
+    is_popular: boolean;
     stickers: Sticker[];
     created_at?: any;
+    batch_source?: string;
+    batch_generated?: boolean;
 }
 
 export interface ContactMessage {

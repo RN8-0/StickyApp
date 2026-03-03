@@ -200,7 +200,7 @@ class OnboardingActivity : AppCompatActivity() {
             override fun onPageSelected(position: Int) {
                 updateIndicators(position)
 
-                if (position == 2) {
+                if (position == 3) {
                     checkNotificationPermission()
                     // Last page
                     btnNext.setText(R.string.onboarding_start)

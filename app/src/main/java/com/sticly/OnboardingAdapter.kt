@@ -45,10 +45,11 @@ class OnboardingAdapter(
             val (imageRes, titleRes, descRes) = when(position) {
                 0 -> Triple(R.drawable.onboarding_3d_welcome, R.string.onboarding_1_title, R.string.onboarding_1_desc)
                 1 -> Triple(R.drawable.onboarding_3d_create, R.string.onboarding_2_title, R.string.onboarding_2_desc)
-                2 -> Triple(R.drawable.onboarding_3d_notify, R.string.onboarding_3_title, R.string.onboarding_3_desc)
+                2 -> Triple(0, R.string.onboarding_ai_title, R.string.onboarding_ai_desc)
+                3 -> Triple(R.drawable.onboarding_3d_notify, R.string.onboarding_3_title, R.string.onboarding_3_desc)
                 else -> Triple(0, 0, 0)
             }
-            if (imageRes != 0) {
+            if (titleRes != 0) {
                 holder.bind(imageRes, context.getString(titleRes), context.getString(descRes), position)
             }
         } else if (holder is PremiumViewHolder) {
@@ -56,7 +57,7 @@ class OnboardingAdapter(
         }
     }
 
-    override fun getItemCount(): Int = 3
+    override fun getItemCount(): Int = 4
 
     fun updatePrices() {
         premiumHolder?.updatePrices(getPriceForPlan)
@@ -93,6 +94,20 @@ class OnboardingAdapter(
                     lottie.translationY = 0f
                 }
                 2 -> {
+                    brandContainer.visibility = View.GONE
+                    icon.visibility = View.GONE
+                    lottie.visibility = View.VISIBLE
+                    lottie.setAnimation("onboarding_ai.json")
+                    lottie.repeatCount = 0
+                    // Make AI lottie bigger and centered
+                    val size = (300 * lottie.context.resources.displayMetrics.density).toInt()
+                    lottie.layoutParams.width = size
+                    lottie.layoutParams.height = size
+                    lottie.requestLayout()
+                    lottie.playAnimation()
+                    lottie.translationY = 0f
+                }
+                3 -> {
                     brandContainer.visibility = View.GONE
                     icon.visibility = View.GONE
                     lottie.visibility = View.VISIBLE
