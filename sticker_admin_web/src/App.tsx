@@ -2751,6 +2751,17 @@ function App() {
                 </div>
               </div>
 
+              {/* Popular Empty State */}
+              {statsFilter === 'popular' && packs.filter(p => p.is_popular === true).length === 0 && (
+                <div className="glass rounded-2xl p-8 border border-yellow-500/20 text-center space-y-3">
+                  <Star size={40} className="text-yellow-500/40 mx-auto" />
+                  <h3 className="text-lg font-black text-white">No Popular Packs Yet</h3>
+                  <p className="text-xs text-textSec max-w-md mx-auto">
+                    No packs have been marked as popular. Go to any pack's edit modal and toggle <span className="text-yellow-400 font-bold">⭐ POPULAR</span> to feature it on the home page and see its stats here.
+                  </p>
+                </div>
+              )}
+
               {/* Metrics Grid */}
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
                 {((): any => {
