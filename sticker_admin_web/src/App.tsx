@@ -404,6 +404,7 @@ function App() {
   const [isTelegramImporting, setIsTelegramImporting] = useState(false);
   const [telegramProgress, setTelegramProgress] = useState<any>(null);
   const [telegramStickerLimit, setTelegramStickerLimit] = useState(30);
+  const [telegramMaxStickers, setTelegramMaxStickers] = useState(0); // 0 = all
   const [telegramSplitPacks, setTelegramSplitPacks] = useState(true);
   const [telegramKeepOriginalName, setTelegramKeepOriginalName] = useState(true);
 
@@ -4698,7 +4699,21 @@ function App() {
                       <span className="text-[10px] font-black text-textSec uppercase tracking-widest">Import Settings</span>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                      {/* Max Stickers to Fetch */}
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-bold text-textSec uppercase">Max Stickers</label>
+                        <input
+                          type="number"
+                          min={0}
+                          max={500}
+                          value={telegramMaxStickers}
+                          onChange={(e) => setTelegramMaxStickers(Math.max(0, Math.min(500, parseInt(e.target.value) || 0)))}
+                          placeholder="0 = All"
+                          className="w-full bg-card/60 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm font-bold outline-none focus:ring-2 focus:ring-sky-500 placeholder:text-white/20"
+                        />
+                      </div>
+
                       {/* Sticker Limit */}
                       <div className="space-y-2">
                         <label className="text-[10px] font-bold text-textSec uppercase">Stickers per Pack</label>
@@ -4744,9 +4759,10 @@ function App() {
                     </div>
 
                     <p className="text-[9px] text-textSec">
+                      {telegramMaxStickers > 0 ? `First ${telegramMaxStickers} stickers will be fetched. ` : 'All stickers will be fetched. '}
                       {telegramSplitPacks
-                        ? `Packs with more than ${telegramStickerLimit} stickers will be split into multiple packs.`
-                        : `Packs will be limited to first ${telegramStickerLimit} stickers.`
+                        ? `Then split into packs of ${telegramStickerLimit}.`
+                        : `Then truncated to ${telegramStickerLimit} per pack.`
                       }
                     </p>
                   </div>
@@ -4769,6 +4785,7 @@ function App() {
                           useAiNaming: !telegramKeepOriginalName,
                           useAiTranslation: true,
                           stickerLimit: telegramStickerLimit,
+                          maxStickers: telegramMaxStickers,
                           splitPacks: telegramSplitPacks,
                           keepOriginalName: telegramKeepOriginalName,
                           onProgress: (p) => setTelegramProgress(p)

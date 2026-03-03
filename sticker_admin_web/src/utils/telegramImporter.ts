@@ -367,6 +367,7 @@ export async function importTelegramPacks(
         useAiNaming?: boolean;
         useAiTranslation?: boolean;
         stickerLimit?: number;
+        maxStickers?: number;
         splitPacks?: boolean;
         keepOriginalName?: boolean;
         onProgress?: (progress: TelegramImportProgress) => void;
@@ -376,6 +377,7 @@ export async function importTelegramPacks(
         useAiNaming = false,
         useAiTranslation = false,
         stickerLimit = 30,
+        maxStickers = 0,
         splitPacks = true,
         keepOriginalName = true,
         onProgress
@@ -457,8 +459,8 @@ export async function importTelegramPacks(
                 }
             }
 
-            // Step 3: Split or truncate based on settings
-            let stickersToProcess = allStickers;
+            // Step 3: Apply max stickers limit, then split or truncate
+            let stickersToProcess = maxStickers > 0 ? allStickers.slice(0, maxStickers) : allStickers;
             const chunks: TelegramSticker[][] = [];
 
             if (splitPacks) {

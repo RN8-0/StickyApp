@@ -1589,17 +1589,17 @@ Rules:
     private fun updateRegionalPacks(packs: List<Pack>) {
         regionalPopularTitle.text = getString(R.string.popular_stickers)
 
-        // First try to get packs marked as popular from admin panel
+        // First try to get packs marked as popular from admin panel, sorted by rank score
         var regionalTopPacks = packs
             .filter { it.isActive && it.category != "custom" && it.isPopular }
-            .sortedByDescending { it.fakeDownloadBase + it.downloadCount }
+            .sortedByDescending { getOrCalculateRankScore(it) }
             .take(10)
 
-        // Fallback to download-based sorting if no popular packs set
+        // Fallback to rank-score-based sorting if no popular packs set
         if (regionalTopPacks.isEmpty()) {
             regionalTopPacks = packs
                 .filter { it.isActive && it.category != "custom" }
-                .sortedByDescending { it.fakeDownloadBase + it.downloadCount }
+                .sortedByDescending { getOrCalculateRankScore(it) }
                 .take(10)
         }
 
