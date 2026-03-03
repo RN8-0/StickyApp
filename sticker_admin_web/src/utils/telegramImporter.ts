@@ -268,8 +268,10 @@ async function processTelegramSticker(
     sticker: TelegramSticker,
     packId: string,
     index: number,
-    onProgress?: (msg: string) => void
+    onProgress?: (msg: string) => void,
+    abortSignal?: AbortSignal
 ): Promise<Sticker | null> {
+    if (abortSignal?.aborted) return null;
     // Per-sticker timeout: 90s for animated/video, 30s for static
     const timeoutMs = (sticker.is_animated || sticker.is_video) ? 90000 : 30000;
     return Promise.race([
@@ -278,7 +280,15 @@ async function processTelegramSticker(
             console.warn(`[TELEGRAM] Sticker #${index + 1} timed out after ${timeoutMs / 1000}s`);
             onProgress?.(`⏱️ Sticker #${index + 1} timed out, skipping...`);
             resolve(null);
-        }, timeoutMs))
+        }, timeoutMs)),
+        // Abort signal race — resolves immediately when stop is pressed
+        ...(abortSignal ? [new Promise<null>((resolve) => {
+            if (abortSignal.aborted) { resolve(null); return; }
+            abortSignal.addEventListener('abort', () => {
+                console.log(`[TELEGRAM] Sticker #${index + 1} aborted by user`);
+                resolve(null);
+            }, { once: true });
+        })] : [])
     ]);
 }
 
@@ -448,7 +458,6 @@ export async function importTelegramPacks(
         maxStickers?: number;
         splitPacks?: boolean;
         keepOriginalName?: boolean;
-        stickerType?: 'auto' | 'animated' | 'static';
         abortSignal?: AbortSignal;
         onProgress?: (progress: TelegramImportProgress) => void;
     } = {}
@@ -460,7 +469,6 @@ export async function importTelegramPacks(
         maxStickers = 0,
         splitPacks = true,
         keepOriginalName = true,
-        stickerType = 'auto',
         abortSignal,
         onProgress
     } = options;
@@ -527,40 +535,9 @@ export async function importTelegramPacks(
             }
 
             const allStickers = stickerSet.stickers;
+            const filteredByType = allStickers;
 
-            // Filter stickers by user-selected type
-            let filteredByType = allStickers;
-            if (stickerType === 'animated') {
-                filteredByType = allStickers.filter(s => s.is_animated || s.is_video);
-                if (filteredByType.length === 0) {
-                    // No animated stickers, fall back to all
-                    filteredByType = allStickers;
-                    onProgress?.({
-                        currentPack: i + 1,
-                        totalPacks: packInputs.length,
-                        currentStep: `⚠️ "${stickerSet.title}" has no animated stickers, using all...`,
-                        status: 'running',
-                        completedPacks
-                    });
-                }
-            } else if (stickerType === 'static') {
-                filteredByType = allStickers.filter(s => !s.is_animated && !s.is_video);
-                if (filteredByType.length === 0) {
-                    // No static stickers, fall back to all
-                    filteredByType = allStickers;
-                    onProgress?.({
-                        currentPack: i + 1,
-                        totalPacks: packInputs.length,
-                        currentStep: `⚠️ "${stickerSet.title}" has no static stickers, using all...`,
-                        status: 'running',
-                        completedPacks
-                    });
-                }
-            }
-
-            const isAnimatedPack = stickerType === 'animated' ? true
-                : stickerType === 'static' ? false
-                : filteredByType.some(s => s.is_animated || s.is_video);
+            const isAnimatedPack = filteredByType.some(s => s.is_animated || s.is_video);
 
             if (filteredByType.length === 0) {
                 onProgress?.({
@@ -699,7 +676,7 @@ export async function importTelegramPacks(
                             status: 'running',
                             completedPacks
                         });
-                    });
+                    }, abortSignal);
 
                     if (sticker) {
                         processedStickers.push(sticker);

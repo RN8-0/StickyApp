@@ -353,61 +353,64 @@ Rules:
 
     private suspend fun generateImageWithStableHorde(prompt: String): Bitmap? =
         withContext(Dispatchers.IO) {
-            // Try Pollinations.ai first (fast, free, no polling needed)
+            // Race: Pollinations and Stable Horde in PARALLEL
             try {
-                val result = generateWithPollinations(prompt)
-                if (result != null) return@withContext result
-            } catch (e: Exception) {
-                android.util.Log.e("AiGenerate", "Pollinations failed: ${e.message}")
-            }
+                coroutineScope {
+                    val pollinations = async {
+                        try { generateWithPollinations(prompt) } catch (_: Exception) { null }
+                    }
+                    val horde = async {
+                        try { tryGenerateWithModel(prompt, "Deliberate") } catch (_: Exception) { null }
+                    }
 
-            // Fallback to Stable Horde - try fastest model first (stable_diffusion has most workers)
-            val models = listOf("stable_diffusion", "Deliberate", "Dreamshaper")
-            for (model in models) {
-                try {
-                    val result = tryGenerateWithModel(prompt, model)
-                    if (result != null) return@withContext result
-                } catch (e: Exception) {
-                    android.util.Log.e("AiGenerate", "Horde $model failed: ${e.message}")
+                    val polResult = pollinations.await()
+                    if (polResult != null) {
+                        horde.cancel()
+                        return@coroutineScope polResult
+                    }
+
+                    val hordeResult = horde.await()
+                    if (hordeResult != null) return@coroutineScope hordeResult
+
+                    for (model in listOf("Dreamshaper", "stable_diffusion")) {
+                        try {
+                            val result = tryGenerateWithModel(prompt, model)
+                            if (result != null) return@coroutineScope result
+                        } catch (_: Exception) {}
+                    }
+                    null
                 }
-            }
-            null
+            } catch (_: Exception) { null }
         }
 
     private suspend fun generateWithPollinations(prompt: String): Bitmap? =
         withContext(Dispatchers.IO) {
             val encodedPrompt = java.net.URLEncoder.encode(prompt, "UTF-8")
-            val urlStr = "https://image.pollinations.ai/prompt/$encodedPrompt?width=512&height=512&nologo=true&seed=${System.currentTimeMillis()}"
-            android.util.Log.d("AiGenerate", "Pollinations request: $urlStr")
 
-            var currentUrl = urlStr
-            var redirectCount = 0
-            while (redirectCount < 5) {
-                val conn = URL(currentUrl).openConnection() as HttpURLConnection
-                conn.requestMethod = "GET"
-                conn.connectTimeout = 30000
-                conn.readTimeout = 60000
-                conn.instanceFollowRedirects = false
-                conn.setRequestProperty("User-Agent", "StickyApp/1.0")
+            for (model in listOf("turbo", "flux")) {
+                try {
+                    val urlStr = "https://image.pollinations.ai/prompt/$encodedPrompt?width=512&height=512&nologo=true&model=$model&seed=${System.currentTimeMillis()}"
+                    android.util.Log.d("AiGenerate", "Pollinations ($model) request")
 
-                val code = conn.responseCode
-                android.util.Log.d("AiGenerate", "Pollinations response: $code")
-                if (code in 301..308) {
-                    currentUrl = conn.getHeaderField("Location") ?: break
+                    val conn = URL(urlStr).openConnection() as HttpURLConnection
+                    conn.requestMethod = "GET"
+                    conn.connectTimeout = 15000
+                    conn.readTimeout = 25000
+                    conn.instanceFollowRedirects = true
+                    conn.setRequestProperty("User-Agent", "StickyApp/1.0")
+
+                    val code = conn.responseCode
+                    android.util.Log.d("AiGenerate", "Pollinations ($model) response: $code")
+                    if (code == 200) {
+                        val bitmap = BitmapFactory.decodeStream(conn.inputStream)
+                        conn.disconnect()
+                        if (bitmap != null) return@withContext bitmap
+                    }
                     conn.disconnect()
-                    redirectCount++
-                    continue
+                } catch (e: Exception) {
+                    android.util.Log.e("AiGenerate", "Pollinations $model failed: ${e.message}")
                 }
-                if (code == 200) {
-                    val bitmap = BitmapFactory.decodeStream(conn.inputStream)
-                    conn.disconnect()
-                    android.util.Log.d("AiGenerate", "Pollinations bitmap: ${bitmap != null}")
-                    return@withContext bitmap
-                }
-                conn.disconnect()
-                break
             }
-            android.util.Log.e("AiGenerate", "Pollinations failed after $redirectCount redirects")
             null
         }
 

@@ -44,6 +44,8 @@ import com.google.android.material.floatingactionbutton.FloatingActionButton
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -158,6 +160,7 @@ class MainActivity : AppCompatActivity() {
     
     // Cached format instance (only used on Default dispatcher — single thread safe)
     private val rankDateFormat = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.getDefault())
+    private val rankDateFormatFallback = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
 
     private fun getOrCalculateRankScore(pack: Pack): Double {
         return sessionRankScores.getOrPut(pack.id) {
@@ -167,7 +170,9 @@ class MainActivity : AppCompatActivity() {
 
     private fun parseDateCached(dateStr: String): Long {
         return parsedDateCache.getOrPut(dateStr) {
-            try { rankDateFormat.parse(dateStr)?.time ?: 0L } catch (_: Exception) { 0L }
+            try { rankDateFormat.parse(dateStr)?.time ?: 0L } catch (_: Exception) {
+                try { rankDateFormatFallback.parse(dateStr)?.time ?: 0L } catch (_: Exception) { 0L }
+            }
         }
     }
 
@@ -1075,62 +1080,72 @@ Rules:
 
     private suspend fun aiGenerateImage(prompt: String, onPoll: () -> Unit): Bitmap? =
         withContext(Dispatchers.IO) {
-            // Try Pollinations.ai first (fast, free, no polling needed)
+            // Race: run Pollinations and Stable Horde in PARALLEL, return first success
             try {
-                val result = aiGenerateWithPollinations(prompt)
-                if (result != null) return@withContext result
-            } catch (e: Exception) {
-                android.util.Log.e("AiGenerate", "Pollinations failed: ${e.message}")
-            }
+                coroutineScope {
+                    val pollinations = async {
+                        try { aiGenerateWithPollinations(prompt) } catch (_: Exception) { null }
+                    }
+                    val horde = async {
+                        try { aiTryGenerate(prompt, "Deliberate", onPoll) } catch (_: Exception) { null }
+                    }
 
-            // Fallback to Stable Horde - Deliberate is best quality for stickers
-            val models = listOf("Deliberate", "Dreamshaper", "stable_diffusion")
-            for (model in models) {
-                try {
-                    val result = aiTryGenerate(prompt, model, onPoll)
-                    if (result != null) return@withContext result
-                } catch (e: Exception) {
-                    android.util.Log.e("AiGenerate", "Horde $model failed: ${e.message}")
+                    // Wait for Pollinations first (usually faster with turbo)
+                    val polResult = pollinations.await()
+                    if (polResult != null) {
+                        horde.cancel()
+                        return@coroutineScope polResult
+                    }
+
+                    // Pollinations failed, wait for Horde
+                    val hordeResult = horde.await()
+                    if (hordeResult != null) return@coroutineScope hordeResult
+
+                    // Both failed, try remaining Horde models sequentially
+                    for (model in listOf("Dreamshaper", "stable_diffusion")) {
+                        try {
+                            val result = aiTryGenerate(prompt, model, onPoll)
+                            if (result != null) return@coroutineScope result
+                        } catch (_: Exception) {}
+                    }
+                    null
                 }
-            }
-            null
+            } catch (_: Exception) { null }
         }
 
     private suspend fun aiGenerateWithPollinations(prompt: String): Bitmap? =
         withContext(Dispatchers.IO) {
             val enhancedPrompt = "$prompt, masterpiece, best quality, ultra detailed"
             val encodedPrompt = java.net.URLEncoder.encode(enhancedPrompt, "UTF-8")
-            val urlStr = "https://image.pollinations.ai/prompt/$encodedPrompt?width=512&height=512&nologo=true&model=flux&seed=${System.currentTimeMillis()}"
-            android.util.Log.d("AiGenerate", "Pollinations request: $urlStr")
 
-            var currentUrl = urlStr
-            var redirectCount = 0
-            while (redirectCount < 5) {
-                val conn = URL(currentUrl).openConnection() as HttpURLConnection
-                conn.requestMethod = "GET"
-                conn.connectTimeout = 30000
-                conn.readTimeout = 60000
-                conn.instanceFollowRedirects = false
-                conn.setRequestProperty("User-Agent", "StickyApp/1.0")
+            // Try turbo (fast ~3-5s) then flux (slower but higher quality)
+            for (model in listOf("turbo", "flux")) {
+                try {
+                    val urlStr = "https://image.pollinations.ai/prompt/$encodedPrompt?width=512&height=512&nologo=true&model=$model&seed=${System.currentTimeMillis()}"
+                    android.util.Log.d("AiGenerate", "Pollinations ($model) request")
 
-                val code = conn.responseCode
-                android.util.Log.d("AiGenerate", "Pollinations response: $code")
-                if (code in 301..308) {
-                    currentUrl = conn.getHeaderField("Location") ?: break
+                    val conn = URL(urlStr).openConnection() as HttpURLConnection
+                    conn.requestMethod = "GET"
+                    conn.connectTimeout = 15000
+                    conn.readTimeout = 25000
+                    conn.instanceFollowRedirects = true
+                    conn.setRequestProperty("User-Agent", "StickyApp/1.0")
+
+                    val code = conn.responseCode
+                    android.util.Log.d("AiGenerate", "Pollinations ($model) response: $code")
+                    if (code == 200) {
+                        val bitmap = BitmapFactory.decodeStream(conn.inputStream)
+                        conn.disconnect()
+                        if (bitmap != null) {
+                            android.util.Log.d("AiGenerate", "Pollinations success with $model")
+                            return@withContext bitmap
+                        }
+                    }
                     conn.disconnect()
-                    redirectCount++
-                    continue
+                } catch (e: Exception) {
+                    android.util.Log.e("AiGenerate", "Pollinations $model failed: ${e.message}")
                 }
-                if (code == 200) {
-                    val bitmap = BitmapFactory.decodeStream(conn.inputStream)
-                    conn.disconnect()
-                    android.util.Log.d("AiGenerate", "Pollinations bitmap: ${bitmap != null}")
-                    return@withContext bitmap
-                }
-                conn.disconnect()
-                break
             }
-            android.util.Log.e("AiGenerate", "Pollinations failed after $redirectCount redirects")
             null
         }
 
@@ -1142,8 +1157,8 @@ Rules:
                 put("params", JSONObject().apply {
                     put("width", 512)
                     put("height", 512)
-                    put("steps", 20)
-                    put("cfg_scale", 9.0)
+                    put("steps", 15)
+                    put("cfg_scale", 8.0)
                     put("sampler_name", "k_euler_a")
                     put("karras", true)
                     put("clip_skip", 2)
@@ -2304,16 +2319,9 @@ Rules:
                 else -> filtered
             }
 
-            // Sort by rank score, but demote popular packs (already shown in Popular section)
-            // This ensures users discover different content in the main list
-            val sorted = filtered.sortedByDescending { pack ->
-                val score = getOrCalculateRankScore(pack)
-                if (pack.isPopular && (currentFilter == FilterType.ALL || currentFilter == FilterType.PREMIUM)) {
-                    score * 0.5 // Demote popular packs in main list (they're in the Popular carousel)
-                } else {
-                    score
-                }
-            }
+            // Main list: shuffle for discovery, NOT sorted by popularity
+            // Popular section already shows top packs — main list should help users discover new content
+            val sorted = filtered.shuffled(java.util.Random(sessionSeed))
 
             // Insert banner ads every 10 packs (only in ALL/PREMIUM filters, not for premium users)
             val withAds = mutableListOf<Any>()
