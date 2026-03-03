@@ -107,6 +107,48 @@ function extractSetName(input: string): string {
     return input.trim().replace(/\s+/g, '');
 }
 
+// ========== THEME EMOJI DETECTION ==========
+
+function autoDetectEmoji(text: string): string {
+    const lower = text.toLowerCase();
+    const emojiMap: [string[], string][] = [
+        [['cat', 'kitty', 'kitten', 'meow', 'neko'], '🐱'],
+        [['dog', 'puppy', 'doggy', 'woof', 'pup'], '🐶'],
+        [['duck', 'quack'], '🦆'],
+        [['bear', 'teddy'], '🐻'],
+        [['rabbit', 'bunny', 'usagi'], '🐰'],
+        [['fox'], '🦊'],
+        [['panda'], '🐼'],
+        [['frog', 'pepe'], '🐸'],
+        [['bird', 'penguin'], '🐦'],
+        [['pig', 'piggy'], '🐷'],
+        [['monkey', 'ape'], '🐵'],
+        [['love', 'heart', 'kiss', 'romance', 'valentine', 'couple'], '❤️'],
+        [['happy', 'smile', 'joy', 'laugh', 'lol', 'haha'], '😄'],
+        [['sad', 'cry', 'tear'], '😢'],
+        [['angry', 'mad', 'rage'], '😠'],
+        [['cool', 'swag', 'awesome'], '😎'],
+        [['fire', 'hot', 'lit'], '🔥'],
+        [['star', 'sparkle', 'shine'], '⭐'],
+        [['food', 'eat', 'yummy', 'delicious'], '🍔'],
+        [['coffee', 'tea', 'drink'], '☕'],
+        [['game', 'gaming', 'play'], '🎮'],
+        [['music', 'song', 'sing', 'dance'], '🎵'],
+        [['sport', 'football', 'soccer', 'ball'], '⚽'],
+        [['christmas', 'xmas', 'santa'], '🎄'],
+        [['halloween', 'spooky', 'ghost'], '👻'],
+        [['anime', 'manga', 'kawaii'], '✨'],
+        [['flower', 'rose', 'blossom'], '🌸'],
+        [['moon', 'night', 'sleep'], '🌙'],
+        [['sun', 'morning', 'bright'], '☀️'],
+        [['party', 'celebrate', 'birthday'], '🎉'],
+    ];
+    for (const [keywords, emoji] of emojiMap) {
+        if (keywords.some(k => lower.includes(k))) return emoji;
+    }
+    return '✨';
+}
+
 // ========== DUPLICATE DETECTION ==========
 
 // Render ALL frames of TGS (Lottie) animation → PNG blobs for FFmpeg encoding
@@ -446,18 +488,38 @@ export async function importTelegramPacks(
                 continue;
             }
 
-            // Step 2: Generate pack name
-            let baseName = stickerSet.title;
+            // Step 2: Generate pack name with emoji
+            let baseNameText = stickerSet.title;
+            let baseEmoji = '';
+
+            // Extract theme emoji from sticker emojis if available
+            const stickerEmojis = allStickers.map(s => s.emoji).filter(Boolean);
+            if (stickerEmojis.length > 0) {
+                // Use the most common emoji from the pack
+                const emojiCount = new Map<string, number>();
+                stickerEmojis.forEach(e => emojiCount.set(e!, (emojiCount.get(e!) || 0) + 1));
+                baseEmoji = [...emojiCount.entries()].sort((a, b) => b[1] - a[1])[0][0];
+            }
+
             if (!keepOriginalName && useAiNaming && deepseekService.isConfigured()) {
                 try {
                     const names = await deepseekService.generatePackNames(stickerSet.title, 3);
                     if (names.length > 0) {
-                        baseName = `${names[0].name} ${names[0].emoji}`;
+                        baseNameText = names[0].name;
+                        baseEmoji = names[0].emoji || baseEmoji || '✨';
                     }
                 } catch {
                     // Keep original Telegram name
                 }
             }
+
+            // Ensure emoji always exists
+            if (!baseEmoji) {
+                baseEmoji = autoDetectEmoji(stickerSet.title + ' ' + setName);
+            }
+
+            // baseName for single pack: "Duck 🦆", for multi: will become "Duck 1 🦆", "Duck 2 🦆"
+            const baseName = `${baseNameText} ${baseEmoji}`;
 
             // Step 3: Apply max stickers limit, then split or single-pack
             let stickersToProcess = maxStickers > 0 ? allStickers.slice(0, maxStickers) : allStickers;
@@ -491,13 +553,26 @@ export async function importTelegramPacks(
             for (let partIdx = 0; partIdx < chunks.length; partIdx++) {
                 const chunk = chunks[partIdx];
                 const partNum = partIdx + 1;
-                const packName = totalParts > 1 ? `${baseName} ${partNum}` : baseName;
+                // Format: "Duck 🦆" for single, "Duck 1 🦆", "Duck 2 🦆" for multi
+                const packName = totalParts > 1 ? `${baseNameText} ${partNum} ${baseEmoji}` : baseName;
                 const packId = `tg_${setName.toLowerCase()}_${totalParts > 1 ? partNum + '_' : ''}${Date.now().toString(36)}`;
 
-                // Add part suffix to translations if multi-part
+                // Add part number to translations if multi-part: "Name 2 emoji"
                 const partTranslations: Record<string, string> = {};
                 for (const [key, val] of Object.entries(translations)) {
-                    partTranslations[key] = totalParts > 1 ? `${val} ${partNum}` : val;
+                    if (totalParts > 1) {
+                        // Insert part number before the emoji at the end
+                        const emojiRegex = /(\p{Emoji_Presentation}|\p{Emoji}\uFE0F)+$/u;
+                        const match = val.match(emojiRegex);
+                        if (match) {
+                            const textPart = val.slice(0, match.index).trimEnd();
+                            partTranslations[key] = `${textPart} ${partNum} ${match[0]}`;
+                        } else {
+                            partTranslations[key] = `${val} ${partNum} ${baseEmoji}`;
+                        }
+                    } else {
+                        partTranslations[key] = val;
+                    }
                 }
 
                 onProgress?.({

@@ -4705,14 +4705,18 @@ function App() {
                         <label className="text-[10px] font-bold text-textSec uppercase">Max Stickers to Download</label>
                         <input
                           type="number"
-                          min={0}
+                          min={1}
                           max={500}
-                          value={telegramMaxStickers}
+                          value={telegramMaxStickers || ''}
                           onChange={(e) => setTelegramMaxStickers(Math.max(0, Math.min(500, parseInt(e.target.value) || 0)))}
-                          placeholder="0 = All"
-                          className="w-full bg-card/60 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm font-bold outline-none focus:ring-2 focus:ring-sky-500 placeholder:text-white/20"
+                          placeholder="Required"
+                          className={cn("w-full bg-card/60 border rounded-xl px-4 py-2.5 text-white text-sm font-bold outline-none focus:ring-2 focus:ring-sky-500 placeholder:text-white/20",
+                            telegramMaxStickers === 0 ? "border-red-500/50" : "border-white/10"
+                          )}
                         />
-                        <p className="text-[8px] text-textSec">0 = download all stickers from pack</p>
+                        <p className={cn("text-[8px]", telegramMaxStickers === 0 ? "text-red-400 font-bold" : "text-textSec")}>
+                          {telegramMaxStickers === 0 ? '⚠️ Required! Set how many stickers to download' : `Will download first ${telegramMaxStickers} stickers`}
+                        </p>
                       </div>
 
                       {/* Stickers per Pack */}
@@ -4761,9 +4765,9 @@ function App() {
                     </div>
 
                     <p className="text-[9px] text-textSec">
-                      {telegramMaxStickers > 0 ? `Only first ${telegramMaxStickers} stickers will be downloaded. ` : 'All stickers will be downloaded. '}
+                      {telegramMaxStickers > 0 ? `First ${telegramMaxStickers} stickers will be downloaded. ` : ''}
                       {telegramSplitPacks
-                        ? `Then split into packs of ${telegramStickerLimit} each.`
+                        ? `Split into packs of ${telegramStickerLimit} each.`
                         : `Saved as a single pack (max 30 for WhatsApp).`
                       }
                     </p>
@@ -4777,6 +4781,10 @@ function App() {
                     onClick={async () => {
                       if (!telegramTokenValid) {
                         alert('Please verify your bot token first!');
+                        return;
+                      }
+                      if (!telegramMaxStickers || telegramMaxStickers <= 0) {
+                        alert('⚠️ Please set "Max Stickers to Download"!\n\nYou must specify how many stickers to download from each pack.');
                         return;
                       }
                       if (!telegramSplitPacks && telegramStickerLimit > 30) {
