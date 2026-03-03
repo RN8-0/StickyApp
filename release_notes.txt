@@ -1,12 +1,119 @@
 <tr-TR>
-• Çıkartma yükleme performansı artırıldı ve animasyonlar düzeltildi.
-• Arka plan silme işlemi iyileştirildi, artık daha hızlı ve verimli.
-• Popüler paketler görünümü modernize edildi.
-• Uygulama genelinde kararlılık iyileştirmeleri ve hata düzeltmeleri yapıldı.
+🎉 Sticly v4.0.0 — Büyük Güncelleme!
+• Yeni akıllı sıralama algoritması: En sevdiğiniz çıkartmalar artık daha kolay bulunuyor.
+• Popüler çıkartmalar bölümü profesyonel bir algoritma ile yeniden tasarlandı.
+• Favorilere ekleme sistemi iyileştirildi.
+• Performans ve kararlılık iyileştirmeleri yapıldı.
 </tr-TR>
+<ar>
+🎉 Sticly v4.0.0 — تحديث كبير!
+• خوارزمية ترتيب ذكية جديدة: اعثر على ملصقاتك المفضلة بسهولة أكبر.
+• تم إعادة تصميم قسم الملصقات الشائعة بخوارزمية احترافية.
+• تحسين نظام الإضافة إلى المفضلة.
+• تحسينات في الأداء والاستقرار.
+</ar>
+<de-DE>
+🎉 Sticly v4.0.0 — Großes Update!
+• Neuer intelligenter Sortieralgorithmus: Finde deine Lieblingssticker noch einfacher.
+• Der Bereich für beliebte Sticker wurde mit einem professionellen Algorithmus neu gestaltet.
+• Verbessertes Favoritensystem.
+• Leistungs- und Stabilitätsverbesserungen.
+</de-DE>
 <en-US>
-• Improved sticker loading performance and fixed animations.
-• Optimized background removal process for better speed and efficiency.
-• Modernized the look of popular packs.
-• General stability improvements and bug fixes throughout the app.
+🎉 Sticly v4.0.0 — Major Update!
+• New smart ranking algorithm: Find your favorite stickers more easily.
+• Popular stickers section redesigned with a professional ranking system.
+• Improved favorites system.
+• Performance and stability improvements.
 </en-US>
+<es-419>
+🎉 Sticly v4.0.0 — ¡Gran actualización!
+• Nuevo algoritmo de clasificación inteligente: Encuentra tus stickers favoritos más fácilmente.
+• La sección de stickers populares fue rediseñada con un algoritmo profesional.
+• Sistema de favoritos mejorado.
+• Mejoras de rendimiento y estabilidad.
+</es-419>
+<fil>
+🎉 Sticly v4.0.0 — Malaking Update!
+• Bagong matalinong algorithm ng pag-rank: Mas madaling mahanap ang iyong mga paboritong sticker.
+• Ang seksyon ng mga popular na sticker ay muling idinisenyo gamit ang isang propesyonal na algorithm.
+• Pinahusay na sistema ng mga paborito.
+• Mga pagpapabuti sa performance at stability.
+</fil>
+<fr-FR>
+🎉 Sticly v4.0.0 — Mise à jour majeure !
+• Nouvel algorithme de classement intelligent : Trouvez vos stickers préférés plus facilement.
+• La section des stickers populaires a été repensée avec un algorithme professionnel.
+• Système de favoris amélioré.
+• Améliorations des performances et de la stabilité.
+</fr-FR>
+<hi-IN>
+🎉 Sticly v4.0.0 — बड़ा अपडेट!
+• नया स्मार्ट रैंकिंग एल्गोरिदम: अपने पसंदीदा स्टिकर और आसानी से खोजें।
+• लोकप्रिय स्टिकर अनुभाग को पेशेवर एल्गोरिदम के साथ फिर से डिज़ाइन किया गया।
+• बेहतर पसंदीदा प्रणाली।
+• प्रदर्शन और स्थिरता में सुधार।
+</hi-IN>
+<id>
+🎉 Sticly v4.0.0 — Pembaruan Besar!
+• Algoritma peringkat cerdas baru: Temukan stiker favorit Anda lebih mudah.
+• Bagian stiker populer dirancang ulang dengan algoritma profesional.
+• Sistem favorit yang ditingkatkan.
+• Peningkatan kinerja dan stabilitas.
+</id>
+<it-IT>
+🎉 Sticly v4.0.0 — Grande aggiornamento!
+• Nuovo algoritmo di classificazione intelligente: Trova i tuoi sticker preferiti più facilmente.
+• La sezione degli sticker popolari è stata ridisegnata con un algoritmo professionale.
+• Sistema dei preferiti migliorato.
+• Miglioramenti delle prestazioni e della stabilità.
+</it-IT>
+<ja-JP>
+🎉 Sticly v4.0.0 — 大型アップデート！
+• 新しいスマートランキングアルゴリズム：お気に入りのステッカーがより簡単に見つかります。
+• 人気ステッカーセクションをプロフェッショナルなアルゴリズムで再設計しました。
+• お気に入りシステムを改善しました。
+• パフォーマンスと安定性の向上。
+</ja-JP>
+<ko-KR>
+🎉 Sticly v4.0.0 — 대규모 업데이트!
+• 새로운 스마트 랭킹 알고리즘: 좋아하는 스티커를 더 쉽게 찾을 수 있습니다.
+• 인기 스티커 섹션이 전문적인 알고리즘으로 재설계되었습니다.
+• 즐겨찾기 시스템이 개선되었습니다.
+• 성능 및 안정성 개선.
+</ko-KR>
+<pt-BR>
+🎉 Sticly v4.0.0 — Grande atualização!
+• Novo algoritmo de classificação inteligente: Encontre seus stickers favoritos mais facilmente.
+• A seção de stickers populares foi redesenhada com um algoritmo profissional.
+• Sistema de favoritos aprimorado.
+• Melhorias de desempenho e estabilidade.
+</pt-BR>
+<ru-RU>
+🎉 Sticly v4.0.0 — Большое обновление!
+• Новый умный алгоритм ранжирования: Находите любимые стикеры ещё проще.
+• Раздел популярных стикеров переработан с профессиональным алгоритмом.
+• Улучшена система избранного.
+• Улучшения производительности и стабильности.
+</ru-RU>
+<th>
+🎉 Sticly v4.0.0 — อัปเดตครั้งใหญ่!
+• อัลกอริทึมการจัดอันดับอัจฉริยะใหม่: ค้นหาสติกเกอร์ที่ชอบได้ง่ายขึ้น
+• ส่วนสติกเกอร์ยอดนิยมถูกออกแบบใหม่ด้วยอัลกอริทึมระดับมืออาชีพ
+• ระบบรายการโปรดที่ปรับปรุงแล้ว
+• การปรับปรุงประสิทธิภาพและความเสถียร
+</th>
+<vi>
+🎉 Sticly v4.0.0 — Bản cập nhật lớn!
+• Thuật toán xếp hạng thông minh mới: Tìm sticker yêu thích dễ dàng hơn.
+• Mục sticker phổ biến được thiết kế lại với thuật toán chuyên nghiệp.
+• Hệ thống yêu thích được cải thiện.
+• Cải thiện hiệu suất và độ ổn định.
+</vi>
+<zh-CN>
+🎉 Sticly v4.0.0 — 重大更新！
+• 全新智能排名算法：更轻松地找到您喜欢的贴纸。
+• 热门贴纸板块已使用专业算法重新设计。
+• 改进了收藏系统。
+• 性能和稳定性改进。
+</zh-CN>
