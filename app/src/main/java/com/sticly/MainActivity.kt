@@ -157,7 +157,7 @@ class MainActivity : AppCompatActivity() {
     private val sessionSeed = System.currentTimeMillis()
     
     // Cached format instance (only used on Default dispatcher — single thread safe)
-    private val rankDateFormat = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+    private val rankDateFormat = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.getDefault())
 
     private fun getOrCalculateRankScore(pack: Pack): Double {
         return sessionRankScores.getOrPut(pack.id) {
@@ -219,14 +219,14 @@ class MainActivity : AppCompatActivity() {
             else -> 1.0
         }
 
-        // 5. Popular flag boost (admin-curated)
-        val popularBoost = if (pack.isPopular) 1.3 else 1.0
+        // 5. Popular flag boost (only used in popular section, not main list)
+        // Removed from ranking — popular section uses its own filter
 
-        // 6. Deterministic jitter (prevents same ordering every time, like YouTube shuffle)
-        val jitter = 1.0 + (((pack.id.hashCode().toLong() xor sessionSeed) % 100) / 1000.0)
+        // 6. Deterministic jitter per session (ensures variety between sessions)
+        val jitter = 1.0 + (((pack.id.hashCode().toLong() xor sessionSeed) % 200) / 1000.0)
 
-        // Final Score = (Quality * Engagement * Freshness * Diversity * Popular) with jitter
-        return (wilsonScore * 100 + engagementScore) * ageMultiplier * diversityBonus * popularBoost * jitter
+        // Final Score = (Quality * Engagement * Freshness * Diversity) with jitter
+        return (wilsonScore * 100 + engagementScore) * ageMultiplier * diversityBonus * jitter
     }
 
     private val notificationPermissionLauncher = registerForActivityResult(
@@ -1278,12 +1278,13 @@ Rules:
             try {
                 val success = CustomStickerManager.addStickerToPack(this@MainActivity, packId, bitmap)
                 if (success) {
-                    // Refresh allPacks with updated custom packs before switching tab
-                    val customPacks = CustomStickerManager.getCustomPacks(this@MainActivity).mapNotNull { cp ->
-                        CustomStickerManager.toWhatsAppPack(this@MainActivity, cp.id)?.copy(category = "custom")
+                    // Only refresh the changed pack, not all custom packs
+                    val updatedPack = CustomStickerManager.toWhatsAppPack(this@MainActivity, packId)?.copy(category = "custom")
+                    if (updatedPack != null) {
+                        allPacks = allPacks.map { if (it.id == packId) updatedPack else it }.let { list ->
+                            if (list.none { it.id == packId }) list + updatedPack else list
+                        }
                     }
-                    val firebasePacks = allPacks.filter { !it.id.startsWith("custom_") }
-                    allPacks = firebasePacks + customPacks
                 }
                 withContext(Dispatchers.Main) {
                     if (success) {
@@ -1670,7 +1671,7 @@ Rules:
 
         // Recently added: sorted by creation date (most recent first), up to 15
         val recentPacks = activePacks
-            .sortedByDescending { it.createdAt }
+            .sortedByDescending { parseDateCached(it.createdAt) }
             .take(15)
 
         if (recentPacks.isNotEmpty() && (currentFilter == FilterType.ALL || currentFilter == FilterType.PREMIUM)) {
@@ -2303,8 +2304,16 @@ Rules:
                 else -> filtered
             }
 
-            // Basit sıralama (Çıkartma sayısına veya puana göre)
-            val sorted = filtered.sortedByDescending { getOrCalculateRankScore(it) }
+            // Sort by rank score, but demote popular packs (already shown in Popular section)
+            // This ensures users discover different content in the main list
+            val sorted = filtered.sortedByDescending { pack ->
+                val score = getOrCalculateRankScore(pack)
+                if (pack.isPopular && (currentFilter == FilterType.ALL || currentFilter == FilterType.PREMIUM)) {
+                    score * 0.5 // Demote popular packs in main list (they're in the Popular carousel)
+                } else {
+                    score
+                }
+            }
 
             // Insert banner ads every 10 packs (only in ALL/PREMIUM filters, not for premium users)
             val withAds = mutableListOf<Any>()

@@ -766,7 +766,7 @@ export async function importTelegramPacks(
                 const packData: any = {
                     name: packName,
                     ...partTranslations,
-                    publisher: 'Sticky Telegram',
+                    publisher: 'Sticky',
                     publisher_email: 'contact@arain.digital',
                     privacy_policy_website: '',
                     license_agreement_website: '',

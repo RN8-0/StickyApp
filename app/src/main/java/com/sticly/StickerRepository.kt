@@ -314,7 +314,7 @@ object StickerRepository {
                 storagePath = "stickers", // Tüm dosyalar tek klasörde
                 createdAt = when (val time = data["created_at"]) {
                     is com.google.firebase.Timestamp -> {
-                        val sdf = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+                        val sdf = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.getDefault())
                         sdf.format(time.toDate())
                     }
                     is String -> time
