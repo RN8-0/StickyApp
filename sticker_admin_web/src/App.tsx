@@ -4702,7 +4702,7 @@ function App() {
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                       {/* Max Stickers to Fetch */}
                       <div className="space-y-2">
-                        <label className="text-[10px] font-bold text-textSec uppercase">Max Stickers</label>
+                        <label className="text-[10px] font-bold text-textSec uppercase">Max Stickers to Download</label>
                         <input
                           type="number"
                           min={0}
@@ -4712,24 +4712,26 @@ function App() {
                           placeholder="0 = All"
                           className="w-full bg-card/60 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm font-bold outline-none focus:ring-2 focus:ring-sky-500 placeholder:text-white/20"
                         />
+                        <p className="text-[8px] text-textSec">0 = download all stickers from pack</p>
                       </div>
 
-                      {/* Sticker Limit */}
+                      {/* Stickers per Pack */}
                       <div className="space-y-2">
                         <label className="text-[10px] font-bold text-textSec uppercase">Stickers per Pack</label>
                         <input
                           type="number"
                           min={1}
-                          max={120}
+                          max={30}
                           value={telegramStickerLimit}
-                          onChange={(e) => setTelegramStickerLimit(Math.max(1, Math.min(120, parseInt(e.target.value) || 30)))}
+                          onChange={(e) => setTelegramStickerLimit(Math.max(1, Math.min(30, parseInt(e.target.value) || 30)))}
                           className="w-full bg-card/60 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm font-bold outline-none focus:ring-2 focus:ring-sky-500"
                         />
+                        <p className="text-[8px] text-textSec">WhatsApp max: 30 per pack</p>
                       </div>
 
                       {/* Split Packs Toggle */}
                       <div className="space-y-2">
-                        <label className="text-[10px] font-bold text-textSec uppercase">Split Large Packs</label>
+                        <label className="text-[10px] font-bold text-textSec uppercase">Large Pack Handling</label>
                         <div className="flex bg-hover rounded-xl p-1 gap-1">
                           <button
                             onClick={() => setTelegramSplitPacks(true)}
@@ -4738,7 +4740,7 @@ function App() {
                           <button
                             onClick={() => setTelegramSplitPacks(false)}
                             className={cn("flex-1 py-2 rounded-lg text-[10px] font-black transition-all", !telegramSplitPacks ? "bg-orange-500 text-white" : "text-textSec")}
-                          >Truncate</button>
+                          >Single Pack</button>
                         </div>
                       </div>
 
@@ -4759,12 +4761,15 @@ function App() {
                     </div>
 
                     <p className="text-[9px] text-textSec">
-                      {telegramMaxStickers > 0 ? `First ${telegramMaxStickers} stickers will be fetched. ` : 'All stickers will be fetched. '}
+                      {telegramMaxStickers > 0 ? `Only first ${telegramMaxStickers} stickers will be downloaded. ` : 'All stickers will be downloaded. '}
                       {telegramSplitPacks
-                        ? `Then split into packs of ${telegramStickerLimit}.`
-                        : `Then truncated to ${telegramStickerLimit} per pack.`
+                        ? `Then split into packs of ${telegramStickerLimit} each.`
+                        : `Saved as a single pack (max 30 for WhatsApp).`
                       }
                     </p>
+                    {!telegramSplitPacks && telegramStickerLimit > 30 && (
+                      <p className="text-[9px] text-red-400 font-bold">⚠️ WhatsApp supports max 30 stickers per pack! Please reduce "Stickers per Pack" to 30 or less.</p>
+                    )}
                   </div>
 
                   {/* Import Button */}
@@ -4772,6 +4777,10 @@ function App() {
                     onClick={async () => {
                       if (!telegramTokenValid) {
                         alert('Please verify your bot token first!');
+                        return;
+                      }
+                      if (!telegramSplitPacks && telegramStickerLimit > 30) {
+                        alert('⚠️ WhatsApp supports maximum 30 stickers per pack!\n\nPlease reduce "Stickers per Pack" to 30 or less, or switch to "Split" mode.');
                         return;
                       }
                       const packs = telegramPacksInput.split('\n').map(s => s.trim()).filter(Boolean);

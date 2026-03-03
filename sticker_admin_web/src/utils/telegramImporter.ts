@@ -459,18 +459,19 @@ export async function importTelegramPacks(
                 }
             }
 
-            // Step 3: Apply max stickers limit, then split or truncate
+            // Step 3: Apply max stickers limit, then split or single-pack
             let stickersToProcess = maxStickers > 0 ? allStickers.slice(0, maxStickers) : allStickers;
             const chunks: TelegramSticker[][] = [];
 
             if (splitPacks) {
-                // Split into multiple packs
+                // Split into multiple packs of stickerLimit each
                 for (let c = 0; c < stickersToProcess.length; c += stickerLimit) {
                     chunks.push(stickersToProcess.slice(c, c + stickerLimit));
                 }
             } else {
-                // Truncate to limit
-                chunks.push(stickersToProcess.slice(0, stickerLimit));
+                // Single pack mode: cap at stickerLimit (max 30 for WhatsApp)
+                const limit = Math.min(stickerLimit, 30);
+                chunks.push(stickersToProcess.slice(0, limit));
             }
             const totalParts = chunks.length;
 
