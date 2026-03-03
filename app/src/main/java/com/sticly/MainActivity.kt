@@ -295,6 +295,13 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    @Suppress("DEPRECATION")
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        // singleTop: activity already running, just bring to front — no state reset needed
+    }
+
     override fun onCreate(s: Bundle?) {
         // Switch from SplashTheme to normal AppTheme BEFORE setContentView
         setTheme(R.style.AppTheme)
@@ -305,6 +312,14 @@ class MainActivity : AppCompatActivity() {
             return
         }
         setContentView(R.layout.activity_main)
+
+        // Restore state if activity was recreated
+        if (s != null) {
+            val filterName = s.getString("currentFilter", "ALL")
+            currentFilter = try { FilterType.valueOf(filterName) } catch (_: Exception) { FilterType.ALL }
+            currentCategory = s.getString("currentCategory", "all") ?: "all"
+            currentSearchQuery = s.getString("currentSearchQuery", "") ?: ""
+        }
 
         // Initialize views FIRST so we can display cached content immediately
         initViews()
@@ -2083,6 +2098,38 @@ Rules:
     override fun onPause() {
         super.onPause()
         stopAutoScroll()
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putString("currentFilter", currentFilter.name)
+        outState.putString("currentCategory", currentCategory)
+        outState.putString("currentSearchQuery", currentSearchQuery)
+        // Save scroll position
+        val lm = rv.layoutManager as? LinearLayoutManager
+        outState.putInt("scrollPosition", lm?.findFirstVisibleItemPosition() ?: 0)
+        val topView = lm?.findViewByPosition(lm.findFirstVisibleItemPosition())
+        outState.putInt("scrollOffset", topView?.top ?: 0)
+    }
+
+    override fun onRestoreInstanceState(savedInstanceState: Bundle) {
+        super.onRestoreInstanceState(savedInstanceState)
+        val filterName = savedInstanceState.getString("currentFilter", "ALL")
+        currentFilter = try { FilterType.valueOf(filterName) } catch (_: Exception) { FilterType.ALL }
+        currentCategory = savedInstanceState.getString("currentCategory", "all") ?: "all"
+        currentSearchQuery = savedInstanceState.getString("currentSearchQuery", "") ?: ""
+        val scrollPos = savedInstanceState.getInt("scrollPosition", 0)
+        val scrollOffset = savedInstanceState.getInt("scrollOffset", 0)
+
+        // Restore UI state after data is loaded
+        updateBottomNavUI()
+        if (currentSearchQuery.isNotEmpty()) {
+            searchBarLayoutCached?.visibility = View.VISIBLE
+        }
+        // Restore scroll position after adapter update
+        rv.post {
+            (rv.layoutManager as? LinearLayoutManager)?.scrollToPositionWithOffset(scrollPos, scrollOffset)
+        }
     }
 
     private var noInternetDialog: com.google.android.material.bottomsheet.BottomSheetDialog? = null
