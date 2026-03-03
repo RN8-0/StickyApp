@@ -87,6 +87,15 @@ class StickerProcessor {
         return this.loadPromise;
     }
 
+    // Force reload FFmpeg (recover from crash)
+    async forceReload() {
+        this.isLoaded = false;
+        this.isLoading = false;
+        this.loadPromise = null;
+        this.ffmpeg = null;
+        return this.load();
+    }
+
     // Uygulama açılır açılmaz çağrılacak - FFmpeg'i önceden yükle
     async preload() {
         return this.load();
@@ -203,8 +212,8 @@ class StickerProcessor {
 
         let blob: Blob | null = null;
 
-        // Frame sayısına göre başlangıç kalitesi
-        const qualities = frameCount > 50 ? [25, 15, 10, 5] : [40, 25, 15, 10];
+        // Frame sayısına göre başlangıç kalitesi — start high
+        const qualities = frameCount > 50 ? [50, 35, 25, 15] : [65, 50, 35, 25];
 
         for (const q of qualities) {
             try { await ffmpeg.deleteFile(outputName); } catch { }
@@ -406,18 +415,18 @@ class StickerProcessor {
         // Arka plan silinmeyecekse - HIZLI YÖNTEM
         let blob: Blob | null = null;
 
-        // Dosya boyutuna göre kalite seçimi
+        // Dosya boyutuna göre kalite seçimi — start high for best quality
         const fileSizeKB = file.size / 1024;
         let qualities: number[];
 
         if (fileSizeKB > 2000) {
-            qualities = [15, 10, 5];
+            qualities = [30, 20, 15, 10];
         } else if (fileSizeKB > 1000) {
-            qualities = [25, 15, 10];
+            qualities = [50, 35, 25, 15];
         } else if (fileSizeKB > 500) {
-            qualities = [35, 25, 15];
+            qualities = [65, 50, 35, 25];
         } else {
-            qualities = [50, 35, 25];
+            qualities = [75, 65, 50, 35];
         }
 
         for (const q of qualities) {

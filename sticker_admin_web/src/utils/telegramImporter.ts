@@ -286,29 +286,43 @@ async function processTelegramSticker(
     onProgress?: (msg: string) => void
 ): Promise<Sticker | null> {
     try {
-        let webpBlob: Blob;
+        let webpBlob: Blob | null = null;
         console.log(`[TELEGRAM] Sticker #${index + 1}: animated=${sticker.is_animated}, video=${sticker.is_video}, thumb=${!!sticker.thumbnail}`);
 
         if (sticker.is_animated) {
             // Animated TGS → render ALL frames via lottie-web SVG → FFmpeg animated WebP
             onProgress?.(`Rendering animated sticker #${index + 1}...`);
-            try {
-                const filePath = await getFile(botToken, sticker.file_id);
-                const blob = await downloadTelegramFile(botToken, filePath);
-                const tgsBuffer = await blob.arrayBuffer();
+            let lastError: any = null;
 
-                // Render all Lottie frames to PNG blobs
-                const { frames, fps } = await renderTgsFrames(tgsBuffer, onProgress);
-                console.log(`[TELEGRAM] TGS #${index + 1}: ${frames.length} frames @ ${fps}fps`);
+            for (let attempt = 0; attempt < 2; attempt++) {
+                try {
+                    if (attempt > 0) {
+                        onProgress?.(`Retrying animated #${index + 1} (reloading FFmpeg)...`);
+                        await stickerProcessor.forceReload();
+                    }
+                    const filePath = await getFile(botToken, sticker.file_id);
+                    const blob = await downloadTelegramFile(botToken, filePath);
+                    const tgsBuffer = await blob.arrayBuffer();
 
-                // Encode frames → animated WebP via FFmpeg
-                onProgress?.(`Encoding animated WebP #${index + 1} (${frames.length} frames)...`);
-                webpBlob = await stickerProcessor.processFromPngFrames(frames, fps, (p) => {
-                    onProgress?.(`Sticker #${index + 1}: ${p.message}`);
-                });
-                console.log(`[TELEGRAM] ✓ Animated WebP for #${index + 1}: ${Math.round(webpBlob.size / 1024)}KB`);
-            } catch (err: any) {
-                console.warn(`[TELEGRAM] Animated render failed for #${index + 1}:`, err.message, '→ thumbnail fallback');
+                    const { frames, fps } = await renderTgsFrames(tgsBuffer, onProgress);
+                    console.log(`[TELEGRAM] TGS #${index + 1}: ${frames.length} frames @ ${fps}fps`);
+
+                    onProgress?.(`Encoding animated WebP #${index + 1} (${frames.length} frames)...`);
+                    webpBlob = await stickerProcessor.processFromPngFrames(frames, fps, (p) => {
+                        onProgress?.(`Sticker #${index + 1}: ${p.message}`);
+                    });
+                    console.log(`[TELEGRAM] ✓ Animated WebP for #${index + 1}: ${Math.round(webpBlob.size / 1024)}KB`);
+                    lastError = null;
+                    break;
+                } catch (err: any) {
+                    lastError = err;
+                    console.warn(`[TELEGRAM] Animated attempt ${attempt + 1} failed for #${index + 1}:`, err.message);
+                }
+            }
+
+            if (lastError) {
+                console.error(`[TELEGRAM] Animated render failed for #${index + 1} after retries:`, lastError.message);
+                onProgress?.(`⚠️ Animated #${index + 1} failed, using thumbnail fallback...`);
                 const fb = await thumbnailFallback(botToken, sticker, index, onProgress);
                 if (!fb) return null;
                 webpBlob = fb;
@@ -316,16 +330,32 @@ async function processTelegramSticker(
         } else if (sticker.is_video) {
             // Video WebM → FFmpeg → animated WebP
             onProgress?.(`Processing video sticker #${index + 1}...`);
-            try {
-                const filePath = await getFile(botToken, sticker.file_id);
-                const blob = await downloadTelegramFile(botToken, filePath);
-                const videoFile = new File([blob], `sticker_${index}.webm`, { type: 'video/webm' });
-                webpBlob = await stickerProcessor.processAnimated(videoFile, (p) => {
-                    onProgress?.(`Sticker #${index + 1}: ${p.message}`);
-                });
-                console.log(`[TELEGRAM] ✓ Video→WebP for #${index + 1}: ${Math.round(webpBlob.size / 1024)}KB`);
-            } catch (err: any) {
-                console.warn(`[TELEGRAM] Video render failed for #${index + 1}:`, err.message, '→ thumbnail fallback');
+            let lastError: any = null;
+
+            for (let attempt = 0; attempt < 2; attempt++) {
+                try {
+                    if (attempt > 0) {
+                        onProgress?.(`Retrying video #${index + 1} (reloading FFmpeg)...`);
+                        await stickerProcessor.forceReload();
+                    }
+                    const filePath = await getFile(botToken, sticker.file_id);
+                    const blob = await downloadTelegramFile(botToken, filePath);
+                    const videoFile = new File([blob], `sticker_${index}.webm`, { type: 'video/webm' });
+                    webpBlob = await stickerProcessor.processAnimated(videoFile, (p) => {
+                        onProgress?.(`Sticker #${index + 1}: ${p.message}`);
+                    });
+                    console.log(`[TELEGRAM] ✓ Video→WebP for #${index + 1}: ${Math.round(webpBlob.size / 1024)}KB`);
+                    lastError = null;
+                    break;
+                } catch (err: any) {
+                    lastError = err;
+                    console.warn(`[TELEGRAM] Video attempt ${attempt + 1} failed for #${index + 1}:`, err.message);
+                }
+            }
+
+            if (lastError) {
+                console.error(`[TELEGRAM] Video render failed for #${index + 1} after retries:`, lastError.message);
+                onProgress?.(`⚠️ Video #${index + 1} failed, using thumbnail fallback...`);
                 const fb = await thumbnailFallback(botToken, sticker, index, onProgress);
                 if (!fb) return null;
                 webpBlob = fb;
@@ -348,6 +378,12 @@ async function processTelegramSticker(
                     return null;
                 }
             }
+        }
+
+        // Check result
+        if (!webpBlob) {
+            console.warn(`[TELEGRAM] Sticker #${index + 1} produced no output`);
+            return null;
         }
 
         // Size check
