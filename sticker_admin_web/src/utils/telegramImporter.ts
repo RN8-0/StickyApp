@@ -246,30 +246,6 @@ async function renderTgsFrames(
 }
 
 // Thumbnail fallback: resize thumbnail to 512x512 static WebP (last resort)
-async function thumbnailFallback(
-    botToken: string, sticker: TelegramSticker, index: number,
-    onProgress?: (msg: string) => void
-): Promise<Blob | null> {
-    if (!sticker.thumbnail) return null;
-    onProgress?.(`Fallback: thumbnail for #${index + 1}...`);
-    const thumbPath = await getFile(botToken, sticker.thumbnail.file_id);
-    const thumbBlob = await downloadTelegramFile(botToken, thumbPath);
-    const img = new Image();
-    const thumbUrl = URL.createObjectURL(thumbBlob);
-    await new Promise<void>((resolve, reject) => {
-        img.onload = () => resolve();
-        img.onerror = () => reject(new Error('Image load failed'));
-        img.src = thumbUrl;
-    });
-    const c = document.createElement('canvas');
-    c.width = 512; c.height = 512;
-    c.getContext('2d')!.drawImage(img, 0, 0, 512, 512);
-    URL.revokeObjectURL(thumbUrl);
-    return new Promise<Blob>((resolve, reject) => {
-        c.toBlob(b => b ? resolve(b) : reject(new Error('Export failed')), 'image/webp', 0.95);
-    });
-}
-
 // ========== DUPLICATE DETECTION ==========
 
 async function checkDuplicatePack(setName: string): Promise<{ exists: boolean; location?: string }> {
@@ -350,10 +326,8 @@ async function processTelegramStickerInner(
 
             if (lastError) {
                 console.error(`[TELEGRAM] Animated render failed for #${index + 1} after retries:`, lastError.message);
-                onProgress?.(`⚠️ Animated #${index + 1} failed, using thumbnail fallback...`);
-                const fb = await thumbnailFallback(botToken, sticker, index, onProgress);
-                if (!fb) return null;
-                webpBlob = fb;
+                onProgress?.(`⚠️ Animated #${index + 1} failed, skipping (no static fallback for animated packs)...`);
+                return null;
             }
         } else if (sticker.is_video) {
             // Video WebM → FFmpeg → animated WebP
@@ -383,10 +357,8 @@ async function processTelegramStickerInner(
 
             if (lastError) {
                 console.error(`[TELEGRAM] Video render failed for #${index + 1} after retries:`, lastError.message);
-                onProgress?.(`⚠️ Video #${index + 1} failed, using thumbnail fallback...`);
-                const fb = await thumbnailFallback(botToken, sticker, index, onProgress);
-                if (!fb) return null;
-                webpBlob = fb;
+                onProgress?.(`⚠️ Video #${index + 1} failed, skipping (no static fallback for animated packs)...`);
+                return null;
             }
         } else {
             // Static WebP — download directly
