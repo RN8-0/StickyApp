@@ -2972,6 +2972,68 @@ function App() {
                 </div>
               </div>
 
+              {/* User Preference Intelligence */}
+              <div className="glass rounded-2xl p-6 border border-white/5">
+                <h3 className="text-sm font-black text-white tracking-tight mb-2 flex items-center gap-2">
+                  <Sparkles size={16} className="text-yellow-400" /> User Preference Intelligence
+                </h3>
+                <p className="text-[9px] text-textSec mb-5">What types of stickers your users love most — powered by engagement analysis</p>
+                {(() => {
+                  const activePacks = packs.filter(p => p.is_active !== false);
+                  // Category performance analysis
+                  const catMap = new Map<string, { downloads: number; views: number; favorites: number; packs: number; totalStickers: number }>();
+                  activePacks.forEach(p => {
+                    const cat = p.category || 'uncategorized';
+                    const prev = catMap.get(cat) || { downloads: 0, views: 0, favorites: 0, packs: 0, totalStickers: 0 };
+                    catMap.set(cat, {
+                      downloads: prev.downloads + (p.download_count || 0),
+                      views: prev.views + (p.view_count || 0),
+                      favorites: prev.favorites + (p.favorite_count || 0),
+                      packs: prev.packs + 1,
+                      totalStickers: prev.totalStickers + (p.sticker_count || 0)
+                    });
+                  });
+                  const catArr = Array.from(catMap.entries())
+                    .map(([name, d]) => ({
+                      name,
+                      ...d,
+                      cvr: d.views > 0 ? (d.downloads / d.views) * 100 : 0,
+                      engagementPerPack: d.packs > 0 ? (d.downloads + d.favorites * 3) / d.packs : 0
+                    }))
+                    .sort((a, b) => b.engagementPerPack - a.engagementPerPack);
+                  const maxEng = catArr[0]?.engagementPerPack || 1;
+
+                  return (
+                    <div className="space-y-2.5">
+                      {catArr.map((cat, i) => (
+                        <div key={cat.name} className="group">
+                          <div className="flex items-center gap-3 mb-1">
+                            <span className="text-[10px] font-black text-white uppercase w-28 truncate">{cat.name}</span>
+                            <div className="flex-1 h-5 bg-white/5 rounded-full overflow-hidden relative">
+                              <div className="absolute inset-y-0 left-0 rounded-full transition-all duration-500" style={{
+                                width: `${(cat.engagementPerPack / maxEng) * 100}%`,
+                                background: i === 0 ? 'linear-gradient(90deg, #f59e0b, #ef4444)' :
+                                  i === 1 ? 'linear-gradient(90deg, #8b5cf6, #6366f1)' :
+                                  i === 2 ? 'linear-gradient(90deg, #06b6d4, #3b82f6)' :
+                                  'linear-gradient(90deg, rgba(255,255,255,0.15), rgba(255,255,255,0.08))'
+                              }} />
+                              <div className="absolute inset-0 flex items-center px-2">
+                                <span className="text-[8px] font-black text-white/90 drop-shadow">{Math.round(cat.engagementPerPack)} eng/pack</span>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <span className="text-[9px] font-bold text-primary">{cat.downloads}↓</span>
+                              <span className="text-[9px] font-bold text-yellow-400">{cat.favorites}♥</span>
+                              <span className="text-[9px] font-bold text-textSec">{cat.cvr.toFixed(1)}%</span>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
+              </div>
+
               {/* App Health & Improvement Insights */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="glass rounded-2xl p-6 border border-white/5">
@@ -2983,6 +3045,7 @@ function App() {
                       const activePacks = packs.filter(p => p.is_active !== false);
                       const animatedPacks = packs.filter(p => p.is_animated);
                       const premiumPacks = packs.filter(p => p.is_premium);
+                      const popularPacks = packs.filter(p => p.is_popular === true);
                       const zeroDLPacks = activePacks.filter(p => (p.download_count || 0) === 0);
                       const avgStickersPerPack = activePacks.length > 0 ? Math.round(activePacks.reduce((a, p) => a + (p.sticker_count || 0), 0) / activePacks.length) : 0;
                       const telegramPacks = packs.filter(p => p.batch_source === 'telegram');
@@ -2991,6 +3054,7 @@ function App() {
                       return [
                         { label: 'Total Packs', value: packs.length, color: 'text-white' },
                         { label: 'Active / Inactive', value: `${activePacks.length} / ${packs.length - activePacks.length}`, color: 'text-green-400' },
+                        { label: '⭐ Popular Packs', value: popularPacks.length, color: 'text-yellow-400' },
                         { label: 'Animated Packs', value: animatedPacks.length, color: 'text-cyan-400' },
                         { label: 'Premium Packs', value: premiumPacks.length, color: 'text-yellow-400' },
                         { label: 'Telegram Content', value: telegramPacks.length, color: 'text-sky-400' },
@@ -3009,30 +3073,47 @@ function App() {
 
                 <div className="glass rounded-2xl p-6 border border-white/5">
                   <h3 className="text-sm font-black text-white tracking-tight mb-4 flex items-center gap-2">
-                    <TrendingUp size={16} className="text-accent" /> Improvement Suggestions
+                    <Lightbulb size={16} className="text-yellow-400" /> Algorithm Insights
                   </h3>
+                  <p className="text-[9px] text-textSec mb-4">How the ranking algorithm sees your content</p>
                   <div className="space-y-3">
                     {(() => {
                       const suggestions: { icon: string; text: string; severity: 'info' | 'warn' | 'good' }[] = [];
                       const activePacks = packs.filter(p => p.is_active !== false);
                       const animatedRatio = packs.length > 0 ? packs.filter(p => p.is_animated).length / packs.length : 0;
-                      const premiumRatio = packs.length > 0 ? packs.filter(p => p.is_premium).length / packs.length : 0;
                       const zeroDL = activePacks.filter(p => (p.download_count || 0) === 0).length;
                       const categories = new Set(packs.map(p => p.category).filter(Boolean));
+                      const popularCount = packs.filter(p => p.is_popular).length;
+                      const highCVR = activePacks.filter(p => (p.view_count || 0) > 10 && ((p.download_count || 0) / (p.view_count || 1)) > 0.15).length;
+                      const avgFavPerPack = activePacks.length > 0 ? activePacks.reduce((a, p) => a + (p.favorite_count || 0), 0) / activePacks.length : 0;
 
-                      if (packs.length < 50) suggestions.push({ icon: '📦', text: `${packs.length} packs available. 100+ packs are important for organic growth.`, severity: 'warn' });
-                      else suggestions.push({ icon: '✅', text: `${packs.length} packs — good content volume!`, severity: 'good' });
+                      // Content volume
+                      if (packs.length < 50) suggestions.push({ icon: '📦', text: `${packs.length} packs. Target 100+ for organic discovery.`, severity: 'warn' });
+                      else suggestions.push({ icon: '✅', text: `${packs.length} packs — solid content library!`, severity: 'good' });
 
-                      if (animatedRatio < 0.2) suggestions.push({ icon: '🎬', text: `Animated ratio is ${Math.round(animatedRatio * 100)}%. Add more animated stickers.`, severity: 'warn' });
-                      else suggestions.push({ icon: '🎬', text: `Animated ratio is ${Math.round(animatedRatio * 100)}% — great!`, severity: 'good' });
+                      // Popular curation
+                      if (popularCount === 0) suggestions.push({ icon: '⭐', text: `No popular packs curated. Mark top packs as Popular for home page.`, severity: 'warn' });
+                      else if (popularCount > 15) suggestions.push({ icon: '⭐', text: `${popularCount} popular packs — too many dilutes impact. Keep 5-10.`, severity: 'warn' });
+                      else suggestions.push({ icon: '⭐', text: `${popularCount} curated popular packs — good curation!`, severity: 'good' });
 
-                      if (zeroDL > activePacks.length * 0.3) suggestions.push({ icon: '⚠️', text: `${zeroDL} active packs have zero downloads. Check SEO and names.`, severity: 'warn' });
+                      // Engagement quality
+                      if (highCVR > 0) suggestions.push({ icon: '🎯', text: `${highCVR} packs have >15% CVR — high quality content performing well.`, severity: 'good' });
 
-                      if (categories.size < 5) suggestions.push({ icon: '🏷️', text: `Only ${categories.size} categories used. Add more variety.`, severity: 'warn' });
-                      else suggestions.push({ icon: '🏷️', text: `${categories.size} different categories — diverse!`, severity: 'good' });
+                      // Favorites signal
+                      if (avgFavPerPack < 0.5) suggestions.push({ icon: '💛', text: `Low favorite rate (${avgFavPerPack.toFixed(1)}/pack). Favorites boost ranking 3x.`, severity: 'info' });
+                      else suggestions.push({ icon: '💛', text: `Avg ${avgFavPerPack.toFixed(1)} favorites/pack — users are engaging!`, severity: 'good' });
 
-                      if (premiumRatio < 0.05) suggestions.push({ icon: '💎', text: 'Few premium packs. Add premium content for revenue.', severity: 'info' });
+                      // Animated variety
+                      if (animatedRatio < 0.2) suggestions.push({ icon: '🎬', text: `${Math.round(animatedRatio * 100)}% animated. Algorithm gives 8% boost to animated.`, severity: 'info' });
 
+                      // Category diversity
+                      if (categories.size < 5) suggestions.push({ icon: '🏷️', text: `Only ${categories.size} categories. More variety = better discovery.`, severity: 'warn' });
+                      else suggestions.push({ icon: '🏷️', text: `${categories.size} categories — great diversity for users!`, severity: 'good' });
+
+                      // Zero downloads warning
+                      if (zeroDL > activePacks.length * 0.3) suggestions.push({ icon: '📉', text: `${zeroDL} active packs have 0 downloads. Check names/SEO.`, severity: 'warn' });
+
+                      // Premium insights
                       if (usersData.length > 0) {
                         const premUsers = usersData.filter((u: any) => u.isPremium || u.subscription_type).length;
                         const convRate = (premUsers / usersData.length * 100).toFixed(1);

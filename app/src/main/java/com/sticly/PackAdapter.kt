@@ -338,8 +338,6 @@ class PackAdapter(
                 )
                 if (newFavState) {
                     StickerRepository.incrementFavoriteCount(pack.id, pack.isPremium)
-                } else {
-                    StickerRepository.decrementFavoriteCount(pack.id, pack.isPremium)
                 }
                 val msg = if (newFavState) R.string.added_to_favorites else R.string.removed_from_favorites
                 Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()

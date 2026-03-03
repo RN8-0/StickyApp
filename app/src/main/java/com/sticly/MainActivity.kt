@@ -164,20 +164,60 @@ class MainActivity : AppCompatActivity() {
         val downloads = pack.downloadCount.toDouble()
         val views = pack.viewCount.toDouble()
         val favorites = pack.favoriteCount.toDouble()
-        val cvr = if (views > 0) downloads / views else 0.0
-        val engagementScore = downloads + (favorites * 5.0)
-        var freshnessMultiplier = 1.0
+        val fakeBase = pack.fakeDownloadBase.toDouble()
+
+        // 1. Quality Score (Wilson Score Interval - like Reddit/YouTube)
+        // Measures true engagement quality, not raw volume
+        val totalSignals = downloads + favorites
+        val positiveRate = if (views > 0) (totalSignals / views).coerceAtMost(1.0) else 0.0
+        val z = 1.96 // 95% confidence
+        val n = views.coerceAtLeast(1.0)
+        val phat = positiveRate
+        val wilsonScore = if (n > 10) {
+            (phat + z * z / (2 * n) - z * Math.sqrt((phat * (1 - phat) + z * z / (4 * n)) / n)) / (1 + z * z / n)
+        } else {
+            phat * 0.5 // Low confidence penalty for new packs with few views
+        }
+
+        // 2. Engagement Score (weighted signals)
+        val engagementScore = downloads * 1.0 + favorites * 3.0 + fakeBase * 0.1
+
+        // 3. Time Decay (YouTube-style exponential decay with freshness boost)
+        var ageMultiplier = 1.0
         if (pack.createdAt.isNotEmpty()) {
             try {
                 val format = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
                 val createdDate = format.parse(pack.createdAt)
                 if (createdDate != null) {
-                    val diffDays = java.util.concurrent.TimeUnit.MILLISECONDS.toDays(currentTime - createdDate.time)
-                    if (diffDays <= 7) freshnessMultiplier = 3.5
+                    val diffHours = (currentTime - createdDate.time).toDouble() / (1000 * 60 * 60)
+                    val diffDays = diffHours / 24.0
+                    when {
+                        diffDays <= 2 -> ageMultiplier = 4.0    // Brand new: strong boost
+                        diffDays <= 7 -> ageMultiplier = 2.5    // This week: good boost
+                        diffDays <= 14 -> ageMultiplier = 1.5   // Recent: mild boost
+                        diffDays <= 30 -> ageMultiplier = 1.0   // Normal
+                        else -> ageMultiplier = 0.85            // Older: slight decay
+                    }
                 }
-            } catch (e: Exception) {}
+            } catch (_: Exception) {}
         }
-        return (engagementScore * (1.0 + cvr)) * freshnessMultiplier
+
+        // 4. Diversity bonus (animated/premium get slight variety boost)
+        val diversityBonus = when {
+            pack.isAnimated && pack.isPremium -> 1.15
+            pack.isAnimated -> 1.08
+            pack.isPremium -> 1.05
+            else -> 1.0
+        }
+
+        // 5. Popular flag boost (admin-curated)
+        val popularBoost = if (pack.isPopular) 1.3 else 1.0
+
+        // 6. Deterministic jitter (prevents same ordering every time, like YouTube shuffle)
+        val jitter = 1.0 + (((pack.id.hashCode().toLong() xor sessionSeed) % 100) / 1000.0)
+
+        // Final Score = (Quality * Engagement * Freshness * Diversity * Popular) with jitter
+        return (wilsonScore * 100 + engagementScore) * ageMultiplier * diversityBonus * popularBoost * jitter
     }
 
     private val notificationPermissionLauncher = registerForActivityResult(
