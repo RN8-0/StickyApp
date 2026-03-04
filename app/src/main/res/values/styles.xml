@@ -94,6 +94,7 @@
 
     <style name="RoundedBottomSheetStyle" parent="Widget.MaterialComponents.BottomSheet.Modal">
         <item name="shapeAppearanceOverlay">@style/RoundedBottomSheetCorners</item>
+        <item name="backgroundTint">@color/background</item>
     </style>
 
     <style name="RoundedBottomSheetCorners" parent="">

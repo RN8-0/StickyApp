@@ -3,8 +3,7 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:orientation="vertical"
-    android:background="@drawable/bg_bottom_sheet_rounded">
+    android:orientation="vertical">
 
     <!-- Drag handle -->
     <View
@@ -14,7 +13,7 @@
         android:layout_marginTop="12dp"
         android:background="@drawable/bg_drag_handle" />
 
-    <!-- Image preview with rounded corners -->
+    <!-- Image preview -->
     <com.google.android.material.card.MaterialCardView
         android:layout_width="260dp"
         android:layout_height="wrap_content"
@@ -34,7 +33,7 @@
 
     </com.google.android.material.card.MaterialCardView>
 
-    <!-- Prompt section - tappable to copy -->
+    <!-- Prompt section -->
     <com.google.android.material.card.MaterialCardView
         android:id="@+id/promptSection"
         android:layout_width="match_parent"
@@ -87,83 +86,118 @@
 
     </com.google.android.material.card.MaterialCardView>
 
-    <!-- Action buttons - 3 equal pill buttons -->
+    <!-- 2x2 Action buttons grid -->
     <LinearLayout
-        android:id="@+id/actionButtons"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
+        android:orientation="vertical"
         android:layout_marginHorizontal="24dp"
         android:layout_marginTop="18dp"
-        android:layout_marginBottom="28dp"
-        android:gravity="center">
+        android:layout_marginBottom="28dp">
 
-        <!-- Edit -->
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnUsePrompt"
-            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-            android:layout_width="0dp"
-            android:layout_height="44dp"
-            android:layout_weight="1"
-            android:layout_marginEnd="6dp"
-            android:text="Edit"
-            android:textAllCaps="false"
-            android:textSize="13sp"
-            android:textColor="@color/primary"
-            android:insetTop="0dp"
-            android:insetBottom="0dp"
-            app:icon="@drawable/ic_edit"
-            app:iconTint="@color/primary"
-            app:iconSize="18dp"
-            app:iconGravity="textStart"
-            app:iconPadding="4dp"
-            app:cornerRadius="14dp"
-            app:strokeColor="@color/primary_light"
-            app:strokeWidth="1.5dp" />
+        <!-- Top row: Edit + Add -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
 
-        <!-- Add to Pack -->
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnAddToPack"
-            style="@style/Widget.MaterialComponents.Button"
-            android:layout_width="0dp"
-            android:layout_height="44dp"
-            android:layout_weight="1"
-            android:layout_marginHorizontal="6dp"
-            android:text="Add"
-            android:textAllCaps="false"
-            android:textSize="13sp"
-            android:textColor="@android:color/white"
-            android:insetTop="0dp"
-            android:insetBottom="0dp"
-            app:icon="@drawable/ic_add"
-            app:iconTint="@android:color/white"
-            app:iconSize="18dp"
-            app:iconGravity="textStart"
-            app:iconPadding="4dp"
-            app:backgroundTint="@color/primary"
-            app:cornerRadius="14dp" />
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnUsePrompt"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:layout_width="0dp"
+                android:layout_height="46dp"
+                android:layout_weight="1"
+                android:layout_marginEnd="5dp"
+                android:text="Edit"
+                android:textAllCaps="false"
+                android:textSize="13sp"
+                android:textColor="@color/primary"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                app:icon="@drawable/ic_edit"
+                app:iconTint="@color/primary"
+                app:iconSize="18dp"
+                app:iconGravity="textStart"
+                app:iconPadding="6dp"
+                app:cornerRadius="14dp"
+                app:strokeColor="@color/primary_light"
+                app:strokeWidth="1.5dp" />
 
-        <!-- Delete -->
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnDelete"
-            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-            android:layout_width="0dp"
-            android:layout_height="44dp"
-            android:layout_weight="1"
-            android:layout_marginStart="6dp"
-            android:textAllCaps="false"
-            android:textSize="13sp"
-            android:textColor="#E74C3C"
-            android:insetTop="0dp"
-            android:insetBottom="0dp"
-            app:icon="@drawable/ic_delete"
-            app:iconTint="#E74C3C"
-            app:iconSize="18dp"
-            app:iconGravity="textStart"
-            app:iconPadding="4dp"
-            app:cornerRadius="14dp"
-            app:strokeColor="#FFCDD2"
-            app:strokeWidth="1.5dp" />
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnAddToPack"
+                style="@style/Widget.MaterialComponents.Button"
+                android:layout_width="0dp"
+                android:layout_height="46dp"
+                android:layout_weight="1"
+                android:layout_marginStart="5dp"
+                android:text="Add to Pack"
+                android:textAllCaps="false"
+                android:textSize="13sp"
+                android:textColor="@android:color/white"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                app:icon="@drawable/ic_add"
+                app:iconTint="@android:color/white"
+                app:iconSize="18dp"
+                app:iconGravity="textStart"
+                app:iconPadding="6dp"
+                app:backgroundTint="@color/primary"
+                app:cornerRadius="14dp" />
+
+        </LinearLayout>
+
+        <!-- Bottom row: Regenerate + Delete -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="10dp">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnRegenerate"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:layout_width="0dp"
+                android:layout_height="46dp"
+                android:layout_weight="1"
+                android:layout_marginEnd="5dp"
+                android:text="Regenerate"
+                android:textAllCaps="false"
+                android:textSize="13sp"
+                android:textColor="#FF9800"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                app:icon="@drawable/ic_refresh"
+                app:iconTint="#FF9800"
+                app:iconSize="18dp"
+                app:iconGravity="textStart"
+                app:iconPadding="6dp"
+                app:cornerRadius="14dp"
+                app:strokeColor="#FFE0B2"
+                app:strokeWidth="1.5dp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnDelete"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:layout_width="0dp"
+                android:layout_height="46dp"
+                android:layout_weight="1"
+                android:layout_marginStart="5dp"
+                android:text="Delete"
+                android:textAllCaps="false"
+                android:textSize="13sp"
+                android:textColor="#E74C3C"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                app:icon="@drawable/ic_delete"
+                app:iconTint="#E74C3C"
+                app:iconSize="18dp"
+                app:iconGravity="textStart"
+                app:iconPadding="6dp"
+                app:cornerRadius="14dp"
+                app:strokeColor="#FFCDD2"
+                app:strokeWidth="1.5dp" />
+
+        </LinearLayout>
 
     </LinearLayout>
 

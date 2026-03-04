@@ -1424,6 +1424,7 @@ Rules:
 
         val btnEdit = sheetView.findViewById<com.google.android.material.button.MaterialButton>(R.id.btnUsePrompt)
         val btnAddToPack = sheetView.findViewById<com.google.android.material.button.MaterialButton>(R.id.btnAddToPack)
+        val btnRegenerate = sheetView.findViewById<com.google.android.material.button.MaterialButton>(R.id.btnRegenerate)
         val btnDelete = sheetView.findViewById<com.google.android.material.button.MaterialButton>(R.id.btnDelete)
 
         // Edit — open sticker editor with this image
@@ -1454,6 +1455,16 @@ Rules:
             aiGeneratedBitmap = bmp
             dialog.dismiss()
             aiShowPackPickerDialog()
+        }
+
+        // Regenerate — fill prompt and trigger generation
+        btnRegenerate?.setOnClickListener {
+            if (item.prompt.isNotEmpty()) {
+                findViewById<android.widget.EditText>(R.id.aiEtPrompt)?.setText(item.prompt)
+            }
+            dialog.dismiss()
+            // Trigger generation with the same prompt
+            findViewById<com.google.android.material.button.MaterialButton>(R.id.aiBtnGenerate)?.performClick()
         }
 
         // Delete
