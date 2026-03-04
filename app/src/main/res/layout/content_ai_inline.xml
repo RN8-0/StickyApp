@@ -110,36 +110,7 @@
 
         </androidx.cardview.widget.CardView>
 
-        <!-- Style chips -->
-        <HorizontalScrollView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:scrollbars="none"
-            android:layout_marginBottom="12dp">
-
-            <com.google.android.material.chip.ChipGroup
-                android:id="@+id/aiStyleChipGroup"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                app:singleSelection="true"
-                app:selectionRequired="true">
-
-                <com.google.android.material.chip.Chip android:id="@+id/aiChipCartoon" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="🎨 Cartoon" android:checked="true" style="@style/Widget.MaterialComponents.Chip.Choice" app:chipBackgroundColor="@color/chip_ai_bg" app:checkedIconEnabled="false" android:textColor="@color/chip_ai_text" />
-                <com.google.android.material.chip.Chip android:id="@+id/aiChipKawaii" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="🌸 Kawaii" style="@style/Widget.MaterialComponents.Chip.Choice" app:chipBackgroundColor="@color/chip_ai_bg" app:checkedIconEnabled="false" android:textColor="@color/chip_ai_text" />
-                <com.google.android.material.chip.Chip android:id="@+id/aiChipPixel" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="👾 Pixel" style="@style/Widget.MaterialComponents.Chip.Choice" app:chipBackgroundColor="@color/chip_ai_bg" app:checkedIconEnabled="false" android:textColor="@color/chip_ai_text" />
-                <com.google.android.material.chip.Chip android:id="@+id/aiChipRealistic" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="📸 Real" style="@style/Widget.MaterialComponents.Chip.Choice" app:chipBackgroundColor="@color/chip_ai_bg" app:checkedIconEnabled="false" android:textColor="@color/chip_ai_text" />
-                <com.google.android.material.chip.Chip android:id="@+id/aiChipAnime" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="⛩️ Anime" style="@style/Widget.MaterialComponents.Chip.Choice" app:chipBackgroundColor="@color/chip_ai_bg" app:checkedIconEnabled="false" android:textColor="@color/chip_ai_text" />
-                <com.google.android.material.chip.Chip android:id="@+id/aiChipComic" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="💥 Comic" style="@style/Widget.MaterialComponents.Chip.Choice" app:chipBackgroundColor="@color/chip_ai_bg" app:checkedIconEnabled="false" android:textColor="@color/chip_ai_text" />
-                <com.google.android.material.chip.Chip android:id="@+id/aiChipDoodle" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="✏️ Doodle" style="@style/Widget.MaterialComponents.Chip.Choice" app:chipBackgroundColor="@color/chip_ai_bg" app:checkedIconEnabled="false" android:textColor="@color/chip_ai_text" />
-                <com.google.android.material.chip.Chip android:id="@+id/aiChip3d" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="🧊 3D" style="@style/Widget.MaterialComponents.Chip.Choice" app:chipBackgroundColor="@color/chip_ai_bg" app:checkedIconEnabled="false" android:textColor="@color/chip_ai_text" />
-                <com.google.android.material.chip.Chip android:id="@+id/aiChipWatercolor" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="💧 Watercolor" style="@style/Widget.MaterialComponents.Chip.Choice" app:chipBackgroundColor="@color/chip_ai_bg" app:checkedIconEnabled="false" android:textColor="@color/chip_ai_text" />
-                <com.google.android.material.chip.Chip android:id="@+id/aiChipNeon" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="💡 Neon" style="@style/Widget.MaterialComponents.Chip.Choice" app:chipBackgroundColor="@color/chip_ai_bg" app:checkedIconEnabled="false" android:textColor="@color/chip_ai_text" />
-                <com.google.android.material.chip.Chip android:id="@+id/aiChipPop" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="🎉 Pop Art" style="@style/Widget.MaterialComponents.Chip.Choice" app:chipBackgroundColor="@color/chip_ai_bg" app:checkedIconEnabled="false" android:textColor="@color/chip_ai_text" />
-                <com.google.android.material.chip.Chip android:id="@+id/aiChipGraffiti" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="🎤 Graffiti" style="@style/Widget.MaterialComponents.Chip.Choice" app:chipBackgroundColor="@color/chip_ai_bg" app:checkedIconEnabled="false" android:textColor="@color/chip_ai_text" />
-
-            </com.google.android.material.chip.ChipGroup>
-
-        </HorizontalScrollView>
+        <!-- Style chips removed — single high-quality sticker style -->
 
         <!-- Generate Button -->
         <com.google.android.material.button.MaterialButton

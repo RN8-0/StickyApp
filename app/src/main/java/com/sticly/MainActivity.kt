@@ -692,7 +692,7 @@ class MainActivity : AppCompatActivity() {
         val aiBtnAddToPack = findViewById<MaterialButton>(R.id.aiBtnAddToPack)
         val aiTvError = findViewById<TextView>(R.id.aiTvError)
         val aiTvDailyCounter = findViewById<TextView>(R.id.tvAiDailyCounter)
-        val aiStyleChipGroup = findViewById<ChipGroup>(R.id.aiStyleChipGroup)
+        // Style chips removed — single high-quality sticker style
         val aiBtnInspireMe = findViewById<View>(R.id.aiBtnInspireMe)
         val aiBtnClosePreview = findViewById<ImageView>(R.id.aiBtnClosePreview)
         fun updateAiDailyCounter() {
@@ -710,23 +710,7 @@ class MainActivity : AppCompatActivity() {
             updateAiDailyCounter()
         }
 
-        fun getAiSelectedStyle(): String {
-            return when (aiStyleChipGroup?.checkedChipId) {
-                R.id.aiChipCartoon -> "cartoon style, 2D cartoon illustration, bold outlines, flat colors"
-                R.id.aiChipKawaii -> "kawaii cute style, Japanese kawaii art, pastel colors, adorable"
-                R.id.aiChipPixel -> "pixel art style, 8-bit retro pixel art, blocky pixels, retro game"
-                R.id.aiChipRealistic -> "photorealistic style, realistic photograph, highly detailed, photographic"
-                R.id.aiChipAnime -> "anime style, Japanese anime illustration, manga art, cel shading"
-                R.id.aiChipComic -> "comic book style, Marvel DC comic art, halftone dots, action lines"
-                R.id.aiChipDoodle -> "hand drawn doodle style, pencil sketch, notebook doodle, line art"
-                R.id.aiChip3d -> "3D rendered style, 3D CGI render, Pixar style, smooth shading"
-                R.id.aiChipWatercolor -> "watercolor painting style, watercolor wash, soft edges, painted"
-                R.id.aiChipNeon -> "neon glow style, neon lights, glowing edges, dark background, cyberpunk"
-                R.id.aiChipPop -> "pop art style, Andy Warhol pop art, bold primary colors, Ben-Day dots"
-                R.id.aiChipGraffiti -> "street art graffiti style, spray paint, urban wall art, bold tags"
-                else -> "cartoon style, 2D cartoon illustration, bold outlines"
-            }
-        }
+        fun getAiSelectedStyle(): String = ""
 
         fun setAiGenerating(isGenerating: Boolean) {
             aiPreviewCard?.visibility = View.VISIBLE
@@ -976,24 +960,31 @@ class MainActivity : AppCompatActivity() {
 
     private fun aiTodayString(): String = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
 
+    private val AI_STICKER_SUFFIX = ", ultra vibrant saturated neon colors, cartoon sticker style, white background, thick bold outlines, very expressive exaggerated emotions, huge googly eyes, chibi proportions, funny hilarious, professional sticker design, masterpiece, best quality, ultra detailed, sharp crisp lines, centered composition, single character, high resolution"
+
     private suspend fun aiOptimizePrompt(userPrompt: String, style: String): String =
         withContext(Dispatchers.IO) {
             try {
                 val apiKey = BuildConfig.DEEPSEEK_API_KEY
-                if (apiKey.isEmpty()) return@withContext "$style style, $style sticker of $userPrompt, hilarious goofy facial expression, clean white background, thick bold black outline, ultra vibrant neon colors, chibi proportions, huge expressive eyes, exaggerated emotions, cel-shaded, masterpiece, best quality, ultra detailed, sharp crisp lines, professional sticker design, centered, hilarious expression, dramatic pose"
+                if (apiKey.isEmpty()) return@withContext "$userPrompt$AI_STICKER_SUFFIX"
 
-                val systemMessage = """You are an expert AI sticker prompt engineer. Your job is to create the PERFECT image generation prompt.
+                val systemMessage = """You are an expert AI sticker prompt engineer specializing in WhatsApp/Telegram sticker creation.
 CRITICAL RULES:
 - Output ONLY the optimized prompt text, nothing else
-- The art style MUST be: $style - this is NON-NEGOTIABLE, the entire image must look like $style artwork
-- Characters MUST have HILARIOUS, EXAGGERATED facial expressions: impossibly wide crazy eyes, comically huge goofy grins, dramatic shocked mouths, silly tongue sticking out, crossed eyes, sweat drops
-- ALWAYS include these exact keywords: clean white background, thick bold black outline, sticker design, centered composition, single character
-- Add quality: masterpiece, best quality, ultra detailed, sharp lines, high resolution
-- Colors: ultra vibrant, saturated, high contrast
-- Proportions: chibi style with big head and small body, enormous expressive eyes
-- Make the character doing something funny or in a comedic situation
-- Keep it under 120 words
-- IMPORTANT: Start the prompt with "$style style, " to enforce the art style"""
+- The result MUST look like a professional cartoon sticker with these MANDATORY qualities:
+  * Ultra vibrant, saturated, neon-bright colors (pink, blue, green, orange, purple)
+  * Clean white or transparent background
+  * Thick bold black outlines around everything
+  * Extremely exaggerated hilarious facial expressions: huge googly eyes, wide open mouth in shock, dramatic emotions
+  * Chibi/cartoon proportions: big head, small body
+  * Very detailed and high quality rendering
+  * Single centered character or object
+- Add dramatic visual effects: sweat drops, steam, sparkles, motion lines, food explosions, etc.
+- Make it FUNNY and EXPRESSIVE - the character should have maximum personality
+- Include specific color descriptions (neon pink, electric blue, bright orange, etc.)
+- Keep it under 100 words
+- DO NOT mention any specific art style names (no "cartoon style", "anime", etc.) - just describe what you see
+- Think of stickers like the ones on Telegram/WhatsApp - bold, colorful, expressive, fun"""
 
                 val body = JSONObject().apply {
                     put("model", "deepseek-chat")
@@ -1022,10 +1013,10 @@ CRITICAL RULES:
                     content
                 } else {
                     conn.disconnect()
-                    "$style style, $style sticker of $userPrompt, hilarious goofy facial expression, clean white background, thick bold black outline, ultra vibrant neon colors, chibi proportions, huge expressive eyes, exaggerated emotions, cel-shaded, masterpiece, best quality, ultra detailed, sharp crisp lines, professional sticker design, centered, hilarious expression, dramatic pose"
+                    "$userPrompt$AI_STICKER_SUFFIX"
                 }
             } catch (e: Exception) {
-                "$style style, $style sticker of $userPrompt, hilarious goofy facial expression, clean white background, thick bold black outline, ultra vibrant neon colors, chibi proportions, huge expressive eyes, exaggerated emotions, cel-shaded, masterpiece, best quality, ultra detailed, sharp crisp lines, professional sticker design, centered, hilarious expression, dramatic pose"
+                "$userPrompt$AI_STICKER_SUFFIX"
             }
         }
 
@@ -1614,6 +1605,7 @@ Rules:
                     .load(android.net.Uri.parse("file:///android_asset/${item.path}"))
                     .override(256)
                     .centerCrop()
+                    .signature(com.bumptech.glide.signature.ObjectKey("v2_${item.path}"))
                     .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.RESOURCE)
                     .into(holder.iv)
             } else {

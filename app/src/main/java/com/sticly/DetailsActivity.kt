@@ -956,24 +956,35 @@ class DetailsActivity : AppCompatActivity() {
         if (loadSource == null) {
             imageView.setImageResource(R.drawable.transparent_placeholder)
         } else {
-            // Use default load() — Glide auto-detects animated WebP/GIF and plays them
-            val errorSource = if (sticker.url.isNotEmpty() && loadSource != sticker.url) sticker.url else null
-            val builder = Glide.with(this)
+            val request = Glide.with(this)
                 .load(loadSource)
-                .override(512, 512)
                 .placeholder(R.drawable.transparent_placeholder)
                 .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.ALL)
+                .listener(object : com.bumptech.glide.request.RequestListener<android.graphics.drawable.Drawable> {
+                    override fun onLoadFailed(e: com.bumptech.glide.load.engine.GlideException?, model: Any?, target: com.bumptech.glide.request.target.Target<android.graphics.drawable.Drawable>, isFirstResource: Boolean): Boolean {
+                        android.util.Log.e("StickerPreview", "Load FAILED: source=$loadSource isAnimated=$isAnimatedPack", e)
+                        // Fallback: try URL directly
+                        if (sticker.url.isNotEmpty() && loadSource != sticker.url) {
+                            Glide.with(this@DetailsActivity)
+                                .load(sticker.url)
+                                .placeholder(R.drawable.transparent_placeholder)
+                                .error(R.drawable.transparent_placeholder)
+                                .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.ALL)
+                                .into(imageView)
+                        }
+                        return false
+                    }
+                    override fun onResourceReady(resource: android.graphics.drawable.Drawable, model: Any, target: com.bumptech.glide.request.target.Target<android.graphics.drawable.Drawable>, dataSource: com.bumptech.glide.load.DataSource, isFirstResource: Boolean): Boolean {
+                        android.util.Log.d("StickerPreview", "Load OK: ${resource.javaClass.simpleName} isAnimated=$isAnimatedPack")
+                        return false
+                    }
+                })
 
-            if (errorSource != null) {
-                builder.error(
-                    Glide.with(this)
-                        .load(errorSource)
-                        .override(512, 512)
-                        .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.ALL)
-                ).into(imageView)
-            } else {
-                builder.error(R.drawable.transparent_placeholder).into(imageView)
+            // Don't use override() for animated stickers — it can break animation
+            if (!isAnimatedPack) {
+                request.override(512, 512)
             }
+            request.error(R.drawable.transparent_placeholder).into(imageView)
         }
 
         // Tasarımdaki animasyonlu açılış
