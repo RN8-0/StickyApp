@@ -1403,91 +1403,53 @@ Rules:
         }
         if (bmp == null) return
 
-        // Show in a separate bottom sheet dialog — doesn't disturb ongoing generation
         val dialog = com.google.android.material.bottomsheet.BottomSheetDialog(this)
-        val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_sticker_preview, null)
-        val imageView = dialogView.findViewById<ImageView>(R.id.previewImage)
-        imageView.setImageBitmap(bmp)
-        dialogView.findViewById<View>(R.id.lockOverlay)?.visibility = View.GONE
-        dialogView.findViewById<View>(R.id.unlockHint)?.visibility = View.GONE
-        dialog.setContentView(dialogView)
+        val sheetView = LayoutInflater.from(this).inflate(R.layout.dialog_ai_preview, null)
 
-        // Set background and make it large
-        dialog.behavior.peekHeight = (resources.displayMetrics.heightPixels * 0.7).toInt()
-        dialog.window?.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(
-            androidx.core.content.ContextCompat.getColor(this, R.color.preview_bg)))
+        // Image
+        sheetView.findViewById<ImageView>(R.id.ivPreview)?.setImageBitmap(bmp)
 
-        // Add action buttons below
-        val container = dialogView.parent as? android.view.ViewGroup
-        if (container != null) {
-            val btnLayout = android.widget.LinearLayout(this).apply {
-                orientation = android.widget.LinearLayout.HORIZONTAL
-                gravity = android.view.Gravity.CENTER
-                setPadding(16, 8, 16, 24)
-            }
-
-            if (item.isAsset && item.prompt.isNotEmpty()) {
-                // "Use Prompt" button for sample images
-                val btnUsePrompt = com.google.android.material.button.MaterialButton(
-                    this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle
-                ).apply {
-                    text = "✨ Use Prompt"
-                    setOnClickListener {
-                        findViewById<android.widget.EditText>(R.id.aiEtPrompt)?.setText(item.prompt)
-                        dialog.dismiss()
-                    }
-                }
-                btnLayout.addView(btnUsePrompt)
-            }
-
-            if (!item.isAsset) {
-                // "Add to Pack" button for user creations
-                val btnAdd = com.google.android.material.button.MaterialButton(this).apply {
-                    text = "📦 Add to Pack"
-                    setOnClickListener {
-                        aiRawBitmap = bmp
-                        aiGeneratedBitmap = bmp
-                        dialog.dismiss()
-                        aiShowPackPickerDialog()
-                    }
-                }
-                btnLayout.addView(btnAdd)
-
-                val spacer = View(this).apply {
-                    layoutParams = android.widget.LinearLayout.LayoutParams(16, 0)
-                }
-                btnLayout.addView(spacer)
-
-                // "Delete" button
-                val btnDelete = com.google.android.material.button.MaterialButton(
-                    this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle
-                ).apply {
-                    text = "🗑 Delete"
-                    setTextColor(android.graphics.Color.parseColor("#E74C3C"))
-                    setOnClickListener {
-                        aiDeleteHistoryItem(item)
-                        dialog.dismiss()
-                    }
-                }
-                btnLayout.addView(btnDelete)
-            }
-
-            // Show prompt text
-            if (item.prompt.isNotEmpty()) {
-                val promptTv = TextView(this).apply {
-                    text = "\"${item.prompt}\""
-                    setTextColor(android.graphics.Color.parseColor("#AAAAAA"))
-                    textSize = 12f
-                    setPadding(24, 8, 24, 0)
-                    maxLines = 3
-                    gravity = android.view.Gravity.CENTER
-                }
-                container.addView(promptTv)
-            }
-
-            container.addView(btnLayout)
+        // Prompt
+        val promptSection = sheetView.findViewById<View>(R.id.promptSection)
+        val tvPrompt = sheetView.findViewById<TextView>(R.id.tvPrompt)
+        if (item.prompt.isNotEmpty()) {
+            promptSection?.visibility = View.VISIBLE
+            tvPrompt?.text = item.prompt
         }
 
+        // Buttons
+        val btnUsePrompt = sheetView.findViewById<com.google.android.material.button.MaterialButton>(R.id.btnUsePrompt)
+        val btnAddToPack = sheetView.findViewById<com.google.android.material.button.MaterialButton>(R.id.btnAddToPack)
+        val btnDelete = sheetView.findViewById<com.google.android.material.button.MaterialButton>(R.id.btnDelete)
+        val btnSpacer = sheetView.findViewById<View>(R.id.btnSpacer)
+
+        if (item.isAsset && item.prompt.isNotEmpty()) {
+            btnUsePrompt?.visibility = View.VISIBLE
+            btnUsePrompt?.setOnClickListener {
+                findViewById<android.widget.EditText>(R.id.aiEtPrompt)?.setText(item.prompt)
+                dialog.dismiss()
+            }
+        }
+
+        if (!item.isAsset) {
+            btnAddToPack?.visibility = View.VISIBLE
+            btnSpacer?.visibility = View.VISIBLE
+            btnDelete?.visibility = View.VISIBLE
+            btnAddToPack?.setOnClickListener {
+                aiRawBitmap = bmp
+                aiGeneratedBitmap = bmp
+                dialog.dismiss()
+                aiShowPackPickerDialog()
+            }
+            btnDelete?.setOnClickListener {
+                aiDeleteHistoryItem(item)
+                dialog.dismiss()
+            }
+        }
+
+        dialog.setContentView(sheetView)
+        // Transparent background so our custom bg_bottom_sheet corners show
+        (sheetView.parent as? View)?.setBackgroundColor(android.graphics.Color.TRANSPARENT)
         dialog.show()
     }
 
