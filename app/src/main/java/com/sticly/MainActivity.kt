@@ -812,7 +812,7 @@ class MainActivity : AppCompatActivity() {
                         if (savedPath != null) aiSyncHistoryToFirebase(queuedPrompt, savedPath)
                     } else {
                         withContext(Dispatchers.Main) {
-                            aiTvError?.text = getString(R.string.ai_generation_failed)
+                            aiTvError?.text = "⚠️ Server busy, please try again in a few seconds"
                             aiTvError?.visibility = View.VISIBLE
                         }
                     }
@@ -1092,25 +1092,21 @@ Rules:
 
     private suspend fun aiGenerateImage(prompt: String, onPoll: () -> Unit): Bitmap? =
         withContext(Dispatchers.IO) {
-            // Try models sequentially (api.airforce has 1 req/sec global rate limit)
-            for (model in listOf("flux-2-dev", "z-image")) {
-                try {
-                    val result = aiApiAirforceRequest(prompt, model)
-                    if (result != null) return@withContext result
-                    delay(1500) // respect rate limit before next attempt
-                } catch (_: Exception) {
-                    delay(1500)
-                }
+            // Try api.airforce models sequentially — 1 req/min rate limit
+            // Models ordered: grok-imagine (best quality per user), flux-2-dev, z-image, flux-2-klein-4b
+            val models = listOf("grok-imagine", "flux-2-dev", "z-image", "flux-2-klein-4b")
+            for (model in models) {
+                val result = aiApiAirforceRequest(prompt, model)
+                if (result != null) return@withContext result
             }
             null
         }
 
     private suspend fun aiApiAirforceRequest(prompt: String, model: String): Bitmap? =
         withContext(Dispatchers.IO) {
-            // Retry up to 3 times on rate limit (429)
-            for (attempt in 1..3) {
+            for (attempt in 1..2) {
                 try {
-                    android.util.Log.d("AiGenerate", "api.airforce ($model) request attempt=$attempt")
+                    android.util.Log.d("AiGenerate", "api.airforce ($model) attempt=$attempt")
                     val body = JSONObject().apply {
                         put("model", model)
                         put("prompt", prompt)
@@ -1121,16 +1117,21 @@ Rules:
                     val conn = URL("https://api.airforce/v1/images/generations").openConnection() as HttpURLConnection
                     conn.requestMethod = "POST"
                     conn.setRequestProperty("Content-Type", "application/json")
-                    conn.connectTimeout = 10000
-                    conn.readTimeout = 20000
+                    conn.connectTimeout = 15000
+                    conn.readTimeout = 45000
                     conn.doOutput = true
                     OutputStreamWriter(conn.outputStream).use { it.write(body.toString()) }
 
                     val code = conn.responseCode
                     android.util.Log.d("AiGenerate", "api.airforce ($model) response: $code")
+
                     if (code == 429) {
                         conn.disconnect()
-                        delay(2000L * attempt) // back off: 2s, 4s, 6s
+                        // Parse retry delay from error message
+                        val errBody = try { BufferedReader(InputStreamReader(conn.errorStream)).use { it.readText() } } catch (_: Exception) { "" }
+                        val waitSec = Regex("(\\d+) seconds").find(errBody)?.groupValues?.get(1)?.toLongOrNull() ?: (3L * attempt)
+                        android.util.Log.d("AiGenerate", "Rate limited, waiting ${waitSec}s")
+                        delay(waitSec * 1000 + 500)
                         continue
                     }
                     if (code != 200) { conn.disconnect(); return@withContext null }
@@ -1140,14 +1141,15 @@ Rules:
 
                     val data = JSONObject(response).optJSONArray("data")
                     if (data == null || data.length() == 0) {
-                        delay(2000)
+                        android.util.Log.d("AiGenerate", "api.airforce ($model) empty data, retrying...")
+                        delay(3000)
                         continue
                     }
 
                     val imageUrl = data.getJSONObject(0).optString("url", "")
-                    if (imageUrl.isEmpty()) return@withContext null
+                    if (imageUrl.isEmpty()) continue
 
-                    android.util.Log.d("AiGenerate", "api.airforce ($model) downloading: $imageUrl")
+                    android.util.Log.d("AiGenerate", "api.airforce ($model) downloading image")
                     val imgConn = URL(imageUrl).openConnection() as HttpURLConnection
                     imgConn.connectTimeout = 10000
                     imgConn.readTimeout = 15000
@@ -1160,8 +1162,8 @@ Rules:
                         return@withContext bitmap
                     }
                 } catch (e: Exception) {
-                    android.util.Log.e("AiGenerate", "api.airforce $model attempt=$attempt failed: ${e.message}")
-                    if (attempt < 3) delay(2000)
+                    android.util.Log.e("AiGenerate", "api.airforce $model attempt=$attempt: ${e.message}")
+                    if (attempt < 2) delay(2000)
                 }
             }
             null
@@ -1401,72 +1403,92 @@ Rules:
         }
         if (bmp == null) return
 
-        val aiIvPreview = findViewById<ImageView>(R.id.aiIvPreview)
-        val aiPreviewCard = findViewById<androidx.cardview.widget.CardView>(R.id.aiPreviewCard)
-        val aiEditButtons = findViewById<View>(R.id.aiEditButtons)
-        val aiBtnAddToPack = findViewById<com.google.android.material.button.MaterialButton>(R.id.aiBtnAddToPack)
-        val aiLoadingOverlay = findViewById<View>(R.id.aiLoadingOverlay)
-        val aiBtnClosePreview = findViewById<ImageView>(R.id.aiBtnClosePreview)
-        val aiBtnTryAgain = findViewById<com.google.android.material.button.MaterialButton>(R.id.aiBtnTryAgain)
-        val aiTvPromptDisplay = findViewById<TextView>(R.id.aiTvPromptDisplay)
+        // Show in a separate bottom sheet dialog — doesn't disturb ongoing generation
+        val dialog = com.google.android.material.bottomsheet.BottomSheetDialog(this)
+        val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_sticker_preview, null)
+        val imageView = dialogView.findViewById<ImageView>(R.id.previewImage)
+        imageView.setImageBitmap(bmp)
+        dialogView.findViewById<View>(R.id.lockOverlay)?.visibility = View.GONE
+        dialogView.findViewById<View>(R.id.unlockHint)?.visibility = View.GONE
+        dialog.setContentView(dialogView)
 
-        aiRawBitmap = bmp
-        aiGeneratedBitmap = bmp
-        aiPreviewCard?.visibility = View.VISIBLE
-        aiLoadingOverlay?.visibility = View.GONE
-        aiIvPreview?.setImageBitmap(bmp)
-        aiEditButtons?.visibility = View.VISIBLE
-        aiBtnAddToPack?.visibility = View.VISIBLE
-        aiBtnClosePreview?.visibility = View.VISIBLE
+        // Set background and make it large
+        dialog.behavior.peekHeight = (resources.displayMetrics.heightPixels * 0.7).toInt()
+        dialog.window?.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(
+            androidx.core.content.ContextCompat.getColor(this, R.color.preview_bg)))
 
-        // Show prompt if available
-        if (item.prompt.isNotEmpty()) {
-            aiTvPromptDisplay?.visibility = View.VISIBLE
-            aiTvPromptDisplay?.text = "\"${item.prompt}\""
-        } else {
-            aiTvPromptDisplay?.visibility = View.GONE
-        }
+        // Add action buttons below
+        val container = dialogView.parent as? android.view.ViewGroup
+        if (container != null) {
+            val btnLayout = android.widget.LinearLayout(this).apply {
+                orientation = android.widget.LinearLayout.HORIZONTAL
+                gravity = android.view.Gravity.CENTER
+                setPadding(16, 8, 16, 24)
+            }
 
-        if (item.isAsset) {
-            // For sample images: "Use Prompt" button instead of Delete
-            aiBtnTryAgain?.text = "✨ Use Prompt"
-            aiBtnTryAgain?.setTextColor(androidx.core.content.ContextCompat.getColor(this, R.color.primary))
-            aiBtnTryAgain?.strokeColor = android.content.res.ColorStateList.valueOf(androidx.core.content.ContextCompat.getColor(this, R.color.primary))
-            aiBtnTryAgain?.icon = null
-            aiBtnTryAgain?.iconTint = null
-            aiBtnTryAgain?.setOnClickListener {
-                // Fill the prompt input with the sample's prompt
-                if (item.prompt.isNotEmpty()) {
-                    findViewById<android.widget.EditText>(R.id.aiEtPrompt)?.setText(item.prompt)
+            if (item.isAsset && item.prompt.isNotEmpty()) {
+                // "Use Prompt" button for sample images
+                val btnUsePrompt = com.google.android.material.button.MaterialButton(
+                    this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle
+                ).apply {
+                    text = "✨ Use Prompt"
+                    setOnClickListener {
+                        findViewById<android.widget.EditText>(R.id.aiEtPrompt)?.setText(item.prompt)
+                        dialog.dismiss()
+                    }
                 }
-                aiPreviewCard?.visibility = View.GONE
-                aiBtnClosePreview?.visibility = View.GONE
-                aiTvPromptDisplay?.visibility = View.GONE
+                btnLayout.addView(btnUsePrompt)
             }
-        } else {
-            // For user creations: Delete button
-            aiBtnTryAgain?.text = " Delete"
-            aiBtnTryAgain?.setTextColor(android.graphics.Color.parseColor("#E74C3C"))
-            aiBtnTryAgain?.strokeColor = android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#E74C3C"))
-            aiBtnTryAgain?.setIconResource(R.drawable.ic_delete)
-            aiBtnTryAgain?.iconTint = android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#E74C3C"))
-            aiBtnTryAgain?.iconGravity = com.google.android.material.button.MaterialButton.ICON_GRAVITY_TEXT_START
-            aiBtnTryAgain?.iconPadding = (4 * resources.displayMetrics.density).toInt()
-            aiBtnTryAgain?.setOnClickListener {
-                aiDeleteHistoryItem(item)
-                aiPreviewCard?.visibility = View.GONE
-                aiBtnClosePreview?.visibility = View.GONE
-                aiTvPromptDisplay?.visibility = View.GONE
-                // Restore button for future generates
-                aiBtnTryAgain.text = "🔄 Regenerate"
-                aiBtnTryAgain.icon = null
-                aiBtnTryAgain.setTextColor(androidx.core.content.ContextCompat.getColor(this, R.color.primary))
-                aiBtnTryAgain.strokeColor = android.content.res.ColorStateList.valueOf(androidx.core.content.ContextCompat.getColor(this, R.color.primary))
+
+            if (!item.isAsset) {
+                // "Add to Pack" button for user creations
+                val btnAdd = com.google.android.material.button.MaterialButton(this).apply {
+                    text = "📦 Add to Pack"
+                    setOnClickListener {
+                        aiRawBitmap = bmp
+                        aiGeneratedBitmap = bmp
+                        dialog.dismiss()
+                        aiShowPackPickerDialog()
+                    }
+                }
+                btnLayout.addView(btnAdd)
+
+                val spacer = View(this).apply {
+                    layoutParams = android.widget.LinearLayout.LayoutParams(16, 0)
+                }
+                btnLayout.addView(spacer)
+
+                // "Delete" button
+                val btnDelete = com.google.android.material.button.MaterialButton(
+                    this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle
+                ).apply {
+                    text = "🗑 Delete"
+                    setTextColor(android.graphics.Color.parseColor("#E74C3C"))
+                    setOnClickListener {
+                        aiDeleteHistoryItem(item)
+                        dialog.dismiss()
+                    }
+                }
+                btnLayout.addView(btnDelete)
             }
+
+            // Show prompt text
+            if (item.prompt.isNotEmpty()) {
+                val promptTv = TextView(this).apply {
+                    text = "\"${item.prompt}\""
+                    setTextColor(android.graphics.Color.parseColor("#AAAAAA"))
+                    textSize = 12f
+                    setPadding(24, 8, 24, 0)
+                    maxLines = 3
+                    gravity = android.view.Gravity.CENTER
+                }
+                container.addView(promptTv)
+            }
+
+            container.addView(btnLayout)
         }
 
-        // Scroll to top to show preview
-        findViewById<android.widget.ScrollView>(R.id.aiContentContainer)?.smoothScrollTo(0, 0)
+        dialog.show()
     }
 
     private fun aiDeleteHistoryItem(item: AiHistoryItem) {
