@@ -103,7 +103,7 @@ class PackAdapter(
 
     companion object {
         private const val STICKER_PREVIEW_COUNT = 5
-        private const val GLIDE_OVERRIDE_SIZE = 128
+        private const val GLIDE_OVERRIDE_SIZE = 256
 
         // Single instance. DateFormat is NOT thread-safe, but PackAdapter only runs on Main Thread
         private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
@@ -185,7 +185,7 @@ class PackAdapter(
 
                     (adView.headlineView as? TextView)?.text = nativeAd.headline
                     (adView.bodyView as? TextView)?.text = nativeAd.body
-                    (adView.callToActionView as? Button)?.text = nativeAd.callToAction
+                    (adView.callToActionView as? TextView)?.text = nativeAd.callToAction
                     nativeAd.icon?.drawable?.let { (adView.iconView as? ImageView)?.setImageDrawable(it) }
                     nativeAd.mediaContent?.let { adView.mediaView?.setMediaContent(it) }
 

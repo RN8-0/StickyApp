@@ -152,7 +152,7 @@ class StickerAdapter(
                 glideManager.asDrawable()
                     .load(cachedFile)
                     .signature(ObjectKey(cachedFile.lastModified()))
-                    .override(256, 256)
+                    .override(384, 384)
                     .placeholder(R.drawable.sticker_placeholder)
                     .error(R.drawable.sticker_placeholder)
                     .diskCacheStrategy(DiskCacheStrategy.AUTOMATIC)
@@ -170,7 +170,7 @@ class StickerAdapter(
 
                 // Static stickers için boyut optimize et
                 if (!isAnimated) {
-                    request.override(256, 256).dontAnimate()
+                    request.override(384, 384).dontAnimate()
                 }
                 request.into(h.img)
             }
@@ -185,7 +185,7 @@ class StickerAdapter(
                     .listener(clearBgListener)
 
                 if (!isAnimated) {
-                    request.override(256, 256).dontAnimate()
+                    request.override(384, 384).dontAnimate()
                 }
                 request.into(h.img)
             }

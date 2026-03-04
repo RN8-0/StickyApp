@@ -30,13 +30,14 @@ import java.util.concurrent.TimeUnit
 class StickyGlideModule : AppGlideModule() {
 
     override fun applyOptions(context: Context, builder: GlideBuilder) {
-        val memoryCacheSize = Runtime.getRuntime().maxMemory() / 6
+        // RAM'in 1/4'ünü bellek cache'e ayır — görseller scroll sırasında anında gelsin
+        val memoryCacheSize = Runtime.getRuntime().maxMemory() / 4
         builder.setMemoryCache(LruResourceCache(memoryCacheSize))
-        builder.setDiskCache(InternalCacheDiskCacheFactory(context, "glide_cache", 250 * 1024 * 1024))
+        builder.setDiskCache(InternalCacheDiskCacheFactory(context, "glide_cache", 350L * 1024 * 1024))
         builder.setDefaultRequestOptions(
             com.bumptech.glide.request.RequestOptions()
-                .format(com.bumptech.glide.load.DecodeFormat.PREFER_RGB_565)
-                .disallowHardwareConfig()
+                .format(com.bumptech.glide.load.DecodeFormat.PREFER_ARGB_8888)
+                .disallowHardwareConfig() // Daha tutarlı memory cache davranışı
         )
     }
 
@@ -62,7 +63,7 @@ class StickyGlideModule : AppGlideModule() {
                     val urls = mutableListOf<String>()
                     popularPacks.forEach { pack ->
                         if (pack.category != "custom") {
-                            pack.stickers.take(3).forEach { sticker ->
+                            pack.stickers.take(5).forEach { sticker ->
                                 val url = if (sticker.url.isNotEmpty()) sticker.url
                                 else if (pack.storagePath.isNotEmpty()) StickerRepository.getStickerDirectUrl(pack.id, sticker.file, pack.storagePath)
                                 else ""
@@ -71,7 +72,7 @@ class StickyGlideModule : AppGlideModule() {
                         }
                     }
 
-                    // 4 paralel indirme — daha az GC baskısı
+                    // 4 paralel indirme — hızlı ön yükleme
                     urls.chunked(4).forEach { batch ->
                         batch.map { url ->
                             async(Dispatchers.IO) {
@@ -80,7 +81,7 @@ class StickyGlideModule : AppGlideModule() {
                                         .asFile()
                                         .load(url)
                                         .diskCacheStrategy(DiskCacheStrategy.DATA)
-                                        .priority(Priority.IMMEDIATE)
+                                        .priority(Priority.LOW)
                                         .submit()
                                         .get(6, TimeUnit.SECONDS)
                                 } catch (_: Exception) { null }
@@ -93,7 +94,52 @@ class StickyGlideModule : AppGlideModule() {
             }
         }
 
-        fun preloadStickerPreviews(context: Context, packs: List<Pack>, packCount: Int = 8, stickersPerPack: Int = 2) {
+        /**
+         * Ana listedeki ilk N paketi agresif ön yükle — ilk scroll anında her şey hazır olsun
+         */
+        fun preloadFeedPacks(context: Context, packs: List<Any>, preloadCount: Int = 20) {
+            CoroutineScope(Dispatchers.IO).launch {
+                try {
+                    val urls = mutableListOf<String>()
+                    var count = 0
+                    for (item in packs) {
+                        if (count >= preloadCount) break
+                        val pack = item as? Pack ?: continue
+                        if (pack.category == "custom") continue
+                        pack.stickers.take(5).forEach { sticker ->
+                            val url = if (sticker.url.isNotEmpty()) sticker.url
+                            else if (pack.storagePath.isNotEmpty()) StickerRepository.getStickerDirectUrl(pack.id, sticker.file, pack.storagePath)
+                            else ""
+                            if (url.isNotEmpty()) urls.add(url)
+                        }
+                        count++
+                    }
+
+                    Log.d(TAG, "Preloading ${urls.size} sticker URLs from first $count packs")
+
+                    // 6 paralel indirme — hızlı doldur
+                    urls.chunked(6).forEach { batch ->
+                        batch.map { url ->
+                            async(Dispatchers.IO) {
+                                try {
+                                    Glide.with(context.applicationContext)
+                                        .asFile()
+                                        .load(url)
+                                        .diskCacheStrategy(DiskCacheStrategy.DATA)
+                                        .submit()
+                                        .get(8, TimeUnit.SECONDS)
+                                } catch (_: Exception) { null }
+                            }
+                        }.awaitAll()
+                    }
+                    Log.d(TAG, "Feed preload complete")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Feed preload error: ${e.message}")
+                }
+            }
+        }
+
+        fun preloadStickerPreviews(context: Context, packs: List<Pack>, packCount: Int = 15, stickersPerPack: Int = 5) {
             CoroutineScope(Dispatchers.IO).launch {
                 try {
                     val urls = mutableListOf<String>()
@@ -109,7 +155,7 @@ class StickyGlideModule : AppGlideModule() {
                         }
                     }
 
-                    // 4 paralel indirme — hafif GC baskısı
+                    // 4 paralel indirme
                     urls.chunked(4).forEach { batch ->
                         batch.map { url ->
                             async(Dispatchers.IO) {
@@ -119,7 +165,7 @@ class StickyGlideModule : AppGlideModule() {
                                         .load(url)
                                         .diskCacheStrategy(DiskCacheStrategy.DATA)
                                         .submit()
-                                        .get(8, TimeUnit.SECONDS)
+                                        .get(6, TimeUnit.SECONDS)
                                 } catch (_: Exception) { null }
                             }
                         }.awaitAll()

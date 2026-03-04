@@ -495,16 +495,6 @@ class MainActivity : AppCompatActivity() {
         viewPool.setMaxRecycledViews(0, 20) // TYPE_PACK
         viewPool.setMaxRecycledViews(1, 5)  // TYPE_AD
         rv.setRecycledViewPool(viewPool)
-        // Hızlı scroll sırasında Glide isteklerini duraklat — jank azaltır
-        rv.addOnScrollListener(object : RecyclerView.OnScrollListener() {
-            override fun onScrollStateChanged(recyclerView: RecyclerView, newState: Int) {
-                if (newState == RecyclerView.SCROLL_STATE_SETTLING || newState == RecyclerView.SCROLL_STATE_DRAGGING) {
-                    com.bumptech.glide.Glide.with(this@MainActivity).pauseRequests()
-                } else {
-                    com.bumptech.glide.Glide.with(this@MainActivity).resumeRequests()
-                }
-            }
-        })
         adapter = PackAdapter(allPacks, { pack ->
             sessionPackOpenCount++
             if (sessionPackOpenCount == 3) {
@@ -2497,6 +2487,11 @@ Rules:
                     showHomeSections()
                 } else {
                     hideHomeSections()
+                }
+
+                // İlk 20 paketi arka planda ön yükle — scroll sırasında anında gözüksün
+                if (newList.isNotEmpty()) {
+                    StickyGlideModule.preloadFeedPacks(this@MainActivity, newList, 20)
                 }
             }
         }
