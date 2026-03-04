@@ -1417,38 +1417,38 @@ Rules:
             tvPrompt?.text = item.prompt
         }
 
-        // Buttons
-        val btnUsePrompt = sheetView.findViewById<com.google.android.material.button.MaterialButton>(R.id.btnUsePrompt)
+        // All 3 buttons visible for all items
+        val btnEdit = sheetView.findViewById<com.google.android.material.button.MaterialButton>(R.id.btnUsePrompt)
         val btnAddToPack = sheetView.findViewById<com.google.android.material.button.MaterialButton>(R.id.btnAddToPack)
         val btnDelete = sheetView.findViewById<com.google.android.material.button.MaterialButton>(R.id.btnDelete)
-        val btnSpacer = sheetView.findViewById<View>(R.id.btnSpacer)
 
-        if (item.isAsset && item.prompt.isNotEmpty()) {
-            btnUsePrompt?.visibility = View.VISIBLE
-            btnUsePrompt?.setOnClickListener {
+        // Edit / Use Prompt — fills prompt input
+        btnEdit?.setOnClickListener {
+            if (item.prompt.isNotEmpty()) {
                 findViewById<android.widget.EditText>(R.id.aiEtPrompt)?.setText(item.prompt)
-                dialog.dismiss()
             }
+            dialog.dismiss()
         }
 
-        if (!item.isAsset) {
-            btnAddToPack?.visibility = View.VISIBLE
-            btnSpacer?.visibility = View.VISIBLE
-            btnDelete?.visibility = View.VISIBLE
-            btnAddToPack?.setOnClickListener {
-                aiRawBitmap = bmp
-                aiGeneratedBitmap = bmp
-                dialog.dismiss()
-                aiShowPackPickerDialog()
-            }
-            btnDelete?.setOnClickListener {
+        // Add to Pack
+        btnAddToPack?.setOnClickListener {
+            aiRawBitmap = bmp
+            aiGeneratedBitmap = bmp
+            dialog.dismiss()
+            aiShowPackPickerDialog()
+        }
+
+        // Delete
+        btnDelete?.setOnClickListener {
+            if (item.isAsset) {
+                Toast.makeText(this, "Sample images can't be deleted", Toast.LENGTH_SHORT).show()
+            } else {
                 aiDeleteHistoryItem(item)
                 dialog.dismiss()
             }
         }
 
         dialog.setContentView(sheetView)
-        // Transparent background so our custom bg_bottom_sheet corners show
         (sheetView.parent as? View)?.setBackgroundColor(android.graphics.Color.TRANSPARENT)
         dialog.show()
     }
