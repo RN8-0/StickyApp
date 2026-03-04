@@ -956,35 +956,22 @@ class DetailsActivity : AppCompatActivity() {
         if (loadSource == null) {
             imageView.setImageResource(R.drawable.transparent_placeholder)
         } else {
+            // Animated WebP: must use DATA cache (Glide has no encoder for AnimatedImageDrawable)
+            val cacheStrategy = if (isAnimatedPack)
+                com.bumptech.glide.load.engine.DiskCacheStrategy.DATA
+            else
+                com.bumptech.glide.load.engine.DiskCacheStrategy.RESOURCE
+
             val request = Glide.with(this)
                 .load(loadSource)
                 .placeholder(R.drawable.transparent_placeholder)
-                .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.ALL)
-                .listener(object : com.bumptech.glide.request.RequestListener<android.graphics.drawable.Drawable> {
-                    override fun onLoadFailed(e: com.bumptech.glide.load.engine.GlideException?, model: Any?, target: com.bumptech.glide.request.target.Target<android.graphics.drawable.Drawable>, isFirstResource: Boolean): Boolean {
-                        android.util.Log.e("StickerPreview", "Load FAILED: source=$loadSource isAnimated=$isAnimatedPack", e)
-                        // Fallback: try URL directly
-                        if (sticker.url.isNotEmpty() && loadSource != sticker.url) {
-                            Glide.with(this@DetailsActivity)
-                                .load(sticker.url)
-                                .placeholder(R.drawable.transparent_placeholder)
-                                .error(R.drawable.transparent_placeholder)
-                                .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.ALL)
-                                .into(imageView)
-                        }
-                        return false
-                    }
-                    override fun onResourceReady(resource: android.graphics.drawable.Drawable, model: Any, target: com.bumptech.glide.request.target.Target<android.graphics.drawable.Drawable>, dataSource: com.bumptech.glide.load.DataSource, isFirstResource: Boolean): Boolean {
-                        android.util.Log.d("StickerPreview", "Load OK: ${resource.javaClass.simpleName} isAnimated=$isAnimatedPack")
-                        return false
-                    }
-                })
+                .diskCacheStrategy(cacheStrategy)
+                .error(R.drawable.transparent_placeholder)
 
-            // Don't use override() for animated stickers — it can break animation
             if (!isAnimatedPack) {
                 request.override(512, 512)
             }
-            request.error(R.drawable.transparent_placeholder).into(imageView)
+            request.into(imageView)
         }
 
         // Tasarımdaki animasyonlu açılış

@@ -968,23 +968,29 @@ class MainActivity : AppCompatActivity() {
                 val apiKey = BuildConfig.DEEPSEEK_API_KEY
                 if (apiKey.isEmpty()) return@withContext "$userPrompt$AI_STICKER_SUFFIX"
 
-                val systemMessage = """You are an expert AI sticker prompt engineer specializing in WhatsApp/Telegram sticker creation.
-CRITICAL RULES:
-- Output ONLY the optimized prompt text, nothing else
-- The result MUST look like a professional cartoon sticker with these MANDATORY qualities:
-  * Ultra vibrant, saturated, neon-bright colors (pink, blue, green, orange, purple)
-  * Clean white or transparent background
-  * Thick bold black outlines around everything
-  * Extremely exaggerated hilarious facial expressions: huge googly eyes, wide open mouth in shock, dramatic emotions
-  * Chibi/cartoon proportions: big head, small body
-  * Very detailed and high quality rendering
-  * Single centered character or object
-- Add dramatic visual effects: sweat drops, steam, sparkles, motion lines, food explosions, etc.
-- Make it FUNNY and EXPRESSIVE - the character should have maximum personality
-- Include specific color descriptions (neon pink, electric blue, bright orange, etc.)
-- Keep it under 100 words
-- DO NOT mention any specific art style names (no "cartoon style", "anime", etc.) - just describe what you see
-- Think of stickers like the ones on Telegram/WhatsApp - bold, colorful, expressive, fun"""
+                val systemMessage = """You are an expert AI sticker prompt engineer for WhatsApp/Telegram stickers.
+Transform the user's idea into a vivid image generation prompt. Output ONLY the prompt, nothing else.
+
+MANDATORY style (every prompt MUST include these):
+- Cute chubby cartoon character with chibi proportions (big head, tiny body)
+- Huge expressive googly eyes, extremely exaggerated emotion (shock, anger, joy, sadness)
+- Ultra vibrant saturated neon colors (neon pink, electric blue, bright orange, vivid green, hot purple)
+- White background, clean and simple
+- Thick bold black outlines around everything
+- Visual gag effects: dramatic sweat drops, steam puffs, sparkles, motion lines, food splashes
+- Single centered character, sticker format
+
+REFERENCE examples of good output:
+- "cute chubby neon pink and electric blue penguin with huge googly eyes, mouth wide open in extreme shock, tiny flippers raised to cheeks, dramatic sweat drops flying, vibrant glowing colors, cartoon sticker style, white background, very expressive, funny"
+- "super greedy panda with cheeks stuffed full of sushi rolls, eyes rolling back in bliss, drooling waterfall, chopsticks in both paws, bright pink tongue out, colorful food explosion around, chibi cute but hilarious, sticker style"
+- "panicked calico cat in business suit running with coffee splashing everywhere, giant clock showing 9:01 behind, tie flying, terrified wide eyes, bright red-yellow-blue color palette, comic style sticker"
+
+Rules:
+- Keep under 80 words
+- Be specific about colors (name exact colors: neon pink, electric blue, etc.)
+- Always make it FUNNY and over-the-top expressive
+- Never mention "realistic" or "photograph" or "anime"
+- Describe the character's body, face, accessories, and action vividly"""
 
                 val body = JSONObject().apply {
                     put("model", "deepseek-chat")
@@ -1099,7 +1105,7 @@ Rules:
                         try { aiGenerateWithPollinations(prompt) } catch (_: Exception) { null }
                     }
                     val horde = async {
-                        try { aiTryGenerate(prompt, "Deliberate", onPoll) } catch (_: Exception) { null }
+                        try { aiTryGenerate(prompt, "Anything Diffusion", onPoll) } catch (_: Exception) { null }
                     }
 
                     // Wait for Pollinations first (usually faster with turbo)
@@ -1114,7 +1120,7 @@ Rules:
                     if (hordeResult != null) return@coroutineScope hordeResult
 
                     // Both failed, try remaining Horde models sequentially
-                    for (model in listOf("Dreamshaper", "stable_diffusion")) {
+                    for (model in listOf("Abyss OrangeMix", "stable_diffusion")) {
                         try {
                             val result = aiTryGenerate(prompt, model, onPoll)
                             if (result != null) return@coroutineScope result
@@ -1127,13 +1133,14 @@ Rules:
 
     private suspend fun aiGenerateWithPollinations(prompt: String): Bitmap? =
         withContext(Dispatchers.IO) {
-            val enhancedPrompt = "$prompt, masterpiece, best quality, ultra detailed"
-            val encodedPrompt = java.net.URLEncoder.encode(enhancedPrompt, "UTF-8")
+            val stickerPrompt = "$prompt, cartoon sticker style, white background, thick bold black outlines, ultra vibrant saturated neon colors, very expressive, cute funny, chibi proportions, huge googly eyes, professional sticker design, high quality digital illustration, centered single character"
+            val encodedPrompt = java.net.URLEncoder.encode(stickerPrompt, "UTF-8")
+            val negPrompt = java.net.URLEncoder.encode("realistic, photograph, blurry, low quality, ugly, deformed, watermark, text, bad anatomy, dark background, complex background, multiple characters, cropped", "UTF-8")
 
-            // Try turbo (fast ~3-5s) then flux (slower but higher quality)
-            for (model in listOf("turbo", "flux")) {
+            // flux-realism is bad for stickers; flux is best for stylized cartoon art
+            for (model in listOf("flux", "turbo")) {
                 try {
-                    val urlStr = "https://image.pollinations.ai/prompt/$encodedPrompt?width=512&height=512&nologo=true&model=$model&seed=${System.currentTimeMillis()}"
+                    val urlStr = "https://image.pollinations.ai/prompt/$encodedPrompt?width=512&height=512&nologo=true&model=$model&seed=${System.currentTimeMillis()}&negative=$negPrompt"
                     android.util.Log.d("AiGenerate", "Pollinations ($model) request")
 
                     val conn = URL(urlStr).openConnection() as HttpURLConnection
@@ -1163,14 +1170,15 @@ Rules:
 
     private suspend fun aiTryGenerate(prompt: String, model: String, onPoll: () -> Unit): Bitmap? =
         withContext(Dispatchers.IO) {
-            val negativePrompt = "blurry, low quality, distorted, ugly, deformed, watermark, text, bad anatomy, bad hands, extra fingers, missing fingers, poorly drawn, out of frame, duplicate, morbid, mutilated"
+            val negativePrompt = "realistic, photograph, blurry, low quality, distorted, ugly, deformed, watermark, text, bad anatomy, bad hands, extra fingers, dark background, complex background, multiple characters, cropped, out of frame, duplicate, morbid"
+            val stickerPrompt = "$prompt, cartoon sticker style, white background, thick bold outlines, vibrant neon colors, cute expressive, chibi, high quality"
             val body = JSONObject().apply {
-                put("prompt", "$prompt ### $negativePrompt")
+                put("prompt", "$stickerPrompt ### $negativePrompt")
                 put("params", JSONObject().apply {
                     put("width", 512)
                     put("height", 512)
-                    put("steps", 15)
-                    put("cfg_scale", 8.0)
+                    put("steps", 25)
+                    put("cfg_scale", 7.5)
                     put("sampler_name", "k_euler_a")
                     put("karras", true)
                     put("clip_skip", 2)
