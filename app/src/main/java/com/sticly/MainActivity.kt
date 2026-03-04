@@ -333,6 +333,8 @@ class MainActivity : AppCompatActivity() {
         if (StickerRepository.allPacksCache.isNotEmpty()) {
             displayPacks(StickerRepository.allPacksCache)
         } else {
+            // Show UI skeleton immediately — no blank white screen
+            showContent()
             // Disk cache'i arka planda oku — main thread'i bloklama
             lifecycleScope.launch {
                 val diskPacks = withContext(Dispatchers.IO) {
@@ -343,17 +345,7 @@ class MainActivity : AppCompatActivity() {
                     displayPacks(diskPacks)
                 } else if (StickerRepository.allPacksCache.isNotEmpty()) {
                     displayPacks(StickerRepository.allPacksCache)
-                } else {
-                    // Cold start: Show loading animation but auto-dismiss after 500ms
-                    loadingAnimation.visibility = View.VISIBLE
-                    loadingAnimation.repeatCount = com.airbnb.lottie.LottieDrawable.INFINITE
-                    loadingAnimation.playAnimation()
                 }
-            }
-            // Failsafe: show content after 500ms even if data hasn't loaded
-            lifecycleScope.launch {
-                delay(500)
-                if (!contentShown) showContent()
             }
         }
 
@@ -489,11 +481,11 @@ class MainActivity : AppCompatActivity() {
 
         rv.layoutManager = LinearLayoutManager(this)
         rv.setHasFixedSize(true)
-        rv.setItemViewCacheSize(6)
-        rv.itemAnimator = null // Performans: Animasyonları kapat
-        (rv.layoutManager as LinearLayoutManager).initialPrefetchItemCount = 4
+        rv.setItemViewCacheSize(10)
+        rv.itemAnimator = null
+        (rv.layoutManager as LinearLayoutManager).initialPrefetchItemCount = 6
         val viewPool = RecyclerView.RecycledViewPool()
-        viewPool.setMaxRecycledViews(0, 15) // TYPE_PACK
+        viewPool.setMaxRecycledViews(0, 20) // TYPE_PACK
         viewPool.setMaxRecycledViews(1, 5)  // TYPE_AD
         rv.setRecycledViewPool(viewPool)
         adapter = PackAdapter(allPacks, { pack ->
@@ -2260,6 +2252,8 @@ Rules:
         mainContent.visibility = View.VISIBLE
         mainContent.alpha = 1f
         swipeRefresh.visibility = View.VISIBLE
+        // Ensure search/filter bar is ready
+        rv.visibility = View.VISIBLE
     }
 
     private var lastPacksUpdateTime = 0L
@@ -2320,8 +2314,40 @@ Rules:
             }
 
             // Main list: shuffle for discovery, NOT sorted by popularity
-            // Popular section already shows top packs — main list should help users discover new content
-            val sorted = filtered.shuffled(java.util.Random(sessionSeed))
+            // Popular section shows top packs; main list should help discover new content
+            val shuffled = filtered.shuffled(java.util.Random(sessionSeed))
+
+            // Interleave premium/free to prevent same-type clustering
+            val premium = shuffled.filter { it.isPremium }.toMutableList()
+            val free = shuffled.filter { !it.isPremium }.toMutableList()
+            val sorted = mutableListOf<Pack>()
+            var consecutivePremium = 0
+            var consecutiveFree = 0
+            val pIdx = intArrayOf(0)
+            val fIdx = intArrayOf(0)
+            while (pIdx[0] < premium.size || fIdx[0] < free.size) {
+                // Pick next pack, avoiding more than 2 consecutive of same type
+                val pickPremium = when {
+                    pIdx[0] >= premium.size -> false
+                    fIdx[0] >= free.size -> true
+                    consecutivePremium >= 2 -> false
+                    consecutiveFree >= 2 -> true
+                    else -> {
+                        // Maintain original ratio
+                        val premRatio = premium.size.toFloat() / shuffled.size
+                        sorted.count { it.isPremium }.toFloat() / sorted.size.coerceAtLeast(1) < premRatio
+                    }
+                }
+                if (pickPremium) {
+                    sorted.add(premium[pIdx[0]++])
+                    consecutivePremium++
+                    consecutiveFree = 0
+                } else {
+                    sorted.add(free[fIdx[0]++])
+                    consecutiveFree++
+                    consecutivePremium = 0
+                }
+            }
 
             // Insert banner ads every 10 packs (only in ALL/PREMIUM filters, not for premium users)
             val withAds = mutableListOf<Any>()

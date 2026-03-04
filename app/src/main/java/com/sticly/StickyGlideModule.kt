@@ -30,9 +30,14 @@ import java.util.concurrent.TimeUnit
 class StickyGlideModule : AppGlideModule() {
 
     override fun applyOptions(context: Context, builder: GlideBuilder) {
-        val memoryCacheSize = Runtime.getRuntime().maxMemory() / 8
+        val memoryCacheSize = Runtime.getRuntime().maxMemory() / 6
         builder.setMemoryCache(LruResourceCache(memoryCacheSize))
-        builder.setDiskCache(InternalCacheDiskCacheFactory(context, "glide_cache", 150 * 1024 * 1024))
+        builder.setDiskCache(InternalCacheDiskCacheFactory(context, "glide_cache", 250 * 1024 * 1024))
+        builder.setDefaultRequestOptions(
+            com.bumptech.glide.request.RequestOptions()
+                .format(com.bumptech.glide.load.DecodeFormat.PREFER_RGB_565)
+                .disallowHardwareConfig()
+        )
     }
 
     override fun isManifestParsingEnabled(): Boolean = false

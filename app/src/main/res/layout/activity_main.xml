@@ -150,7 +150,7 @@
                     android:id="@+id/mainContent"
                     android:layout_width="match_parent"
                     android:layout_height="match_parent"
-                    android:visibility="gone">
+                    android:visibility="visible">
                     
                     <!-- Content remains same -->
                     <com.google.android.material.appbar.AppBarLayout
@@ -296,7 +296,8 @@
                     android:layout_height="match_parent"
                     android:background="@color/background"
                     android:gravity="center"
-                    android:orientation="vertical">
+                    android:orientation="vertical"
+                    android:visibility="gone">
 
                     <!-- İlk giriş: Logo + etrafında progress ring -->
                     <LinearLayout

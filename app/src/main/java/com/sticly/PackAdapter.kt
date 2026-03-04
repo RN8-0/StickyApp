@@ -408,7 +408,7 @@ class PackAdapter(
                 val stickerFile = CustomStickerManager.getCustomStickerPath(context, pack.id, sticker.file)
                 val req = glide.load(stickerFile)
                     .override(GLIDE_OVERRIDE_SIZE)
-                    .thumbnail(0.25f)
+                    .thumbnail(0.5f)
                     .priority(Priority.NORMAL)
                     .diskCacheStrategy(DiskCacheStrategy.NONE)
                     .skipMemoryCache(true)
@@ -426,7 +426,7 @@ class PackAdapter(
                 if (urlToLoad.isNotEmpty()) {
                     val req = glide.load(urlToLoad)
                         .override(GLIDE_OVERRIDE_SIZE)
-                        .thumbnail(0.25f)
+                        .thumbnail(0.5f)
                         .priority(Priority.NORMAL)
                         .diskCacheStrategy(DiskCacheStrategy.DATA)
                         .dontTransform()
@@ -439,7 +439,7 @@ class PackAdapter(
                     
                     val req = glide.load(cachedSticker)
                         .override(GLIDE_OVERRIDE_SIZE)
-                        .thumbnail(0.25f)
+                        .thumbnail(0.5f)
                         .priority(Priority.NORMAL)
                         .diskCacheStrategy(DiskCacheStrategy.DATA)
                         .dontTransform()
