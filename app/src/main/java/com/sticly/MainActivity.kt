@@ -120,6 +120,9 @@ class MainActivity : AppCompatActivity() {
     private var aiGeneratedBitmap: Bitmap? = null
     private var aiRawBitmap: Bitmap? = null
     private var aiGenerateJob: Job? = null
+    private val aiGenerateQueue = java.util.concurrent.ConcurrentLinkedQueue<String>()
+    private var aiActiveGenerations = java.util.concurrent.atomic.AtomicInteger(0)
+    private val AI_MAX_QUEUE = 4
     private var aiHistoryAdapter: AiHistoryAdapter? = null
     private var aiUpdateGenerateButton: (() -> Unit)? = null
 
@@ -752,25 +755,44 @@ class MainActivity : AppCompatActivity() {
                 aiShowDailyLimitDialog()
                 return
             }
+            // Check queue limit
+            val active = aiActiveGenerations.get()
+            if (active >= AI_MAX_QUEUE) {
+                Toast.makeText(this, "⏳ Maximum $AI_MAX_QUEUE generations at once. Please wait.", Toast.LENGTH_SHORT).show()
+                return
+            }
             // Dismiss keyboard
             currentFocus?.let {
                 val imm = getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager
                 imm.hideSoftInputFromWindow(it.windowToken, 0)
             }
-            aiGenerateJob?.cancel()
-            aiGenerateJob = lifecycleScope.launch {
+            aiActiveGenerations.incrementAndGet()
+            val queuedPrompt = prompt
+            val queuedStyle = getAiSelectedStyle()
+
+            // Show generating UI for the first request
+            if (aiActiveGenerations.get() == 1) {
+                setAiGenerating(true)
+            } else {
+                Toast.makeText(this, "✨ Queued! (${aiActiveGenerations.get()}/$AI_MAX_QUEUE)", Toast.LENGTH_SHORT).show()
+            }
+
+            lifecycleScope.launch {
                 try {
-                    setAiGenerating(true)
                     aiTvError?.visibility = View.GONE
 
                     withContext(Dispatchers.Main) {
                         aiTvLoadingStatus?.text = getString(R.string.ai_optimizing_prompt)
                     }
-                    val style = getAiSelectedStyle()
-                    val optimizedPrompt = aiOptimizePrompt(prompt, style)
+                    val optimizedPrompt = aiOptimizePrompt(queuedPrompt, queuedStyle)
 
                     withContext(Dispatchers.Main) {
-                        aiTvLoadingStatus?.text = getString(R.string.ai_generating_image)
+                        val queueCount = aiActiveGenerations.get()
+                        aiTvLoadingStatus?.text = if (queueCount > 1) {
+                            "${getString(R.string.ai_generating_image)} ($queueCount active)"
+                        } else {
+                            getString(R.string.ai_generating_image)
+                        }
                     }
                     val bitmap = aiGenerateImage(optimizedPrompt) {
                         lifecycleScope.launch(Dispatchers.Main) {
@@ -782,14 +804,15 @@ class MainActivity : AppCompatActivity() {
                         withContext(Dispatchers.Main) {
                             aiTvLoadingStatus?.text = getString(R.string.ai_processing)
                         }
-                        aiRawBitmap = Bitmap.createScaledBitmap(bitmap, 512, 512, true)
-                        aiGeneratedBitmap = aiRawBitmap
+                        val scaledBmp = Bitmap.createScaledBitmap(bitmap, 512, 512, true)
+                        aiRawBitmap = scaledBmp
+                        aiGeneratedBitmap = scaledBmp
 
-                        // Save to local history
-                        val savedPath = aiSaveToHistory(aiRawBitmap!!, prompt)
+                        val savedPath = aiSaveToHistory(scaledBmp, queuedPrompt)
 
                         withContext(Dispatchers.Main) {
-                            aiIvPreview?.setImageBitmap(aiGeneratedBitmap)
+                            aiIvPreview?.setImageBitmap(scaledBmp)
+                            aiPreviewCard?.visibility = View.VISIBLE
                             aiEditButtons?.visibility = View.VISIBLE
                             aiBtnAddToPack?.visibility = View.VISIBLE
                             aiBtnClosePreview?.visibility = View.VISIBLE
@@ -798,8 +821,7 @@ class MainActivity : AppCompatActivity() {
                             aiContentContainer?.post { aiLoadHistory() }
                         }
 
-                        // Sync to Firebase if signed in
-                        if (savedPath != null) aiSyncHistoryToFirebase(prompt, savedPath)
+                        if (savedPath != null) aiSyncHistoryToFirebase(queuedPrompt, savedPath)
                     } else {
                         withContext(Dispatchers.Main) {
                             aiTvError?.text = getString(R.string.ai_generation_failed)
@@ -814,8 +836,13 @@ class MainActivity : AppCompatActivity() {
                         aiTvError?.visibility = View.VISIBLE
                     }
                 } finally {
+                    val remaining = aiActiveGenerations.decrementAndGet()
                     withContext(Dispatchers.Main) {
-                        setAiGenerating(false)
+                        if (remaining <= 0) {
+                            setAiGenerating(false)
+                        } else {
+                            aiTvLoadingStatus?.text = "${getString(R.string.ai_generating_image)} ($remaining remaining)"
+                        }
                     }
                 }
             }

@@ -45,6 +45,7 @@ class DetailsActivity : AppCompatActivity() {
     }
 
     private lateinit var packId: String
+    private var isAnimatedPack: Boolean = false
     private lateinit var btnAction: MaterialButton
     private lateinit var btnWatchAd: MaterialButton
     private lateinit var premiumButtonsContainer: LinearLayout
@@ -228,6 +229,7 @@ class DetailsActivity : AppCompatActivity() {
 
     private fun setupUI(pack: Pack) {
         currentPack = pack
+        isAnimatedPack = pack.isAnimated
         isPackReady = false // Reset state when setting up new pack
 
         // View count arka planda artır, interstitial main thread'de yüklenmeli
@@ -938,61 +940,54 @@ class DetailsActivity : AppCompatActivity() {
         lockOverlay?.visibility = View.GONE
         unlockHint?.visibility = View.GONE
 
-        // Custom sticker: load from local file
-        if (packId.startsWith("custom_")) {
+        // Determine the load source
+        val loadSource: Any? = if (packId.startsWith("custom_")) {
             val customFile = CustomStickerManager.getCustomStickerPath(this, packId, sticker.file)
-            if (customFile.exists()) {
-                Glide.with(this)
-                    .asDrawable()
-                    .load(customFile)
-                    .override(512, 512)
-                    .signature(com.bumptech.glide.signature.ObjectKey(customFile.lastModified()))
-                    .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.RESOURCE)
-                    .into(imageView)
-            } else {
-                imageView.setImageResource(R.drawable.transparent_placeholder)
-            }
+            if (customFile.exists()) customFile else null
         } else {
-        val cachedFile = StickerRepository.getCachedStickerPath(this, packId, sticker.file)
-
-        // Try all sources with fallback chain
-        val requestBuilder = when {
-            cachedFile.exists() && cachedFile.length() > 0 -> {
-                Glide.with(this)
-                    .asDrawable()
-                    .load(cachedFile)
-                    .override(512, 512)
-                    .signature(com.bumptech.glide.signature.ObjectKey(cachedFile.lastModified()))
-                    .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.RESOURCE)
-            }
-            sticker.url.isNotEmpty() -> {
-                Glide.with(this)
-                    .asDrawable()
-                    .load(sticker.url)
-                    .override(512, 512)
-                    .signature(com.bumptech.glide.signature.ObjectKey(sticker.url))
-                    .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.ALL)
-            }
-            else -> {
-                val assetPath = "file:///android_asset/$packId/${sticker.file}"
-                Glide.with(this)
-                    .asDrawable()
-                    .load(android.net.Uri.parse(assetPath))
-                    .override(512, 512)
+            val cachedFile = StickerRepository.getCachedStickerPath(this, packId, sticker.file)
+            when {
+                cachedFile.exists() && cachedFile.length() > 0 -> cachedFile
+                sticker.url.isNotEmpty() -> sticker.url
+                else -> android.net.Uri.parse("file:///android_asset/$packId/${sticker.file}")
             }
         }
 
-        // Always set placeholder + error fallback to prevent blank preview
-        requestBuilder
-            .placeholder(R.drawable.transparent_placeholder)
-            .error(
+        if (loadSource == null) {
+            imageView.setImageResource(R.drawable.transparent_placeholder)
+        } else {
+            // Use asGif() for animated packs to properly render animated WebP
+            if (isAnimatedPack) {
+                Glide.with(this)
+                    .asGif()
+                    .load(loadSource)
+                    .override(512, 512)
+                    .placeholder(R.drawable.transparent_placeholder)
+                    .error(
+                        Glide.with(this)
+                            .asGif()
+                            .load(if (sticker.url.isNotEmpty()) sticker.url else R.drawable.transparent_placeholder)
+                            .override(512, 512)
+                            .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.ALL)
+                    )
+                    .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.ALL)
+                    .into(imageView)
+            } else {
                 Glide.with(this)
                     .asDrawable()
-                    .load(if (sticker.url.isNotEmpty()) sticker.url else R.drawable.transparent_placeholder)
+                    .load(loadSource)
                     .override(512, 512)
+                    .placeholder(R.drawable.transparent_placeholder)
+                    .error(
+                        Glide.with(this)
+                            .asDrawable()
+                            .load(if (sticker.url.isNotEmpty()) sticker.url else R.drawable.transparent_placeholder)
+                            .override(512, 512)
+                            .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.ALL)
+                    )
                     .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.ALL)
-            )
-            .into(imageView)
+                    .into(imageView)
+            }
         }
 
         // Tasarımdaki animasyonlu açılış
