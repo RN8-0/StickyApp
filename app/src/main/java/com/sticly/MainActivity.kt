@@ -960,37 +960,27 @@ class MainActivity : AppCompatActivity() {
 
     private fun aiTodayString(): String = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
 
-    private val AI_STICKER_SUFFIX = ", ultra vibrant saturated neon colors, cartoon sticker style, white background, thick bold outlines, very expressive exaggerated emotions, huge googly eyes, chibi proportions, funny hilarious, professional sticker design, masterpiece, best quality, ultra detailed, sharp crisp lines, centered composition, single character, high resolution"
+    private val AI_STICKER_SUFFIX = ", cartoon sticker, white background, bold outlines, vibrant colors, expressive, cute, centered"
 
+    // Skip DeepSeek rewriting — it loses the subject. Just enhance the prompt minimally.
     private suspend fun aiOptimizePrompt(userPrompt: String, style: String): String =
         withContext(Dispatchers.IO) {
+            // If user prompt is already detailed (>30 chars), just add sticker suffix
+            // If short, use DeepSeek to expand it into a proper sticker description
+            if (userPrompt.length > 40) {
+                return@withContext "$userPrompt$AI_STICKER_SUFFIX"
+            }
+
             try {
                 val apiKey = BuildConfig.DEEPSEEK_API_KEY
                 if (apiKey.isEmpty()) return@withContext "$userPrompt$AI_STICKER_SUFFIX"
 
-                val systemMessage = """You are an expert AI sticker prompt engineer for WhatsApp/Telegram stickers.
-Transform the user's idea into a vivid image generation prompt. Output ONLY the prompt, nothing else.
-
-MANDATORY style (every prompt MUST include these):
-- Cute chubby cartoon character with chibi proportions (big head, tiny body)
-- Huge expressive googly eyes, extremely exaggerated emotion (shock, anger, joy, sadness)
-- Ultra vibrant saturated neon colors (neon pink, electric blue, bright orange, vivid green, hot purple)
-- White background, clean and simple
-- Thick bold black outlines around everything
-- Visual gag effects: dramatic sweat drops, steam puffs, sparkles, motion lines, food splashes
-- Single centered character, sticker format
-
-REFERENCE examples of good output:
-- "cute chubby neon pink and electric blue penguin with huge googly eyes, mouth wide open in extreme shock, tiny flippers raised to cheeks, dramatic sweat drops flying, vibrant glowing colors, cartoon sticker style, white background, very expressive, funny"
-- "super greedy panda with cheeks stuffed full of sushi rolls, eyes rolling back in bliss, drooling waterfall, chopsticks in both paws, bright pink tongue out, colorful food explosion around, chibi cute but hilarious, sticker style"
-- "panicked calico cat in business suit running with coffee splashing everywhere, giant clock showing 9:01 behind, tie flying, terrified wide eyes, bright red-yellow-blue color palette, comic style sticker"
-
-Rules:
-- Keep under 80 words
-- Be specific about colors (name exact colors: neon pink, electric blue, etc.)
-- Always make it FUNNY and over-the-top expressive
-- Never mention "realistic" or "photograph" or "anime"
-- Describe the character's body, face, accessories, and action vividly"""
+                val systemMessage = """Expand this short idea into a vivid sticker image prompt (40-60 words max). Output ONLY the prompt.
+Keep the EXACT subject the user described. Add: specific colors, facial expression, pose, one funny detail.
+End with: cartoon sticker, white background, bold outlines, vibrant colors
+Example input: "angry cactus"
+Example output: "angry green cactus with bright orange cheeks, wearing a tiny party hat, eyebrow raised high, steam puffs shooting from spines, arms crossed, grumpy frown, cartoon sticker, white background, bold outlines, vibrant neon colors"
+NEVER change the subject. NEVER add unrelated characters."""
 
                 val body = JSONObject().apply {
                     put("model", "deepseek-chat")
@@ -998,7 +988,7 @@ Rules:
                         put(JSONObject().apply { put("role", "system"); put("content", systemMessage) })
                         put(JSONObject().apply { put("role", "user"); put("content", userPrompt) })
                     })
-                    put("max_tokens", 150)
+                    put("max_tokens", 100)
                     put("temperature", 0.7)
                 }
 
@@ -1133,12 +1123,12 @@ Rules:
 
     private suspend fun aiGenerateWithPollinations(prompt: String): Bitmap? =
         withContext(Dispatchers.IO) {
-            val stickerPrompt = "$prompt, cartoon sticker style, white background, thick bold black outlines, ultra vibrant saturated neon colors, very expressive, cute funny, chibi proportions, huge googly eyes, professional sticker design, high quality digital illustration, centered single character"
-            val encodedPrompt = java.net.URLEncoder.encode(stickerPrompt, "UTF-8")
-            val negPrompt = java.net.URLEncoder.encode("realistic, photograph, blurry, low quality, ugly, deformed, watermark, text, bad anatomy, dark background, complex background, multiple characters, cropped", "UTF-8")
+            // Prompt already has sticker suffix from aiOptimizePrompt — don't add more
+            val encodedPrompt = java.net.URLEncoder.encode(prompt, "UTF-8")
+            val negPrompt = java.net.URLEncoder.encode("realistic, photograph, blurry, ugly, deformed, watermark, text, dark background, multiple characters", "UTF-8")
 
-            // flux-realism is bad for stickers; flux is best for stylized cartoon art
-            for (model in listOf("flux", "turbo")) {
+            // Try flux first (best cartoon quality), then gptimage (free, good quality), then turbo (fast fallback)
+            for (model in listOf("flux", "gptimage", "turbo")) {
                 try {
                     val urlStr = "https://image.pollinations.ai/prompt/$encodedPrompt?width=512&height=512&nologo=true&model=$model&seed=${System.currentTimeMillis()}&negative=$negPrompt"
                     android.util.Log.d("AiGenerate", "Pollinations ($model) request")
@@ -1170,10 +1160,9 @@ Rules:
 
     private suspend fun aiTryGenerate(prompt: String, model: String, onPoll: () -> Unit): Bitmap? =
         withContext(Dispatchers.IO) {
-            val negativePrompt = "realistic, photograph, blurry, low quality, distorted, ugly, deformed, watermark, text, bad anatomy, bad hands, extra fingers, dark background, complex background, multiple characters, cropped, out of frame, duplicate, morbid"
-            val stickerPrompt = "$prompt, cartoon sticker style, white background, thick bold outlines, vibrant neon colors, cute expressive, chibi, high quality"
+            val negativePrompt = "realistic, photograph, blurry, ugly, deformed, watermark, text, dark background, multiple characters, bad anatomy"
             val body = JSONObject().apply {
-                put("prompt", "$stickerPrompt ### $negativePrompt")
+                put("prompt", "$prompt ### $negativePrompt")
                 put("params", JSONObject().apply {
                     put("width", 512)
                     put("height", 512)
