@@ -13,7 +13,7 @@ const MAX_DURATION = 5; // WhatsApp max 5 saniye
 const MIN_FPS = 8; // Minimum fps
 const MAX_FPS = 30; // WhatsApp max desteklenen fps
 const DEFAULT_FPS = 15; // Varsayılan fps (fps belirlenemezse)
-const MAX_STATIC_SIZE = 100 * 1024;
+const MAX_STATIC_SIZE = 300 * 1024;
 const MAX_ANIMATED_SIZE = 500 * 1024;
 
 class StickerProcessor {
@@ -652,7 +652,7 @@ class StickerProcessor {
     }
 
     private async resizeAndCenter(blob: Blob): Promise<Blob> {
-        const MAX_STATIC_SIZE = 100 * 1024;
+        const MAX_STATIC_SIZE = 300 * 1024;
 
         return new Promise((resolve) => {
             const img = new Image();

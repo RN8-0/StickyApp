@@ -394,7 +394,7 @@ function App() {
   const [draftDeleting, setDraftDeleting] = useState<string | null>(null);
   const [deleteAllProgress, setDeleteAllProgress] = useState<{ current: number; total: number } | null>(null);
   const [publishAllProgress, setPublishAllProgress] = useState<{ current: number; total: number; currentName?: string } | null>(null);
-  const [singlePublishProgress, setSinglePublishProgress] = useState<{ step: string } | null>(null);
+  const [singlePublishProgress, setSinglePublishProgress] = useState<{ step: string; percent: number } | null>(null);
   const [singleDeleteProgress, setSingleDeleteProgress] = useState<{ step: string; fileProgress?: { current: number; total: number } } | null>(null);
   const [draftPreviewSticker, setDraftPreviewSticker] = useState<{ url: string, title?: string } | null>(null);
   const [draftDragIdx, setDraftDragIdx] = useState<number | null>(null);
@@ -725,35 +725,40 @@ function App() {
   const publishDraft = async (draft: StickerPack) => {
     if (!window.confirm(`Are you sure you want to publish "${draft.name}"?`)) return;
     setDraftPublishing(draft.id);
-    setSinglePublishProgress({ step: 'Translating...' });
+    setSinglePublishProgress({ step: 'Preparing...', percent: 5 });
     try {
-      // Auto-translate from name_en at publish time
+      // Use the current draft name (which may have been edited) for translation
+      const currentName = draft.name;
+      const stickerCount = draft.sticker_count || draft.stickers?.length || 0;
+
+      setSinglePublishProgress({ step: `Translating "${currentName}" to 33 languages...`, percent: 15 });
       let translations: Record<string, string> = {};
-      const englishName = (draft as any).name_en || draft.name;
       if (deepseekService.isConfigured()) {
         try {
-          setSinglePublishProgress({ step: 'AI translating pack name...' });
-          translations = await deepseekService.translatePackName(englishName);
+          translations = await deepseekService.translatePackName(currentName);
         } catch { translations = {}; }
       }
 
-      setSinglePublishProgress({ step: 'Publishing to database...' });
+      setSinglePublishProgress({ step: `Publishing ${stickerCount} stickers to database...`, percent: 55 });
       const targetCollection = draft.is_premium ? 'premium_stickers' : 'stickers';
       const { id, ...packDataWithoutId } = draft as any;
       await setDoc(doc(db, targetCollection, draft.id), {
         ...packDataWithoutId,
         ...translations,
-        name_en: englishName,
+        name: currentName,
+        name_en: currentName,
         is_active: true,
         published_at: serverTimestamp(),
       });
-      setSinglePublishProgress({ step: 'Removing draft...' });
+
+      setSinglePublishProgress({ step: 'Cleaning up draft...', percent: 75 });
       await deleteDoc(doc(db, 'draft_stickers', draft.id));
       setDraftPacks(prev => prev.filter(p => p.id !== draft.id));
       if (selectedDraft?.id === draft.id) setSelectedDraft(null);
-      setSinglePublishProgress({ step: 'Refreshing packs...' });
+
+      setSinglePublishProgress({ step: 'Refreshing pack list...', percent: 90 });
       await fetchPacks();
-      alert(`✅ "${draft.name}" published successfully!`);
+      alert(`✅ "${currentName}" published successfully! (${stickerCount} stickers)`);
     } catch (error: any) {
       console.error("Publish error:", error);
       alert(`Publish error: ${error.message}`);
@@ -775,10 +780,10 @@ function App() {
       setPublishAllProgress({ current: idx, total, currentName: draft.name });
       try {
         let translations: Record<string, string> = {};
-        const englishName = (draft as any).name_en || draft.name;
+        const currentName = draft.name;
         if (deepseekService.isConfigured()) {
           try {
-            translations = await deepseekService.translatePackName(englishName);
+            translations = await deepseekService.translatePackName(currentName);
           } catch { translations = {}; }
         }
 
@@ -787,7 +792,8 @@ function App() {
         await setDoc(doc(db, targetCollection, draft.id), {
           ...packDataWithoutId,
           ...translations,
-          name_en: englishName,
+          name: currentName,
+          name_en: currentName,
           is_active: true,
           published_at: serverTimestamp(),
         });
@@ -5306,10 +5312,11 @@ function App() {
                               <div className="mt-3 space-y-2">
                                 <div className="flex items-center gap-2">
                                   <div className="flex-1 bg-white/5 rounded-full h-1.5 overflow-hidden">
-                                    <div className="h-full bg-gradient-to-r from-violet-500 to-purple-600 rounded-full animate-pulse" style={{ width: '60%' }} />
+                                    <div className="h-full bg-gradient-to-r from-violet-500 to-purple-600 rounded-full transition-all duration-500 ease-out" style={{ width: `${singlePublishProgress.percent}%` }} />
                                   </div>
-                                  <span className="text-[9px] font-bold text-violet-400 shrink-0">{singlePublishProgress.step}</span>
+                                  <span className="text-[9px] font-bold text-violet-400 shrink-0">{singlePublishProgress.percent}%</span>
                                 </div>
+                                <p className="text-[9px] text-violet-300/70 truncate">{singlePublishProgress.step}</p>
                               </div>
                             )}
                             {draftDeleting === draft.id && singleDeleteProgress && (

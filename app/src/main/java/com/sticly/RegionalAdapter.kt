@@ -228,7 +228,7 @@ class RegionalAdapter(
     }
 
     companion object {
-        private const val GLIDE_OVERRIDE = 200
+        private const val GLIDE_OVERRIDE = 320
     }
 
     private fun formatDownloadValue(count: Int): String {
