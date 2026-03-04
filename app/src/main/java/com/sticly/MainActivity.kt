@@ -770,19 +770,23 @@ class MainActivity : AppCompatActivity() {
                     }
                     val optimizedPrompt = aiOptimizePrompt(queuedPrompt, queuedStyle)
 
-                    withContext(Dispatchers.Main) {
-                        val queueCount = aiActiveGenerations.get()
-                        aiTvLoadingStatus?.text = if (queueCount > 1) {
-                            "${getString(R.string.ai_generating_image)} ($queueCount active)"
-                        } else {
-                            getString(R.string.ai_generating_image)
+                    // Start a timer to show elapsed seconds
+                    val startTime = System.currentTimeMillis()
+                    val timerJob = lifecycleScope.launch(Dispatchers.Main) {
+                        while (true) {
+                            val elapsed = (System.currentTimeMillis() - startTime) / 1000
+                            val queueCount = aiActiveGenerations.get()
+                            val base = "🎨 Generating"
+                            val timer = "${elapsed}s"
+                            aiTvLoadingStatus?.text = if (queueCount > 1) "$base... $timer ($queueCount active)" else "$base... $timer"
+                            kotlinx.coroutines.delay(1000)
                         }
                     }
+
                     val bitmap = aiGenerateImage(optimizedPrompt) {
-                        lifecycleScope.launch(Dispatchers.Main) {
-                            aiTvLoadingStatus?.text = getString(R.string.ai_generating_image) + " ⏳"
-                        }
+                        // no-op, timer handles progress display
                     }
+                    timerJob.cancel()
 
                     if (bitmap != null) {
                         withContext(Dispatchers.Main) {
@@ -1088,154 +1092,56 @@ Rules:
 
     private suspend fun aiGenerateImage(prompt: String, onPoll: () -> Unit): Bitmap? =
         withContext(Dispatchers.IO) {
-            // Race: run Pollinations and Stable Horde in PARALLEL, return first success
+            // Race all free models in parallel — first success wins
             try {
                 coroutineScope {
-                    val pollinations = async {
-                        try { aiGenerateWithPollinations(prompt) } catch (_: Exception) { null }
-                    }
-                    val horde = async {
-                        try { aiTryGenerate(prompt, "Anything Diffusion", onPoll) } catch (_: Exception) { null }
-                    }
+                    val grok = async { aiPollinationsRequest(prompt, "grok-imagine") }
+                    val flux = async { aiPollinationsRequest(prompt, "flux") }
+                    val gptImg = async { aiPollinationsRequest(prompt, "gptimage") }
 
-                    // Wait for Pollinations first (usually faster with turbo)
-                    val polResult = pollinations.await()
-                    if (polResult != null) {
-                        horde.cancel()
-                        return@coroutineScope polResult
-                    }
+                    // Wait for grok first (best quality per user testing)
+                    val grokResult = grok.await()
+                    if (grokResult != null) { flux.cancel(); gptImg.cancel(); return@coroutineScope grokResult }
 
-                    // Pollinations failed, wait for Horde
-                    val hordeResult = horde.await()
-                    if (hordeResult != null) return@coroutineScope hordeResult
+                    val fluxResult = flux.await()
+                    if (fluxResult != null) { gptImg.cancel(); return@coroutineScope fluxResult }
 
-                    // Both failed, try remaining Horde models sequentially
-                    for (model in listOf("Abyss OrangeMix", "stable_diffusion")) {
-                        try {
-                            val result = aiTryGenerate(prompt, model, onPoll)
-                            if (result != null) return@coroutineScope result
-                        } catch (_: Exception) {}
-                    }
-                    null
+                    gptImg.await()
                 }
             } catch (_: Exception) { null }
         }
 
-    private suspend fun aiGenerateWithPollinations(prompt: String): Bitmap? =
+    private suspend fun aiPollinationsRequest(prompt: String, model: String): Bitmap? =
         withContext(Dispatchers.IO) {
-            // Prompt already has sticker suffix from aiOptimizePrompt — don't add more
-            val encodedPrompt = java.net.URLEncoder.encode(prompt, "UTF-8")
-            val negPrompt = java.net.URLEncoder.encode("realistic, photograph, blurry, ugly, deformed, watermark, text, dark background, multiple characters", "UTF-8")
+            try {
+                val encodedPrompt = java.net.URLEncoder.encode(prompt, "UTF-8")
+                val negPrompt = java.net.URLEncoder.encode("realistic, photograph, blurry, ugly, deformed, watermark, text, dark background", "UTF-8")
+                val urlStr = "https://image.pollinations.ai/prompt/$encodedPrompt?width=512&height=512&nologo=true&model=$model&seed=${System.currentTimeMillis()}&negative=$negPrompt"
+                android.util.Log.d("AiGenerate", "Pollinations ($model) request")
 
-            // Try flux first (best cartoon quality), then gptimage (free, good quality), then turbo (fast fallback)
-            for (model in listOf("flux", "gptimage", "turbo")) {
-                try {
-                    val urlStr = "https://image.pollinations.ai/prompt/$encodedPrompt?width=512&height=512&nologo=true&model=$model&seed=${System.currentTimeMillis()}&negative=$negPrompt"
-                    android.util.Log.d("AiGenerate", "Pollinations ($model) request")
+                val conn = URL(urlStr).openConnection() as HttpURLConnection
+                conn.requestMethod = "GET"
+                conn.connectTimeout = 10000
+                conn.readTimeout = 15000
+                conn.instanceFollowRedirects = true
+                conn.setRequestProperty("User-Agent", "StickyApp/1.0")
 
-                    val conn = URL(urlStr).openConnection() as HttpURLConnection
-                    conn.requestMethod = "GET"
-                    conn.connectTimeout = 15000
-                    conn.readTimeout = 25000
-                    conn.instanceFollowRedirects = true
-                    conn.setRequestProperty("User-Agent", "StickyApp/1.0")
-
-                    val code = conn.responseCode
-                    android.util.Log.d("AiGenerate", "Pollinations ($model) response: $code")
-                    if (code == 200) {
-                        val bitmap = BitmapFactory.decodeStream(conn.inputStream)
-                        conn.disconnect()
-                        if (bitmap != null) {
-                            android.util.Log.d("AiGenerate", "Pollinations success with $model")
-                            return@withContext bitmap
-                        }
-                    }
+                val code = conn.responseCode
+                android.util.Log.d("AiGenerate", "Pollinations ($model) response: $code")
+                if (code == 200) {
+                    val bitmap = BitmapFactory.decodeStream(conn.inputStream)
                     conn.disconnect()
-                } catch (e: Exception) {
-                    android.util.Log.e("AiGenerate", "Pollinations $model failed: ${e.message}")
-                }
-            }
-            null
-        }
-
-    private suspend fun aiTryGenerate(prompt: String, model: String, onPoll: () -> Unit): Bitmap? =
-        withContext(Dispatchers.IO) {
-            val negativePrompt = "realistic, photograph, blurry, ugly, deformed, watermark, text, dark background, multiple characters, bad anatomy"
-            val body = JSONObject().apply {
-                put("prompt", "$prompt ### $negativePrompt")
-                put("params", JSONObject().apply {
-                    put("width", 512)
-                    put("height", 512)
-                    put("steps", 25)
-                    put("cfg_scale", 7.5)
-                    put("sampler_name", "k_euler_a")
-                    put("karras", true)
-                    put("clip_skip", 2)
-                })
-                put("nsfw", false)
-                put("censor_nsfw", true)
-                put("models", JSONArray().apply { put(model) })
-            }
-
-            val submitConn = URL("https://stablehorde.net/api/v2/generate/async").openConnection() as HttpURLConnection
-            submitConn.requestMethod = "POST"
-            submitConn.setRequestProperty("Content-Type", "application/json")
-            submitConn.setRequestProperty("apikey", "0000000000")
-            submitConn.connectTimeout = 10000
-            submitConn.readTimeout = 10000
-            submitConn.doOutput = true
-            OutputStreamWriter(submitConn.outputStream).use { it.write(body.toString()) }
-
-            if (submitConn.responseCode != 202) {
-                val errorBody = try { BufferedReader(InputStreamReader(submitConn.errorStream)).use { it.readText() } } catch (_: Exception) { "" }
-                submitConn.disconnect()
-                val errorMsg = try { JSONObject(errorBody).optString("message", "") } catch (_: Exception) { "" }
-                throw Exception(if (errorMsg.isNotEmpty()) errorMsg else "Server error (${submitConn.responseCode})")
-            }
-
-            val submitResponse = BufferedReader(InputStreamReader(submitConn.inputStream)).use { it.readText() }
-            submitConn.disconnect()
-            val jobId = JSONObject(submitResponse).getString("id")
-            android.util.Log.d("AiGenerate", "Stable Horde job: $jobId model: $model")
-
-            var imageUrl: String? = null
-            for (attempt in 1..20) {
-                delay(2000)
-                onPoll()
-
-                val checkConn = URL("https://stablehorde.net/api/v2/generate/status/$jobId").openConnection() as HttpURLConnection
-                checkConn.requestMethod = "GET"
-                checkConn.connectTimeout = 10000
-                checkConn.readTimeout = 10000
-
-                val statusCode = checkConn.responseCode
-                if (statusCode != 200) { checkConn.disconnect(); continue }
-
-                val statusResponse = BufferedReader(InputStreamReader(checkConn.inputStream)).use { it.readText() }
-                checkConn.disconnect()
-
-                val statusJson = JSONObject(statusResponse)
-                if (statusJson.optBoolean("faulted", false)) return@withContext null
-                if (statusJson.optBoolean("done", false)) {
-                    val generations = statusJson.getJSONArray("generations")
-                    if (generations.length() > 0) {
-                        imageUrl = generations.getJSONObject(0).getString("img")
+                    if (bitmap != null) {
+                        android.util.Log.d("AiGenerate", "Pollinations success with $model")
+                        return@withContext bitmap
                     }
-                    break
                 }
+                conn.disconnect()
+                null
+            } catch (e: Exception) {
+                android.util.Log.e("AiGenerate", "Pollinations $model failed: ${e.message}")
+                null
             }
-
-            if (imageUrl == null) return@withContext null
-
-            val imgConn = URL(imageUrl).openConnection() as HttpURLConnection
-            imgConn.requestMethod = "GET"
-            imgConn.connectTimeout = 10000
-            imgConn.readTimeout = 20000
-            imgConn.instanceFollowRedirects = true
-
-            val bitmap = if (imgConn.responseCode == 200) BitmapFactory.decodeStream(imgConn.inputStream) else null
-            imgConn.disconnect()
-            bitmap
         }
 
     private suspend fun aiProcessSticker(source: Bitmap): Bitmap =
