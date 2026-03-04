@@ -414,6 +414,30 @@ function App() {
   const [telegramSplitPacks, setTelegramSplitPacks] = useState(true);
   const [telegramKeepOriginalName, setTelegramKeepOriginalName] = useState(true);
 
+  // Log state for batch generator and telegram import
+  const [batchLogs, setBatchLogs] = useState<{ time: string; message: string; type: 'info' | 'success' | 'error' | 'warn' }[]>([]);
+  const [telegramLogs, setTelegramLogs] = useState<{ time: string; message: string; type: 'info' | 'success' | 'error' | 'warn' }[]>([]);
+  const batchLogRef = useRef<HTMLDivElement>(null);
+  const telegramLogRef = useRef<HTMLDivElement>(null);
+
+  // Helper: detect log type from progress message
+  const getLogType = (msg: string): 'info' | 'success' | 'error' | 'warn' => {
+    if (msg.startsWith('✅') || msg.startsWith('✓') || msg.includes('published') || msg.includes('Complete') || msg.includes('done') || msg.includes('imported!')) return 'success';
+    if (msg.startsWith('❌') || msg.includes('failed') || msg.includes('Error') || msg.includes('error')) return 'error';
+    if (msg.startsWith('⚠️') || msg.startsWith('⏭️') || msg.startsWith('⏱️') || msg.includes('skipping') || msg.includes('timeout') || msg.includes('Mixed pack')) return 'warn';
+    return 'info';
+  };
+  const addBatchLog = (msg: string) => {
+    const time = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    setBatchLogs(prev => [...prev, { time, message: msg, type: getLogType(msg) }]);
+    setTimeout(() => batchLogRef.current?.scrollTo({ top: batchLogRef.current.scrollHeight, behavior: 'smooth' }), 50);
+  };
+  const addTelegramLog = (msg: string) => {
+    const time = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    setTelegramLogs(prev => [...prev, { time, message: msg, type: getLogType(msg) }]);
+    setTimeout(() => telegramLogRef.current?.scrollTo({ top: telegramLogRef.current.scrollHeight, behavior: 'smooth' }), 50);
+  };
+
   // Helper: get fixed dropdown position from button ref
   const getDropdownPos = (ref: React.RefObject<HTMLButtonElement | null>) => {
     if (!ref.current) return { top: 0, left: 0 };
@@ -4575,6 +4599,7 @@ function App() {
                       if (!window.confirm(`${actualCount} packs will be created (Limit: ${batchMaxPacks}). This may take a while. Do you want to continue?`)) return;
                       setIsBatchRunning(true);
                       setBatchProgress(null);
+                      setBatchLogs([]);
                       try {
                         const completedPacks = await generateBatchPacks({
                           searchTerms: limitedTerms,
@@ -4586,12 +4611,15 @@ function App() {
                           contentType: batchContentType,
                           onProgress: (progress) => {
                             setBatchProgress(progress);
+                            if (progress.currentStep) addBatchLog(progress.currentStep);
                           }
                         });
+                        addBatchLog(`✅ Batch complete! ${completedPacks.length} packs created as drafts.`);
                         await fetchDrafts();
                         alert(`✅ ${completedPacks.length} packs created as drafts! You can review and publish them from the Drafts tab.`);
                       } catch (error: any) {
                         console.error('Batch generation error:', error);
+                        addBatchLog(`❌ Fatal error: ${error.message}`);
                         alert(`Error: ${error.message}`);
                       } finally {
                         setIsBatchRunning(false);
@@ -4683,6 +4711,33 @@ function App() {
                               <p className="text-[10px] text-textSec">{pack.stickerCount} sticker • {pack.searchTerm}</p>
                             </div>
                             <span className="text-[9px] font-bold text-textSec uppercase bg-white/5 px-2 py-1 rounded">{pack.source}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Batch Generator Log Panel */}
+                  {batchLogs.length > 0 && (
+                    <div className="glass rounded-[2rem] border border-white/5 overflow-hidden">
+                      <div className="flex items-center justify-between px-5 py-3 border-b border-white/5 bg-white/[0.02]">
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2 rounded-full bg-yellow-500 animate-pulse" />
+                          <span className="text-[10px] font-black text-textSec uppercase tracking-widest">Live Log</span>
+                          <span className="text-[9px] text-textSec bg-white/5 px-2 py-0.5 rounded-md">{batchLogs.length} entries</span>
+                        </div>
+                        <button onClick={() => setBatchLogs([])} className="text-[9px] text-textSec hover:text-white transition-colors font-bold uppercase tracking-wider">Clear</button>
+                      </div>
+                      <div ref={batchLogRef} className="max-h-[250px] overflow-y-auto p-3 space-y-0.5 font-mono text-[11px] bg-black/40">
+                        {batchLogs.map((log, idx) => (
+                          <div key={idx} className="flex gap-2 py-0.5 px-2 rounded hover:bg-white/5">
+                            <span className="text-white/20 shrink-0 select-none">{log.time}</span>
+                            <span className={
+                              log.type === 'success' ? 'text-green-400' :
+                              log.type === 'error' ? 'text-red-400' :
+                              log.type === 'warn' ? 'text-yellow-400' :
+                              'text-white/60'
+                            }>{log.message}</span>
                           </div>
                         ))}
                       </div>
@@ -4883,6 +4938,7 @@ function App() {
                       setIsTelegramImporting(true);
                       const ac = new AbortController();
                       telegramAbortRef.current = ac;
+                      setTelegramLogs([]);
                       try {
                         await importTelegramPacks(telegramBotToken.trim(), packs, {
                           useAiNaming: !telegramKeepOriginalName,
@@ -4892,9 +4948,13 @@ function App() {
                           splitPacks: telegramSplitPacks,
                           keepOriginalName: telegramKeepOriginalName,
                           abortSignal: ac.signal,
-                          onProgress: (p) => setTelegramProgress(p)
+                          onProgress: (p) => {
+                            setTelegramProgress(p);
+                            if (p.currentStep) addTelegramLog(p.currentStep);
+                          }
                         });
                       } catch (e: any) {
+                        addTelegramLog(`❌ Fatal error: ${e.message}`);
                         alert('Import error: ' + e.message);
                       } finally {
                         setIsTelegramImporting(false);
@@ -5026,6 +5086,33 @@ function App() {
                           <span className="text-xs text-red-300 font-medium">{telegramProgress.error}</span>
                         </div>
                       )}
+                    </div>
+                  )}
+
+                  {/* Telegram Import Log Panel */}
+                  {telegramLogs.length > 0 && (
+                    <div className="glass rounded-2xl border border-sky-500/10 overflow-hidden">
+                      <div className="flex items-center justify-between px-5 py-3 border-b border-white/5 bg-white/[0.02]">
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2 rounded-full bg-sky-500 animate-pulse" />
+                          <span className="text-[10px] font-black text-textSec uppercase tracking-widest">Live Log</span>
+                          <span className="text-[9px] text-textSec bg-white/5 px-2 py-0.5 rounded-md">{telegramLogs.length} entries</span>
+                        </div>
+                        <button onClick={() => setTelegramLogs([])} className="text-[9px] text-textSec hover:text-white transition-colors font-bold uppercase tracking-wider">Clear</button>
+                      </div>
+                      <div ref={telegramLogRef} className="max-h-[250px] overflow-y-auto p-3 space-y-0.5 font-mono text-[11px] bg-black/40">
+                        {telegramLogs.map((log, idx) => (
+                          <div key={idx} className="flex gap-2 py-0.5 px-2 rounded hover:bg-white/5">
+                            <span className="text-white/20 shrink-0 select-none">{log.time}</span>
+                            <span className={
+                              log.type === 'success' ? 'text-green-400' :
+                              log.type === 'error' ? 'text-red-400' :
+                              log.type === 'warn' ? 'text-yellow-400' :
+                              'text-white/60'
+                            }>{log.message}</span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>
