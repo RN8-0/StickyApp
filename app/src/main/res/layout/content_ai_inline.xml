@@ -228,6 +228,18 @@
 
                 </FrameLayout>
 
+                <!-- Prompt text display -->
+                <TextView
+                    android:id="@+id/aiTvPromptDisplay"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="10dp"
+                    android:gravity="center"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="13sp"
+                    android:textStyle="italic"
+                    android:visibility="gone" />
+
                 <!-- Action buttons row -->
                 <LinearLayout
                     android:id="@+id/aiEditButtons"

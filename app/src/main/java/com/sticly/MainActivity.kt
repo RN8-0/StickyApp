@@ -870,10 +870,12 @@ class MainActivity : AppCompatActivity() {
             aiEditButtons?.visibility = View.GONE
             aiBtnAddToPack?.visibility = View.GONE
             aiBtnClosePreview?.visibility = View.GONE
+            findViewById<TextView>(R.id.aiTvPromptDisplay)?.visibility = View.GONE
             aiRawBitmap = null
             aiGeneratedBitmap = null
             // Restore Regenerate button for next generation
             aiBtnTryAgain?.text = "🔄 Regenerate"
+            aiBtnTryAgain?.icon = null
             aiBtnTryAgain?.setTextColor(androidx.core.content.ContextCompat.getColor(this, R.color.primary))
             aiBtnTryAgain?.strokeColor = android.content.res.ColorStateList.valueOf(androidx.core.content.ContextCompat.getColor(this, R.color.primary))
             aiBtnTryAgain?.setOnClickListener { doGenerate() }
@@ -1384,14 +1386,27 @@ Rules:
                 }
             } catch (_: Exception) { }
 
-            // Always show 9 bundled sample images as "Your Creations" examples
-            val sampleItems = (1..9).map { i ->
-                val id = String.format("%02d", i)
-                AiHistoryItem("ai_showcase/$id.webp", "", 0L, isAsset = true)
+            // Load sample prompts from manifest
+            val sampleItems = mutableListOf<AiHistoryItem>()
+            try {
+                val manifestJson = assets.open("ai_showcase/manifest.json").bufferedReader().readText()
+                val arr = JSONArray(manifestJson)
+                for (i in 0 until minOf(arr.length(), 9)) {
+                    val obj = arr.getJSONObject(i)
+                    sampleItems.add(AiHistoryItem(
+                        "ai_showcase/${obj.getString("id")}.webp",
+                        obj.optString("prompt", ""),
+                        0L,
+                        isAsset = true
+                    ))
+                }
+            } catch (_: Exception) {
+                for (i in 1..9) {
+                    sampleItems.add(AiHistoryItem("ai_showcase/${String.format("%02d", i)}.webp", "", 0L, isAsset = true))
+                }
             }
 
             withContext(Dispatchers.Main) {
-                // Always show section — user creations first, then samples to fill grid
                 val displayItems = if (items.isNotEmpty()) items else sampleItems.toMutableList()
 
                 tvTitle.visibility = View.VISIBLE
@@ -1399,9 +1414,7 @@ Rules:
                 rvHistory.visibility = View.VISIBLE
                 rvHistory.isNestedScrollingEnabled = false
                 aiHistoryAdapter = AiHistoryAdapter(displayItems.toMutableList()) { item ->
-                    if (!item.isAsset) {
-                        aiShowHistoryItemOptions(item)
-                    }
+                    aiShowHistoryItemOptions(item)
                 }
                 val gridLm = androidx.recyclerview.widget.GridLayoutManager(this@MainActivity, 3)
                 rvHistory.layoutManager = gridLm
@@ -1411,11 +1424,17 @@ Rules:
     }
 
     private fun aiShowHistoryItemOptions(item: AiHistoryItem) {
-        val file = java.io.File(item.path)
-        if (!file.exists()) return
-        val bmp = android.graphics.BitmapFactory.decodeFile(file.absolutePath) ?: return
+        val bmp: android.graphics.Bitmap? = if (item.isAsset) {
+            try {
+                val inputStream = assets.open(item.path)
+                android.graphics.BitmapFactory.decodeStream(inputStream).also { inputStream.close() }
+            } catch (_: Exception) { null }
+        } else {
+            val file = java.io.File(item.path)
+            if (file.exists()) android.graphics.BitmapFactory.decodeFile(file.absolutePath) else null
+        }
+        if (bmp == null) return
 
-        // Show the image in the preview area and enable edit/add buttons
         val aiIvPreview = findViewById<ImageView>(R.id.aiIvPreview)
         val aiPreviewCard = findViewById<androidx.cardview.widget.CardView>(R.id.aiPreviewCard)
         val aiEditButtons = findViewById<View>(R.id.aiEditButtons)
@@ -1423,6 +1442,7 @@ Rules:
         val aiLoadingOverlay = findViewById<View>(R.id.aiLoadingOverlay)
         val aiBtnClosePreview = findViewById<ImageView>(R.id.aiBtnClosePreview)
         val aiBtnTryAgain = findViewById<com.google.android.material.button.MaterialButton>(R.id.aiBtnTryAgain)
+        val aiTvPromptDisplay = findViewById<TextView>(R.id.aiTvPromptDisplay)
 
         aiRawBitmap = bmp
         aiGeneratedBitmap = bmp
@@ -1433,23 +1453,50 @@ Rules:
         aiBtnAddToPack?.visibility = View.VISIBLE
         aiBtnClosePreview?.visibility = View.VISIBLE
 
-        // Change "Regenerate" to "Delete" for history items
-        aiBtnTryAgain?.text = " Delete"
-        aiBtnTryAgain?.setTextColor(android.graphics.Color.parseColor("#E74C3C"))
-        aiBtnTryAgain?.strokeColor = android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#E74C3C"))
-        aiBtnTryAgain?.setIconResource(R.drawable.ic_delete)
-        aiBtnTryAgain?.iconTint = android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#E74C3C"))
-        aiBtnTryAgain?.iconGravity = com.google.android.material.button.MaterialButton.ICON_GRAVITY_TEXT_START
-        aiBtnTryAgain?.iconPadding = (4 * resources.displayMetrics.density).toInt()
-        aiBtnTryAgain?.setOnClickListener {
-            aiDeleteHistoryItem(item)
-            aiPreviewCard?.visibility = View.GONE
-            aiBtnClosePreview?.visibility = View.GONE
-            // Restore button for future generates
-            aiBtnTryAgain.text = "🔄 Regenerate"
-            aiBtnTryAgain.icon = null
-            aiBtnTryAgain.setTextColor(androidx.core.content.ContextCompat.getColor(this, R.color.primary))
-            aiBtnTryAgain.strokeColor = android.content.res.ColorStateList.valueOf(androidx.core.content.ContextCompat.getColor(this, R.color.primary))
+        // Show prompt if available
+        if (item.prompt.isNotEmpty()) {
+            aiTvPromptDisplay?.visibility = View.VISIBLE
+            aiTvPromptDisplay?.text = "\"${item.prompt}\""
+        } else {
+            aiTvPromptDisplay?.visibility = View.GONE
+        }
+
+        if (item.isAsset) {
+            // For sample images: "Use Prompt" button instead of Delete
+            aiBtnTryAgain?.text = "✨ Use Prompt"
+            aiBtnTryAgain?.setTextColor(androidx.core.content.ContextCompat.getColor(this, R.color.primary))
+            aiBtnTryAgain?.strokeColor = android.content.res.ColorStateList.valueOf(androidx.core.content.ContextCompat.getColor(this, R.color.primary))
+            aiBtnTryAgain?.icon = null
+            aiBtnTryAgain?.iconTint = null
+            aiBtnTryAgain?.setOnClickListener {
+                // Fill the prompt input with the sample's prompt
+                if (item.prompt.isNotEmpty()) {
+                    findViewById<android.widget.EditText>(R.id.aiEtPrompt)?.setText(item.prompt)
+                }
+                aiPreviewCard?.visibility = View.GONE
+                aiBtnClosePreview?.visibility = View.GONE
+                aiTvPromptDisplay?.visibility = View.GONE
+            }
+        } else {
+            // For user creations: Delete button
+            aiBtnTryAgain?.text = " Delete"
+            aiBtnTryAgain?.setTextColor(android.graphics.Color.parseColor("#E74C3C"))
+            aiBtnTryAgain?.strokeColor = android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#E74C3C"))
+            aiBtnTryAgain?.setIconResource(R.drawable.ic_delete)
+            aiBtnTryAgain?.iconTint = android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#E74C3C"))
+            aiBtnTryAgain?.iconGravity = com.google.android.material.button.MaterialButton.ICON_GRAVITY_TEXT_START
+            aiBtnTryAgain?.iconPadding = (4 * resources.displayMetrics.density).toInt()
+            aiBtnTryAgain?.setOnClickListener {
+                aiDeleteHistoryItem(item)
+                aiPreviewCard?.visibility = View.GONE
+                aiBtnClosePreview?.visibility = View.GONE
+                aiTvPromptDisplay?.visibility = View.GONE
+                // Restore button for future generates
+                aiBtnTryAgain.text = "🔄 Regenerate"
+                aiBtnTryAgain.icon = null
+                aiBtnTryAgain.setTextColor(androidx.core.content.ContextCompat.getColor(this, R.color.primary))
+                aiBtnTryAgain.strokeColor = android.content.res.ColorStateList.valueOf(androidx.core.content.ContextCompat.getColor(this, R.color.primary))
+            }
         }
 
         // Scroll to top to show preview

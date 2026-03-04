@@ -153,10 +153,17 @@ class PackAdapter(
             val content = adView.findViewById<View>(R.id.adContent)
             val placeholder = adView.findViewById<View>(R.id.adPlaceholder)
             val currentTag = adView.tag
-            if (currentTag == "loaded" || currentTag == "loading") {
-                // Already loaded or loading — don't reload
+            if (currentTag == "loaded") {
+                // Already loaded — show it
+                adView.visibility = View.VISIBLE
+                val lp = adView.layoutParams
+                lp.height = ViewGroup.LayoutParams.WRAP_CONTENT
+                adView.layoutParams = lp
+                content?.visibility = View.VISIBLE
+                placeholder?.visibility = View.GONE
                 return
             }
+            if (currentTag == "loading") return
             // New slot or previously failed — (re)load
             adView.tag = "loading"
             content?.visibility = View.GONE
@@ -188,9 +195,11 @@ class PackAdapter(
                 .withAdListener(object : AdListener() {
                     override fun onAdFailedToLoad(error: LoadAdError) {
                         adView.tag = null
-                        // Keep placeholder visible instead of collapsing to avoid layout jump
-                        placeholder?.visibility = View.VISIBLE
-                        content?.visibility = View.GONE
+                        // Collapse the entire ad slot when load fails
+                        adView.visibility = View.GONE
+                        val failLp = adView.layoutParams
+                        failLp.height = 0
+                        adView.layoutParams = failLp
                     }
                 })
                 .build()
