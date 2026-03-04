@@ -242,21 +242,17 @@ class DetailsActivity : AppCompatActivity() {
         }
     }
 
-    private fun setupUI(pack: Pack) {
-        currentPack = pack
-        isAnimatedPack = pack.isAnimated
-        isPackReady = false // Reset state when setting up new pack
+    // View referansları — bir kez bul, tekrar kullan (her setupUI'da findViewById çağırmak yerine)
+    private var rvCached: RecyclerView? = null
+    private var toolbarLayoutCached: View? = null
+    private var bottomContainerCached: View? = null
+    private var tvNameCached: android.widget.TextView? = null
+    private var premiumIconToolbarCached: View? = null
+    private var viewsCached = false
 
-        // View count arka planda artır, interstitial arka planda yükle
-        lifecycleScope.launch(Dispatchers.IO) {
-            StickerRepository.incrementViewCount(pack.id, pack.isPremium)
-        }
-        lifecycleScope.launch {
-            AdManager.loadInterstitialAd(this@DetailsActivity)
-        }
-
-        findViewById<android.widget.TextView>(R.id.name).text = pack.localizedName
-
+    private fun cacheViews() {
+        if (viewsCached) return
+        viewsCached = true
         btnAction = findViewById(R.id.btnAction)
         btnWatchAd = findViewById(R.id.btnWatchAd)
         premiumButtonsContainer = findViewById(R.id.premiumButtonsContainer)
@@ -266,108 +262,128 @@ class DetailsActivity : AppCompatActivity() {
         btnConfirmDelete = findViewById(R.id.btnConfirmDelete)
         installedIcon = findViewById(R.id.installedIcon)
         btnFixedWhatsApp = findViewById(R.id.btnFixedWhatsApp)
+        rvCached = findViewById(R.id.rv)
+        toolbarLayoutCached = findViewById(R.id.toolbarLayout)
+        bottomContainerCached = findViewById(R.id.bottomContainer)
+        tvNameCached = findViewById(R.id.name)
+        premiumIconToolbarCached = findViewById(R.id.premiumIconToolbar)
 
-        val toolbarLayout = findViewById<View>(R.id.toolbarLayout)
-        val bottomContainer = findViewById<View>(R.id.bottomContainer)
-        val tvName = findViewById<android.widget.TextView>(R.id.name)
-        
+        // RecyclerView'ı bir kez yapılandır
+        rvCached!!.layoutManager = GridLayoutManager(this, 3).apply {
+            initialPrefetchItemCount = 6
+        }
+        rvCached!!.setHasFixedSize(true)
+        rvCached!!.setItemViewCacheSize(12)
+        rvCached!!.itemAnimator = null
+        rvCached!!.setRecycledViewPool(RecyclerView.RecycledViewPool().apply { setMaxRecycledViews(0, 20) })
+    }
+
+    private fun setupUI(pack: Pack) {
+        currentPack = pack
+        isAnimatedPack = pack.isAnimated
+        isPackReady = false
+
+        // View referanslarını cache'le (ilk çağrıda)
+        cacheViews()
+
+        tvNameCached!!.text = pack.localizedName
+
         val toolbarColor = ContextCompat.getColor(this, R.color.toolbar_bg)
         val primaryColor = ContextCompat.getColor(this, R.color.primary)
         
-        toolbarLayout.setBackgroundColor(toolbarColor)
+        toolbarLayoutCached!!.setBackgroundColor(toolbarColor)
         window.statusBarColor = toolbarColor
         window.navigationBarColor = Color.BLACK
-        bottomContainer.setBackgroundColor(Color.TRANSPARENT)
+        bottomContainerCached!!.setBackgroundColor(Color.TRANSPARENT)
         
         if (pack.isPremium) {
-            tvName.setTextColor(Color.WHITE)
+            tvNameCached!!.setTextColor(Color.WHITE)
             circularProgress?.setIndicatorColor(ContextCompat.getColor(this, R.color.premium_gold))
-            findViewById<View>(R.id.premiumIconToolbar).visibility = View.VISIBLE
+            premiumIconToolbarCached!!.visibility = View.VISIBLE
         } else {
-            tvName.setTextColor(ContextCompat.getColor(this, R.color.text_on_primary_secondary))
+            tvNameCached!!.setTextColor(ContextCompat.getColor(this, R.color.text_on_primary_secondary))
             circularProgress?.setIndicatorColor(primaryColor)
-            findViewById<View>(R.id.premiumIconToolbar).visibility = View.GONE
+            premiumIconToolbarCached!!.visibility = View.GONE
         }
 
-        // Başlangıçta içeriği göster
         btnAction.isEnabled = true
         showLoadingState(false)
 
-        val rv = findViewById<RecyclerView>(R.id.rv)
-        rv.layoutManager = GridLayoutManager(this, 3).apply {
-            initialPrefetchItemCount = 3 // Sadece ilk satırı prefetch et
-        }
-        rv.setHasFixedSize(true)
-        rv.setItemViewCacheSize(3)
-        rv.itemAnimator = null
-        rv.setRecycledViewPool(RecyclerView.RecycledViewPool().apply { setMaxRecycledViews(0, 15) })
-
         val hasAccess = !pack.isPremium || PreferencesHelper.hasAccessToPack(this, pack.id)
         val storagePath = pack.storagePath
-        android.util.Log.d("DetailsDebug", "setupUI pack=${pack.id} stickers.size=${pack.stickers.size} stickers=${pack.stickers.map { it.file }}")
-        pack.stickers.forEach { sticker ->
-            if (sticker.url.isEmpty()) {
-                sticker.url = StickerRepository.getStickerDirectUrl(pack.id, sticker.file, storagePath)
-            }
-        }
 
-        // Kilitli paketlerde rastgele 3 çıkartmayı başa al (Önizleme amaçlı)
-        val displayStickers = if (!hasAccess && pack.stickers.size > 3) {
-            val shuffled = pack.stickers.shuffled()
-            val first3 = shuffled.take(3)
-            val rest = shuffled.drop(3)
-            first3 + rest
-        } else {
-            pack.stickers
-        }
-
-        // KRITIK: Tüm çıkartmaları Glide ile preload et (anında görünmeleri için)
-        // Bu sayede RecyclerView bind olduğunda görseller zaten memory cache'de olacak
-        // Preload'u devre dışı bırak — Glide onBind'de zaten async yüklüyor
-        // preloadAllStickers(pack, displayStickers)
-
-        // Şimdi adapter oluştur - URL'ler HAZIR
-        adapter = StickerAdapter(
-            packId = pack.id,
-            items = displayStickers,
-            isPackPremium = pack.isPremium,
-            hasAccess = hasAccess,
-            storagePath = pack.storagePath,
-            isAnimated = pack.isAnimated, // Animated pack için FPS koruması
-            selectedPositions = selectedIndices,
-            onStickerClick = { sticker, _ ->
-                val isLocked = !PreferencesHelper.hasAccessToPack(this, pack.id)
-                showStickerPreview(sticker, isLocked)
-            },
-            onStickerLongClick = { _, _ ->
-                if (pack.id.startsWith("custom_")) {
-                    toggleDeleteMode()
+        // URL hesaplamayı IO thread'e taşı + sticker preload'u başlat
+        lifecycleScope.launch {
+            val displayStickers = withContext(Dispatchers.Default) {
+                // URL'leri arka planda hesapla
+                pack.stickers.forEach { sticker ->
+                    if (sticker.url.isEmpty()) {
+                        sticker.url = StickerRepository.getStickerDirectUrl(pack.id, sticker.file, storagePath)
+                    }
                 }
-            },
-            onSelectionChanged = { count ->
-                if (isDeleteMode) {
-                    findViewById<android.widget.TextView>(R.id.name).text = if (count > 0) "${getString(R.string.selection_count, count)}" else getString(R.string.selection_mode_title)
+                // Kilitli paketlerde rastgele 3 çıkartmayı başa al
+                if (!hasAccess && pack.stickers.size > 3) {
+                    val shuffled = pack.stickers.shuffled()
+                    shuffled.take(3) + shuffled.drop(3)
+                } else {
+                    pack.stickers
                 }
             }
-        )
-        rv.adapter = adapter
-        isPackReady = true
 
-        // Arka planda cache'e indir (WhatsApp için gerekli) — preload bittikten sonra
-        lifecycleScope.launch(Dispatchers.IO) {
-            kotlinx.coroutines.delay(1500) // Preload'un bitmesini bekle
-            pack.stickers.forEach { sticker ->
-                try {
-                    StickerRepository.downloadStickerToCache(this@DetailsActivity, pack.id, sticker.file, storagePath)
-                } catch (_: Exception) {}
+            // Adapter'ı oluştur ve bağla (Main thread)
+            adapter = StickerAdapter(
+                packId = pack.id,
+                items = displayStickers,
+                isPackPremium = pack.isPremium,
+                hasAccess = hasAccess,
+                storagePath = pack.storagePath,
+                isAnimated = pack.isAnimated,
+                selectedPositions = selectedIndices,
+                onStickerClick = { sticker, _ ->
+                    val isLocked = !PreferencesHelper.hasAccessToPack(this@DetailsActivity, pack.id)
+                    showStickerPreview(sticker, isLocked)
+                },
+                onStickerLongClick = { _, _ ->
+                    if (pack.id.startsWith("custom_")) {
+                        toggleDeleteMode()
+                    }
+                },
+                onSelectionChanged = { count ->
+                    if (isDeleteMode) {
+                        tvNameCached?.text = if (count > 0) "${getString(R.string.selection_count, count)}" else getString(R.string.selection_mode_title)
+                    }
+                }
+            )
+            rvCached!!.adapter = adapter
+            isPackReady = true
+
+            // Preload: ilk 6 stickerı (görünen 2 satır) memory cache'e yükle
+            preloadAllStickers(pack, displayStickers)
+
+            // Arka planda cache'e indir (WhatsApp için)
+            launch(Dispatchers.IO) {
+                kotlinx.coroutines.delay(2000)
+                pack.stickers.forEach { sticker ->
+                    try {
+                        StickerRepository.downloadStickerToCache(this@DetailsActivity, pack.id, sticker.file, storagePath)
+                    } catch (_: Exception) {}
+                }
             }
         }
 
         // Butonları ayarla
         setupButtons(pack, hasAccess)
 
-        // İlgili paketleri gecikmeli yükle (ilk render'ı bloklamasın)
-        rv.post { setupRelatedPacks(pack) }
+        // İlgili paketleri gecikmeli yükle
+        rvCached!!.post { setupRelatedPacks(pack) }
+
+        // Interstitial ve view count — tamamen arka planda
+        lifecycleScope.launch(Dispatchers.IO) {
+            StickerRepository.incrementViewCount(pack.id, pack.isPremium)
+        }
+        lifecycleScope.launch {
+            AdManager.loadInterstitialAd(this@DetailsActivity)
+        }
     }
 
     private fun toggleDeleteMode() {
@@ -378,13 +394,13 @@ class DetailsActivity : AppCompatActivity() {
 
         if (isDeleteMode) {
             // Silme moduna girildi
-            findViewById<android.widget.TextView>(R.id.name).text = getString(R.string.selection_mode_title)
+            tvNameCached?.text = getString(R.string.selection_mode_title)
             // Silme butonu hemen görünür (seçim olmasa bile)
             btnConfirmDelete.visibility = View.VISIBLE
         } else {
             // Silme modundan çıkıldı
             selectedIndices.clear()
-            findViewById<android.widget.TextView>(R.id.name).text = currentPack?.localizedName
+            tvNameCached?.text = currentPack?.localizedName
             btnConfirmDelete.visibility = View.GONE
         }
     }
@@ -394,13 +410,12 @@ class DetailsActivity : AppCompatActivity() {
      * Bu sayede RecyclerView bind olduğunda görseller anında görünür
      */
     private fun preloadAllStickers(pack: Pack, stickers: List<Sticker>) {
-        // Preload işlemini arka planda paralel yap
         lifecycleScope.launch(Dispatchers.IO) {
             val glide = Glide.with(applicationContext)
             val storagePath = pack.storagePath
 
-            // İlk 6 çıkartmayı öncelikli yükle (görünen 2 satır)
-            val priorityStickers = stickers.take(6)
+            // İlk 9 çıkartmayı öncelikli yükle (görünen 3 satır)
+            val priorityStickers = stickers.take(9)
             val restStickers = stickers.drop(9)
 
             // Öncelikli olanları paralel yükle
@@ -433,7 +448,7 @@ class DetailsActivity : AppCompatActivity() {
                 if (customFile.exists()) {
                     glide.load(customFile)
                         .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.NONE)
-                        .submit(192, 192).get()
+                        .submit(384, 384).get()
                 }
             }
             else -> {
@@ -442,18 +457,18 @@ class DetailsActivity : AppCompatActivity() {
                     cachedFile.exists() && cachedFile.length() > 0 -> {
                         glide.load(cachedFile)
                             .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.NONE)
-                            .submit(192, 192).get()
+                            .submit(384, 384).get()
                     }
                     sticker.url.isNotEmpty() -> {
                         glide.load(sticker.url)
                             .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.DATA)
-                            .submit(192, 192).get()
+                            .submit(384, 384).get()
                     }
                     storagePath.isNotEmpty() -> {
                         val directUrl = StickerRepository.getStickerDirectUrl(pack.id, sticker.file, storagePath)
                         glide.load(directUrl)
                             .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.DATA)
-                            .submit(192, 192).get()
+                            .submit(384, 384).get()
                     }
                 }
             }
