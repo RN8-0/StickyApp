@@ -5611,9 +5611,15 @@ function App() {
                         <div className="flex items-center gap-4">
                           <div className="flex-1">
                             <label className="text-xs font-bold text-textSec uppercase mb-2 block">Pack Type</label>
-                            <div className="bg-primary/10 border border-primary/20 p-2.5 rounded-xl flex items-center justify-center gap-2">
-                              <RefreshCcw className="text-primary animate-spin" size={14} />
-                              <span className="text-[10px] text-primary font-black uppercase">ANIMATED (REQUIRED)</span>
+                            <div className="flex bg-hover rounded-xl p-1 gap-1">
+                              <button
+                                onClick={() => setDraftEditData((prev: any) => ({ ...prev, is_animated: false }))}
+                                className={cn("flex-1 py-2 rounded-lg text-[10px] font-black transition-all flex items-center justify-center gap-1", !draftEditData.is_animated ? "bg-blue-500 text-white" : "text-textSec")}
+                              >🖼️ STATIC</button>
+                              <button
+                                onClick={() => setDraftEditData((prev: any) => ({ ...prev, is_animated: true }))}
+                                className={cn("flex-1 py-2 rounded-lg text-[10px] font-black transition-all flex items-center justify-center gap-1", draftEditData.is_animated ? "bg-primary text-white" : "text-textSec")}
+                              >🎬 ANIMATED</button>
                             </div>
                           </div>
                           <div className="flex-1">

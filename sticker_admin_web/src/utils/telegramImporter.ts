@@ -702,121 +702,106 @@ export async function importTelegramPacks(
                 // Determine actual pack type based on processed stickers
                 const animatedCount = processedIsAnimated.filter(Boolean).length;
                 const staticCount = processedStickers.length - animatedCount;
-                let finalStickers = processedStickers;
-                let finalIsAnimated = isAnimatedPack;
+
+                // Build list of sub-packs to save (1 pack if pure, 2 if mixed)
+                const subPacks: Array<{ stickers: any[]; isAnimated: boolean; suffix: string }> = [];
 
                 if (animatedCount > 0 && staticCount > 0) {
-                    // Mixed pack! Keep the majority type, skip the minority
-                    if (animatedCount >= staticCount) {
-                        finalStickers = processedStickers.filter((_, idx) => processedIsAnimated[idx]);
-                        finalIsAnimated = true;
-                        console.log(`[TELEGRAM] Mixed pack: keeping ${animatedCount} animated, dropping ${staticCount} static`);
-                        onProgress?.({
-                            currentPack: i + 1,
-                            totalPacks: packInputs.length,
-                            currentStep: `⚠️ Mixed pack detected: keeping ${animatedCount} animated, skipping ${staticCount} static`,
-                            packName,
-                            status: 'running',
-                            completedPacks
-                        });
-                    } else {
-                        finalStickers = processedStickers.filter((_, idx) => !processedIsAnimated[idx]);
-                        finalIsAnimated = false;
-                        console.log(`[TELEGRAM] Mixed pack: keeping ${staticCount} static, dropping ${animatedCount} animated`);
-                        onProgress?.({
-                            currentPack: i + 1,
-                            totalPacks: packInputs.length,
-                            currentStep: `⚠️ Mixed pack detected: keeping ${staticCount} static, skipping ${animatedCount} animated`,
-                            packName,
-                            status: 'running',
-                            completedPacks
-                        });
-                    }
-                } else {
-                    finalIsAnimated = animatedCount > 0;
-                }
-
-                if (finalStickers.length === 0) {
+                    // Mixed pack! Split into two separate packs
+                    const animatedStickers = processedStickers.filter((_, idx) => processedIsAnimated[idx]);
+                    const staticStickers = processedStickers.filter((_, idx) => !processedIsAnimated[idx]);
+                    console.log(`[TELEGRAM] Mixed pack detected: splitting into ${animatedCount} animated + ${staticCount} static`);
                     onProgress?.({
                         currentPack: i + 1,
                         totalPacks: packInputs.length,
-                        currentStep: `⚠️ No compatible stickers for "${packName}" after filtering`,
+                        currentStep: `🔀 Mixed pack detected: splitting into ${animatedCount} animated + ${staticCount} static packs`,
+                        packName,
                         status: 'running',
                         completedPacks
                     });
-                    continue;
+                    if (animatedStickers.length > 0) subPacks.push({ stickers: animatedStickers, isAnimated: true, suffix: ' (Animated)' });
+                    if (staticStickers.length > 0) subPacks.push({ stickers: staticStickers, isAnimated: false, suffix: ' (Static)' });
+                } else {
+                    subPacks.push({ stickers: processedStickers, isAnimated: animatedCount > 0, suffix: '' });
                 }
 
-                // Create tray
-                onProgress?.({
-                    currentPack: i + 1,
-                    totalPacks: packInputs.length,
-                    currentStep: `Creating cover for "${packName}"...`,
-                    packName,
-                    status: 'running',
-                    completedPacks
-                });
+                for (const subPack of subPacks) {
+                    if (subPack.stickers.length === 0) continue;
 
-                const { trayUrl, trayFile } = await createTrayFromSticker(finalStickers, packId);
+                    const subPackName = packName + subPack.suffix;
+                    const subPackId = subPack.suffix ? `${packId}_${subPack.isAnimated ? 'anim' : 'static'}` : packId;
 
-                // Save to Firestore
-                onProgress?.({
-                    currentPack: i + 1,
-                    totalPacks: packInputs.length,
-                    currentStep: 'Saving to database...',
-                    packName,
-                    status: 'running',
-                    completedPacks
-                });
+                    // Create tray
+                    onProgress?.({
+                        currentPack: i + 1,
+                        totalPacks: packInputs.length,
+                        currentStep: `Creating cover for "${subPackName}"...`,
+                        packName: subPackName,
+                        status: 'running',
+                        completedPacks
+                    });
 
-                const packData: any = {
-                    name: packName,
-                    ...partTranslations,
-                    publisher: 'Sticky Telegram',
-                    publisher_email: 'contact@arain.digital',
-                    privacy_policy_website: '',
-                    license_agreement_website: '',
-                    category,
-                    is_premium: false,
-                    is_animated: finalIsAnimated,
-                    download_count: 0,
-                    fake_download_base: Math.floor(Math.random() * 7001) + 3000,
-                    view_count: 0,
-                    favorite_count: 0,
-                    sticker_count: finalStickers.length,
-                    image_data_version: Date.now().toString(),
-                    is_active: true,
-                    stickers: finalStickers,
-                    tray_url: trayUrl,
-                    tray_image_file: trayFile,
-                    created_at: serverTimestamp(),
-                    batch_generated: true,
-                    batch_source: 'telegram',
-                    batch_search_term: setName,
-                    telegram_set_name: setName,
-                    telegram_set_title: stickerSet.title,
-                    ...(totalParts > 1 ? { telegram_part: partNum, telegram_total_parts: totalParts } : {})
-                };
+                    const { trayUrl, trayFile } = await createTrayFromSticker(subPack.stickers, subPackId);
 
-                await setDoc(doc(db, 'draft_stickers', packId), packData);
+                    // Save to Firestore
+                    onProgress?.({
+                        currentPack: i + 1,
+                        totalPacks: packInputs.length,
+                        currentStep: `Saving "${subPackName}" to database...`,
+                        packName: subPackName,
+                        status: 'running',
+                        completedPacks
+                    });
 
-                completedPacks.push({
-                    id: packId,
-                    name: packName,
-                    stickerCount: finalStickers.length,
-                    telegramName: setName
-                });
+                    const packData: any = {
+                        name: subPackName,
+                        ...partTranslations,
+                        publisher: 'Sticky Telegram',
+                        publisher_email: 'contact@arain.digital',
+                        privacy_policy_website: '',
+                        license_agreement_website: '',
+                        category,
+                        is_premium: false,
+                        is_animated: subPack.isAnimated,
+                        download_count: 0,
+                        fake_download_base: Math.floor(Math.random() * 7001) + 3000,
+                        view_count: 0,
+                        favorite_count: 0,
+                        sticker_count: subPack.stickers.length,
+                        image_data_version: Date.now().toString(),
+                        is_active: true,
+                        stickers: subPack.stickers,
+                        tray_url: trayUrl,
+                        tray_image_file: trayFile,
+                        created_at: serverTimestamp(),
+                        batch_generated: true,
+                        batch_source: 'telegram',
+                        batch_search_term: setName,
+                        telegram_set_name: setName,
+                        telegram_set_title: stickerSet.title,
+                        ...(totalParts > 1 ? { telegram_part: partNum, telegram_total_parts: totalParts } : {})
+                    };
 
-                onProgress?.({
-                    currentPack: i + 1,
-                    totalPacks: packInputs.length,
-                    currentStep: `✅ "${packName}" imported! (${finalStickers.length} ${finalIsAnimated ? 'animated' : 'static'} stickers)`,
-                    packName,
-                    status: 'running',
-                    completedPacks
-                });
+                    await setDoc(doc(db, 'draft_stickers', subPackId), packData);
 
-                console.log(`[TELEGRAM] ✅ Imported: ${packName} (${finalStickers.length} ${finalIsAnimated ? 'animated' : 'static'} stickers from @${setName})`);
+                    completedPacks.push({
+                        id: subPackId,
+                        name: subPackName,
+                        stickerCount: subPack.stickers.length,
+                        telegramName: setName
+                    });
+
+                    onProgress?.({
+                        currentPack: i + 1,
+                        totalPacks: packInputs.length,
+                        currentStep: `✅ "${subPackName}" imported! (${subPack.stickers.length} ${subPack.isAnimated ? 'animated' : 'static'} stickers)`,
+                        packName: subPackName,
+                        status: 'running',
+                        completedPacks
+                    });
+
+                    console.log(`[TELEGRAM] ✅ Imported: ${subPackName} (${subPack.stickers.length} ${subPack.isAnimated ? 'animated' : 'static'} stickers from @${setName})`);
+                }
             }
 
             batchProcessedNames.add(setName.toLowerCase());
