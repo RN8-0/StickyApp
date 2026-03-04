@@ -41,6 +41,12 @@ class StickerAdapter(
         }
     }
 
+    private var glideManager: com.bumptech.glide.RequestManager? = null
+
+    private fun getGlide(context: android.content.Context): com.bumptech.glide.RequestManager {
+        return glideManager ?: Glide.with(context).also { glideManager = it }
+    }
+
     init {
         setHasStableIds(true)
     }
@@ -70,6 +76,11 @@ class StickerAdapter(
             context.getColor(R.color.premium_gold)
         )
         start()
+    }
+
+    override fun onViewRecycled(holder: VH) {
+        super.onViewRecycled(holder)
+        try { getGlide(holder.itemView.context).clear(holder.img) } catch (_: Exception) {}
     }
 
     override fun onBindViewHolder(h: VH, pos: Int) {
@@ -114,8 +125,8 @@ class StickerAdapter(
         // Cache'de var mı kontrol et (en hızlı)
         val cachedFile = StickerRepository.getCachedStickerPath(context, packId, sticker.file)
 
-        // Glide request manager
-        val glideManager = Glide.with(context)
+        // Glide request manager (cached)
+        val glideManager = getGlide(context)
 
         // Hide progressBar (placeholder is enough)
         h.progressBar.visibility = View.GONE
@@ -141,7 +152,7 @@ class StickerAdapter(
                 glideManager.asDrawable()
                     .load(cachedFile)
                     .signature(ObjectKey(cachedFile.lastModified()))
-                    .override(384, 384)
+                    .override(256, 256)
                     .placeholder(R.drawable.sticker_placeholder)
                     .error(R.drawable.sticker_placeholder)
                     .diskCacheStrategy(DiskCacheStrategy.AUTOMATIC)
@@ -159,7 +170,7 @@ class StickerAdapter(
 
                 // Static stickers için boyut optimize et
                 if (!isAnimated) {
-                    request.override(384, 384).dontAnimate()
+                    request.override(256, 256).dontAnimate()
                 }
                 request.into(h.img)
             }
@@ -174,7 +185,7 @@ class StickerAdapter(
                     .listener(clearBgListener)
 
                 if (!isAnimated) {
-                    request.override(384, 384).dontAnimate()
+                    request.override(256, 256).dontAnimate()
                 }
                 request.into(h.img)
             }

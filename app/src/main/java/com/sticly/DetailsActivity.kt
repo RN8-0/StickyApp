@@ -18,6 +18,7 @@ import android.view.animation.OvershootInterpolator
 import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.LinearLayout
+import androidx.activity.addCallback
 import android.widget.*
 import androidx.core.view.ViewCompat
 import androidx.activity.result.contract.ActivityResultContracts
@@ -116,6 +117,7 @@ class DetailsActivity : AppCompatActivity() {
             val intent = Intent(this, MainActivity::class.java)
             intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
             startActivity(intent)
+            overridePendingTransition(R.anim.slide_in_left, R.anim.slide_out_right)
             finish()
         }
 
@@ -135,6 +137,12 @@ class DetailsActivity : AppCompatActivity() {
         window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS)
         window.addFlags(android.view.WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
         window.statusBarColor = ContextCompat.getColor(this, R.color.toolbar_bg)
+
+        // Geri tuşuna yumuşak geçiş animasyonu
+        onBackPressedDispatcher.addCallback(this) {
+            finish()
+            overridePendingTransition(R.anim.slide_in_left, R.anim.slide_out_right)
+        }
         
         // İlk yüklemeyi onResume halledecek, burada yapmaya gerek yok
         setupEdgeToEdge()

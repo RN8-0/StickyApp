@@ -495,12 +495,23 @@ class MainActivity : AppCompatActivity() {
         viewPool.setMaxRecycledViews(0, 20) // TYPE_PACK
         viewPool.setMaxRecycledViews(1, 5)  // TYPE_AD
         rv.setRecycledViewPool(viewPool)
+        // Hızlı scroll sırasında Glide isteklerini duraklat — jank azaltır
+        rv.addOnScrollListener(object : RecyclerView.OnScrollListener() {
+            override fun onScrollStateChanged(recyclerView: RecyclerView, newState: Int) {
+                if (newState == RecyclerView.SCROLL_STATE_SETTLING || newState == RecyclerView.SCROLL_STATE_DRAGGING) {
+                    com.bumptech.glide.Glide.with(this@MainActivity).pauseRequests()
+                } else {
+                    com.bumptech.glide.Glide.with(this@MainActivity).resumeRequests()
+                }
+            }
+        })
         adapter = PackAdapter(allPacks, { pack ->
             sessionPackOpenCount++
             if (sessionPackOpenCount == 3) {
                 StickyApp.appOpenAdInstance?.tryShowAd()
             }
             startActivity(Intent(this, DetailsActivity::class.java).putExtra("id", pack.id))
+            overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left)
         }, {
             if (currentFilter == FilterType.FAVORITES) applyFilters()
         }, { pack ->
@@ -586,7 +597,7 @@ class MainActivity : AppCompatActivity() {
             categoryChipGroup.visibility = View.GONE
             hideHomeSections()
             btnAddStickerHeader.visibility = View.GONE
-            btnPremiumHeaderCached?.visibility = View.GONE
+            btnPremiumHeaderCached?.visibility = if (PreferencesHelper.isPremium(this)) View.GONE else View.VISIBLE
             menuBtn.visibility = View.VISIBLE
             toolbarTitle.text = "✨ Sticky AI"
             toolbarSubtitle.visibility = View.GONE
@@ -1659,11 +1670,13 @@ Rules:
                 sessionPackOpenCount++
                 if (sessionPackOpenCount == 3) StickyApp.appOpenAdInstance?.tryShowAd()
                 startActivity(Intent(this, DetailsActivity::class.java).putExtra("id", pack.id))
+                overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left)
             },
             onAddClick = { pack ->
                 sessionPackOpenCount++
                 if (sessionPackOpenCount == 3) StickyApp.appOpenAdInstance?.tryShowAd()
                 startActivity(Intent(this, DetailsActivity::class.java).putExtra("id", pack.id))
+                overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left)
             }
         )
         rvRegional.layoutManager = LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false)
@@ -1727,6 +1740,7 @@ Rules:
             sessionPackOpenCount++
             if (sessionPackOpenCount == 3) StickyApp.appOpenAdInstance?.tryShowAd()
             startActivity(Intent(this, DetailsActivity::class.java).putExtra("id", pack.id))
+            overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left)
         }
         rvStories.layoutManager = LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false)
         rvStories.setHasFixedSize(true)

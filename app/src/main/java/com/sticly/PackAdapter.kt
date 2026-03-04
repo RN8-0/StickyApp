@@ -103,7 +103,7 @@ class PackAdapter(
 
     companion object {
         private const val STICKER_PREVIEW_COUNT = 5
-        private const val GLIDE_OVERRIDE_SIZE = 256
+        private const val GLIDE_OVERRIDE_SIZE = 128
 
         // Single instance. DateFormat is NOT thread-safe, but PackAdapter only runs on Main Thread
         private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
