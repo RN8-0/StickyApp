@@ -389,7 +389,8 @@ function App() {
   const [draftLoading, setDraftLoading] = useState(false);
   const [selectedDraft, setSelectedDraft] = useState<StickerPack | null>(null);
   const [showDraftEditModal, setShowDraftEditModal] = useState(false);
-  const [draftEditData, setDraftEditData] = useState<Partial<StickerPack>>({});
+  const [draftEditData, setDraftEditData] = useState<any>({});
+  const [draftLangSearch, setDraftLangSearch] = useState('');
   const [draftPublishing, setDraftPublishing] = useState<string | null>(null);
   const [draftDeleting, setDraftDeleting] = useState<string | null>(null);
   const [deleteAllProgress, setDeleteAllProgress] = useState<{ current: number; total: number } | null>(null);
@@ -1264,8 +1265,8 @@ function App() {
     }
   };
 
-  const handleAutoTranslate = async (isEdit: boolean) => {
-    const textToTranslate = isEdit ? editFormData.name : newPackData.name;
+  const handleAutoTranslate = async (isEdit: boolean, isDraft: boolean = false) => {
+    const textToTranslate = isDraft ? draftEditData.name : (isEdit ? editFormData.name : newPackData.name);
     if (!textToTranslate) {
       alert("Please enter a main name (English) first.");
       return;
@@ -1274,7 +1275,9 @@ function App() {
     setIsTranslating(true);
     try {
       const translations = await translateTextAllLanguages(textToTranslate);
-      if (isEdit) {
+      if (isDraft) {
+        setDraftEditData((prev: any) => ({ ...prev, ...translations }));
+      } else if (isEdit) {
         setEditFormData((prev: any) => ({ ...prev, ...translations }));
       } else {
         setNewPackData((prev: any) => ({ ...prev, ...translations }));
@@ -5278,13 +5281,25 @@ function App() {
                                 <button
                                   onClick={() => {
                                     setSelectedDraft(draft);
-                                    setDraftEditData({
+                                    const initData: any = {
                                       name: draft.name,
+                                      name_en: (draft as any).name_en || draft.name,
                                       category: draft.category,
                                       is_premium: draft.is_premium,
                                       is_animated: draft.is_animated,
                                       is_active: draft.is_active,
+                                      publisher: (draft as any).publisher || 'Sticky Telegram',
+                                      publisher_email: (draft as any).publisher_email || '',
+                                      privacy_policy_website: (draft as any).privacy_policy_website || '',
+                                      license_agreement_website: (draft as any).license_agreement_website || '',
+                                    };
+                                    // Copy existing translations
+                                    TARGET_LANGUAGES.forEach(lang => {
+                                      const key = `name_${lang.code}`;
+                                      if ((draft as any)[key]) initData[key] = (draft as any)[key];
                                     });
+                                    setDraftEditData(initData);
+                                    setDraftLangSearch('');
                                     setShowDraftEditModal(true);
                                   }}
                                   className="px-4 py-2.5 bg-white/5 hover:bg-white/10 text-textSec hover:text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2"
@@ -5418,94 +5433,224 @@ function App() {
                   {/* Draft Edit Modal */}
                   {showDraftEditModal && selectedDraft && (
                     <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onClick={() => setShowDraftEditModal(false)}>
-                      <div className="bg-card border border-white/10 rounded-2xl p-6 w-full max-w-lg space-y-5 shadow-2xl" onClick={e => e.stopPropagation()}>
+                      <div className="bg-card border border-white/10 rounded-2xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto space-y-6 shadow-2xl" onClick={e => e.stopPropagation()}>
                         <div className="flex items-center justify-between">
-                          <h3 className="text-lg font-black text-white">Edit Draft</h3>
+                          <h3 className="text-lg font-black text-white">Edit Draft Details</h3>
                           <button onClick={() => setShowDraftEditModal(false)} className="w-8 h-8 bg-white/5 rounded-lg flex items-center justify-center text-textSec hover:text-white hover:bg-white/10">
                             <X size={16} />
                           </button>
                         </div>
 
-                        <div className="space-y-4">
-                          <div>
-                            <label className="text-[10px] font-black text-textSec uppercase tracking-widest mb-1.5 block">Pack Name (EN)</label>
-                            <div className="flex gap-2">
-                              <input
-                                type="text"
-                                value={draftEditData.name || ''}
-                                onChange={e => setDraftEditData(prev => ({ ...prev, name: e.target.value }))}
-                                className="flex-1 bg-background border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:ring-2 focus:ring-primary"
-                              />
-                              <button
-                                type="button"
-                                onClick={async () => {
-                                  const newName = await generateCreativeName(draftEditData.name || '');
-                                  setDraftEditData(prev => ({ ...prev, name: newName }));
-                                }}
-                                className="px-3 bg-accent/10 border border-accent/20 hover:bg-accent/20 hover:border-accent/50 text-accent rounded-xl transition-all flex items-center justify-center active:scale-95 group"
-                                title="Suggest Creative Name"
-                              >
-                                <Wand2 size={18} className="group-hover:rotate-12 transition-transform" />
-                              </button>
+                        {/* Multi-Language Support */}
+                        <div className="bg-gradient-to-r from-primary/10 to-transparent border border-primary/20 rounded-2xl p-4 space-y-4">
+                          <div className="flex items-center gap-2 mb-2">
+                            <Globe className="text-primary" size={20} />
+                            <span className="text-sm font-bold text-white">Multi-Language Support</span>
+                            <span className="text-xs text-textSec ml-auto">Displayed based on selected language in the app</span>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="col-span-2">
+                              {/* Header */}
+                              <div className="flex items-center justify-between mb-3">
+                                <label className="flex items-center gap-2 text-primary font-bold text-sm">
+                                  <Globe size={18} />
+                                  Multi-Language Support ({TARGET_LANGUAGES.length} languages)
+                                </label>
+                                <button
+                                  onClick={() => handleAutoTranslate(false, true)}
+                                  disabled={isTranslating || !draftEditData.name}
+                                  type="button"
+                                  className="px-4 py-2 bg-gradient-to-r from-primary to-accent text-white rounded-xl flex items-center gap-2 hover:opacity-90 transition-all font-bold text-sm disabled:opacity-40 disabled:cursor-not-allowed shadow-lg"
+                                >
+                                  {isTranslating ? <RefreshCcw size={16} className="animate-spin" /> : <Sparkles size={16} />}
+                                  {isTranslating ? 'AI Translating...' : '✨ Auto Translate'}
+                                </button>
+                              </div>
+
+                              {/* English Name */}
+                              <div className="mb-3">
+                                <label className="flex items-center gap-2 text-xs font-bold text-white/80 mb-1.5">
+                                  🇬🇧 English (Main Name) <span className="text-red-400">*</span>
+                                </label>
+                                <div className="flex gap-2">
+                                  <input
+                                    type="text"
+                                    placeholder="e.g. Funny Cats, Love Stickers..."
+                                    className="flex-1 bg-bgSecondary border-2 border-primary/50 rounded-xl p-3 text-white placeholder:text-white/30 text-base focus:border-primary outline-none transition-all"
+                                    value={draftEditData.name || ''}
+                                    onChange={(e) => setDraftEditData((prev: any) => ({ ...prev, name: e.target.value, name_en: e.target.value }))}
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={async () => {
+                                      const newName = await generateCreativeName(draftEditData.name || "");
+                                      setDraftEditData((prev: any) => ({ ...prev, name: newName, name_en: newName }));
+                                    }}
+                                    className="px-4 bg-accent/10 border-2 border-accent/20 hover:bg-accent/20 hover:border-accent/50 text-accent rounded-xl transition-all flex items-center justify-center active:scale-95 group"
+                                    title="Suggest Creative Name"
+                                  >
+                                    <Wand2 size={24} className="group-hover:rotate-12 transition-transform" />
+                                  </button>
+                                </div>
+                              </div>
+
+                              {/* Language Search */}
+                              <div className="relative mb-3">
+                                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-textSec" />
+                                <input
+                                  type="text"
+                                  placeholder="Dil ara... (Turkish, German, Japanese...)"
+                                  className="w-full bg-bgSecondary border border-white/10 rounded-xl py-2.5 pl-10 pr-4 text-sm text-white placeholder:text-white/30"
+                                  value={draftLangSearch}
+                                  onChange={(e) => setDraftLangSearch(e.target.value)}
+                                />
+                              </div>
+
+                              {/* Fill Status */}
+                              <div className="flex items-center gap-4 mb-3 text-xs">
+                                <span className="flex items-center gap-1.5">
+                                  <span className="w-2 h-2 rounded-full bg-violet-500"></span>
+                                  Dolu: {TARGET_LANGUAGES.filter(l => draftEditData[`name_${l.code}`]).length}
+                                </span>
+                                <span className="flex items-center gap-1.5">
+                                  <span className="w-2 h-2 rounded-full bg-white/20"></span>
+                                  Empty: {TARGET_LANGUAGES.filter(l => !draftEditData[`name_${l.code}`]).length}
+                                </span>
+                              </div>
+
+                              {/* Language List */}
+                              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-[280px] overflow-y-auto pr-2 p-3 bg-black/20 rounded-xl border border-white/5">
+                                {TARGET_LANGUAGES
+                                  .filter(lang => lang.code !== 'en')
+                                  .filter(lang =>
+                                    draftLangSearch === '' ||
+                                    lang.name.toLowerCase().includes(draftLangSearch.toLowerCase()) ||
+                                    lang.code.toLowerCase().includes(draftLangSearch.toLowerCase())
+                                  )
+                                  .map((lang) => {
+                                    const value = draftEditData[`name_${lang.code}`] || '';
+                                    const isFilled = value.length > 0;
+                                    return (
+                                      <div key={lang.code} className="space-y-1">
+                                        <label className={`flex items-center gap-1.5 text-xs font-medium ${isFilled ? 'text-violet-400' : 'text-textSec'}`}>
+                                          <span>{lang.flag}</span> {lang.name}
+                                          {isFilled && <Check size={12} className="text-violet-400" />}
+                                        </label>
+                                        <input
+                                          type="text"
+                                          placeholder={`${lang.name}...`}
+                                          className={`w-full bg-bgSecondary border rounded-lg p-2 text-sm text-white placeholder:text-white/20 ${isFilled ? 'border-violet-500/30' : 'border-white/10'}`}
+                                          value={value}
+                                          onChange={(e) => setDraftEditData((prev: any) => ({ ...prev, [`name_${lang.code}`]: e.target.value }))}
+                                        />
+                                      </div>
+                                    );
+                                  })}
+                              </div>
                             </div>
-                          </div>
-                          <div>
-                            <label className="text-[10px] font-black text-textSec uppercase tracking-widest mb-1.5 block">Category</label>
-                            <select
-                              value={draftEditData.category || 'humor'}
-                              onChange={e => setDraftEditData(prev => ({ ...prev, category: e.target.value }))}
-                              className="w-full bg-background border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:ring-2 focus:ring-primary"
-                            >
-                              {['humor', 'love', 'greetings', 'animals', 'food', 'sports', 'movies', 'music', 'gaming', 'memes', 'reactions', 'cute', 'holidays', 'other'].map(cat => (
-                                <option key={cat} value={cat}>{cat.charAt(0).toUpperCase() + cat.slice(1)}</option>
-                              ))}
-                            </select>
-                          </div>
-                          <div className="flex items-center gap-6">
-                            <label className="flex items-center gap-2 cursor-pointer">
-                              <input
-                                type="checkbox"
-                                checked={draftEditData.is_premium || false}
-                                onChange={e => setDraftEditData(prev => ({ ...prev, is_premium: e.target.checked }))}
-                                className="w-4 h-4 rounded accent-yellow-500"
-                              />
-                              <span className="text-xs font-bold text-white">Premium</span>
-                            </label>
-                            <label className="flex items-center gap-2 cursor-pointer">
-                              <input
-                                type="checkbox"
-                                checked={draftEditData.is_animated ?? true}
-                                onChange={e => setDraftEditData(prev => ({ ...prev, is_animated: e.target.checked }))}
-                                className="w-4 h-4 rounded accent-blue-500"
-                              />
-                              <span className="text-xs font-bold text-white">Animated</span>
-                            </label>
-                            <label className="flex items-center gap-2 cursor-pointer">
-                              <input
-                                type="checkbox"
-                                checked={draftEditData.is_active ?? true}
-                                onChange={e => setDraftEditData(prev => ({ ...prev, is_active: e.target.checked }))}
-                                className="w-4 h-4 rounded accent-violet-500"
-                              />
-                              <span className="text-xs font-bold text-white">Active</span>
-                            </label>
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-3 pt-2">
-                          <button
-                            onClick={() => setShowDraftEditModal(false)}
-                            className="flex-1 py-3 bg-white/5 hover:bg-white/10 text-textSec rounded-xl font-black text-xs uppercase tracking-widest transition-all"
-                          >
-                            Cancel
-                          </button>
-                          <button
-                            onClick={updateDraftPack}
-                            className="flex-1 py-3 bg-primary text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-lg shadow-primary/20 hover:translate-y-[-1px] transition-all flex items-center justify-center gap-2"
-                          >
-                            <Save size={14} /> Save
-                          </button>
+                        {/* Publisher */}
+                        <Input
+                          label="Publisher"
+                          value={draftEditData.publisher || ''}
+                          onChange={(e: any) => setDraftEditData((prev: any) => ({ ...prev, publisher: e.target.value }))}
+                        />
+                        <Input
+                          label="Publisher Email"
+                          value={draftEditData.publisher_email || ''}
+                          onChange={(e: any) => setDraftEditData((prev: any) => ({ ...prev, publisher_email: e.target.value }))}
+                        />
+                        <div className="grid grid-cols-2 gap-4">
+                          <Input
+                            label="Privacy Policy Link"
+                            value={draftEditData.privacy_policy_website || ''}
+                            onChange={(e: any) => setDraftEditData((prev: any) => ({ ...prev, privacy_policy_website: e.target.value }))}
+                          />
+                          <Input
+                            label="License Agreement Link"
+                            value={draftEditData.license_agreement_website || ''}
+                            onChange={(e: any) => setDraftEditData((prev: any) => ({ ...prev, license_agreement_website: e.target.value }))}
+                          />
                         </div>
+
+                        {/* Category */}
+                        <div className="flex items-center gap-4">
+                          <div className="flex-1">
+                            <label className="text-xs font-bold text-textSec uppercase mb-2 block">Category</label>
+                            <select
+                              className="w-full bg-hover rounded-xl px-4 py-2.5 text-sm outline-none border-none text-white cursor-pointer"
+                              value={draftEditData.category || 'humor'}
+                              onChange={(e) => setDraftEditData((prev: any) => ({ ...prev, category: e.target.value }))}
+                            >
+                              {CATEGORIES.map(cat => (
+                                <option key={cat.id} value={cat.id}>{cat.emoji} {cat.name}</option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+
+                        {/* Premium Toggle */}
+                        <div>
+                          <label className="text-xs font-bold text-textSec uppercase mb-2 block">Premium Status</label>
+                          <div className="flex bg-hover rounded-xl p-1 gap-1">
+                            <button
+                              onClick={() => setDraftEditData((prev: any) => ({ ...prev, is_premium: false }))}
+                              className={cn("flex-1 py-2.5 rounded-lg text-[10px] font-black transition-all flex items-center justify-center gap-1.5", !draftEditData.is_premium ? "bg-primary text-white" : "text-textSec")}
+                            >🆓 FREE</button>
+                            <button
+                              onClick={() => setDraftEditData((prev: any) => ({ ...prev, is_premium: true }))}
+                              className={cn("flex-1 py-2.5 rounded-lg text-[10px] font-black transition-all flex items-center justify-center gap-1.5", draftEditData.is_premium ? "bg-yellow-500 text-black" : "text-textSec")}
+                            >💎 PREMIUM</button>
+                          </div>
+                        </div>
+
+                        {/* Pack Type + Status + Popular */}
+                        <div className="flex items-center gap-4">
+                          <div className="flex-1">
+                            <label className="text-xs font-bold text-textSec uppercase mb-2 block">Pack Type</label>
+                            <div className="bg-primary/10 border border-primary/20 p-2.5 rounded-xl flex items-center justify-center gap-2">
+                              <RefreshCcw className="text-primary animate-spin" size={14} />
+                              <span className="text-[10px] text-primary font-black uppercase">ANIMATED (REQUIRED)</span>
+                            </div>
+                          </div>
+                          <div className="flex-1">
+                            <label className="text-xs font-bold text-textSec uppercase mb-2 block">Status (Visibility)</label>
+                            <div className="flex bg-hover rounded-xl p-1 gap-1">
+                              <button
+                                onClick={() => setDraftEditData((prev: any) => ({ ...prev, is_active: true }))}
+                                className={cn("flex-1 py-2 rounded-lg text-[10px] font-black transition-all", draftEditData.is_active !== false ? "bg-primary text-white" : "text-textSec")}
+                              >ACTIVE</button>
+                              <button
+                                onClick={() => setDraftEditData((prev: any) => ({ ...prev, is_active: false }))}
+                                className={cn("flex-1 py-2 rounded-lg text-[10px] font-black transition-all", draftEditData.is_active === false ? "bg-danger text-white" : "text-textSec")}
+                              >INACTIVE (HIDDEN)</button>
+                            </div>
+                          </div>
+                          <div className="flex-1">
+                            <label className="text-xs font-bold text-textSec uppercase mb-2 block">Popular (Home Page)</label>
+                            <div className="flex bg-hover rounded-xl p-1 gap-1">
+                              <button
+                                onClick={() => setDraftEditData((prev: any) => ({ ...prev, is_popular: true }))}
+                                className={cn("flex-1 py-2 rounded-lg text-[10px] font-black transition-all", draftEditData.is_popular === true ? "bg-yellow-500 text-white" : "text-textSec")}
+                              >⭐ POPULAR</button>
+                              <button
+                                onClick={() => setDraftEditData((prev: any) => ({ ...prev, is_popular: false }))}
+                                className={cn("flex-1 py-2 rounded-lg text-[10px] font-black transition-all", draftEditData.is_popular !== true ? "bg-hover text-textSec border border-white/10" : "text-textSec")}
+                              >NORMAL</button>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Save Button */}
+                        <button
+                          onClick={updateDraftPack}
+                          className="w-full bg-primary py-4 rounded-2xl font-black shadow-lg shadow-primary/20 flex items-center justify-center gap-2 hover:scale-[1.01] active:scale-95 transition-all text-white"
+                        >
+                          <Save size={20} /> SAVE CHANGES
+                        </button>
                       </div>
                     </div>
                   )}
