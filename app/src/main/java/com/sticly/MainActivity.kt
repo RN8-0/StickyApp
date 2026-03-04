@@ -1092,67 +1092,79 @@ Rules:
 
     private suspend fun aiGenerateImage(prompt: String, onPoll: () -> Unit): Bitmap? =
         withContext(Dispatchers.IO) {
-            // Race models in parallel on api.airforce — first success wins
-            try {
-                coroutineScope {
-                    val flux = async { aiApiAirforceRequest(prompt, "flux-2-dev") }
-                    val zimg = async { aiApiAirforceRequest(prompt, "z-image") }
-
-                    // Wait for first success
-                    val fluxResult = flux.await()
-                    if (fluxResult != null) { zimg.cancel(); return@coroutineScope fluxResult }
-
-                    zimg.await()
+            // Try models sequentially (api.airforce has 1 req/sec global rate limit)
+            for (model in listOf("flux-2-dev", "z-image")) {
+                try {
+                    val result = aiApiAirforceRequest(prompt, model)
+                    if (result != null) return@withContext result
+                    delay(1500) // respect rate limit before next attempt
+                } catch (_: Exception) {
+                    delay(1500)
                 }
-            } catch (_: Exception) { null }
+            }
+            null
         }
 
     private suspend fun aiApiAirforceRequest(prompt: String, model: String): Bitmap? =
         withContext(Dispatchers.IO) {
-            try {
-                android.util.Log.d("AiGenerate", "api.airforce ($model) request")
-                val body = JSONObject().apply {
-                    put("model", model)
-                    put("prompt", prompt)
-                    put("size", "1024x1024")
-                    put("n", 1)
+            // Retry up to 3 times on rate limit (429)
+            for (attempt in 1..3) {
+                try {
+                    android.util.Log.d("AiGenerate", "api.airforce ($model) request attempt=$attempt")
+                    val body = JSONObject().apply {
+                        put("model", model)
+                        put("prompt", prompt)
+                        put("size", "512x512")
+                        put("n", 1)
+                    }
+
+                    val conn = URL("https://api.airforce/v1/images/generations").openConnection() as HttpURLConnection
+                    conn.requestMethod = "POST"
+                    conn.setRequestProperty("Content-Type", "application/json")
+                    conn.connectTimeout = 10000
+                    conn.readTimeout = 20000
+                    conn.doOutput = true
+                    OutputStreamWriter(conn.outputStream).use { it.write(body.toString()) }
+
+                    val code = conn.responseCode
+                    android.util.Log.d("AiGenerate", "api.airforce ($model) response: $code")
+                    if (code == 429) {
+                        conn.disconnect()
+                        delay(2000L * attempt) // back off: 2s, 4s, 6s
+                        continue
+                    }
+                    if (code != 200) { conn.disconnect(); return@withContext null }
+
+                    val response = BufferedReader(InputStreamReader(conn.inputStream)).use { it.readText() }
+                    conn.disconnect()
+
+                    val data = JSONObject(response).optJSONArray("data")
+                    if (data == null || data.length() == 0) {
+                        delay(2000)
+                        continue
+                    }
+
+                    val imageUrl = data.getJSONObject(0).optString("url", "")
+                    if (imageUrl.isEmpty()) return@withContext null
+
+                    android.util.Log.d("AiGenerate", "api.airforce ($model) downloading: $imageUrl")
+                    val imgConn = URL(imageUrl).openConnection() as HttpURLConnection
+                    imgConn.connectTimeout = 10000
+                    imgConn.readTimeout = 15000
+                    imgConn.instanceFollowRedirects = true
+
+                    val bitmap = if (imgConn.responseCode == 200) BitmapFactory.decodeStream(imgConn.inputStream) else null
+                    imgConn.disconnect()
+                    if (bitmap != null) {
+                        android.util.Log.d("AiGenerate", "api.airforce ($model) success!")
+                        return@withContext bitmap
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.e("AiGenerate", "api.airforce $model attempt=$attempt failed: ${e.message}")
+                    if (attempt < 3) delay(2000)
                 }
-
-                val conn = URL("https://api.airforce/v1/images/generations").openConnection() as HttpURLConnection
-                conn.requestMethod = "POST"
-                conn.setRequestProperty("Content-Type", "application/json")
-                conn.connectTimeout = 10000
-                conn.readTimeout = 20000
-                conn.doOutput = true
-                OutputStreamWriter(conn.outputStream).use { it.write(body.toString()) }
-
-                val code = conn.responseCode
-                android.util.Log.d("AiGenerate", "api.airforce ($model) response: $code")
-                if (code != 200) { conn.disconnect(); return@withContext null }
-
-                val response = BufferedReader(InputStreamReader(conn.inputStream)).use { it.readText() }
-                conn.disconnect()
-
-                val data = JSONObject(response).optJSONArray("data")
-                if (data == null || data.length() == 0) return@withContext null
-
-                val imageUrl = data.getJSONObject(0).optString("url", "")
-                if (imageUrl.isEmpty()) return@withContext null
-
-                android.util.Log.d("AiGenerate", "api.airforce ($model) downloading: $imageUrl")
-                val imgConn = URL(imageUrl).openConnection() as HttpURLConnection
-                imgConn.connectTimeout = 10000
-                imgConn.readTimeout = 15000
-                imgConn.instanceFollowRedirects = true
-
-                val bitmap = if (imgConn.responseCode == 200) BitmapFactory.decodeStream(imgConn.inputStream) else null
-                imgConn.disconnect()
-                if (bitmap != null) android.util.Log.d("AiGenerate", "api.airforce ($model) success!")
-                bitmap
-            } catch (e: Exception) {
-                android.util.Log.e("AiGenerate", "api.airforce $model failed: ${e.message}")
-                null
             }
+            null
         }
 
     private suspend fun aiProcessSticker(source: Bitmap): Bitmap =
