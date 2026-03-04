@@ -430,7 +430,7 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
     // ==================== Image Loading ====================
 
     private fun showImageSourceDialog() {
-        val dialog = BottomSheetDialog(this)
+        val dialog = BottomSheetDialog(this, R.style.RoundedBottomSheetDialog)
         val view = layoutInflater.inflate(R.layout.dialog_image_source, null)
         dialog.setContentView(view)
 
@@ -966,7 +966,7 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
     // ==================== Text ====================
 
     private fun showTextDialog() {
-        val dialog = BottomSheetDialog(this)
+        val dialog = BottomSheetDialog(this, R.style.RoundedBottomSheetDialog)
         val view = layoutInflater.inflate(R.layout.dialog_add_text, null)
         dialog.setContentView(view)
 
@@ -1271,7 +1271,7 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
         // Apply border to current image
         val bitmap = currentBitmap ?: return
 
-        val dialog = BottomSheetDialog(this)
+        val dialog = BottomSheetDialog(this, R.style.RoundedBottomSheetDialog)
         val view = layoutInflater.inflate(R.layout.dialog_border_options, null)
         dialog.setContentView(view)
 
@@ -1343,6 +1343,7 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
     // ==================== Save Sticker ====================
 
     private fun saveSticker() {
+        resetCanvasZoom()
         showLoading()
 
         // Geçici olarak arka planı kaldır (Şeffaflık için)
@@ -1576,6 +1577,17 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
     }
 
     @SuppressLint("ClickableViewAccessibility")
+    // Canvas zoom/pan state
+    private var canvasScale = 1f
+    private var canvasPivotX = 0f
+    private var canvasPivotY = 0f
+    private var canvasTransX = 0f
+    private var canvasTransY = 0f
+    private var canvasStartTransX = 0f
+    private var canvasStartTransY = 0f
+    private var canvasStartMidX = 0f
+    private var canvasStartMidY = 0f
+
     private fun setupMultiTouchGestures() {
         photoEditorView.setOnTouchListener { _, event ->
             when (event.actionMasked) {
@@ -1584,30 +1596,49 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
                         val midX = (event.getX(0) + event.getX(1)) / 2f
                         val midY = (event.getY(0) + event.getY(1)) / 2f
                         gestureTargetView = findNearestOverlayView(midX, midY)
+                        isMultiTouchActive = true
+                        gestureStartDist = getSpacing(event)
                         if (gestureTargetView != null) {
-                            isMultiTouchActive = true
-                            gestureStartDist = getSpacing(event)
                             gestureStartScale = gestureTargetView!!.scaleX
                             gestureStartAngle = getAngle(event)
                             gestureStartRotation = gestureTargetView!!.rotation
-                            photoEditorView.parent?.requestDisallowInterceptTouchEvent(true)
+                        } else {
+                            // Canvas zoom/pan
+                            gestureStartScale = canvasScale
+                            canvasStartTransX = canvasTransX
+                            canvasStartTransY = canvasTransY
+                            canvasStartMidX = midX
+                            canvasStartMidY = midY
+                            canvasPivotX = midX
+                            canvasPivotY = midY
                         }
+                        photoEditorView.parent?.requestDisallowInterceptTouchEvent(true)
                     }
                     isMultiTouchActive
                 }
                 MotionEvent.ACTION_MOVE -> {
-                    if (isMultiTouchActive && event.pointerCount >= 2 && gestureTargetView != null) {
-                        val v = gestureTargetView!!
-                        // Pinch to scale
+                    if (isMultiTouchActive && event.pointerCount >= 2) {
                         val newDist = getSpacing(event)
-                        if (gestureStartDist > 10f) {
-                            val scale = (gestureStartScale * newDist / gestureStartDist).coerceIn(0.2f, 5f)
-                            v.scaleX = scale
-                            v.scaleY = scale
+                        if (gestureTargetView != null) {
+                            val v = gestureTargetView!!
+                            if (gestureStartDist > 10f) {
+                                val scale = (gestureStartScale * newDist / gestureStartDist).coerceIn(0.2f, 5f)
+                                v.scaleX = scale
+                                v.scaleY = scale
+                            }
+                            val newAngle = getAngle(event)
+                            v.rotation = gestureStartRotation + (newAngle - gestureStartAngle)
+                        } else {
+                            // Canvas zoom + pan
+                            if (gestureStartDist > 10f) {
+                                canvasScale = (gestureStartScale * newDist / gestureStartDist).coerceIn(1f, 4f)
+                            }
+                            val midX = (event.getX(0) + event.getX(1)) / 2f
+                            val midY = (event.getY(0) + event.getY(1)) / 2f
+                            canvasTransX = canvasStartTransX + (midX - canvasStartMidX)
+                            canvasTransY = canvasStartTransY + (midY - canvasStartMidY)
+                            applyCanvasTransform()
                         }
-                        // Rotate
-                        val newAngle = getAngle(event)
-                        v.rotation = gestureStartRotation + (newAngle - gestureStartAngle)
                     }
                     isMultiTouchActive
                 }
@@ -1622,6 +1653,25 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
                 else -> false
             }
         }
+    }
+
+    private fun applyCanvasTransform() {
+        photoEditorView.pivotX = canvasPivotX
+        photoEditorView.pivotY = canvasPivotY
+        photoEditorView.scaleX = canvasScale
+        photoEditorView.scaleY = canvasScale
+        photoEditorView.translationX = canvasTransX
+        photoEditorView.translationY = canvasTransY
+    }
+
+    fun resetCanvasZoom() {
+        canvasScale = 1f
+        canvasTransX = 0f
+        canvasTransY = 0f
+        photoEditorView.animate()
+            .scaleX(1f).scaleY(1f)
+            .translationX(0f).translationY(0f)
+            .setDuration(200).start()
     }
 
     private fun findNearestOverlayView(touchX: Float, touchY: Float): View? {
@@ -1685,7 +1735,7 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
     }
     
     private fun showEditTextDialog(textView: View, currentText: String, currentColor: Int) {
-        val dialog = BottomSheetDialog(this)
+        val dialog = BottomSheetDialog(this, R.style.RoundedBottomSheetDialog)
         val view = layoutInflater.inflate(R.layout.dialog_add_text, null)
         dialog.setContentView(view)
 
@@ -1882,7 +1932,6 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
             historyIndex--
             currentBitmap = bitmapHistory[historyIndex].copy(Bitmap.Config.ARGB_8888, true)
             photoEditorView.source.setImageBitmap(currentBitmap)
-            photoEditor.clearAllViews()
         }
     }
 
@@ -1891,38 +1940,39 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
             historyIndex++
             currentBitmap = bitmapHistory[historyIndex].copy(Bitmap.Config.ARGB_8888, true)
             photoEditorView.source.setImageBitmap(currentBitmap)
-            photoEditor.clearAllViews()
         }
     }
 
     private fun undoSticker() {
-        // Try bitmap history first (eraser, bg removal, etc.)
-        if (historyIndex > 0) {
-            undoBitmap()
-        } else {
-            // Fall back to PhotoEditor undo (brush strokes, text, stickers)
-            photoEditor.undo()
+        // Try PhotoEditor undo first (brush, text, emoji — most recent actions)
+        if (!photoEditor.undo()) {
+            // If PhotoEditor has nothing to undo, try bitmap history
+            if (historyIndex > 0) {
+                undoBitmap()
+            }
         }
         updateUndoRedoState()
     }
 
     private fun redoSticker() {
-        if (historyIndex < bitmapHistory.size - 1) {
-            redoBitmap()
-        } else {
-            photoEditor.redo()
+        // Try PhotoEditor redo first
+        if (!photoEditor.redo()) {
+            // If PhotoEditor has nothing to redo, try bitmap history
+            if (historyIndex < bitmapHistory.size - 1) {
+                redoBitmap()
+            }
         }
         updateUndoRedoState()
     }
 
     private fun updateUndoRedoState() {
-        val canUndo = historyIndex > 0
-        btnUndo.alpha = if (canUndo) 1f else 0.35f
-        btnUndo.isEnabled = true // Always enabled to allow PhotoEditor undo
+        val canUndoBitmap = historyIndex > 0
+        btnUndo.alpha = if (canUndoBitmap) 1f else 0.5f
+        btnUndo.isEnabled = true
 
-        val canRedo = historyIndex < bitmapHistory.size - 1
-        btnRedo.alpha = if (canRedo) 1f else 0.35f
-        btnRedo.isEnabled = true // Always enabled to allow PhotoEditor redo
+        val canRedoBitmap = historyIndex < bitmapHistory.size - 1
+        btnRedo.alpha = if (canRedoBitmap) 1f else 0.5f
+        btnRedo.isEnabled = true
     }
 
     private fun clearHistory() {

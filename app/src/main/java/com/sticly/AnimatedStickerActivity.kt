@@ -744,7 +744,7 @@ class AnimatedStickerActivity : AppCompatActivity() {
     // ── Text Dialog ──
 
     private fun showTextPanel() {
-        val dialog = BottomSheetDialog(this)
+        val dialog = BottomSheetDialog(this, R.style.RoundedBottomSheetDialog)
         val view = layoutInflater.inflate(R.layout.dialog_add_text, null)
         dialog.setContentView(view)
 
@@ -900,7 +900,7 @@ class AnimatedStickerActivity : AppCompatActivity() {
     }
     
     private fun showEditTextOverlay(item: OverlayItem) {
-        val dialog = BottomSheetDialog(this)
+        val dialog = BottomSheetDialog(this, R.style.RoundedBottomSheetDialog)
         val view = layoutInflater.inflate(R.layout.dialog_add_text, null)
         dialog.setContentView(view)
 
