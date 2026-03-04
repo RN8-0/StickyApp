@@ -347,6 +347,7 @@
             app:layout_constraintEnd_toEndOf="parent">
 
             <FrameLayout
+                android:id="@+id/editorFrame"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent">
 
@@ -384,8 +385,6 @@
             </FrameLayout>
 
         </com.google.android.material.card.MaterialCardView>
-
-        <!-- Bottom Tools Container -->
         <LinearLayout
             android:id="@+id/bottomToolsContainer"
             android:layout_width="match_parent"

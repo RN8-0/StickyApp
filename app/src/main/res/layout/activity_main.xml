@@ -74,7 +74,8 @@
                     android:background="?selectableItemBackgroundBorderless"
                     android:clickable="true"
                     android:focusable="true"
-                    android:padding="7dp">
+                    android:padding="7dp"
+                    android:visibility="visible">
 
                     <com.airbnb.lottie.LottieAnimationView
                         android:layout_width="match_parent"

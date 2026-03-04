@@ -22,6 +22,15 @@ class StickyApp : Application() {
         // Karanlık temayı tamamen devre dışı bırak (Hep açık tema)
         androidx.appcompat.app.AppCompatDelegate.setDefaultNightMode(androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_NO)
 
+        // SYNC: Disk cache'i hemen yükle (JSON parse, <50ms)
+        // Bu sayede MainActivity açıldığında paketler hazır olur
+        try {
+            val diskPacks = StickerRepository.loadCacheFromDisk(this)
+            if (diskPacks.isNotEmpty()) {
+                StickerRepository.allPacksCache = diskPacks
+            }
+        } catch (_: Exception) {}
+
         // Reklam sistemini gecikmeli başlat (ilk karelerin hızlı render olması için)
         android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
             try {
@@ -38,16 +47,8 @@ class StickyApp : Application() {
             }
         }, 800)
 
-        // PRE-WARM: Load disk cache first, then Firebase in sequence
+        // Firebase'den güncel veriyi arka planda çek
         CoroutineScope(Dispatchers.IO).launch {
-            try {
-                val diskPacks = StickerRepository.loadCacheFromDisk(this@StickyApp)
-                if (diskPacks.isNotEmpty()) {
-                    StickerRepository.allPacksCache = diskPacks
-                }
-            } catch (_: Exception) {}
-
-            // After disk cache, load from Firebase (updates cache if newer data available)
             try {
                 val packs = StickerRepository.loadPacks(this@StickyApp, forceRefresh = false)
                 if (packs.isNotEmpty()) {

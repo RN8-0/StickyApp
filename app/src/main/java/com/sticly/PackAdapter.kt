@@ -185,7 +185,7 @@ class PackAdapter(
 
                     (adView.headlineView as? TextView)?.text = nativeAd.headline
                     (adView.bodyView as? TextView)?.text = nativeAd.body
-                    (adView.callToActionView as? TextView)?.text = nativeAd.callToAction
+                    (adView.callToActionView as? Button)?.text = nativeAd.callToAction
                     nativeAd.icon?.drawable?.let { (adView.iconView as? ImageView)?.setImageDrawable(it) }
                     nativeAd.mediaContent?.let { adView.mediaView?.setMediaContent(it) }
 

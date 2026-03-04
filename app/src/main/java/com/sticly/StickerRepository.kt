@@ -25,7 +25,7 @@ object StickerRepository {
     private val firestore = FirebaseFirestore.getInstance()
     
     // Repository scope for long-running observers and background tasks
-    private val repositoryScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private val repositoryScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     
     /**
      * KRITIK: Tüm paketlerin statik cache'i. 

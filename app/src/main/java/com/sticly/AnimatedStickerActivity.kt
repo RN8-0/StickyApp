@@ -627,8 +627,7 @@ class AnimatedStickerActivity : AppCompatActivity() {
                 setLayerType(View.LAYER_TYPE_SOFTWARE, null)
             }
             gravity = Gravity.CENTER
-            // Large padding = large touch area for easier gestures
-            setPadding(dpToPx(60), dpToPx(60), dpToPx(60), dpToPx(60))
+            setPadding(dpToPx(16), dpToPx(16), dpToPx(16), dpToPx(16))
         }
 
         tv.layoutParams = FrameLayout.LayoutParams(
@@ -1068,6 +1067,16 @@ class AnimatedStickerActivity : AppCompatActivity() {
         val dialog = BottomSheetDialog(this, R.style.TransparentBottomSheetDialog)
         val view = layoutInflater.inflate(R.layout.dialog_emoji_picker, null)
         dialog.setContentView(view)
+
+        // Expand bottom sheet to show all emojis
+        dialog.setOnShowListener {
+            val bs = dialog.findViewById<View>(com.google.android.material.R.id.design_bottom_sheet)
+            bs?.let { sheet ->
+                val behavior = com.google.android.material.bottomsheet.BottomSheetBehavior.from(sheet)
+                behavior.state = com.google.android.material.bottomsheet.BottomSheetBehavior.STATE_EXPANDED
+                behavior.skipCollapsed = true
+            }
+        }
 
         // Emoji categories - same as StickerMakerActivity
         val emojiCategories = mapOf(

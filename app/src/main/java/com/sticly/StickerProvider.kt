@@ -6,6 +6,7 @@ import android.database.Cursor
 import android.database.MatrixCursor
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Canvas
 import android.net.Uri
 import android.os.ParcelFileDescriptor
 import java.io.File
@@ -66,6 +67,7 @@ class StickerProvider : ContentProvider() {
 
     // Cache for Firebase packs
     private var cachedPacks: List<Pack>? = null
+    private var cachedPacksTimestamp = 0L
 
     override fun onCreate(): Boolean {
         authority = "${context!!.packageName}.stickers"
@@ -79,6 +81,12 @@ class StickerProvider : ContentProvider() {
     }
 
     private fun getAllPacks(): List<Pack> {
+        // Return cached result if fresh (within 5 seconds)
+        val now = System.currentTimeMillis()
+        cachedPacks?.let {
+            if (now - cachedPacksTimestamp < 5000 && it.isNotEmpty()) return it
+        }
+
         val allPacks = mutableMapOf<String, Pack>()
 
         // 1. Statik Cache ve Disk Cache Senkronizasyonu
@@ -139,7 +147,10 @@ class StickerProvider : ContentProvider() {
             }
         }
 
-        return allPacks.values.toList()
+        val result = allPacks.values.toList()
+        cachedPacks = result
+        cachedPacksTimestamp = now
+        return result
     }
 
     private fun getPack(identifier: String): Pack? {
@@ -148,6 +159,9 @@ class StickerProvider : ContentProvider() {
 
     override fun query(uri: Uri, projection: Array<String>?, selection: String?,
                        selectionArgs: Array<String>?, sortOrder: String?): Cursor? {
+        // Invalidate cache on each query so WhatsApp gets fresh data
+        cachedPacks = null
+        cachedPacksTimestamp = 0L
         return when (uriMatcher.match(uri)) {
             METADATA_CODE -> getAllStickerPacks()
             METADATA_CODE_FOR_SINGLE_PACK -> getSingleStickerPack(uri.lastPathSegment!!)
@@ -241,22 +255,40 @@ class StickerProvider : ContentProvider() {
                 val pfd = ParcelFileDescriptor.open(pngFile, ParcelFileDescriptor.MODE_READ_ONLY)
                 return AssetFileDescriptor(pfd, 0, pngFile.length())
             }
+            // Tray PNG dönüşümü başarısız — cache/assets'ten ham dosyayı al ve dönüştürmeyi dene
+            val rawTray = findRawTrayFile(identifier, fileName)
+            if (rawTray != null) {
+                val converted = convertToPng96(identifier, rawTray)
+                if (converted != null && converted.exists()) {
+                    val pfd = ParcelFileDescriptor.open(converted, ParcelFileDescriptor.MODE_READ_ONLY)
+                    return AssetFileDescriptor(pfd, 0, converted.length())
+                }
+            }
         }
 
         // 1. Custom paketler için filesDir/custom_stickers kontrol et (KALICI DEPOLAMA)
         if (identifier.startsWith("custom_")) {
             val customFile = File(context!!.filesDir, "custom_stickers/$identifier/$fileName")
             if (customFile.exists()) {
-                val pfd = ParcelFileDescriptor.open(customFile, ParcelFileDescriptor.MODE_READ_ONLY)
-                return AssetFileDescriptor(pfd, 0, customFile.length())
+                val optimized = ensureStickerWithinLimit(identifier, customFile)
+                val pfd = ParcelFileDescriptor.open(optimized, ParcelFileDescriptor.MODE_READ_ONLY)
+                return AssetFileDescriptor(pfd, 0, optimized.length())
             }
         }
 
         // 2. Cache klasöründe ara (Firebase stickerleri veya senkronize edilmiş custom paketler)
         val cacheFile = File(context!!.cacheDir, "$CACHE_DIR/$identifier/$fileName")
         if (cacheFile.exists()) {
-            val pfd = ParcelFileDescriptor.open(cacheFile, ParcelFileDescriptor.MODE_READ_ONLY)
-            return AssetFileDescriptor(pfd, 0, cacheFile.length())
+            // Check for pre-optimized file first (created by preOptimizePackForWhatsApp)
+            val preOpt = File(cacheFile.parent, "${cacheFile.nameWithoutExtension}_opt.webp")
+            val fileToServe = if (preOpt.exists() && preOpt.length() > 0) {
+                android.util.Log.d("StickerProvider", "Using pre-optimized: ${preOpt.name} (${preOpt.length()} bytes)")
+                preOpt
+            } else {
+                ensureStickerWithinLimit(identifier, cacheFile)
+            }
+            val pfd = ParcelFileDescriptor.open(fileToServe, ParcelFileDescriptor.MODE_READ_ONLY)
+            return AssetFileDescriptor(pfd, 0, fileToServe.length())
         }
 
         // 3. Assets klasöründe ara (lokal stickerleri)
@@ -355,6 +387,125 @@ class StickerProvider : ContentProvider() {
             android.util.Log.e("StickerProvider", "Error in getTrayAsPngForAnimated", e)
             null
         }
+    }
+
+    /**
+     * Sticker dosyasının WhatsApp boyut limitini aşmadığından emin olur.
+     * Static: ≤100KB, Animated: ≤500KB. Aşıyorsa 512x512 WebP olarak yeniden sıkıştırır.
+     */
+    private fun ensureStickerWithinLimit(identifier: String, file: File): File {
+        try {
+            val pack = getPack(identifier)
+            val isAnimated = pack?.isAnimated ?: false
+            val maxSize = if (isAnimated) 500L * 1024 else 100L * 1024
+            
+            // Check if we need to process (wrong dimensions or oversized)
+            val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeFile(file.absolutePath, opts)
+            val needsDimensionFix = opts.outWidth != 512 || opts.outHeight != 512
+            val needsSizeFix = file.length() > maxSize
+            
+            android.util.Log.d("StickerProvider", "ensureStickerWithinLimit: ${file.name} size=${file.length()} dims=${opts.outWidth}x${opts.outHeight} needsDim=$needsDimensionFix needsSize=$needsSizeFix isAnimated=$isAnimated")
+            
+            if (!needsDimensionFix && !needsSizeFix) return file
+            
+            // Animated stickerları yeniden sıkıştıramayız (frame kaybı olur)
+            if (isAnimated) return file
+            
+            val optimizedFile = File(file.parent, "${file.nameWithoutExtension}_opt.webp")
+            if (optimizedFile.exists() && optimizedFile.length() in 1..maxSize) {
+                // Verify the optimized file has correct dimensions
+                val optOpts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                BitmapFactory.decodeFile(optimizedFile.absolutePath, optOpts)
+                if (optOpts.outWidth == 512 && optOpts.outHeight == 512) return optimizedFile
+            }
+            
+            // Decode with inSampleSize for very large files to avoid OOM
+            var inSampleSize = 1
+            while (opts.outWidth / inSampleSize > 1024 || opts.outHeight / inSampleSize > 1024) {
+                inSampleSize *= 2
+            }
+            val decodeOpts = BitmapFactory.Options().apply { this.inSampleSize = inSampleSize }
+            val bitmap = BitmapFactory.decodeFile(file.absolutePath, decodeOpts)
+            if (bitmap == null) {
+                android.util.Log.e("StickerProvider", "Failed to decode bitmap: ${file.name}")
+                return file
+            }
+            
+            // Create 512x512 canvas with transparent background, center the sticker
+            val output = Bitmap.createBitmap(512, 512, Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(output)
+            // Scale to fit within 512x512 while preserving aspect ratio
+            val scale = minOf(512f / bitmap.width, 512f / bitmap.height)
+            val scaledW = (bitmap.width * scale).toInt()
+            val scaledH = (bitmap.height * scale).toInt()
+            val scaled = Bitmap.createScaledBitmap(bitmap, scaledW, scaledH, true)
+            val left = (512 - scaledW) / 2f
+            val top = (512 - scaledH) / 2f
+            canvas.drawBitmap(scaled, left, top, null)
+            if (bitmap != scaled) scaled.recycle()
+            bitmap.recycle()
+            
+            // WebP ile kademeli sıkıştırma
+            var quality = 90
+            while (quality >= 10) {
+                FileOutputStream(optimizedFile).use { out ->
+                    output.compress(Bitmap.CompressFormat.WEBP, quality, out)
+                }
+                android.util.Log.d("StickerProvider", "Compressed ${file.name} q=$quality → ${optimizedFile.length()} bytes")
+                if (optimizedFile.length() <= maxSize) break
+                quality -= 10
+            }
+            
+            output.recycle()
+            
+            return if (optimizedFile.exists() && optimizedFile.length() <= maxSize) optimizedFile else file
+        } catch (e: Exception) {
+            android.util.Log.e("StickerProvider", "ensureStickerWithinLimit failed: ${e.message}")
+            return file
+        }
+    }
+
+    /**
+     * Ham tray dosyasını cache veya assets'ten bulur
+     */
+    private fun findRawTrayFile(identifier: String, fileName: String): File? {
+        // Cache'de ara
+        val cacheFile = File(context!!.cacheDir, "$CACHE_DIR/$identifier/$fileName")
+        if (cacheFile.exists() && cacheFile.length() > 0) return cacheFile
+        // tray.webp olarak dene
+        val webpFile = File(context!!.cacheDir, "$CACHE_DIR/$identifier/tray.webp")
+        if (webpFile.exists() && webpFile.length() > 0) return webpFile
+        // tray.png olarak dene
+        val pngFile = File(context!!.cacheDir, "$CACHE_DIR/$identifier/tray.png")
+        if (pngFile.exists() && pngFile.length() > 0) return pngFile
+        // Assets'ten kopyala
+        return try {
+            val tempFile = File(context!!.cacheDir, "$CACHE_DIR/$identifier/tray_temp")
+            tempFile.parentFile?.mkdirs()
+            context!!.assets.open("$identifier/$fileName").use { input ->
+                tempFile.outputStream().use { output -> input.copyTo(output) }
+            }
+            if (tempFile.exists() && tempFile.length() > 0) tempFile else null
+        } catch (_: Exception) { null }
+    }
+
+    /**
+     * Herhangi bir kaynak dosyayı 96x96 PNG'ye dönüştürür
+     */
+    private fun convertToPng96(identifier: String, source: File): File? {
+        return try {
+            val outputPng = File(context!!.cacheDir, "$CACHE_DIR/$identifier/tray_whatsapp.png")
+            outputPng.parentFile?.mkdirs()
+            val bitmap = BitmapFactory.decodeFile(source.absolutePath) ?: return null
+            val scaled = Bitmap.createScaledBitmap(bitmap, 96, 96, true)
+            FileOutputStream(outputPng).use { out ->
+                scaled.compress(Bitmap.CompressFormat.PNG, 100, out)
+            }
+            if (bitmap != scaled) scaled.recycle()
+            bitmap.recycle()
+            outputPng
+        } catch (_: Exception) { null }
     }
 
     override fun getType(uri: Uri): String {

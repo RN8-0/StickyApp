@@ -55,27 +55,6 @@
                 android:textSize="18sp"
                 android:textStyle="bold" />
 
-            <!-- Premium Crown - navigates to PremiumActivity -->
-            <FrameLayout
-                android:id="@+id/btnPremiumHeader"
-                android:layout_width="34dp"
-                android:layout_height="34dp"
-                android:background="?selectableItemBackgroundBorderless"
-                android:clickable="true"
-                android:focusable="true"
-                android:padding="5dp">
-
-                <com.airbnb.lottie.LottieAnimationView
-                    android:layout_width="match_parent"
-                    android:layout_height="match_parent"
-                    app:lottie_fileName="crown.json"
-                    app:lottie_autoPlay="true"
-                    app:lottie_loop="false"
-                    app:lottie_renderMode="automatic"
-                    app:lottie_cacheComposition="true" />
-
-            </FrameLayout>
-
             <!-- Installed Icon - WhatsApp'a eklenmiş paketi gösterir -->
             <ImageView
                 android:id="@+id/installedIcon"

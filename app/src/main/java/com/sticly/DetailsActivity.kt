@@ -121,18 +121,6 @@ class DetailsActivity : AppCompatActivity() {
             finish()
         }
 
-        // Premium crown icon → PremiumActivity
-        val btnPremiumHeader = findViewById<View>(R.id.btnPremiumHeader)
-        if (PreferencesHelper.isPremium(this)) {
-            btnPremiumHeader.visibility = View.GONE
-        } else {
-            btnPremiumHeader.visibility = View.VISIBLE
-            btnPremiumHeader.setOnClickListener {
-                startActivity(Intent(this, PremiumActivity::class.java))
-                overridePendingTransition(R.anim.fade_in, R.anim.fade_out)
-            }
-        }
-
         // Durum çubuğunu ve üst barı tek renk yap
         window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS)
         window.addFlags(android.view.WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
@@ -183,6 +171,7 @@ class DetailsActivity : AppCompatActivity() {
     }
 
     private fun loadPackFromFirebase() {
+        // Hemen cache'den göster — donma olmasın
         lifecycleScope.launch {
             try {
                 var pack: Pack? = null
@@ -214,25 +203,31 @@ class DetailsActivity : AppCompatActivity() {
                     showLoadingState(true)
                 }
 
-                // Arka planda veriyi tazele (Firebase paketleri için)
-                val packs = withContext(Dispatchers.IO) { StickerRepository.loadPacks(this@DetailsActivity, forceRefresh = false) }
-                val updatedPack = packs.find { it.id == packId }
-                
-                if (updatedPack != null && pack != null) {
-                    // Sadece sticker listesi veya premium durumu değiştiyse UI'ı güncelle
-                    val changed = updatedPack.stickers.size != pack.stickers.size ||
-                            updatedPack.isPremium != pack.isPremium ||
-                            updatedPack.isActive != pack.isActive ||
-                            updatedPack.localizedName != pack.localizedName
-                    if (changed) {
-                        setupUI(updatedPack)
+                // Firestore tazelemesini AYRI coroutine'de yap — UI'ı bloklamasın
+                val cachedPack = pack
+                lifecycleScope.launch {
+                    try {
+                        val packs = withContext(Dispatchers.IO) { StickerRepository.loadPacks(this@DetailsActivity, forceRefresh = false) }
+                        val updatedPack = packs.find { it.id == packId }
+                        
+                        if (updatedPack != null && cachedPack != null) {
+                            val changed = updatedPack.stickers.size != cachedPack.stickers.size ||
+                                    updatedPack.isPremium != cachedPack.isPremium ||
+                                    updatedPack.isActive != cachedPack.isActive ||
+                                    updatedPack.localizedName != cachedPack.localizedName
+                            if (changed) {
+                                setupUI(updatedPack)
+                            }
+                        } else if (updatedPack != null && cachedPack == null) {
+                            setupUI(updatedPack)
+                        } else if (updatedPack == null && cachedPack == null) {
+                            android.util.Log.e("DetailsActivity", "Pack not found: $packId")
+                            Toast.makeText(this@DetailsActivity, R.string.pack_not_found, Toast.LENGTH_SHORT).show()
+                            finish()
+                        }
+                    } catch (e: Exception) {
+                        android.util.Log.e("DetailsActivity", "Background refresh error: ${e.message}")
                     }
-                } else if (updatedPack != null && pack == null) {
-                    setupUI(updatedPack)
-                } else if (updatedPack == null && pack == null) {
-                    android.util.Log.e("DetailsActivity", "Pack not found: $packId")
-                    Toast.makeText(this@DetailsActivity, R.string.pack_not_found, Toast.LENGTH_SHORT).show()
-                    finish()
                 }
             } catch (e: Exception) {
                 android.util.Log.e("DetailsActivity", "Error loading pack: ${e.message}", e)
@@ -252,10 +247,12 @@ class DetailsActivity : AppCompatActivity() {
         isAnimatedPack = pack.isAnimated
         isPackReady = false // Reset state when setting up new pack
 
-        // View count arka planda artır, interstitial main thread'de yüklenmeli
-        AdManager.loadInterstitialAd(this)
+        // View count arka planda artır, interstitial arka planda yükle
         lifecycleScope.launch(Dispatchers.IO) {
             StickerRepository.incrementViewCount(pack.id, pack.isPremium)
+        }
+        lifecycleScope.launch {
+            AdManager.loadInterstitialAd(this@DetailsActivity)
         }
 
         findViewById<android.widget.TextView>(R.id.name).text = pack.localizedName

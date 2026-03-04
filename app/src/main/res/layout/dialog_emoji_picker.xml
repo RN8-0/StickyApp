@@ -62,13 +62,14 @@
         android:background="@color/divider" />
 
     <!-- Emoji Grid -->
-    <ScrollView
+    <androidx.core.widget.NestedScrollView
         android:layout_width="match_parent"
-        android:layout_height="250dp"
+        android:layout_height="320dp"
         android:scrollbars="vertical"
         android:fadeScrollbars="false"
         android:paddingHorizontal="10dp"
-        android:paddingVertical="8dp">
+        android:paddingVertical="8dp"
+        android:fillViewport="true">
 
         <GridLayout
             android:id="@+id/emojiGrid"
@@ -78,6 +79,6 @@
             android:padding="2dp"
             android:useDefaultMargins="true" />
 
-    </ScrollView>
+    </androidx.core.widget.NestedScrollView>
 
 </LinearLayout>

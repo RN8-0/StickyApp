@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:gravity="center"
+    android:padding="6dp">
+
+    <com.google.android.material.chip.Chip
+        android:id="@+id/chipMoveImage"
+        style="@style/Widget.MaterialComponents.Chip.Choice"
+        android:layout_width="wrap_content"
+        android:layout_height="36dp"
+        android:text="🖼️ Image"
+        android:textSize="12sp"
+        android:checked="true"
+        android:layout_marginEnd="6dp" />
+
+    <com.google.android.material.chip.Chip
+        android:id="@+id/chipMoveText"
+        style="@style/Widget.MaterialComponents.Chip.Choice"
+        android:layout_width="wrap_content"
+        android:layout_height="36dp"
+        android:text="📝 Text"
+        android:textSize="12sp"
+        android:visibility="gone"
+        android:layout_marginEnd="6dp" />
+
+    <com.google.android.material.chip.Chip
+        android:id="@+id/chipMoveEmoji"
+        style="@style/Widget.MaterialComponents.Chip.Choice"
+        android:layout_width="wrap_content"
+        android:layout_height="36dp"
+        android:text="😊 Emoji"
+        android:textSize="12sp"
+        android:visibility="gone" />
+
+</LinearLayout>

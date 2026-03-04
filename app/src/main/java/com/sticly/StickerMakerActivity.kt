@@ -237,7 +237,6 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
         photoEditor.setOnPhotoEditorListener(this)
 
         shapeBuilder = ShapeBuilder()
-        setupMultiTouchGestures()
     }
 
     @SuppressLint("ClickableViewAccessibility")
@@ -260,32 +259,19 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
             }
             val paint = eraserPaint ?: return@setOnTouchListener false
 
-            // Get ImageView and bitmap dimensions
             val imageView = photoEditorView.source
             val bitmapWidth = bitmap.width.toFloat()
             val bitmapHeight = bitmap.height.toFloat()
-
-            // Get actual positions on screen
-            val overlayLocation = IntArray(2)
-            val imageViewLocation = IntArray(2)
-            eraserOverlay.getLocationOnScreen(overlayLocation)
-            imageView.getLocationOnScreen(imageViewLocation)
-
-            // Calculate offset between eraserOverlay and imageView
-            val viewOffsetX = imageViewLocation[0] - overlayLocation[0]
-            val viewOffsetY = imageViewLocation[1] - overlayLocation[1]
-
-            // Get ImageView dimensions
             val viewWidth = imageView.width.toFloat()
             val viewHeight = imageView.height.toFloat()
 
             if (viewWidth == 0f || viewHeight == 0f) return@setOnTouchListener false
 
-            // Transform touch coords from eraserOverlay to imageView coordinate system
-            val adjustedX = event.x - viewOffsetX
-            val adjustedY = event.y - viewOffsetY
+            // Direct coordinates — eraserOverlay and photoEditorView are same-size siblings
+            val localX = event.x
+            val localY = event.y
 
-            // Calculate Scale (FitCenter)
+            // Calculate FitCenter scale
             val viewRatio = viewWidth / viewHeight
             val bitmapRatio = bitmapWidth / bitmapHeight
             val scale: Float
@@ -303,8 +289,8 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
             }
 
             // Transform touch coords to bitmap coords
-            val touchX = (adjustedX - offsetX) / scale
-            val touchY = (adjustedY - offsetY) / scale
+            val touchX = (localX - offsetX) / scale
+            val touchY = (localY - offsetY) / scale
 
             // Boundary check
             if (touchX < 0 || touchX >= bitmapWidth || touchY < 0 || touchY >= bitmapHeight) {
@@ -635,6 +621,8 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
         if (tool.type != ToolType.BRUSH && tool.type != ToolType.ERASER) {
             photoEditor.setBrushDrawingMode(false)
             isEraserMode = false
+            isBrushModeActive = false
+            eraserOverlay.visibility = View.GONE
             toolOptionsPanel.removeAllViews()
             toolOptionsPanel.visibility = View.GONE
         }
@@ -884,7 +872,6 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
         isEraserMode = true
         isBrushModeActive = false
         photoEditor.setBrushDrawingMode(false)
-        
         eraserOverlay.visibility = View.VISIBLE
         showEraserOptions()
     }
@@ -1127,6 +1114,16 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
         val view = layoutInflater.inflate(R.layout.dialog_emoji_picker, null)
         dialog.setContentView(view)
 
+        // Expand bottom sheet to show all emojis
+        dialog.setOnShowListener {
+            val bs = dialog.findViewById<View>(com.google.android.material.R.id.design_bottom_sheet)
+            bs?.let { sheet ->
+                val behavior = com.google.android.material.bottomsheet.BottomSheetBehavior.from(sheet)
+                behavior.state = com.google.android.material.bottomsheet.BottomSheetBehavior.STATE_EXPANDED
+                behavior.skipCollapsed = true
+            }
+        }
+
         // Emoji categories
         val emojiCategories = mapOf(
             getString(R.string.emoji_faces) to listOf(
@@ -1343,7 +1340,6 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
     // ==================== Save Sticker ====================
 
     private fun saveSticker() {
-        resetCanvasZoom()
         showLoading()
 
         // Geçici olarak arka planı kaldır (Şeffaflık için)
@@ -1548,17 +1544,9 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
         }
     }
     
-    private var gestureTargetView: View? = null
-    private var gestureStartDist = 0f
-    private var gestureStartScale = 1f
-    private var gestureStartAngle = 0f
-    private var gestureStartRotation = 0f
-    private var isMultiTouchActive = false
-
     private fun findAndEnhanceLastAddedView() {
         val drawingView = findDrawingView(photoEditorView)
         if (drawingView != null && drawingView is ViewGroup) {
-            // Disable clipping so expanded touch areas work
             drawingView.clipChildren = false
             drawingView.clipToPadding = false
             
@@ -1566,7 +1554,6 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
             if (childCount > 0) {
                 val lastView = drawingView.getChildAt(childCount - 1)
                 if (lastView is ViewGroup) {
-                    // Expand touch target with large padding
                     val extraPadding = (60 * resources.displayMetrics.density).toInt()
                     lastView.setPadding(extraPadding, extraPadding, extraPadding, extraPadding)
                     lastView.clipChildren = false
@@ -1576,135 +1563,6 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
         }
     }
 
-    @SuppressLint("ClickableViewAccessibility")
-    // Canvas zoom/pan state
-    private var canvasScale = 1f
-    private var canvasPivotX = 0f
-    private var canvasPivotY = 0f
-    private var canvasTransX = 0f
-    private var canvasTransY = 0f
-    private var canvasStartTransX = 0f
-    private var canvasStartTransY = 0f
-    private var canvasStartMidX = 0f
-    private var canvasStartMidY = 0f
-
-    private fun setupMultiTouchGestures() {
-        photoEditorView.setOnTouchListener { _, event ->
-            when (event.actionMasked) {
-                MotionEvent.ACTION_POINTER_DOWN -> {
-                    if (event.pointerCount >= 2) {
-                        val midX = (event.getX(0) + event.getX(1)) / 2f
-                        val midY = (event.getY(0) + event.getY(1)) / 2f
-                        gestureTargetView = findNearestOverlayView(midX, midY)
-                        isMultiTouchActive = true
-                        gestureStartDist = getSpacing(event)
-                        if (gestureTargetView != null) {
-                            gestureStartScale = gestureTargetView!!.scaleX
-                            gestureStartAngle = getAngle(event)
-                            gestureStartRotation = gestureTargetView!!.rotation
-                        } else {
-                            // Canvas zoom/pan
-                            gestureStartScale = canvasScale
-                            canvasStartTransX = canvasTransX
-                            canvasStartTransY = canvasTransY
-                            canvasStartMidX = midX
-                            canvasStartMidY = midY
-                            canvasPivotX = midX
-                            canvasPivotY = midY
-                        }
-                        photoEditorView.parent?.requestDisallowInterceptTouchEvent(true)
-                    }
-                    isMultiTouchActive
-                }
-                MotionEvent.ACTION_MOVE -> {
-                    if (isMultiTouchActive && event.pointerCount >= 2) {
-                        val newDist = getSpacing(event)
-                        if (gestureTargetView != null) {
-                            val v = gestureTargetView!!
-                            if (gestureStartDist > 10f) {
-                                val scale = (gestureStartScale * newDist / gestureStartDist).coerceIn(0.2f, 5f)
-                                v.scaleX = scale
-                                v.scaleY = scale
-                            }
-                            val newAngle = getAngle(event)
-                            v.rotation = gestureStartRotation + (newAngle - gestureStartAngle)
-                        } else {
-                            // Canvas zoom + pan
-                            if (gestureStartDist > 10f) {
-                                canvasScale = (gestureStartScale * newDist / gestureStartDist).coerceIn(1f, 4f)
-                            }
-                            val midX = (event.getX(0) + event.getX(1)) / 2f
-                            val midY = (event.getY(0) + event.getY(1)) / 2f
-                            canvasTransX = canvasStartTransX + (midX - canvasStartMidX)
-                            canvasTransY = canvasStartTransY + (midY - canvasStartMidY)
-                            applyCanvasTransform()
-                        }
-                    }
-                    isMultiTouchActive
-                }
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP, MotionEvent.ACTION_CANCEL -> {
-                    if (event.pointerCount <= 2) {
-                        isMultiTouchActive = false
-                        gestureTargetView = null
-                        photoEditorView.parent?.requestDisallowInterceptTouchEvent(false)
-                    }
-                    false
-                }
-                else -> false
-            }
-        }
-    }
-
-    private fun applyCanvasTransform() {
-        photoEditorView.pivotX = canvasPivotX
-        photoEditorView.pivotY = canvasPivotY
-        photoEditorView.scaleX = canvasScale
-        photoEditorView.scaleY = canvasScale
-        photoEditorView.translationX = canvasTransX
-        photoEditorView.translationY = canvasTransY
-    }
-
-    fun resetCanvasZoom() {
-        canvasScale = 1f
-        canvasTransX = 0f
-        canvasTransY = 0f
-        photoEditorView.animate()
-            .scaleX(1f).scaleY(1f)
-            .translationX(0f).translationY(0f)
-            .setDuration(200).start()
-    }
-
-    private fun findNearestOverlayView(touchX: Float, touchY: Float): View? {
-        val drawingView = findDrawingView(photoEditorView) as? ViewGroup ?: return null
-        var nearest: View? = null
-        var minDist = Float.MAX_VALUE
-        val hitRadius = 150 * resources.displayMetrics.density // very generous hit area
-
-        for (i in 0 until drawingView.childCount) {
-            val child = drawingView.getChildAt(i)
-            if (child.visibility != View.VISIBLE) continue
-            
-            // Get center of the child view in photoEditorView coordinates
-            val loc = IntArray(2)
-            child.getLocationInWindow(loc)
-            val parentLoc = IntArray(2)
-            photoEditorView.getLocationInWindow(parentLoc)
-            
-            val cx = loc[0] - parentLoc[0] + child.width / 2f
-            val cy = loc[1] - parentLoc[1] + child.height / 2f
-            
-            val dx = touchX - cx
-            val dy = touchY - cy
-            val dist = kotlin.math.sqrt((dx * dx + dy * dy).toDouble()).toFloat()
-            
-            if (dist < minDist && dist < hitRadius) {
-                minDist = dist
-                nearest = child
-            }
-        }
-        return nearest
-    }
-    
     private fun findDrawingView(parent: View): View? {
         if (parent is ViewGroup) {
             for (i in 0 until parent.childCount) {
@@ -1719,21 +1577,7 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
         }
         return null
     }
-    
-    private fun getSpacing(event: MotionEvent): Float {
-        if (event.pointerCount < 2) return 0f
-        val dx = event.getX(0) - event.getX(1)
-        val dy = event.getY(0) - event.getY(1)
-        return kotlin.math.sqrt((dx * dx + dy * dy).toDouble()).toFloat()
-    }
-    
-    private fun getAngle(event: MotionEvent): Float {
-        if (event.pointerCount < 2) return 0f
-        val dx = (event.getX(1) - event.getX(0)).toDouble()
-        val dy = (event.getY(1) - event.getY(0)).toDouble()
-        return Math.toDegrees(kotlin.math.atan2(dy, dx)).toFloat()
-    }
-    
+
     private fun showEditTextDialog(textView: View, currentText: String, currentColor: Int) {
         val dialog = BottomSheetDialog(this, R.style.RoundedBottomSheetDialog)
         val view = layoutInflater.inflate(R.layout.dialog_add_text, null)
