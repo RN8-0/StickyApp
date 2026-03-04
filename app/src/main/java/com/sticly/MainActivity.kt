@@ -1403,7 +1403,7 @@ Rules:
         }
         if (bmp == null) return
 
-        val dialog = com.google.android.material.bottomsheet.BottomSheetDialog(this, R.style.RoundedBottomSheetDialog)
+        val dialog = com.google.android.material.bottomsheet.BottomSheetDialog(this, R.style.TransparentBottomSheetDialog)
         val sheetView = LayoutInflater.from(this).inflate(R.layout.dialog_ai_preview, null)
 
         // Image
@@ -1478,13 +1478,8 @@ Rules:
         }
 
         dialog.setContentView(sheetView)
-        // Make the BottomSheet's own container transparent + rounded corners
-        (sheetView.parent as? View)?.let { parent ->
-            parent.setBackgroundColor(android.graphics.Color.TRANSPARENT)
-            val behavior = dialog.behavior
-            behavior.skipCollapsed = true
-            behavior.state = com.google.android.material.bottomsheet.BottomSheetBehavior.STATE_EXPANDED
-        }
+        dialog.behavior.skipCollapsed = true
+        dialog.behavior.state = com.google.android.material.bottomsheet.BottomSheetBehavior.STATE_EXPANDED
         dialog.show()
     }
 
