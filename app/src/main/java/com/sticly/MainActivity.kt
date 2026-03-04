@@ -1384,22 +1384,28 @@ Rules:
                 }
             } catch (_: Exception) { }
 
+            // Always show 9 bundled sample images as "Your Creations" examples
+            val sampleItems = (1..9).map { i ->
+                val id = String.format("%02d", i)
+                AiHistoryItem("ai_showcase/$id.webp", "", 0L, isAsset = true)
+            }
+
             withContext(Dispatchers.Main) {
-                if (items.isEmpty()) {
-                    tvTitle.visibility = View.GONE
-                    rvHistory.visibility = View.GONE
-                } else {
-                    tvTitle.visibility = View.VISIBLE
-                    rvHistory.visibility = View.VISIBLE
-                    rvHistory.isNestedScrollingEnabled = false
-                    // Always recreate adapter to avoid stale parent.width=0 from GONE state
-                    aiHistoryAdapter = AiHistoryAdapter(items.toMutableList()) { item ->
+                // Always show section — user creations first, then samples to fill grid
+                val displayItems = if (items.isNotEmpty()) items else sampleItems.toMutableList()
+
+                tvTitle.visibility = View.VISIBLE
+                tvTitle.text = if (items.isNotEmpty()) "Your Creations" else "AI Examples"
+                rvHistory.visibility = View.VISIBLE
+                rvHistory.isNestedScrollingEnabled = false
+                aiHistoryAdapter = AiHistoryAdapter(displayItems.toMutableList()) { item ->
+                    if (!item.isAsset) {
                         aiShowHistoryItemOptions(item)
                     }
-                    val gridLm = androidx.recyclerview.widget.GridLayoutManager(this@MainActivity, 3)
-                    rvHistory.layoutManager = gridLm
-                    rvHistory.adapter = aiHistoryAdapter
                 }
+                val gridLm = androidx.recyclerview.widget.GridLayoutManager(this@MainActivity, 3)
+                rvHistory.layoutManager = gridLm
+                rvHistory.adapter = aiHistoryAdapter
             }
         }
     }
@@ -1480,7 +1486,7 @@ Rules:
         }
     }
 
-    data class AiHistoryItem(val path: String, val prompt: String, val time: Long)
+    data class AiHistoryItem(val path: String, val prompt: String, val time: Long, val isAsset: Boolean = false)
 
     inner class AiHistoryAdapter(
         private var items: MutableList<AiHistoryItem>,
@@ -1507,10 +1513,19 @@ Rules:
 
         override fun onBindViewHolder(holder: VH, position: Int) {
             val item = items[position]
-            com.bumptech.glide.Glide.with(holder.iv)
-                .load(java.io.File(item.path))
-                .centerCrop()
-                .into(holder.iv)
+            if (item.isAsset) {
+                com.bumptech.glide.Glide.with(holder.iv)
+                    .load(android.net.Uri.parse("file:///android_asset/${item.path}"))
+                    .override(256)
+                    .centerCrop()
+                    .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.RESOURCE)
+                    .into(holder.iv)
+            } else {
+                com.bumptech.glide.Glide.with(holder.iv)
+                    .load(java.io.File(item.path))
+                    .centerCrop()
+                    .into(holder.iv)
+            }
             holder.iv.setOnClickListener { onClick(item) }
         }
 
@@ -1676,10 +1691,10 @@ Rules:
     private fun updateStoryPacks(packs: List<Pack>) {
         val activePacks = packs.filter { it.isActive && it.category != "custom" }
 
-        // Recently added: sorted by creation date (most recent first), up to 15
+        // Recently added: sorted by creation date (most recent first), up to 20
         val recentPacks = activePacks
             .sortedByDescending { parseDateCached(it.createdAt) }
-            .take(15)
+            .take(20)
 
         if (recentPacks.isNotEmpty() && (currentFilter == FilterType.ALL || currentFilter == FilterType.PREMIUM)) {
             storyContainer.visibility = View.VISIBLE

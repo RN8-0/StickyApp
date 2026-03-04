@@ -188,10 +188,9 @@ class PackAdapter(
                 .withAdListener(object : AdListener() {
                     override fun onAdFailedToLoad(error: LoadAdError) {
                         adView.tag = null
-                        adView.visibility = View.GONE
-                        val failLp = adView.layoutParams
-                        failLp.height = 0
-                        adView.layoutParams = failLp
+                        // Keep placeholder visible instead of collapsing to avoid layout jump
+                        placeholder?.visibility = View.VISIBLE
+                        content?.visibility = View.GONE
                     }
                 })
                 .build()
@@ -206,8 +205,11 @@ class PackAdapter(
 
     override fun onViewRecycled(holder: VH) {
         super.onViewRecycled(holder)
-        // Don't touch ad views — keep loaded ads intact
-        if (holder.itemView is NativeAdView) return
+        if (holder.itemView is NativeAdView) {
+            // Reset tag so ad reloads when rebound to a new slot
+            holder.itemView.tag = null
+            return
+        }
         val container = holder.stickerPreviewContainer ?: return
         val context = holder.itemView.context
         try {

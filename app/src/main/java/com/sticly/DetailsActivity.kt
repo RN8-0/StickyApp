@@ -924,7 +924,6 @@ class DetailsActivity : AppCompatActivity() {
         dialog.window?.apply {
             setBackgroundDrawable(android.graphics.drawable.ColorDrawable(previewBgColor))
             setLayout(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT)
-            // Status bar ana sayfadaki toolbar ile aynı renk olacak
             statusBarColor = toolbarColor
             navigationBarColor = Color.BLACK
         }
@@ -936,7 +935,6 @@ class DetailsActivity : AppCompatActivity() {
 
         dialog.setContentView(view)
 
-        // Lock overlay ve hint göster/gizle
         lockOverlay?.visibility = View.GONE
         unlockHint?.visibility = View.GONE
 
@@ -947,8 +945,9 @@ class DetailsActivity : AppCompatActivity() {
                 Glide.with(this)
                     .asDrawable()
                     .load(customFile)
+                    .override(512, 512)
                     .signature(com.bumptech.glide.signature.ObjectKey(customFile.lastModified()))
-                    .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.NONE)
+                    .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.RESOURCE)
                     .into(imageView)
             } else {
                 imageView.setImageResource(R.drawable.transparent_placeholder)
@@ -956,37 +955,44 @@ class DetailsActivity : AppCompatActivity() {
         } else {
         val cachedFile = StickerRepository.getCachedStickerPath(this, packId, sticker.file)
 
-        when {
+        // Try all sources with fallback chain
+        val requestBuilder = when {
             cachedFile.exists() && cachedFile.length() > 0 -> {
                 Glide.with(this)
                     .asDrawable()
                     .load(cachedFile)
+                    .override(512, 512)
                     .signature(com.bumptech.glide.signature.ObjectKey(cachedFile.lastModified()))
-                    .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.NONE)
-                    .into(imageView)
+                    .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.RESOURCE)
             }
             sticker.url.isNotEmpty() -> {
                 Glide.with(this)
                     .asDrawable()
                     .load(sticker.url)
+                    .override(512, 512)
                     .signature(com.bumptech.glide.signature.ObjectKey(sticker.url))
-                    .placeholder(R.drawable.transparent_placeholder)
-                    .error(R.drawable.transparent_placeholder)
-                    .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.DATA)
-                    .into(imageView)
+                    .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.ALL)
             }
             else -> {
-                try {
-                    val assetPath = "file:///android_asset/$packId/${sticker.file}"
-                    Glide.with(this)
-                        .asDrawable()
-                        .load(android.net.Uri.parse(assetPath))
-                        .into(imageView)
-                } catch (e: Exception) {
-                    imageView.setImageResource(R.drawable.transparent_placeholder)
-                }
+                val assetPath = "file:///android_asset/$packId/${sticker.file}"
+                Glide.with(this)
+                    .asDrawable()
+                    .load(android.net.Uri.parse(assetPath))
+                    .override(512, 512)
             }
         }
+
+        // Always set placeholder + error fallback to prevent blank preview
+        requestBuilder
+            .placeholder(R.drawable.transparent_placeholder)
+            .error(
+                Glide.with(this)
+                    .asDrawable()
+                    .load(if (sticker.url.isNotEmpty()) sticker.url else R.drawable.transparent_placeholder)
+                    .override(512, 512)
+                    .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.ALL)
+            )
+            .into(imageView)
         }
 
         // Tasarımdaki animasyonlu açılış
