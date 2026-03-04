@@ -1418,7 +1418,9 @@ Rules:
             try {
                 val manifestJson = assets.open("ai_showcase/manifest.json").bufferedReader().readText()
                 val arr = JSONArray(manifestJson)
-                for (i in 0 until minOf(arr.length(), 9)) {
+                val count = minOf(arr.length(), 6)
+                android.util.Log.d("AI_SHOWCASE", "Manifest loaded: ${arr.length()} items, showing $count")
+                for (i in 0 until count) {
                     val obj = arr.getJSONObject(i)
                     sampleItems.add(AiHistoryItem(
                         "ai_showcase/${obj.getString("id")}.webp",
@@ -1427,25 +1429,45 @@ Rules:
                         isAsset = true
                     ))
                 }
-            } catch (_: Exception) {
-                for (i in 1..9) {
+            } catch (e: Exception) {
+                android.util.Log.e("AI_SHOWCASE", "Manifest load failed: ${e.message}", e)
+                for (i in 1..6) {
                     sampleItems.add(AiHistoryItem("ai_showcase/${String.format("%02d", i)}.webp", "", 0L, isAsset = true))
                 }
             }
+            android.util.Log.d("AI_SHOWCASE", "History items: ${items.size}, Sample items: ${sampleItems.size}")
 
             withContext(Dispatchers.Main) {
-                val displayItems = if (items.isNotEmpty()) items else sampleItems.toMutableList()
-
-                tvTitle.visibility = View.VISIBLE
-                tvTitle.text = if (items.isNotEmpty()) "Your Creations" else "AI Examples"
-                rvHistory.visibility = View.VISIBLE
-                rvHistory.isNestedScrollingEnabled = false
-                aiHistoryAdapter = AiHistoryAdapter(displayItems.toMutableList()) { item ->
-                    aiShowHistoryItemOptions(item)
+                // Show user creations if any
+                if (items.isNotEmpty()) {
+                    tvTitle.visibility = View.VISIBLE
+                    tvTitle.text = "Your Creations"
+                    rvHistory.visibility = View.VISIBLE
+                    rvHistory.isNestedScrollingEnabled = false
+                    aiHistoryAdapter = AiHistoryAdapter(items.toMutableList()) { item ->
+                        aiShowHistoryItemOptions(item)
+                    }
+                    val gridLm = androidx.recyclerview.widget.GridLayoutManager(this@MainActivity, 3)
+                    rvHistory.layoutManager = gridLm
+                    rvHistory.adapter = aiHistoryAdapter
+                } else {
+                    tvTitle.visibility = View.GONE
+                    rvHistory.visibility = View.GONE
                 }
-                val gridLm = androidx.recyclerview.widget.GridLayoutManager(this@MainActivity, 3)
-                rvHistory.layoutManager = gridLm
-                rvHistory.adapter = aiHistoryAdapter
+
+                // Always show AI Examples section
+                val rvExamples = findViewById<RecyclerView>(R.id.rvAiExamples)
+                val tvExamplesTitle = findViewById<TextView>(R.id.tvAiExamplesTitle)
+                if (rvExamples != null && tvExamplesTitle != null && sampleItems.isNotEmpty()) {
+                    tvExamplesTitle.visibility = View.VISIBLE
+                    rvExamples.visibility = View.VISIBLE
+                    rvExamples.isNestedScrollingEnabled = false
+                    val exAdapter = AiHistoryAdapter(sampleItems.toMutableList()) { item ->
+                        aiShowHistoryItemOptions(item)
+                    }
+                    rvExamples.layoutManager = androidx.recyclerview.widget.GridLayoutManager(this@MainActivity, 3)
+                    rvExamples.adapter = exAdapter
+                }
             }
         }
     }

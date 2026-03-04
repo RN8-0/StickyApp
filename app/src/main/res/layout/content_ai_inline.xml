@@ -324,6 +324,26 @@
             android:visibility="gone"
             android:nestedScrollingEnabled="false" />
 
+        <!-- AI Examples Gallery (always visible) -->
+        <TextView
+            android:id="@+id/tvAiExamplesTitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="✨ AI Examples"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:textColor="@color/primary"
+            android:visibility="gone"
+            android:layout_marginTop="12dp"
+            android:layout_marginBottom="8dp" />
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/rvAiExamples"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:visibility="gone"
+            android:nestedScrollingEnabled="false" />
+
     </LinearLayout>
 
 </ScrollView>

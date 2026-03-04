@@ -956,37 +956,23 @@ class DetailsActivity : AppCompatActivity() {
         if (loadSource == null) {
             imageView.setImageResource(R.drawable.transparent_placeholder)
         } else {
-            // Use asGif() for animated packs to properly render animated WebP
-            if (isAnimatedPack) {
-                Glide.with(this)
-                    .asGif()
-                    .load(loadSource)
-                    .override(512, 512)
-                    .placeholder(R.drawable.transparent_placeholder)
-                    .error(
-                        Glide.with(this)
-                            .asGif()
-                            .load(if (sticker.url.isNotEmpty()) sticker.url else R.drawable.transparent_placeholder)
-                            .override(512, 512)
-                            .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.ALL)
-                    )
-                    .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.ALL)
-                    .into(imageView)
+            // Use default load() — Glide auto-detects animated WebP/GIF and plays them
+            val errorSource = if (sticker.url.isNotEmpty() && loadSource != sticker.url) sticker.url else null
+            val builder = Glide.with(this)
+                .load(loadSource)
+                .override(512, 512)
+                .placeholder(R.drawable.transparent_placeholder)
+                .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.ALL)
+
+            if (errorSource != null) {
+                builder.error(
+                    Glide.with(this)
+                        .load(errorSource)
+                        .override(512, 512)
+                        .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.ALL)
+                ).into(imageView)
             } else {
-                Glide.with(this)
-                    .asDrawable()
-                    .load(loadSource)
-                    .override(512, 512)
-                    .placeholder(R.drawable.transparent_placeholder)
-                    .error(
-                        Glide.with(this)
-                            .asDrawable()
-                            .load(if (sticker.url.isNotEmpty()) sticker.url else R.drawable.transparent_placeholder)
-                            .override(512, 512)
-                            .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.ALL)
-                    )
-                    .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.ALL)
-                    .into(imageView)
+                builder.error(R.drawable.transparent_placeholder).into(imageView)
             }
         }
 
