@@ -393,6 +393,9 @@ function App() {
   const [draftPublishing, setDraftPublishing] = useState<string | null>(null);
   const [draftDeleting, setDraftDeleting] = useState<string | null>(null);
   const [deleteAllProgress, setDeleteAllProgress] = useState<{ current: number; total: number } | null>(null);
+  const [publishAllProgress, setPublishAllProgress] = useState<{ current: number; total: number; currentName?: string } | null>(null);
+  const [singlePublishProgress, setSinglePublishProgress] = useState<{ step: string } | null>(null);
+  const [singleDeleteProgress, setSingleDeleteProgress] = useState<{ step: string; fileProgress?: { current: number; total: number } } | null>(null);
   const [draftPreviewSticker, setDraftPreviewSticker] = useState<{ url: string, title?: string } | null>(null);
   const [draftDragIdx, setDraftDragIdx] = useState<number | null>(null);
   const [draftDragOverIdx, setDraftDragOverIdx] = useState<number | null>(null);
@@ -698,16 +701,19 @@ function App() {
   const publishDraft = async (draft: StickerPack) => {
     if (!window.confirm(`Are you sure you want to publish "${draft.name}"?`)) return;
     setDraftPublishing(draft.id);
+    setSinglePublishProgress({ step: 'Translating...' });
     try {
       // Auto-translate from name_en at publish time
       let translations: Record<string, string> = {};
       const englishName = (draft as any).name_en || draft.name;
       if (deepseekService.isConfigured()) {
         try {
+          setSinglePublishProgress({ step: 'AI translating pack name...' });
           translations = await deepseekService.translatePackName(englishName);
         } catch { translations = {}; }
       }
 
+      setSinglePublishProgress({ step: 'Publishing to database...' });
       const targetCollection = draft.is_premium ? 'premium_stickers' : 'stickers';
       const { id, ...packDataWithoutId } = draft as any;
       await setDoc(doc(db, targetCollection, draft.id), {
@@ -717,9 +723,11 @@ function App() {
         is_active: true,
         published_at: serverTimestamp(),
       });
+      setSinglePublishProgress({ step: 'Removing draft...' });
       await deleteDoc(doc(db, 'draft_stickers', draft.id));
       setDraftPacks(prev => prev.filter(p => p.id !== draft.id));
       if (selectedDraft?.id === draft.id) setSelectedDraft(null);
+      setSinglePublishProgress({ step: 'Refreshing packs...' });
       await fetchPacks();
       alert(`✅ "${draft.name}" published successfully!`);
     } catch (error: any) {
@@ -727,6 +735,7 @@ function App() {
       alert(`Publish error: ${error.message}`);
     } finally {
       setDraftPublishing(null);
+      setSinglePublishProgress(null);
     }
   };
 
@@ -734,8 +743,12 @@ function App() {
     if (draftPacks.length === 0) return;
     if (!window.confirm(`Are you sure you want to publish ${draftPacks.length} draft packs?`)) return;
     let published = 0;
-    for (const draft of draftPacks) {
+    const total = draftPacks.length;
+    setPublishAllProgress({ current: 0, total, currentName: draftPacks[0]?.name });
+    for (let idx = 0; idx < draftPacks.length; idx++) {
+      const draft = draftPacks[idx];
       setDraftPublishing(draft.id);
+      setPublishAllProgress({ current: idx, total, currentName: draft.name });
       try {
         let translations: Record<string, string> = {};
         const englishName = (draft as any).name_en || draft.name;
@@ -760,11 +773,12 @@ function App() {
         console.error(`Publish error (${draft.name}):`, error);
       }
     }
+    setPublishAllProgress(null);
     setDraftPublishing(null);
     setDraftPacks([]);
     setSelectedDraft(null);
     await fetchPacks();
-    alert(`✅ ${published}/${draftPacks.length} packs published!`);
+    alert(`✅ ${published}/${total} packs published!`);
   };
 
   const deleteAllDrafts = async () => {
@@ -801,15 +815,19 @@ function App() {
   const deleteDraftPack = async (draft: StickerPack) => {
     if (!window.confirm(`Are you sure you want to delete the draft "${draft.name}"? This action cannot be undone!`)) return;
     setDraftDeleting(draft.id);
+    setSingleDeleteProgress({ step: 'Deleting storage files...' });
     try {
       // Storage'dan sticker dosyalarını sil
       try {
         const folderRef = ref(storage, `stickers/${draft.id}`);
         const fileList = await listAll(folderRef);
-        for (const item of fileList.items) {
-          await deleteObject(item);
+        const totalFiles = fileList.items.length;
+        for (let fi = 0; fi < totalFiles; fi++) {
+          setSingleDeleteProgress({ step: `Deleting file ${fi + 1}/${totalFiles}...`, fileProgress: { current: fi, total: totalFiles } });
+          await deleteObject(fileList.items[fi]);
         }
       } catch (e) { console.log('Storage silme (draft):', e); }
+      setSingleDeleteProgress({ step: 'Removing from database...' });
       await deleteDoc(doc(db, 'draft_stickers', draft.id));
       setDraftPacks(prev => prev.filter(p => p.id !== draft.id));
       if (selectedDraft?.id === draft.id) setSelectedDraft(null);
@@ -818,6 +836,7 @@ function App() {
       alert(`Delete error: ${error.message}`);
     } finally {
       setDraftDeleting(null);
+      setSingleDeleteProgress(null);
     }
   };
 
@@ -5037,16 +5056,17 @@ function App() {
                           <>
                           <button
                             onClick={deleteAllDrafts}
-                            disabled={!!deleteAllProgress}
+                            disabled={!!deleteAllProgress || !!publishAllProgress}
                             className="px-5 py-2.5 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-red-500/20 hover:translate-y-[-1px] transition-all flex items-center gap-2 disabled:opacity-50"
                           >
                             <Trash2 size={13} /> Delete All
                           </button>
                           <button
                             onClick={publishAllDrafts}
-                            className="px-5 py-2.5 bg-gradient-to-r from-violet-500 to-purple-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-violet-500/20 hover:translate-y-[-1px] transition-all flex items-center gap-2"
+                            disabled={!!publishAllProgress || !!deleteAllProgress}
+                            className="px-5 py-2.5 bg-gradient-to-r from-violet-500 to-purple-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-violet-500/20 hover:translate-y-[-1px] transition-all flex items-center gap-2 disabled:opacity-50"
                           >
-                            <Check size={13} /> Publish All
+                            {publishAllProgress ? <RefreshCcw size={13} className="animate-spin" /> : <Check size={13} />} {publishAllProgress ? 'Publishing...' : 'Publish All'}
                           </button>
                           </>
                         )}
@@ -5077,6 +5097,34 @@ function App() {
                       {draftDeleting && (
                         <p className="text-[10px] text-red-300/70 truncate">
                           🗑️ {draftPacks.find(d => d.id === draftDeleting)?.name || draftDeleting}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Publish All Progress */}
+                  {publishAllProgress && (
+                    <div className="glass rounded-2xl p-5 border border-violet-500/20 space-y-3 bg-gradient-to-br from-violet-500/5 to-purple-600/5">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <Check size={16} className="text-violet-400 animate-pulse" />
+                          <span className="text-sm font-black text-white">
+                            Publishing {publishAllProgress.current + 1}/{publishAllProgress.total}
+                          </span>
+                        </div>
+                        <span className="text-lg font-black text-violet-400">
+                          {Math.round(((publishAllProgress.current + 1) / publishAllProgress.total) * 100)}%
+                        </span>
+                      </div>
+                      <div className="w-full bg-white/5 rounded-full h-3 overflow-hidden">
+                        <div
+                          className="h-full bg-gradient-to-r from-violet-500 to-purple-600 rounded-full transition-all duration-300"
+                          style={{ width: `${Math.max(2, ((publishAllProgress.current + 1) / publishAllProgress.total) * 100)}%` }}
+                        />
+                      </div>
+                      {publishAllProgress.currentName && (
+                        <p className="text-[10px] text-violet-300/70 truncate">
+                          📦 {publishAllProgress.currentName}
                         </p>
                       )}
                     </div>
@@ -5162,10 +5210,34 @@ function App() {
                                   disabled={draftPublishing === draft.id}
                                   className="px-5 py-2.5 bg-gradient-to-r from-violet-500 to-purple-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-violet-500/20 hover:translate-y-[-1px] transition-all flex items-center gap-2 disabled:opacity-50"
                                 >
-                                  <Check size={13} /> {draftPublishing === draft.id ? 'Publishing...' : 'Publish'}
+                                  {draftPublishing === draft.id ? <RefreshCcw size={13} className="animate-spin" /> : <Check size={13} />} {draftPublishing === draft.id ? 'Publishing...' : 'Publish'}
                                 </button>
                               </div>
                             </div>
+                            {/* Single item progress bar */}
+                            {draftPublishing === draft.id && singlePublishProgress && (
+                              <div className="mt-3 space-y-2">
+                                <div className="flex items-center gap-2">
+                                  <div className="flex-1 bg-white/5 rounded-full h-1.5 overflow-hidden">
+                                    <div className="h-full bg-gradient-to-r from-violet-500 to-purple-600 rounded-full animate-pulse" style={{ width: '60%' }} />
+                                  </div>
+                                  <span className="text-[9px] font-bold text-violet-400 shrink-0">{singlePublishProgress.step}</span>
+                                </div>
+                              </div>
+                            )}
+                            {draftDeleting === draft.id && singleDeleteProgress && (
+                              <div className="mt-3 space-y-2">
+                                <div className="flex items-center gap-2">
+                                  <div className="flex-1 bg-white/5 rounded-full h-1.5 overflow-hidden">
+                                    <div
+                                      className="h-full bg-gradient-to-r from-red-500 to-red-600 rounded-full transition-all duration-300"
+                                      style={{ width: singleDeleteProgress.fileProgress ? `${Math.max(5, (singleDeleteProgress.fileProgress.current / singleDeleteProgress.fileProgress.total) * 100)}%` : '60%' }}
+                                    />
+                                  </div>
+                                  <span className="text-[9px] font-bold text-red-400 shrink-0">{singleDeleteProgress.step}</span>
+                                </div>
+                              </div>
+                            )}
                           </div>
 
                           {/* Sticker Grid - Large Previews with Drag & Drop */}
@@ -5263,12 +5335,25 @@ function App() {
                         <div className="space-y-4">
                           <div>
                             <label className="text-[10px] font-black text-textSec uppercase tracking-widest mb-1.5 block">Pack Name (EN)</label>
-                            <input
-                              type="text"
-                              value={draftEditData.name || ''}
-                              onChange={e => setDraftEditData(prev => ({ ...prev, name: e.target.value }))}
-                              className="w-full bg-background border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:ring-2 focus:ring-primary"
-                            />
+                            <div className="flex gap-2">
+                              <input
+                                type="text"
+                                value={draftEditData.name || ''}
+                                onChange={e => setDraftEditData(prev => ({ ...prev, name: e.target.value }))}
+                                className="flex-1 bg-background border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:ring-2 focus:ring-primary"
+                              />
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  const newName = await generateCreativeName(draftEditData.name || '');
+                                  setDraftEditData(prev => ({ ...prev, name: newName }));
+                                }}
+                                className="px-3 bg-accent/10 border border-accent/20 hover:bg-accent/20 hover:border-accent/50 text-accent rounded-xl transition-all flex items-center justify-center active:scale-95 group"
+                                title="Suggest Creative Name"
+                              >
+                                <Wand2 size={18} className="group-hover:rotate-12 transition-transform" />
+                              </button>
+                            </div>
                           </div>
                           <div>
                             <label className="text-[10px] font-black text-textSec uppercase tracking-widest mb-1.5 block">Category</label>

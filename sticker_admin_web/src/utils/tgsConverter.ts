@@ -6,7 +6,7 @@ import lottie from 'lottie-web';
 
 const STICKER_SIZE = 512;
 const MAX_ANIMATED_SIZE = 500 * 1024; // 500KB WhatsApp limit
-const MAX_FRAMES = 50;
+const MAX_FRAMES = 60;
 
 // ========== TGS DECOMPRESSION ==========
 
@@ -21,8 +21,8 @@ export function decompressTgs(buffer: ArrayBuffer): object {
 export async function renderLottieFrames(
     lottieData: object,
     size: number = STICKER_SIZE,
-    fps: number = 10,
-    quality: number = 0.65
+    fps: number = 12,
+    quality: number = 0.75
 ): Promise<ArrayBuffer[]> {
     const wrapper = document.createElement('div');
     wrapper.style.cssText = `position:fixed;left:-9999px;top:-9999px;width:${size}px;height:${size}px;overflow:hidden;`;
@@ -88,8 +88,8 @@ export async function renderLottieFrames(
 export async function renderVideoFrames(
     videoBlob: Blob,
     size: number = STICKER_SIZE,
-    fps: number = 10,
-    quality: number = 0.65
+    fps: number = 12,
+    quality: number = 0.75
 ): Promise<ArrayBuffer[]> {
     const video = document.createElement('video');
     video.muted = true;
@@ -261,6 +261,7 @@ export async function convertTgsToAnimatedWebp(tgsBuffer: ArrayBuffer): Promise<
     const lottieData = decompressTgs(tgsBuffer);
 
     const attempts: Array<{ fps: number; quality: number }> = [
+        { fps: 12, quality: 0.75 },
         { fps: 10, quality: 0.65 },
         { fps: 10, quality: 0.45 },
         { fps: 8, quality: 0.35 },
@@ -285,6 +286,7 @@ export async function convertTgsToAnimatedWebp(tgsBuffer: ArrayBuffer): Promise<
 
 export async function convertWebmToAnimatedWebp(webmBlob: Blob): Promise<Blob> {
     const attempts: Array<{ fps: number; quality: number }> = [
+        { fps: 12, quality: 0.75 },
         { fps: 10, quality: 0.65 },
         { fps: 10, quality: 0.45 },
         { fps: 8, quality: 0.35 },

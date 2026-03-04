@@ -176,10 +176,14 @@ async function renderTgsFrames(
     try {
         const anim = lottie.loadAnimation({
             container: wrapper,
-            renderer: 'svg',
+            renderer: 'canvas',
             loop: false,
             autoplay: false,
             animationData: lottieData,
+            rendererSettings: {
+                clearCanvas: true,
+                progressiveLoad: false,
+            }
         });
 
         await new Promise<void>((resolve, reject) => {
@@ -192,44 +196,31 @@ async function renderTgsFrames(
         const targetFps = 15;
         const frameStep = Math.max(1, Math.round(originalFps / targetFps));
 
-        const w = lottieData.w || 512;
-        const h = lottieData.h || 512;
+        // Use lottie's own canvas directly
+        const lottieCanvas = wrapper.querySelector('canvas') as HTMLCanvasElement;
+        if (!lottieCanvas) throw new Error('Lottie did not create canvas');
 
-        const svg = wrapper.querySelector('svg');
-        if (!svg) throw new Error('Lottie SVG not found');
-        svg.setAttribute('width', '512');
-        svg.setAttribute('height', '512');
-        if (!svg.getAttribute('viewBox')) {
-            svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
-        }
+        const outCanvas = document.createElement('canvas');
+        outCanvas.width = 512;
+        outCanvas.height = 512;
+        const outCtx = outCanvas.getContext('2d')!;
 
         const frames: Blob[] = [];
-        const canvas = document.createElement('canvas');
-        canvas.width = 512;
-        canvas.height = 512;
-        const ctx = canvas.getContext('2d')!;
         const totalOutputFrames = Math.ceil(totalFrames / frameStep);
 
         for (let f = 0; f < totalFrames; f += frameStep) {
             anim.goToAndStop(f, true);
             onProgress?.(`Rendering frame ${frames.length + 1}/${totalOutputFrames}...`);
 
-            const svgData = new XMLSerializer().serializeToString(svg);
-            const img = new Image();
-            img.width = 512;
-            img.height = 512;
+            // Wait for canvas render
+            await new Promise(r => requestAnimationFrame(r));
 
-            await new Promise<void>((resolve, reject) => {
-                img.onload = () => resolve();
-                img.onerror = () => reject(new Error('SVG rasterize failed'));
-                img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgData);
-            });
-
-            ctx.clearRect(0, 0, 512, 512);
-            ctx.drawImage(img, 0, 0, 512, 512);
+            // Copy from lottie canvas to output canvas
+            outCtx.clearRect(0, 0, 512, 512);
+            outCtx.drawImage(lottieCanvas, 0, 0, 512, 512);
 
             const blob = await new Promise<Blob>((resolve, reject) => {
-                canvas.toBlob(
+                outCanvas.toBlob(
                     b => b ? resolve(b) : reject(new Error('Frame export failed')),
                     'image/png'
                 );
@@ -640,49 +631,60 @@ export async function importTelegramPacks(
                     completedPacks
                 });
 
-                // Process stickers sequentially (FFmpeg WASM is single-threaded)
+                // Process stickers - parallel for static, sequential for animated (FFmpeg WASM is single-threaded)
                 const processedStickers: Sticker[] = [];
-                const processedIsAnimated: boolean[] = []; // Track if each sticker is animated
+                const processedIsAnimated: boolean[] = [];
+                const hasAnimated = chunk.some(s => s.is_animated || s.is_video);
+                const PARALLEL_BATCH = hasAnimated ? 1 : 3; // parallel for static packs
 
-                for (let j = 0; j < chunk.length; j++) {
+                for (let j = 0; j < chunk.length; j += PARALLEL_BATCH) {
                     if (abortSignal?.aborted) break;
+                    const batchEnd = Math.min(j + PARALLEL_BATCH, chunk.length);
+                    const batchSlice = chunk.slice(j, batchEnd);
 
                     onProgress?.({
                         currentPack: i + 1,
                         totalPacks: packInputs.length,
-                        currentStep: `${totalParts > 1 ? `[Part ${partNum}/${totalParts}] ` : ''}Processing sticker ${j + 1}/${chunk.length}`,
+                        currentStep: `${totalParts > 1 ? `[Part ${partNum}/${totalParts}] ` : ''}Processing sticker${PARALLEL_BATCH > 1 ? 's' : ''} ${j + 1}${batchEnd > j + 1 ? `-${batchEnd}` : ''}/${chunk.length}`,
                         packName,
                         stickerProgress: { current: j, total: chunk.length },
                         status: 'running',
                         completedPacks
                     });
 
-                    const globalIdx = partIdx * stickerLimit + j;
-                    const sticker = await processTelegramSticker(botToken, chunk[j], packId, globalIdx, (msg) => {
-                        onProgress?.({
-                            currentPack: i + 1,
-                            totalPacks: packInputs.length,
-                            currentStep: msg,
-                            packName,
-                            stickerProgress: { current: j, total: chunk.length },
-                            status: 'running',
-                            completedPacks
-                        });
-                    }, abortSignal);
+                    const results = await Promise.all(
+                        batchSlice.map((s, bIdx) => {
+                            const globalIdx = partIdx * stickerLimit + j + bIdx;
+                            return processTelegramSticker(botToken, s, packId, globalIdx, (msg) => {
+                                onProgress?.({
+                                    currentPack: i + 1,
+                                    totalPacks: packInputs.length,
+                                    currentStep: msg,
+                                    packName,
+                                    stickerProgress: { current: j + bIdx, total: chunk.length },
+                                    status: 'running',
+                                    completedPacks
+                                });
+                            }, abortSignal);
+                        })
+                    );
 
-                    if (sticker) {
-                        processedStickers.push(sticker);
-                        processedIsAnimated.push(chunk[j].is_animated || chunk[j].is_video);
-                        onProgress?.({
-                            currentPack: i + 1,
-                            totalPacks: packInputs.length,
-                            currentStep: `✓ Sticker ${processedStickers.length}/${chunk.length} done`,
-                            packName,
-                            stickerProgress: { current: j + 1, total: chunk.length },
-                            status: 'running',
-                            completedPacks
-                        });
-                    }
+                    results.forEach((sticker, bIdx) => {
+                        if (sticker) {
+                            processedStickers.push(sticker);
+                            processedIsAnimated.push(batchSlice[bIdx].is_animated || batchSlice[bIdx].is_video);
+                        }
+                    });
+
+                    onProgress?.({
+                        currentPack: i + 1,
+                        totalPacks: packInputs.length,
+                        currentStep: `✓ ${processedStickers.length}/${chunk.length} stickers done`,
+                        packName,
+                        stickerProgress: { current: batchEnd, total: chunk.length },
+                        status: 'running',
+                        completedPacks
+                    });
                 }
 
                 if (processedStickers.length === 0) {
