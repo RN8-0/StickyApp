@@ -1409,12 +1409,17 @@ Rules:
         // Image
         sheetView.findViewById<ImageView>(R.id.ivPreview)?.setImageBitmap(bmp)
 
-        // Prompt
+        // Prompt — full text, tap to copy
         val promptSection = sheetView.findViewById<View>(R.id.promptSection)
         val tvPrompt = sheetView.findViewById<TextView>(R.id.tvPrompt)
         if (item.prompt.isNotEmpty()) {
             promptSection?.visibility = View.VISIBLE
             tvPrompt?.text = item.prompt
+            promptSection?.setOnClickListener {
+                val clipboard = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                clipboard.setPrimaryClip(android.content.ClipData.newPlainText("AI Prompt", item.prompt))
+                Toast.makeText(this, "📋 Prompt copied!", Toast.LENGTH_SHORT).show()
+            }
         }
 
         // All 3 buttons visible for all items
