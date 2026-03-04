@@ -119,6 +119,18 @@ class DetailsActivity : AppCompatActivity() {
             finish()
         }
 
+        // Premium crown icon → PremiumActivity
+        val btnPremiumHeader = findViewById<View>(R.id.btnPremiumHeader)
+        if (PreferencesHelper.isPremium(this)) {
+            btnPremiumHeader.visibility = View.GONE
+        } else {
+            btnPremiumHeader.visibility = View.VISIBLE
+            btnPremiumHeader.setOnClickListener {
+                startActivity(Intent(this, PremiumActivity::class.java))
+                overridePendingTransition(R.anim.fade_in, R.anim.fade_out)
+            }
+        }
+
         // Durum çubuğunu ve üst barı tek renk yap
         window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS)
         window.addFlags(android.view.WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
@@ -1167,6 +1179,12 @@ class DetailsActivity : AppCompatActivity() {
                 prepareJob.await()
                 progressJob.join() // Wait for smooth progress to finish
                 
+                // Pre-optimize stickers for WhatsApp BEFORE sending intent
+                // This avoids heavy bitmap ops during ContentProvider calls
+                withContext(Dispatchers.IO) {
+                    preOptimizePackForWhatsApp(pack)
+                }
+                
                 val sizeCheckResult = checkStickerFileSizes(pack)
                 if (sizeCheckResult != null) {
                     showLoadingState(false)
@@ -1236,46 +1254,122 @@ class DetailsActivity : AppCompatActivity() {
 
     /**
      * Sticker dosya boyutlarını kontrol et - WhatsApp limitlerine uygun mu?
-     * @return Hata mesajı veya null (sorun yoksa)
+     * StickerProvider otomatik sıkıştırma yaptığı için artık sadece log uyarısı verir.
+     * @return Her zaman null (StickerProvider boyut aşımını halleder)
      */
     private fun checkStickerFileSizes(pack: Pack): String? {
         val maxStaticSize = 100 * 1024L // 100KB
         val maxAnimatedSize = 500 * 1024L // 500KB
-        val maxTraySize = 50 * 1024L // 50KB
         val maxSize = if (pack.isAnimated) maxAnimatedSize else maxStaticSize
 
         val cacheDir = java.io.File(cacheDir, "sticker_cache/${pack.id}")
-        if (!cacheDir.exists()) return null // Cache yoksa kontrol etme
+        if (!cacheDir.exists()) return null
 
         var oversizedCount = 0
-        var largestFile = ""
-        var largestSize = 0L
-
-        // Sticker dosyalarını kontrol et
         for (sticker in pack.stickers) {
             val file = java.io.File(cacheDir, sticker.file)
             if (file.exists() && file.length() > maxSize) {
                 oversizedCount++
-                if (file.length() > largestSize) {
-                    largestSize = file.length()
-                    largestFile = sticker.file
+            }
+        }
+
+        if (oversizedCount > 0) {
+            Log.w("DetailsActivity", "Pack ${pack.id}: $oversizedCount stickers exceed ${maxSize/1024}KB limit, StickerProvider will auto-compress")
+        }
+
+        return null
+    }
+
+    /**
+     * WhatsApp'a göndermeden ÖNCE tüm stickerleri optimize et.
+     * Bu sayede ContentProvider'da ağır bitmap işlemi yapılmaz.
+     */
+    private fun preOptimizePackForWhatsApp(pack: Pack) {
+        val isAnimated = pack.isAnimated
+        val maxSize = if (isAnimated) 500L * 1024 else 100L * 1024
+        val cacheDir = java.io.File(cacheDir, "sticker_cache/${pack.id}")
+        if (!cacheDir.exists()) return
+
+        Log.d("DetailsActivity", "preOptimize: pack=${pack.id} isAnimated=$isAnimated stickers=${pack.stickers.size}")
+
+        // Tray dosyasını 96x96 PNG'ye dönüştür
+        val trayFile = java.io.File(cacheDir, pack.tray)
+        if (trayFile.exists()) {
+            val trayPng = java.io.File(cacheDir, "tray_whatsapp.png")
+            if (!trayPng.exists() || trayPng.length() <= 0) {
+                try {
+                    val bmp = android.graphics.BitmapFactory.decodeFile(trayFile.absolutePath)
+                    if (bmp != null) {
+                        val scaled = android.graphics.Bitmap.createScaledBitmap(bmp, 96, 96, true)
+                        java.io.FileOutputStream(trayPng).use { out ->
+                            scaled.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, out)
+                        }
+                        if (bmp != scaled) scaled.recycle()
+                        bmp.recycle()
+                        Log.d("DetailsActivity", "Tray converted: ${trayPng.length()} bytes")
+                    }
+                } catch (e: Exception) {
+                    Log.e("DetailsActivity", "Tray conversion failed: ${e.message}")
                 }
             }
         }
 
-        // Tray dosyasını kontrol et
-        val trayFile = cacheDir.listFiles()?.find { it.name.startsWith("tray") && it.name.endsWith(".png") }
-        if (trayFile != null && trayFile.length() > maxTraySize) {
-            // Tray çok büyük ama bu genellikle sorun değil çünkü StickerProvider 96x96'ya dönüştürüyor
-        }
+        // Animated paketleri sıkıştırmıyoruz
+        if (isAnimated) return
 
-        if (oversizedCount > 0) {
-            val limitKB = maxSize / 1024
-            val largestKB = largestSize / 1024
-            return getString(R.string.sticker_size_error, oversizedCount, limitKB, largestKB)
-        }
+        // Her stickeri kontrol et ve gerekirse boyutlandır/sıkıştır
+        for (sticker in pack.stickers) {
+            val file = java.io.File(cacheDir, sticker.file)
+            if (!file.exists()) continue
 
-        return null
+            // Check dimensions AND size
+            val opts = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            android.graphics.BitmapFactory.decodeFile(file.absolutePath, opts)
+            val needsDimensionFix = opts.outWidth != 512 || opts.outHeight != 512
+            val needsSizeFix = file.length() > maxSize
+            if (!needsDimensionFix && !needsSizeFix) continue
+
+            val optFile = java.io.File(cacheDir, "${file.nameWithoutExtension}_opt.webp")
+            if (optFile.exists() && optFile.length() in 1..maxSize) {
+                val optOpts = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                android.graphics.BitmapFactory.decodeFile(optFile.absolutePath, optOpts)
+                if (optOpts.outWidth == 512 && optOpts.outHeight == 512) continue
+            }
+
+            try {
+                var inSampleSize = 1
+                while (opts.outWidth / inSampleSize > 1024 || opts.outHeight / inSampleSize > 1024) {
+                    inSampleSize *= 2
+                }
+                val decodeOpts = android.graphics.BitmapFactory.Options().apply { this.inSampleSize = inSampleSize }
+                val bitmap = android.graphics.BitmapFactory.decodeFile(file.absolutePath, decodeOpts) ?: continue
+                
+                // Create 512x512 canvas, center sticker with aspect ratio preserved
+                val output = android.graphics.Bitmap.createBitmap(512, 512, android.graphics.Bitmap.Config.ARGB_8888)
+                val canvas = android.graphics.Canvas(output)
+                val scale = minOf(512f / bitmap.width, 512f / bitmap.height)
+                val scaledW = (bitmap.width * scale).toInt()
+                val scaledH = (bitmap.height * scale).toInt()
+                val scaled = android.graphics.Bitmap.createScaledBitmap(bitmap, scaledW, scaledH, true)
+                canvas.drawBitmap(scaled, (512 - scaledW) / 2f, (512 - scaledH) / 2f, null)
+                if (bitmap != scaled) scaled.recycle()
+                bitmap.recycle()
+
+                var quality = 90
+                while (quality >= 10) {
+                    java.io.FileOutputStream(optFile).use { out ->
+                        output.compress(android.graphics.Bitmap.CompressFormat.WEBP, quality, out)
+                    }
+                    if (optFile.length() <= maxSize) break
+                    quality -= 10
+                }
+                
+                output.recycle()
+                Log.d("DetailsActivity", "Optimized ${sticker.file}: ${opts.outWidth}x${opts.outHeight} ${file.length()}B → 512x512 ${optFile.length()}B (q=$quality)")
+            } catch (e: Exception) {
+                Log.e("DetailsActivity", "Failed to optimize ${sticker.file}: ${e.message}")
+            }
+        }
     }
 
     private fun removeFromWhatsApp() {
@@ -1623,11 +1717,15 @@ class DetailsActivity : AppCompatActivity() {
 
         lifecycleScope.launch {
             try {
-                Log.d("DetailsActivity", "Preparing to launch WhatsApp intent for pack: ${pack.id}")
+                Log.d("DetailsActivity", "Preparing to launch WhatsApp intent for pack: ${pack.id} isAnimated=${pack.isAnimated} stickers=${pack.stickers.size} tray=${pack.tray}")
 
                 // KRITIK: Provider'ın veriyi bulabilmesi için cache'i diske kaydet
                 // UI'ı dondurmamak için IO thread'inde yap
                 withContext(Dispatchers.IO) {
+                    // Invalidate provider cache so it picks up fresh data
+                    contentResolver.notifyChange(
+                        android.net.Uri.parse("content://${packageName}.stickers/metadata"), null
+                    )
                     val currentPacks = StickerRepository.allPacksCache
                     val packsToSave = if (currentPacks.any { it.id == pack.id }) {
                         currentPacks

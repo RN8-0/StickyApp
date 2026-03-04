@@ -1,6 +1,7 @@
 package com.sticly
 
 import android.graphics.BitmapFactory
+import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -102,7 +103,7 @@ class PackAdapter(
 
     companion object {
         private const val STICKER_PREVIEW_COUNT = 5
-        private const val GLIDE_OVERRIDE_SIZE = 320
+        private const val GLIDE_OVERRIDE_SIZE = 256
 
         // Single instance. DateFormat is NOT thread-safe, but PackAdapter only runs on Main Thread
         private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
@@ -199,6 +200,7 @@ class PackAdapter(
                 }
                 .withAdListener(object : AdListener() {
                     override fun onAdFailedToLoad(error: LoadAdError) {
+                        Log.e("PackAdapter", "Feed ad failed: ${error.message} (code=${error.code})")
                         adView.tag = null
                         // Collapse the entire ad slot when load fails
                         adView.visibility = View.GONE
@@ -207,6 +209,12 @@ class PackAdapter(
                         adView.layoutParams = failLp
                     }
                 })
+                .withNativeAdOptions(
+                    com.google.android.gms.ads.nativead.NativeAdOptions.Builder()
+                        .setAdChoicesPlacement(com.google.android.gms.ads.nativead.NativeAdOptions.ADCHOICES_TOP_RIGHT)
+                        .setRequestMultipleImages(false)
+                        .build()
+                )
                 .build()
             adLoader.loadAd(AdRequest.Builder().build())
             return
@@ -220,8 +228,12 @@ class PackAdapter(
     override fun onViewRecycled(holder: VH) {
         super.onViewRecycled(holder)
         if (holder.itemView is NativeAdView) {
-            // Reset tag so ad reloads when rebound to a new slot
-            holder.itemView.tag = null
+            // Keep the "loaded" tag so successfully-loaded ads are not re-requested
+            // when the same ViewHolder is rebound to the same ad slot.
+            // Only clear "loading" state (request in-flight for a now-invisible slot).
+            if (holder.itemView.tag == "loading") {
+                holder.itemView.tag = null
+            }
             return
         }
         val container = holder.stickerPreviewContainer ?: return
@@ -424,7 +436,6 @@ class PackAdapter(
                 val stickerFile = CustomStickerManager.getCustomStickerPath(context, pack.id, sticker.file)
                 val req = glide.load(stickerFile)
                     .override(GLIDE_OVERRIDE_SIZE)
-                    .thumbnail(0.5f)
                     .priority(Priority.NORMAL)
                     .diskCacheStrategy(DiskCacheStrategy.NONE)
                     .skipMemoryCache(true)
@@ -442,7 +453,6 @@ class PackAdapter(
                 if (urlToLoad.isNotEmpty()) {
                     val req = glide.load(urlToLoad)
                         .override(GLIDE_OVERRIDE_SIZE)
-                        .thumbnail(0.5f)
                         .priority(Priority.NORMAL)
                         .diskCacheStrategy(DiskCacheStrategy.DATA)
                         .dontTransform()
@@ -455,7 +465,6 @@ class PackAdapter(
                     
                     val req = glide.load(cachedSticker)
                         .override(GLIDE_OVERRIDE_SIZE)
-                        .thumbnail(0.5f)
                         .priority(Priority.NORMAL)
                         .diskCacheStrategy(DiskCacheStrategy.DATA)
                         .dontTransform()

@@ -336,9 +336,8 @@ class MainActivity : AppCompatActivity() {
         if (StickerRepository.allPacksCache.isNotEmpty()) {
             displayPacks(StickerRepository.allPacksCache)
         } else {
-            // Show UI skeleton immediately — no blank white screen
-            showContent()
             // Disk cache'i arka planda oku — main thread'i bloklama
+            // Loading overlay kalır, displayPacks() gelince showContent() çağrılır
             lifecycleScope.launch {
                 val diskPacks = withContext(Dispatchers.IO) {
                     StickerRepository.loadCacheFromDisk(this@MainActivity)
@@ -349,6 +348,11 @@ class MainActivity : AppCompatActivity() {
                 } else if (StickerRepository.allPacksCache.isNotEmpty()) {
                     displayPacks(StickerRepository.allPacksCache)
                 }
+            }
+            // Güvenlik: cache boşsa kısa süre sonra yine de içeriği göster
+            lifecycleScope.launch {
+                delay(500)
+                if (!contentShown) showContent()
             }
         }
 
@@ -582,7 +586,7 @@ class MainActivity : AppCompatActivity() {
             categoryChipGroup.visibility = View.GONE
             hideHomeSections()
             btnAddStickerHeader.visibility = View.GONE
-            btnPremiumHeaderCached?.visibility = View.VISIBLE
+            btnPremiumHeaderCached?.visibility = View.GONE
             menuBtn.visibility = View.VISIBLE
             toolbarTitle.text = "✨ Sticky AI"
             toolbarSubtitle.visibility = View.GONE
@@ -1248,10 +1252,14 @@ Rules:
                         aiRawBitmap = null
                         aiPreviewCard?.visibility = View.GONE
                         aiEtPrompt?.text?.clear()
+                        // Full refresh to show new pack immediately
+                        refreshPacks()
                         // Navigate to My Stickers tab
                         currentFilter = FilterType.CUSTOM
-                        applyFilters()
+                        categoryChipGroup.visibility = View.GONE
+                        hideHomeSections()
                         updateBottomNavUI()
+                        applyFilters()
                     } else {
                         Toast.makeText(this@MainActivity, R.string.ai_generation_failed, Toast.LENGTH_SHORT).show()
                     }
@@ -1560,8 +1568,16 @@ Rules:
         override fun getItemCount() = items.size
 
         fun updateItems(newItems: List<AiHistoryItem>) {
-            items = newItems.toMutableList()
-            notifyDataSetChanged()
+            val oldItems = items
+            val newList = newItems.toMutableList()
+            val diff = DiffUtil.calculateDiff(object : DiffUtil.Callback() {
+                override fun getOldListSize() = oldItems.size
+                override fun getNewListSize() = newList.size
+                override fun areItemsTheSame(o: Int, n: Int) = oldItems[o].path == newList[n].path
+                override fun areContentsTheSame(o: Int, n: Int) = oldItems[o] == newList[n]
+            }, false)
+            items = newList
+            diff.dispatchUpdatesTo(this)
         }
     }
 
@@ -1654,6 +1670,9 @@ Rules:
         rvRegional.setHasFixedSize(true)
         rvRegional.setItemViewCacheSize(4)
         rvRegional.itemAnimator = null
+        val regionalPool = RecyclerView.RecycledViewPool()
+        regionalPool.setMaxRecycledViews(0, 8)
+        rvRegional.setRecycledViewPool(regionalPool)
         rvRegional.adapter = regionalAdapter
 
         // Snap to card edges for smooth swipe
@@ -1874,7 +1893,7 @@ Rules:
         data class FilterChipInfo(val id: String, val label: String, val filterType: FilterType)
         val filterChips = listOf(
             FilterChipInfo("filter_all", "✨ ${getString(R.string.filter_all)}", FilterType.ALL),
-            FilterChipInfo("filter_premium", "💎 ${getString(R.string.filter_premium)}", FilterType.PREMIUM)
+            FilterChipInfo("filter_premium", "👑 Premium", FilterType.PREMIUM)
         )
 
         filterChips.forEach { info ->
@@ -1909,16 +1928,16 @@ Rules:
             val isActive = currentFilter == FilterType.ALL && currentCategory == categoryKey
             val chip = Chip(this).apply {
                 val resId = getCategoryStringRes(categoryKey)
-                val emoji = getCategoryEmoji(categoryKey)
                 val label = if (resId != 0) {
                     getString(resId)
                 } else {
                     val dynResId = resources.getIdentifier("category_$categoryKey", "string", packageName)
                     if (dynResId != 0) getString(dynResId) else {
-                        categoryKey.replace("_", " ").split(" ").joinToString(" ") { it.replaceFirstChar { char -> char.uppercase() } }
+                        val emoji = getCategoryEmoji(categoryKey)
+                        "$emoji " + categoryKey.replace("_", " ").split(" ").joinToString(" ") { it.replaceFirstChar { char -> char.uppercase() } }
                     }
                 }
-                text = "$emoji $label"
+                text = label
                 isCheckable = true
                 isChecked = isActive
                 tag = categoryKey
@@ -2041,7 +2060,7 @@ Rules:
             override fun afterTextChanged(s: Editable?) {
                 searchJob?.cancel()
                 searchJob = lifecycleScope.launch {
-                    delay(300) // Debounce
+                    delay(500) // Debounce
                     currentSearchQuery = s?.toString() ?: ""
                     applyFilters()
                 }
@@ -2067,11 +2086,11 @@ Rules:
 
         // Detect keyboard dismiss and clear search focus
         val rootView = window.decorView.rootView
+        val keyboardRect = android.graphics.Rect()
         rootView.viewTreeObserver.addOnGlobalLayoutListener {
-            val rect = android.graphics.Rect()
-            rootView.getWindowVisibleDisplayFrame(rect)
+            rootView.getWindowVisibleDisplayFrame(keyboardRect)
             val screenHeight = rootView.height
-            val keypadHeight = screenHeight - rect.bottom
+            val keypadHeight = screenHeight - keyboardRect.bottom
             if (keypadHeight < screenHeight * 0.15 && searchBox.hasFocus()) {
                 searchBox.clearFocus()
             }
@@ -2134,7 +2153,7 @@ Rules:
                     val firebasePacks = allPacks.filter { it.category != "custom" }
                     firebasePacks + customPacks
                 }
-                allPacks = updatedPacks
+                allPacks = updatedPacks.distinctBy { it.id }
                 applyFilters()
             }
         }
@@ -2246,7 +2265,7 @@ Rules:
     private var hasPreloadedPopular = false
 
     private fun displayPacks(packs: List<Pack>) {
-        allPacks = packs
+        allPacks = packs.distinctBy { it.id }
         setupCategoryChips()
         updateRegionalPacks(packs)
         updateStoryPacks(packs)
@@ -2309,7 +2328,7 @@ Rules:
                 if (now - lastPacksUpdateTime < 2000) return@collect
                 lastPacksUpdateTime = now
                 Log.d("MainActivity", "Real-time update received: ${updatedPacks.size} packs")
-                allPacks = updatedPacks
+                allPacks = updatedPacks.distinctBy { it.id }
                 setupCategoryChips()
                 applyFilters()
                 updateRegionalPacks(updatedPacks)
@@ -2326,6 +2345,8 @@ Rules:
 
     private fun applyFilters() {
         filterJob?.cancel()
+        // Capture adapter snapshot on Main before switching to background
+        val oldList = if (::adapter.isInitialized) adapter.getItems() else emptyList<Any>()
         filterJob = lifecycleScope.launch(Dispatchers.Default) {
             var filtered = allPacks
 
@@ -2407,8 +2428,7 @@ Rules:
                 withAds.addAll(sorted)
             }
 
-            // Calculate Diff on Background
-            val oldList = if (::adapter.isInitialized) adapter.getItems() else emptyList()
+            // Calculate Diff on Background (oldList captured on Main before coroutine launch)
             val newList: List<Any> = withAds
             
             val diffResult = DiffUtil.calculateDiff(object : DiffUtil.Callback() {
@@ -2427,7 +2447,7 @@ Rules:
                      if (old is BannerAdPlaceholder && new is BannerAdPlaceholder) return true
                      return old == new
                  }
-            })
+            }, false) // detectMoves=false for faster DiffUtil computation
 
             withContext(Dispatchers.Main) {
                 if (sorted.isEmpty()) {
@@ -2782,7 +2802,7 @@ Rules:
                     CustomStickerManager.toWhatsAppPack(this@MainActivity, cp.id)?.copy(category = "custom")
                 }
                 val firebasePacks = allPacks.filter { it.category != "custom" }
-                allPacks = firebasePacks + customPacks
+                allPacks = (firebasePacks + customPacks).distinctBy { it.id }
 
                 // Switch to My Stickers tab to show the newly added sticker
                 currentFilter = FilterType.CUSTOM

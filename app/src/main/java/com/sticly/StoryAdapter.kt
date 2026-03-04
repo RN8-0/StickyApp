@@ -5,6 +5,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.TextView
+import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
 import com.bumptech.glide.load.engine.DiskCacheStrategy
@@ -13,6 +14,14 @@ class StoryAdapter(
     private var packs: List<Pack>,
     private val onClick: (Pack) -> Unit
 ) : RecyclerView.Adapter<StoryAdapter.VH>() {
+
+    init {
+        setHasStableIds(true)
+    }
+
+    override fun getItemId(position: Int): Long {
+        return packs.getOrNull(position)?.id?.hashCode()?.toLong() ?: position.toLong()
+    }
 
     inner class VH(v: View) : RecyclerView.ViewHolder(v) {
         val image: ImageView = v.findViewById(R.id.storyImage)
@@ -40,7 +49,6 @@ class StoryAdapter(
             Glide.with(holder.image.context)
                 .load(imageUrl)
                 .override(STORY_SIZE)
-                .thumbnail(0.25f)
                 .diskCacheStrategy(DiskCacheStrategy.DATA)
                 .placeholder(R.drawable.ic_launcher_foreground)
                 .into(holder.image)
@@ -55,8 +63,15 @@ class StoryAdapter(
     }
 
     fun updateData(newPacks: List<Pack>) {
+        val oldPacks = packs
+        val diffResult = DiffUtil.calculateDiff(object : DiffUtil.Callback() {
+            override fun getOldListSize() = oldPacks.size
+            override fun getNewListSize() = newPacks.size
+            override fun areItemsTheSame(oldPos: Int, newPos: Int) = oldPacks[oldPos].id == newPacks[newPos].id
+            override fun areContentsTheSame(oldPos: Int, newPos: Int) = oldPacks[oldPos].id == newPacks[newPos].id && oldPacks[oldPos].version == newPacks[newPos].version
+        })
         packs = newPacks
-        notifyDataSetChanged()
+        diffResult.dispatchUpdatesTo(this)
     }
 
     companion object {

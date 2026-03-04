@@ -7,6 +7,7 @@ import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
+import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
 import com.bumptech.glide.Priority
@@ -25,6 +26,14 @@ class RegionalAdapter(
     private val onClick: (Pack) -> Unit,
     private val onAddClick: (Pack) -> Unit
 ) : RecyclerView.Adapter<RegionalAdapter.VH>() {
+
+    init {
+        setHasStableIds(true)
+    }
+
+    override fun getItemId(position: Int): Long {
+        return packs.getOrNull(position)?.id?.hashCode()?.toLong() ?: position.toLong()
+    }
 
     private var density = 0f
     private var btn36Px = 0
@@ -100,8 +109,15 @@ class RegionalAdapter(
     }
 
     fun updateData(newPacks: List<Pack>) {
+        val oldPacks = packs
+        val diffResult = DiffUtil.calculateDiff(object : DiffUtil.Callback() {
+            override fun getOldListSize() = oldPacks.size
+            override fun getNewListSize() = newPacks.size
+            override fun areItemsTheSame(oldPos: Int, newPos: Int) = oldPacks[oldPos].id == newPacks[newPos].id
+            override fun areContentsTheSame(oldPos: Int, newPos: Int) = oldPacks[oldPos].id == newPacks[newPos].id && oldPacks[oldPos].version == newPacks[newPos].version
+        })
         packs = newPacks
-        notifyDataSetChanged()
+        diffResult.dispatchUpdatesTo(this)
     }
 
     private fun bindPack(h: VH, pack: Pack, position: Int) {
@@ -195,8 +211,7 @@ class RegionalAdapter(
                 urlToLoad.isNotEmpty() -> {
                     glide.load(urlToLoad)
                         .override(GLIDE_OVERRIDE)
-                        .thumbnail(0.25f)
-                        .priority(Priority.HIGH)
+                        .priority(Priority.NORMAL)
                         .diskCacheStrategy(DiskCacheStrategy.DATA)
                         .listener(clearBgListener)
                         .into(previewView)
@@ -206,8 +221,7 @@ class RegionalAdapter(
                     if (cachedSticker.exists() && cachedSticker.length() > 0) {
                         glide.load(cachedSticker)
                             .override(GLIDE_OVERRIDE)
-                            .thumbnail(0.25f)
-                            .priority(Priority.HIGH)
+                            .priority(Priority.NORMAL)
                             .diskCacheStrategy(DiskCacheStrategy.DATA)
                             .signature(ObjectKey(cachedSticker.lastModified()))
                             .listener(clearBgListener)
@@ -216,8 +230,7 @@ class RegionalAdapter(
                         val assetPath = "file:///android_asset/${pack.id}/${sticker.file}"
                         glide.load(android.net.Uri.parse(assetPath))
                             .override(GLIDE_OVERRIDE)
-                            .thumbnail(0.25f)
-                            .priority(Priority.HIGH)
+                            .priority(Priority.NORMAL)
                             .diskCacheStrategy(DiskCacheStrategy.DATA)
                             .listener(clearBgListener)
                             .into(previewView)
@@ -228,7 +241,7 @@ class RegionalAdapter(
     }
 
     companion object {
-        private const val GLIDE_OVERRIDE = 320
+        private const val GLIDE_OVERRIDE = 256
     }
 
     private fun formatDownloadValue(count: Int): String {
