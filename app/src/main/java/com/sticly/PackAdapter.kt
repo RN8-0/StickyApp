@@ -167,10 +167,11 @@ class PackAdapter(
             // New slot or previously failed — (re)load
             adView.tag = "loading"
             content?.visibility = View.GONE
-            placeholder?.visibility = View.VISIBLE
-            adView.visibility = View.VISIBLE
+            placeholder?.visibility = View.GONE
+            // Start hidden — only show when ad actually loads
+            adView.visibility = View.GONE
             val lp = adView.layoutParams
-            lp.height = ViewGroup.LayoutParams.WRAP_CONTENT
+            lp.height = 0
             adView.layoutParams = lp
 
             val adLoader = AdLoader.Builder(holder.itemView.context, AdManager.FEED_AD_ID)
@@ -190,6 +191,10 @@ class PackAdapter(
                     adView.setNativeAd(nativeAd)
                     placeholder?.visibility = View.GONE
                     content?.visibility = View.VISIBLE
+                    adView.visibility = View.VISIBLE
+                    val adLp = adView.layoutParams
+                    adLp.height = ViewGroup.LayoutParams.WRAP_CONTENT
+                    adView.layoutParams = adLp
                     adView.tag = "loaded"
                 }
                 .withAdListener(object : AdListener() {
