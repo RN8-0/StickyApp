@@ -1403,7 +1403,7 @@ Rules:
         }
         if (bmp == null) return
 
-        val dialog = com.google.android.material.bottomsheet.BottomSheetDialog(this)
+        val dialog = com.google.android.material.bottomsheet.BottomSheetDialog(this, R.style.RoundedBottomSheetDialog)
         val sheetView = LayoutInflater.from(this).inflate(R.layout.dialog_ai_preview, null)
 
         // Image
@@ -1422,17 +1422,30 @@ Rules:
             }
         }
 
-        // All 3 buttons visible for all items
         val btnEdit = sheetView.findViewById<com.google.android.material.button.MaterialButton>(R.id.btnUsePrompt)
         val btnAddToPack = sheetView.findViewById<com.google.android.material.button.MaterialButton>(R.id.btnAddToPack)
         val btnDelete = sheetView.findViewById<com.google.android.material.button.MaterialButton>(R.id.btnDelete)
 
-        // Edit / Use Prompt — fills prompt input
+        // Edit — open sticker editor with this image
         btnEdit?.setOnClickListener {
-            if (item.prompt.isNotEmpty()) {
-                findViewById<android.widget.EditText>(R.id.aiEtPrompt)?.setText(item.prompt)
-            }
             dialog.dismiss()
+            lifecycleScope.launch(Dispatchers.IO) {
+                try {
+                    val tempFile = java.io.File(cacheDir, "ai_edit_temp.png")
+                    java.io.FileOutputStream(tempFile).use { out ->
+                        bmp.compress(Bitmap.CompressFormat.PNG, 100, out)
+                    }
+                    withContext(Dispatchers.Main) {
+                        val intent = Intent(this@MainActivity, StickerMakerActivity::class.java)
+                        intent.putExtra("editImageUri", android.net.Uri.fromFile(tempFile).toString())
+                        startActivity(intent)
+                    }
+                } catch (e: Exception) {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(this@MainActivity, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
         }
 
         // Add to Pack
@@ -1454,7 +1467,13 @@ Rules:
         }
 
         dialog.setContentView(sheetView)
-        (sheetView.parent as? View)?.setBackgroundColor(android.graphics.Color.TRANSPARENT)
+        // Make the BottomSheet's own container transparent + rounded corners
+        (sheetView.parent as? View)?.let { parent ->
+            parent.setBackgroundColor(android.graphics.Color.TRANSPARENT)
+            val behavior = dialog.behavior
+            behavior.skipCollapsed = true
+            behavior.state = com.google.android.material.bottomsheet.BottomSheetBehavior.STATE_EXPANDED
+        }
         dialog.show()
     }
 

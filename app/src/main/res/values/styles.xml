@@ -98,8 +98,8 @@
 
     <style name="RoundedBottomSheetCorners" parent="">
         <item name="cornerFamily">rounded</item>
-        <item name="cornerSizeTopLeft">28dp</item>
-        <item name="cornerSizeTopRight">28dp</item>
+        <item name="cornerSizeTopLeft">36dp</item>
+        <item name="cornerSizeTopRight">36dp</item>
     </style>
 
     <!-- UCrop Theme with proper navigation bar handling -->
