@@ -242,9 +242,11 @@ async function renderTgsFrames(
 async function checkDuplicatePack(setName: string): Promise<{ exists: boolean; location?: string }> {
     try {
         const stickersQuery = query(collection(db, 'stickers'), where('telegram_set_name', '==', setName));
+        const premiumQuery = query(collection(db, 'premium_stickers'), where('telegram_set_name', '==', setName));
         const draftsQuery = query(collection(db, 'draft_stickers'), where('telegram_set_name', '==', setName));
-        const [stickersSnap, draftsSnap] = await Promise.all([getDocs(stickersQuery), getDocs(draftsQuery)]);
-        if (!stickersSnap.empty) return { exists: true, location: 'published' };
+        const [stickersSnap, premiumSnap, draftsSnap] = await Promise.all([getDocs(stickersQuery), getDocs(premiumQuery), getDocs(draftsQuery)]);
+        if (!stickersSnap.empty) return { exists: true, location: 'published (free)' };
+        if (!premiumSnap.empty) return { exists: true, location: 'published (premium)' };
         if (!draftsSnap.empty) return { exists: true, location: 'drafts' };
         return { exists: false };
     } catch {
@@ -263,16 +265,17 @@ async function processTelegramSticker(
     abortSignal?: AbortSignal
 ): Promise<Sticker | null> {
     if (abortSignal?.aborted) return null;
-    // Per-sticker timeout: 90s for animated/video, 30s for static
     const timeoutMs = (sticker.is_animated || sticker.is_video) ? 90000 : 30000;
-    return Promise.race([
+    let timeoutId: ReturnType<typeof setTimeout>;
+    const result = await Promise.race([
         processTelegramStickerInner(botToken, sticker, packId, index, onProgress),
-        new Promise<null>((resolve) => setTimeout(() => {
-            console.warn(`[TELEGRAM] Sticker #${index + 1} timed out after ${timeoutMs / 1000}s`);
-            onProgress?.(`⏱️ Sticker #${index + 1} timed out, skipping...`);
-            resolve(null);
-        }, timeoutMs)),
-        // Abort signal race — resolves immediately when stop is pressed
+        new Promise<null>((resolve) => {
+            timeoutId = setTimeout(() => {
+                console.warn(`[TELEGRAM] Sticker #${index + 1} timed out after ${timeoutMs / 1000}s`);
+                onProgress?.(`⏱️ Sticker #${index + 1} timed out, skipping...`);
+                resolve(null);
+            }, timeoutMs);
+        }),
         ...(abortSignal ? [new Promise<null>((resolve) => {
             if (abortSignal.aborted) { resolve(null); return; }
             abortSignal.addEventListener('abort', () => {
@@ -281,6 +284,8 @@ async function processTelegramSticker(
             }, { once: true });
         })] : [])
     ]);
+    clearTimeout(timeoutId!);
+    return result;
 }
 
 async function processTelegramStickerInner(
@@ -820,13 +825,14 @@ export async function importTelegramPacks(
         }
     }
 
+    const setsCount = packInputs.length;
     const doneMsg = errors.length > 0
-        ? `⚠️ Done! ${completedPacks.length}/${packInputs.length} imported. Errors: ${errors.join(' | ')}`
-        : `🎉 Done! ${completedPacks.length}/${packInputs.length} packs imported successfully!`;
+        ? `⚠️ Done! ${completedPacks.length} packs from ${setsCount} set(s) imported. Errors: ${errors.join(' | ')}`
+        : `🎉 Done! ${completedPacks.length} packs from ${setsCount} set(s) imported successfully!`;
 
     onProgress?.({
-        currentPack: packInputs.length,
-        totalPacks: packInputs.length,
+        currentPack: setsCount,
+        totalPacks: setsCount,
         currentStep: doneMsg,
         status: 'done',
         completedPacks

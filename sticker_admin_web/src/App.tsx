@@ -4735,7 +4735,13 @@ function App() {
                           <span className="text-[10px] font-black text-textSec uppercase tracking-widest">Live Log</span>
                           <span className="text-[9px] text-textSec bg-white/5 px-2 py-0.5 rounded-md">{batchLogs.length} entries</span>
                         </div>
-                        <button onClick={() => setBatchLogs([])} className="text-[9px] text-textSec hover:text-white transition-colors font-bold uppercase tracking-wider">Clear</button>
+                        <div className="flex items-center gap-3">
+                          <button onClick={() => {
+                            const text = batchLogs.map(l => `${l.time} ${l.message}`).join('\n');
+                            navigator.clipboard.writeText(text);
+                          }} className="text-[9px] text-textSec hover:text-white transition-colors font-bold uppercase tracking-wider">Copy</button>
+                          <button onClick={() => setBatchLogs([])} className="text-[9px] text-textSec hover:text-white transition-colors font-bold uppercase tracking-wider">Clear</button>
+                        </div>
                       </div>
                       <div ref={batchLogRef} className="max-h-[250px] overflow-y-auto p-3 space-y-0.5 font-mono text-[11px] bg-black/40">
                         {batchLogs.map((log, idx) => (
@@ -5017,22 +5023,35 @@ function App() {
                           </div>
                           <div>
                             <h4 className="text-sm font-black text-white">
-                              {telegramProgress.status === 'done' ? 'Import Complete' : `Importing Pack ${telegramProgress.currentPack}/${telegramProgress.totalPacks}`}
+                              {telegramProgress.status === 'done'
+                                ? `✅ Import Complete — ${telegramProgress.completedPacks?.length || 0} packs`
+                                : `Importing Pack ${telegramProgress.currentPack}/${telegramProgress.totalPacks}`}
                             </h4>
-                            {telegramProgress.packName && (
+                            {telegramProgress.status !== 'done' && telegramProgress.packName && (
                               <p className="text-xs text-sky-400 font-bold mt-0.5">{telegramProgress.packName}</p>
+                            )}
+                            {telegramProgress.status === 'done' && (
+                              <p className="text-xs text-green-400 font-bold mt-0.5">{telegramProgress.currentStep}</p>
                             )}
                           </div>
                         </div>
-                        {telegramProgress.stickerProgress && (
+                        {telegramProgress.status === 'done' ? (
+                          <span className="text-lg font-black text-green-400">100%</span>
+                        ) : telegramProgress.stickerProgress ? (
                           <span className="text-lg font-black text-white">
                             {Math.round((telegramProgress.stickerProgress.current / telegramProgress.stickerProgress.total) * 100)}%
                           </span>
-                        )}
+                        ) : null}
                       </div>
 
                       {/* Progress Bar */}
-                      {telegramProgress.stickerProgress ? (
+                      {telegramProgress.status === 'done' ? (
+                        <div className="space-y-2">
+                          <div className="w-full bg-white/5 rounded-full h-3 overflow-hidden">
+                            <div className="h-full bg-gradient-to-r from-green-500 to-emerald-500 rounded-full w-full transition-all duration-500" />
+                          </div>
+                        </div>
+                      ) : telegramProgress.stickerProgress ? (
                         <div className="space-y-2">
                           <div className="w-full bg-white/5 rounded-full h-3 overflow-hidden">
                             <div
@@ -5107,7 +5126,13 @@ function App() {
                           <span className="text-[10px] font-black text-textSec uppercase tracking-widest">Live Log</span>
                           <span className="text-[9px] text-textSec bg-white/5 px-2 py-0.5 rounded-md">{telegramLogs.length} entries</span>
                         </div>
-                        <button onClick={() => setTelegramLogs([])} className="text-[9px] text-textSec hover:text-white transition-colors font-bold uppercase tracking-wider">Clear</button>
+                        <div className="flex items-center gap-3">
+                          <button onClick={() => {
+                            const text = telegramLogs.map(l => `${l.time} ${l.message}`).join('\n');
+                            navigator.clipboard.writeText(text);
+                          }} className="text-[9px] text-textSec hover:text-white transition-colors font-bold uppercase tracking-wider">Copy</button>
+                          <button onClick={() => setTelegramLogs([])} className="text-[9px] text-textSec hover:text-white transition-colors font-bold uppercase tracking-wider">Clear</button>
+                        </div>
                       </div>
                       <div ref={telegramLogRef} className="max-h-[250px] overflow-y-auto p-3 space-y-0.5 font-mono text-[11px] bg-black/40">
                         {telegramLogs.map((log, idx) => (
