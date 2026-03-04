@@ -1092,54 +1092,65 @@ Rules:
 
     private suspend fun aiGenerateImage(prompt: String, onPoll: () -> Unit): Bitmap? =
         withContext(Dispatchers.IO) {
-            // Race all free models in parallel — first success wins
+            // Race models in parallel on api.airforce — first success wins
             try {
                 coroutineScope {
-                    val grok = async { aiPollinationsRequest(prompt, "grok-imagine") }
-                    val flux = async { aiPollinationsRequest(prompt, "flux") }
-                    val gptImg = async { aiPollinationsRequest(prompt, "gptimage") }
+                    val flux = async { aiApiAirforceRequest(prompt, "flux-2-dev") }
+                    val zimg = async { aiApiAirforceRequest(prompt, "z-image") }
 
-                    // Wait for grok first (best quality per user testing)
-                    val grokResult = grok.await()
-                    if (grokResult != null) { flux.cancel(); gptImg.cancel(); return@coroutineScope grokResult }
-
+                    // Wait for first success
                     val fluxResult = flux.await()
-                    if (fluxResult != null) { gptImg.cancel(); return@coroutineScope fluxResult }
+                    if (fluxResult != null) { zimg.cancel(); return@coroutineScope fluxResult }
 
-                    gptImg.await()
+                    zimg.await()
                 }
             } catch (_: Exception) { null }
         }
 
-    private suspend fun aiPollinationsRequest(prompt: String, model: String): Bitmap? =
+    private suspend fun aiApiAirforceRequest(prompt: String, model: String): Bitmap? =
         withContext(Dispatchers.IO) {
             try {
-                val encodedPrompt = java.net.URLEncoder.encode(prompt, "UTF-8")
-                val negPrompt = java.net.URLEncoder.encode("realistic, photograph, blurry, ugly, deformed, watermark, text, dark background", "UTF-8")
-                val urlStr = "https://image.pollinations.ai/prompt/$encodedPrompt?width=512&height=512&nologo=true&model=$model&seed=${System.currentTimeMillis()}&negative=$negPrompt"
-                android.util.Log.d("AiGenerate", "Pollinations ($model) request")
+                android.util.Log.d("AiGenerate", "api.airforce ($model) request")
+                val body = JSONObject().apply {
+                    put("model", model)
+                    put("prompt", prompt)
+                    put("size", "1024x1024")
+                    put("n", 1)
+                }
 
-                val conn = URL(urlStr).openConnection() as HttpURLConnection
-                conn.requestMethod = "GET"
+                val conn = URL("https://api.airforce/v1/images/generations").openConnection() as HttpURLConnection
+                conn.requestMethod = "POST"
+                conn.setRequestProperty("Content-Type", "application/json")
                 conn.connectTimeout = 10000
-                conn.readTimeout = 15000
-                conn.instanceFollowRedirects = true
-                conn.setRequestProperty("User-Agent", "StickyApp/1.0")
+                conn.readTimeout = 20000
+                conn.doOutput = true
+                OutputStreamWriter(conn.outputStream).use { it.write(body.toString()) }
 
                 val code = conn.responseCode
-                android.util.Log.d("AiGenerate", "Pollinations ($model) response: $code")
-                if (code == 200) {
-                    val bitmap = BitmapFactory.decodeStream(conn.inputStream)
-                    conn.disconnect()
-                    if (bitmap != null) {
-                        android.util.Log.d("AiGenerate", "Pollinations success with $model")
-                        return@withContext bitmap
-                    }
-                }
+                android.util.Log.d("AiGenerate", "api.airforce ($model) response: $code")
+                if (code != 200) { conn.disconnect(); return@withContext null }
+
+                val response = BufferedReader(InputStreamReader(conn.inputStream)).use { it.readText() }
                 conn.disconnect()
-                null
+
+                val data = JSONObject(response).optJSONArray("data")
+                if (data == null || data.length() == 0) return@withContext null
+
+                val imageUrl = data.getJSONObject(0).optString("url", "")
+                if (imageUrl.isEmpty()) return@withContext null
+
+                android.util.Log.d("AiGenerate", "api.airforce ($model) downloading: $imageUrl")
+                val imgConn = URL(imageUrl).openConnection() as HttpURLConnection
+                imgConn.connectTimeout = 10000
+                imgConn.readTimeout = 15000
+                imgConn.instanceFollowRedirects = true
+
+                val bitmap = if (imgConn.responseCode == 200) BitmapFactory.decodeStream(imgConn.inputStream) else null
+                imgConn.disconnect()
+                if (bitmap != null) android.util.Log.d("AiGenerate", "api.airforce ($model) success!")
+                bitmap
             } catch (e: Exception) {
-                android.util.Log.e("AiGenerate", "Pollinations $model failed: ${e.message}")
+                android.util.Log.e("AiGenerate", "api.airforce $model failed: ${e.message}")
                 null
             }
         }
