@@ -70,7 +70,19 @@ class RegionalAdapter(
         val displayMetrics = parent.context.resources.displayMetrics
         val parentWidth = if (parent.width > 0) parent.width else displayMetrics.widthPixels
         v.layoutParams.width = (parentWidth * 0.72).toInt()
-        return VH(v)
+        val vh = VH(v)
+        // Pre-allocate 4 ImageViews in container to avoid creating them in onBind
+        ensureDensity(parent.context)
+        for (i in 0 until 4) {
+            val previewView = ImageView(parent.context).apply {
+                val params = LinearLayout.LayoutParams(stickerSizePx, stickerSizePx)
+                params.marginEnd = if (i == 3) 0 else stickerMarginPx
+                layoutParams = params
+                scaleType = ImageView.ScaleType.FIT_CENTER
+            }
+            vh.stickerPreviewContainer.addView(previewView)
+        }
+        return vh
     }
 
     class VH(v: View) : RecyclerView.ViewHolder(v) {
@@ -173,27 +185,18 @@ class RegionalAdapter(
         val context = container.context
 
         val stickersToShow = pack.stickers.take(4)
-        val currentChildCount = container.childCount
         val neededCount = stickersToShow.size
 
-        if (neededCount > currentChildCount) {
-            for (i in currentChildCount until neededCount) {
-                val previewView = ImageView(context).apply {
-                    val params = LinearLayout.LayoutParams(stickerSizePx, stickerSizePx)
-                    params.marginEnd = stickerMarginPx
-                    layoutParams = params
-                    scaleType = ImageView.ScaleType.FIT_CENTER
-                }
-                container.addView(previewView)
-            }
-        } else if (neededCount < currentChildCount) {
-            container.removeViews(neededCount, currentChildCount - neededCount)
-        }
-
+        // Show/hide pre-allocated views (never add/remove)
         for (i in 0 until container.childCount) {
             val child = container.getChildAt(i) as? ImageView ?: continue
-            (child.layoutParams as? LinearLayout.LayoutParams)?.marginEnd =
-                if (i == container.childCount - 1) 0 else stickerMarginPx
+            if (i < neededCount) {
+                child.visibility = View.VISIBLE
+                (child.layoutParams as? LinearLayout.LayoutParams)?.marginEnd =
+                    if (i == neededCount - 1) 0 else stickerMarginPx
+            } else {
+                child.visibility = View.GONE
+            }
         }
 
         val glide = Glide.with(context)

@@ -1,6 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:fillViewport="true">
+
+<LinearLayout
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="vertical"
@@ -16,10 +21,10 @@
 
     <!-- Image preview -->
     <com.google.android.material.card.MaterialCardView
-        android:layout_width="260dp"
+        android:layout_width="220dp"
         android:layout_height="wrap_content"
         android:layout_gravity="center_horizontal"
-        android:layout_marginTop="20dp"
+        android:layout_marginTop="16dp"
         app:cardCornerRadius="28dp"
         app:cardElevation="6dp"
         app:strokeWidth="0dp"
@@ -28,7 +33,7 @@
         <ImageView
             android:id="@+id/ivPreview"
             android:layout_width="match_parent"
-            android:layout_height="260dp"
+            android:layout_height="220dp"
             android:scaleType="fitCenter"
             android:padding="12dp" />
 
@@ -39,8 +44,8 @@
         android:id="@+id/promptSection"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginHorizontal="24dp"
-        android:layout_marginTop="16dp"
+        android:layout_marginHorizontal="20dp"
+        android:layout_marginTop="12dp"
         app:cardCornerRadius="16dp"
         app:cardElevation="0dp"
         app:cardBackgroundColor="#F5F3FF"
@@ -73,7 +78,9 @@
                 android:textColor="#5A4BD1"
                 android:textSize="13sp"
                 android:fontFamily="sans-serif-medium"
-                android:lineSpacingExtra="2dp" />
+                android:lineSpacingExtra="2dp"
+                android:maxLines="4"
+                android:ellipsize="end" />
 
             <ImageView
                 android:layout_width="16dp"
@@ -92,9 +99,9 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:layout_marginHorizontal="24dp"
-        android:layout_marginTop="18dp"
-        android:layout_marginBottom="28dp">
+        android:layout_marginHorizontal="20dp"
+        android:layout_marginTop="14dp"
+        android:layout_marginBottom="20dp">
 
         <!-- Top row: Edit + Add -->
         <LinearLayout
@@ -106,20 +113,20 @@
                 android:id="@+id/btnUsePrompt"
                 style="@style/Widget.MaterialComponents.Button.OutlinedButton"
                 android:layout_width="0dp"
-                android:layout_height="46dp"
+                android:layout_height="44dp"
                 android:layout_weight="1"
                 android:layout_marginEnd="5dp"
                 android:text="Edit"
                 android:textAllCaps="false"
-                android:textSize="13sp"
+                android:textSize="12sp"
                 android:textColor="@color/primary"
                 android:insetTop="0dp"
                 android:insetBottom="0dp"
                 app:icon="@drawable/ic_edit"
                 app:iconTint="@color/primary"
-                app:iconSize="18dp"
+                app:iconSize="16dp"
                 app:iconGravity="textStart"
-                app:iconPadding="6dp"
+                app:iconPadding="4dp"
                 app:cornerRadius="14dp"
                 app:strokeColor="@color/primary_light"
                 app:strokeWidth="1.5dp" />
@@ -128,20 +135,20 @@
                 android:id="@+id/btnAddToPack"
                 style="@style/Widget.MaterialComponents.Button"
                 android:layout_width="0dp"
-                android:layout_height="46dp"
+                android:layout_height="44dp"
                 android:layout_weight="1"
                 android:layout_marginStart="5dp"
                 android:text="Add to Pack"
                 android:textAllCaps="false"
-                android:textSize="13sp"
+                android:textSize="12sp"
                 android:textColor="@android:color/white"
                 android:insetTop="0dp"
                 android:insetBottom="0dp"
                 app:icon="@drawable/ic_add"
                 app:iconTint="@android:color/white"
-                app:iconSize="18dp"
+                app:iconSize="16dp"
                 app:iconGravity="textStart"
-                app:iconPadding="6dp"
+                app:iconPadding="4dp"
                 app:backgroundTint="@color/primary"
                 app:cornerRadius="14dp" />
 
@@ -152,26 +159,26 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:layout_marginTop="10dp">
+            android:layout_marginTop="8dp">
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnRegenerate"
                 style="@style/Widget.MaterialComponents.Button.OutlinedButton"
                 android:layout_width="0dp"
-                android:layout_height="46dp"
+                android:layout_height="44dp"
                 android:layout_weight="1"
                 android:layout_marginEnd="5dp"
                 android:text="Regenerate"
                 android:textAllCaps="false"
-                android:textSize="13sp"
+                android:textSize="12sp"
                 android:textColor="#FF9800"
                 android:insetTop="0dp"
                 android:insetBottom="0dp"
                 app:icon="@drawable/ic_refresh"
                 app:iconTint="#FF9800"
-                app:iconSize="18dp"
+                app:iconSize="16dp"
                 app:iconGravity="textStart"
-                app:iconPadding="6dp"
+                app:iconPadding="4dp"
                 app:cornerRadius="14dp"
                 app:strokeColor="#FFE0B2"
                 app:strokeWidth="1.5dp" />
@@ -180,20 +187,20 @@
                 android:id="@+id/btnDelete"
                 style="@style/Widget.MaterialComponents.Button.OutlinedButton"
                 android:layout_width="0dp"
-                android:layout_height="46dp"
+                android:layout_height="44dp"
                 android:layout_weight="1"
                 android:layout_marginStart="5dp"
                 android:text="Delete"
                 android:textAllCaps="false"
-                android:textSize="13sp"
+                android:textSize="12sp"
                 android:textColor="#E74C3C"
                 android:insetTop="0dp"
                 android:insetBottom="0dp"
                 app:icon="@drawable/ic_delete"
                 app:iconTint="#E74C3C"
-                app:iconSize="18dp"
+                app:iconSize="16dp"
                 app:iconGravity="textStart"
-                app:iconPadding="6dp"
+                app:iconPadding="4dp"
                 app:cornerRadius="14dp"
                 app:strokeColor="#FFCDD2"
                 app:strokeWidth="1.5dp" />
@@ -203,3 +210,5 @@
     </LinearLayout>
 
 </LinearLayout>
+
+</ScrollView>

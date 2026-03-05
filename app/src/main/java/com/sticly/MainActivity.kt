@@ -161,6 +161,17 @@ class MainActivity : AppCompatActivity() {
     // Deterministic Random Seed for Session
     private val sessionSeed = System.currentTimeMillis()
     
+    // Cached shuffle order: once computed for ALL filter, reuse across applyFilters calls
+    private var cachedShuffleOrder: List<String>? = null
+    
+    // Flag to scroll to top after next applyFilters completes (avoids race with async DiffUtil)
+    private var pendingScrollToTop = false
+    
+    // Saved Explore state — full adapter list + scroll position
+    private var savedExploreList: List<Any>? = null
+    private var savedExploreScrollPos = 0
+    private var savedExploreScrollOffset = 0
+    
     // Cached format instance (only used on Default dispatcher — single thread safe)
     private val rankDateFormat = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.getDefault())
     private val rankDateFormatFallback = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
@@ -445,6 +456,11 @@ class MainActivity : AppCompatActivity() {
         toolbarTitle = findViewById(R.id.toolbarTitle)
         toolbarSubtitle = findViewById(R.id.toolbarSubtitle)
 
+        // Toolbar'a tıklayınca en üste scroll
+        findViewById<View>(R.id.toolbarLayout).setOnClickListener {
+            rv.smoothScrollToPosition(0)
+        }
+
         mainContent = findViewById(R.id.mainContent)
         emptyStateView = findViewById(R.id.emptyStateView)
         aiContentContainer = findViewById(R.id.aiContentContainer) // null until ViewStub inflated
@@ -526,24 +542,56 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun saveExploreState() {
+        if (currentFilter == FilterType.ALL || currentFilter == FilterType.PREMIUM) {
+            if (::adapter.isInitialized) {
+                savedExploreList = adapter.getItems()
+            }
+            val lm = rv.layoutManager as? LinearLayoutManager ?: return
+            savedExploreScrollPos = lm.findFirstVisibleItemPosition()
+            val topView = lm.findViewByPosition(savedExploreScrollPos)
+            savedExploreScrollOffset = topView?.top ?: 0
+        }
+    }
+
+    private fun restoreExploreState(): Boolean {
+        val saved = savedExploreList ?: return false
+        if (saved.isEmpty()) return false
+        if (::adapter.isInitialized) {
+            adapter.updateList(saved)
+            rv.visibility = View.VISIBLE
+            emptyStateView.visibility = View.GONE
+            (rv.layoutManager as? LinearLayoutManager)?.scrollToPositionWithOffset(
+                savedExploreScrollPos, savedExploreScrollOffset
+            )
+        }
+        return true
+    }
+
     private fun setupBottomNav() {
         tabExplore.setOnClickListener {
             currentFilter = FilterType.ALL
             currentCategory = "all"
-            applyFilters()
             updateBottomNavUI()
             updateCategoryChipSelection()
             categoryChipGroup.visibility = View.VISIBLE
             showHomeSections()
+            // Directly restore cached Explore list + scroll — no async, no flicker
+            if (!restoreExploreState()) {
+                applyFilters()
+            }
         }
 
         tabFavorites.setOnClickListener {
+            saveExploreState()
             currentFilter = FilterType.FAVORITES
+            pendingScrollToTop = true
             applyFilters()
             updateBottomNavUI()
         }
 
         tabAICreate.setOnClickListener {
+            saveExploreState()
             currentFilter = FilterType.AI
             // Inflate AI content ViewStub on first use (before updateBottomNavUI accesses it)
             ensureAiInflated()
@@ -552,7 +600,9 @@ class MainActivity : AppCompatActivity() {
         }
 
         tabMyStickers.setOnClickListener {
+            saveExploreState()
             currentFilter = FilterType.CUSTOM
+            pendingScrollToTop = true
             applyFilters()
             updateBottomNavUI()
             categoryChipGroup.visibility = View.GONE
@@ -1488,6 +1538,7 @@ Rules:
 
         dialog.setContentView(sheetView)
         dialog.behavior.skipCollapsed = true
+        dialog.behavior.isFitToContents = true
         dialog.behavior.state = com.google.android.material.bottomsheet.BottomSheetBehavior.STATE_EXPANDED
         dialog.show()
     }
@@ -2146,6 +2197,15 @@ Rules:
             aiContentContainer?.post { aiLoadHistory() }
         }
 
+        // Ensure pack list is visible after returning from background
+        // (some OEMs like TECNO aggressively reclaim memory)
+        if (::adapter.isInitialized && adapter.getItems().isEmpty() && allPacks.isNotEmpty()
+            && currentFilter != FilterType.AI) {
+            applyFilters()
+        } else if (allPacks.isEmpty() && currentFilter != FilterType.AI) {
+            loadPacksFromFirebase()
+        }
+
         // Only reload custom packs if user is specifically on CUSTOM tab
         if (::adapter.isInitialized && currentFilter == FilterType.CUSTOM) {
             lifecycleScope.launch {
@@ -2381,9 +2441,23 @@ Rules:
                 else -> filtered
             }
 
-            // Main list: shuffle for discovery, NOT sorted by popularity
-            // Popular section shows top packs; main list should help discover new content
-            val shuffled = filtered.shuffled(java.util.Random(sessionSeed))
+            // Main list: use cached shuffle order for session stability
+            // Only compute shuffle once; new packs get appended at the end
+            val currentCache = cachedShuffleOrder
+            val shuffled: List<Pack>
+            if (currentCache != null) {
+                val orderMap = currentCache.withIndex().associate { it.value to it.index }
+                val (known, newPacks) = filtered.partition { it.id in orderMap }
+                val sortedKnown = known.sortedBy { orderMap[it.id] ?: Int.MAX_VALUE }
+                shuffled = sortedKnown + newPacks.shuffled(java.util.Random(sessionSeed))
+                // Update cache with new packs appended
+                if (newPacks.isNotEmpty()) {
+                    cachedShuffleOrder = shuffled.map { it.id }
+                }
+            } else {
+                shuffled = filtered.shuffled(java.util.Random(sessionSeed))
+                cachedShuffleOrder = shuffled.map { it.id }
+            }
 
             // Interleave premium/free to prevent same-type clustering
             val premium = shuffled.filter { it.isPremium }.toMutableList()
@@ -2492,6 +2566,12 @@ Rules:
                 // İlk 20 paketi arka planda ön yükle — scroll sırasında anında gözüksün
                 if (newList.isNotEmpty()) {
                     StickyGlideModule.preloadFeedPacks(this@MainActivity, newList, 20)
+                }
+
+                // Scroll handling after adapter update
+                if (pendingScrollToTop) {
+                    pendingScrollToTop = false
+                    rv.scrollToPosition(0)
                 }
             }
         }

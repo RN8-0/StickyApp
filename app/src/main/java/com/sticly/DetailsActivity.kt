@@ -18,7 +18,6 @@ import android.view.animation.OvershootInterpolator
 import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.LinearLayout
-import androidx.activity.addCallback
 import android.widget.*
 import androidx.core.view.ViewCompat
 import androidx.activity.result.contract.ActivityResultContracts
@@ -117,7 +116,6 @@ class DetailsActivity : AppCompatActivity() {
             val intent = Intent(this, MainActivity::class.java)
             intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
             startActivity(intent)
-            overridePendingTransition(R.anim.slide_in_left, R.anim.slide_out_right)
             finish()
         }
 
@@ -125,12 +123,6 @@ class DetailsActivity : AppCompatActivity() {
         window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS)
         window.addFlags(android.view.WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
         window.statusBarColor = ContextCompat.getColor(this, R.color.toolbar_bg)
-
-        // Geri tuşuna yumuşak geçiş animasyonu
-        onBackPressedDispatcher.addCallback(this) {
-            finish()
-            overridePendingTransition(R.anim.slide_in_left, R.anim.slide_out_right)
-        }
         
         // İlk yüklemeyi onResume halledecek, burada yapmaya gerek yok
         setupEdgeToEdge()
@@ -171,7 +163,6 @@ class DetailsActivity : AppCompatActivity() {
     }
 
     private fun loadPackFromFirebase() {
-        // Hemen cache'den göster — donma olmasın
         lifecycleScope.launch {
             try {
                 var pack: Pack? = null
@@ -203,30 +194,29 @@ class DetailsActivity : AppCompatActivity() {
                     showLoadingState(true)
                 }
 
-                // Firestore tazelemesini AYRI coroutine'de yap — UI'ı bloklamasın
-                val cachedPack = pack
+                // Arka planda veriyi tazele (Firebase paketleri için) — ayrı coroutine
                 lifecycleScope.launch {
                     try {
                         val packs = withContext(Dispatchers.IO) { StickerRepository.loadPacks(this@DetailsActivity, forceRefresh = false) }
                         val updatedPack = packs.find { it.id == packId }
                         
-                        if (updatedPack != null && cachedPack != null) {
-                            val changed = updatedPack.stickers.size != cachedPack.stickers.size ||
-                                    updatedPack.isPremium != cachedPack.isPremium ||
-                                    updatedPack.isActive != cachedPack.isActive ||
-                                    updatedPack.localizedName != cachedPack.localizedName
+                        if (updatedPack != null && pack != null) {
+                            val changed = updatedPack.stickers.size != pack.stickers.size ||
+                                    updatedPack.isPremium != pack.isPremium ||
+                                    updatedPack.isActive != pack.isActive ||
+                                    updatedPack.localizedName != pack.localizedName
                             if (changed) {
                                 setupUI(updatedPack)
                             }
-                        } else if (updatedPack != null && cachedPack == null) {
+                        } else if (updatedPack != null && pack == null) {
                             setupUI(updatedPack)
-                        } else if (updatedPack == null && cachedPack == null) {
+                        } else if (updatedPack == null && pack == null) {
                             android.util.Log.e("DetailsActivity", "Pack not found: $packId")
                             Toast.makeText(this@DetailsActivity, R.string.pack_not_found, Toast.LENGTH_SHORT).show()
                             finish()
                         }
                     } catch (e: Exception) {
-                        android.util.Log.e("DetailsActivity", "Background refresh error: ${e.message}")
+                        android.util.Log.e("DetailsActivity", "Error refreshing pack: ${e.message}", e)
                     }
                 }
             } catch (e: Exception) {
@@ -242,17 +232,19 @@ class DetailsActivity : AppCompatActivity() {
         }
     }
 
-    // View referansları — bir kez bul, tekrar kullan (her setupUI'da findViewById çağırmak yerine)
-    private var rvCached: RecyclerView? = null
-    private var toolbarLayoutCached: View? = null
-    private var bottomContainerCached: View? = null
-    private var tvNameCached: android.widget.TextView? = null
-    private var premiumIconToolbarCached: View? = null
-    private var viewsCached = false
+    private fun setupUI(pack: Pack) {
+        currentPack = pack
+        isAnimatedPack = pack.isAnimated
+        isPackReady = false // Reset state when setting up new pack
 
-    private fun cacheViews() {
-        if (viewsCached) return
-        viewsCached = true
+        // View count ve interstitial — tamamen arka planda
+        lifecycleScope.launch(Dispatchers.IO) {
+            StickerRepository.incrementViewCount(pack.id, pack.isPremium)
+        }
+        lifecycleScope.launch { AdManager.loadInterstitialAd(this@DetailsActivity) }
+
+        findViewById<android.widget.TextView>(R.id.name).text = pack.localizedName
+
         btnAction = findViewById(R.id.btnAction)
         btnWatchAd = findViewById(R.id.btnWatchAd)
         premiumButtonsContainer = findViewById(R.id.premiumButtonsContainer)
@@ -262,128 +254,108 @@ class DetailsActivity : AppCompatActivity() {
         btnConfirmDelete = findViewById(R.id.btnConfirmDelete)
         installedIcon = findViewById(R.id.installedIcon)
         btnFixedWhatsApp = findViewById(R.id.btnFixedWhatsApp)
-        rvCached = findViewById(R.id.rv)
-        toolbarLayoutCached = findViewById(R.id.toolbarLayout)
-        bottomContainerCached = findViewById(R.id.bottomContainer)
-        tvNameCached = findViewById(R.id.name)
-        premiumIconToolbarCached = findViewById(R.id.premiumIconToolbar)
 
-        // RecyclerView'ı bir kez yapılandır
-        rvCached!!.layoutManager = GridLayoutManager(this, 3).apply {
-            initialPrefetchItemCount = 6
-        }
-        rvCached!!.setHasFixedSize(true)
-        rvCached!!.setItemViewCacheSize(12)
-        rvCached!!.itemAnimator = null
-        rvCached!!.setRecycledViewPool(RecyclerView.RecycledViewPool().apply { setMaxRecycledViews(0, 20) })
-    }
-
-    private fun setupUI(pack: Pack) {
-        currentPack = pack
-        isAnimatedPack = pack.isAnimated
-        isPackReady = false
-
-        // View referanslarını cache'le (ilk çağrıda)
-        cacheViews()
-
-        tvNameCached!!.text = pack.localizedName
-
+        val toolbarLayout = findViewById<View>(R.id.toolbarLayout)
+        val bottomContainer = findViewById<View>(R.id.bottomContainer)
+        val tvName = findViewById<android.widget.TextView>(R.id.name)
+        
         val toolbarColor = ContextCompat.getColor(this, R.color.toolbar_bg)
         val primaryColor = ContextCompat.getColor(this, R.color.primary)
         
-        toolbarLayoutCached!!.setBackgroundColor(toolbarColor)
+        toolbarLayout.setBackgroundColor(toolbarColor)
         window.statusBarColor = toolbarColor
         window.navigationBarColor = Color.BLACK
-        bottomContainerCached!!.setBackgroundColor(Color.TRANSPARENT)
+        bottomContainer.setBackgroundColor(Color.TRANSPARENT)
         
         if (pack.isPremium) {
-            tvNameCached!!.setTextColor(Color.WHITE)
+            tvName.setTextColor(Color.WHITE)
             circularProgress?.setIndicatorColor(ContextCompat.getColor(this, R.color.premium_gold))
-            premiumIconToolbarCached!!.visibility = View.VISIBLE
+            findViewById<View>(R.id.premiumIconToolbar).visibility = View.VISIBLE
         } else {
-            tvNameCached!!.setTextColor(ContextCompat.getColor(this, R.color.text_on_primary_secondary))
+            tvName.setTextColor(ContextCompat.getColor(this, R.color.text_on_primary_secondary))
             circularProgress?.setIndicatorColor(primaryColor)
-            premiumIconToolbarCached!!.visibility = View.GONE
+            findViewById<View>(R.id.premiumIconToolbar).visibility = View.GONE
         }
 
+        // Başlangıçta içeriği göster
         btnAction.isEnabled = true
         showLoadingState(false)
 
+        val rv = findViewById<RecyclerView>(R.id.rv)
+        rv.layoutManager = GridLayoutManager(this, 3).apply {
+            initialPrefetchItemCount = 3 // Sadece ilk satırı prefetch et
+        }
+        rv.setHasFixedSize(true)
+        rv.setItemViewCacheSize(12)
+        rv.itemAnimator = null
+        rv.setRecycledViewPool(RecyclerView.RecycledViewPool().apply { setMaxRecycledViews(0, 20) })
+
         val hasAccess = !pack.isPremium || PreferencesHelper.hasAccessToPack(this, pack.id)
         val storagePath = pack.storagePath
+        android.util.Log.d("DetailsDebug", "setupUI pack=${pack.id} stickers.size=${pack.stickers.size} stickers=${pack.stickers.map { it.file }}")
 
-        // URL hesaplamayı IO thread'e taşı + sticker preload'u başlat
+        // Kilitli paketlerde rastgele 3 çıkartmayı başa al
+        val displayStickers = if (!hasAccess && pack.stickers.size > 3) {
+            val shuffled = pack.stickers.shuffled()
+            shuffled.take(3) + shuffled.drop(3)
+        } else {
+            pack.stickers
+        }
+
+        // URL hesaplama + preload arka planda
         lifecycleScope.launch {
-            val displayStickers = withContext(Dispatchers.Default) {
-                // URL'leri arka planda hesapla
+            withContext(Dispatchers.Default) {
                 pack.stickers.forEach { sticker ->
                     if (sticker.url.isEmpty()) {
                         sticker.url = StickerRepository.getStickerDirectUrl(pack.id, sticker.file, storagePath)
                     }
                 }
-                // Kilitli paketlerde rastgele 3 çıkartmayı başa al
-                if (!hasAccess && pack.stickers.size > 3) {
-                    val shuffled = pack.stickers.shuffled()
-                    shuffled.take(3) + shuffled.drop(3)
-                } else {
-                    pack.stickers
+            }
+            preloadAllStickers(pack, displayStickers)
+        }
+
+        // Şimdi adapter oluştur - URL'ler HAZIR
+        adapter = StickerAdapter(
+            packId = pack.id,
+            items = displayStickers,
+            isPackPremium = pack.isPremium,
+            hasAccess = hasAccess,
+            storagePath = pack.storagePath,
+            isAnimated = pack.isAnimated, // Animated pack için FPS koruması
+            selectedPositions = selectedIndices,
+            onStickerClick = { sticker, _ ->
+                val isLocked = !PreferencesHelper.hasAccessToPack(this, pack.id)
+                showStickerPreview(sticker, isLocked)
+            },
+            onStickerLongClick = { _, _ ->
+                if (pack.id.startsWith("custom_")) {
+                    toggleDeleteMode()
+                }
+            },
+            onSelectionChanged = { count ->
+                if (isDeleteMode) {
+                    findViewById<android.widget.TextView>(R.id.name).text = if (count > 0) "${getString(R.string.selection_count, count)}" else getString(R.string.selection_mode_title)
                 }
             }
+        )
+        rv.adapter = adapter
+        isPackReady = true
 
-            // Adapter'ı oluştur ve bağla (Main thread)
-            adapter = StickerAdapter(
-                packId = pack.id,
-                items = displayStickers,
-                isPackPremium = pack.isPremium,
-                hasAccess = hasAccess,
-                storagePath = pack.storagePath,
-                isAnimated = pack.isAnimated,
-                selectedPositions = selectedIndices,
-                onStickerClick = { sticker, _ ->
-                    val isLocked = !PreferencesHelper.hasAccessToPack(this@DetailsActivity, pack.id)
-                    showStickerPreview(sticker, isLocked)
-                },
-                onStickerLongClick = { _, _ ->
-                    if (pack.id.startsWith("custom_")) {
-                        toggleDeleteMode()
-                    }
-                },
-                onSelectionChanged = { count ->
-                    if (isDeleteMode) {
-                        tvNameCached?.text = if (count > 0) "${getString(R.string.selection_count, count)}" else getString(R.string.selection_mode_title)
-                    }
-                }
-            )
-            rvCached!!.adapter = adapter
-            isPackReady = true
-
-            // Preload: ilk 6 stickerı (görünen 2 satır) memory cache'e yükle
-            preloadAllStickers(pack, displayStickers)
-
-            // Arka planda cache'e indir (WhatsApp için)
-            launch(Dispatchers.IO) {
-                kotlinx.coroutines.delay(2000)
-                pack.stickers.forEach { sticker ->
-                    try {
-                        StickerRepository.downloadStickerToCache(this@DetailsActivity, pack.id, sticker.file, storagePath)
-                    } catch (_: Exception) {}
-                }
+        // Arka planda cache'e indir (WhatsApp için gerekli) — preload bittikten sonra
+        lifecycleScope.launch(Dispatchers.IO) {
+            kotlinx.coroutines.delay(1500) // Preload'un bitmesini bekle
+            pack.stickers.forEach { sticker ->
+                try {
+                    StickerRepository.downloadStickerToCache(this@DetailsActivity, pack.id, sticker.file, storagePath)
+                } catch (_: Exception) {}
             }
         }
 
         // Butonları ayarla
         setupButtons(pack, hasAccess)
 
-        // İlgili paketleri gecikmeli yükle
-        rvCached!!.post { setupRelatedPacks(pack) }
-
-        // Interstitial ve view count — tamamen arka planda
-        lifecycleScope.launch(Dispatchers.IO) {
-            StickerRepository.incrementViewCount(pack.id, pack.isPremium)
-        }
-        lifecycleScope.launch {
-            AdManager.loadInterstitialAd(this@DetailsActivity)
-        }
+        // İlgili paketleri gecikmeli yükle (ilk render'ı bloklamasın)
+        rv.post { setupRelatedPacks(pack) }
     }
 
     private fun toggleDeleteMode() {
@@ -394,13 +366,13 @@ class DetailsActivity : AppCompatActivity() {
 
         if (isDeleteMode) {
             // Silme moduna girildi
-            tvNameCached?.text = getString(R.string.selection_mode_title)
+            findViewById<android.widget.TextView>(R.id.name).text = getString(R.string.selection_mode_title)
             // Silme butonu hemen görünür (seçim olmasa bile)
             btnConfirmDelete.visibility = View.VISIBLE
         } else {
             // Silme modundan çıkıldı
             selectedIndices.clear()
-            tvNameCached?.text = currentPack?.localizedName
+            findViewById<android.widget.TextView>(R.id.name).text = currentPack?.localizedName
             btnConfirmDelete.visibility = View.GONE
         }
     }
@@ -410,12 +382,13 @@ class DetailsActivity : AppCompatActivity() {
      * Bu sayede RecyclerView bind olduğunda görseller anında görünür
      */
     private fun preloadAllStickers(pack: Pack, stickers: List<Sticker>) {
+        // Preload işlemini arka planda paralel yap
         lifecycleScope.launch(Dispatchers.IO) {
             val glide = Glide.with(applicationContext)
             val storagePath = pack.storagePath
 
-            // İlk 9 çıkartmayı öncelikli yükle (görünen 3 satır)
-            val priorityStickers = stickers.take(9)
+            // İlk 6 çıkartmayı öncelikli yükle (görünen 2 satır)
+            val priorityStickers = stickers.take(6)
             val restStickers = stickers.drop(9)
 
             // Öncelikli olanları paralel yükle
@@ -1199,12 +1172,6 @@ class DetailsActivity : AppCompatActivity() {
                 prepareJob.await()
                 progressJob.join() // Wait for smooth progress to finish
                 
-                // Pre-optimize stickers for WhatsApp BEFORE sending intent
-                // This avoids heavy bitmap ops during ContentProvider calls
-                withContext(Dispatchers.IO) {
-                    preOptimizePackForWhatsApp(pack)
-                }
-                
                 val sizeCheckResult = checkStickerFileSizes(pack)
                 if (sizeCheckResult != null) {
                     showLoadingState(false)
@@ -1274,122 +1241,46 @@ class DetailsActivity : AppCompatActivity() {
 
     /**
      * Sticker dosya boyutlarını kontrol et - WhatsApp limitlerine uygun mu?
-     * StickerProvider otomatik sıkıştırma yaptığı için artık sadece log uyarısı verir.
-     * @return Her zaman null (StickerProvider boyut aşımını halleder)
+     * @return Hata mesajı veya null (sorun yoksa)
      */
     private fun checkStickerFileSizes(pack: Pack): String? {
         val maxStaticSize = 100 * 1024L // 100KB
         val maxAnimatedSize = 500 * 1024L // 500KB
+        val maxTraySize = 50 * 1024L // 50KB
         val maxSize = if (pack.isAnimated) maxAnimatedSize else maxStaticSize
 
         val cacheDir = java.io.File(cacheDir, "sticker_cache/${pack.id}")
-        if (!cacheDir.exists()) return null
+        if (!cacheDir.exists()) return null // Cache yoksa kontrol etme
 
         var oversizedCount = 0
+        var largestFile = ""
+        var largestSize = 0L
+
+        // Sticker dosyalarını kontrol et
         for (sticker in pack.stickers) {
             val file = java.io.File(cacheDir, sticker.file)
             if (file.exists() && file.length() > maxSize) {
                 oversizedCount++
+                if (file.length() > largestSize) {
+                    largestSize = file.length()
+                    largestFile = sticker.file
+                }
             }
+        }
+
+        // Tray dosyasını kontrol et
+        val trayFile = cacheDir.listFiles()?.find { it.name.startsWith("tray") && it.name.endsWith(".png") }
+        if (trayFile != null && trayFile.length() > maxTraySize) {
+            // Tray çok büyük ama bu genellikle sorun değil çünkü StickerProvider 96x96'ya dönüştürüyor
         }
 
         if (oversizedCount > 0) {
-            Log.w("DetailsActivity", "Pack ${pack.id}: $oversizedCount stickers exceed ${maxSize/1024}KB limit, StickerProvider will auto-compress")
+            val limitKB = maxSize / 1024
+            val largestKB = largestSize / 1024
+            return getString(R.string.sticker_size_error, oversizedCount, limitKB, largestKB)
         }
 
         return null
-    }
-
-    /**
-     * WhatsApp'a göndermeden ÖNCE tüm stickerleri optimize et.
-     * Bu sayede ContentProvider'da ağır bitmap işlemi yapılmaz.
-     */
-    private fun preOptimizePackForWhatsApp(pack: Pack) {
-        val isAnimated = pack.isAnimated
-        val maxSize = if (isAnimated) 500L * 1024 else 100L * 1024
-        val cacheDir = java.io.File(cacheDir, "sticker_cache/${pack.id}")
-        if (!cacheDir.exists()) return
-
-        Log.d("DetailsActivity", "preOptimize: pack=${pack.id} isAnimated=$isAnimated stickers=${pack.stickers.size}")
-
-        // Tray dosyasını 96x96 PNG'ye dönüştür
-        val trayFile = java.io.File(cacheDir, pack.tray)
-        if (trayFile.exists()) {
-            val trayPng = java.io.File(cacheDir, "tray_whatsapp.png")
-            if (!trayPng.exists() || trayPng.length() <= 0) {
-                try {
-                    val bmp = android.graphics.BitmapFactory.decodeFile(trayFile.absolutePath)
-                    if (bmp != null) {
-                        val scaled = android.graphics.Bitmap.createScaledBitmap(bmp, 96, 96, true)
-                        java.io.FileOutputStream(trayPng).use { out ->
-                            scaled.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, out)
-                        }
-                        if (bmp != scaled) scaled.recycle()
-                        bmp.recycle()
-                        Log.d("DetailsActivity", "Tray converted: ${trayPng.length()} bytes")
-                    }
-                } catch (e: Exception) {
-                    Log.e("DetailsActivity", "Tray conversion failed: ${e.message}")
-                }
-            }
-        }
-
-        // Animated paketleri sıkıştırmıyoruz
-        if (isAnimated) return
-
-        // Her stickeri kontrol et ve gerekirse boyutlandır/sıkıştır
-        for (sticker in pack.stickers) {
-            val file = java.io.File(cacheDir, sticker.file)
-            if (!file.exists()) continue
-
-            // Check dimensions AND size
-            val opts = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
-            android.graphics.BitmapFactory.decodeFile(file.absolutePath, opts)
-            val needsDimensionFix = opts.outWidth != 512 || opts.outHeight != 512
-            val needsSizeFix = file.length() > maxSize
-            if (!needsDimensionFix && !needsSizeFix) continue
-
-            val optFile = java.io.File(cacheDir, "${file.nameWithoutExtension}_opt.webp")
-            if (optFile.exists() && optFile.length() in 1..maxSize) {
-                val optOpts = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                android.graphics.BitmapFactory.decodeFile(optFile.absolutePath, optOpts)
-                if (optOpts.outWidth == 512 && optOpts.outHeight == 512) continue
-            }
-
-            try {
-                var inSampleSize = 1
-                while (opts.outWidth / inSampleSize > 1024 || opts.outHeight / inSampleSize > 1024) {
-                    inSampleSize *= 2
-                }
-                val decodeOpts = android.graphics.BitmapFactory.Options().apply { this.inSampleSize = inSampleSize }
-                val bitmap = android.graphics.BitmapFactory.decodeFile(file.absolutePath, decodeOpts) ?: continue
-                
-                // Create 512x512 canvas, center sticker with aspect ratio preserved
-                val output = android.graphics.Bitmap.createBitmap(512, 512, android.graphics.Bitmap.Config.ARGB_8888)
-                val canvas = android.graphics.Canvas(output)
-                val scale = minOf(512f / bitmap.width, 512f / bitmap.height)
-                val scaledW = (bitmap.width * scale).toInt()
-                val scaledH = (bitmap.height * scale).toInt()
-                val scaled = android.graphics.Bitmap.createScaledBitmap(bitmap, scaledW, scaledH, true)
-                canvas.drawBitmap(scaled, (512 - scaledW) / 2f, (512 - scaledH) / 2f, null)
-                if (bitmap != scaled) scaled.recycle()
-                bitmap.recycle()
-
-                var quality = 90
-                while (quality >= 10) {
-                    java.io.FileOutputStream(optFile).use { out ->
-                        output.compress(android.graphics.Bitmap.CompressFormat.WEBP, quality, out)
-                    }
-                    if (optFile.length() <= maxSize) break
-                    quality -= 10
-                }
-                
-                output.recycle()
-                Log.d("DetailsActivity", "Optimized ${sticker.file}: ${opts.outWidth}x${opts.outHeight} ${file.length()}B → 512x512 ${optFile.length()}B (q=$quality)")
-            } catch (e: Exception) {
-                Log.e("DetailsActivity", "Failed to optimize ${sticker.file}: ${e.message}")
-            }
-        }
     }
 
     private fun removeFromWhatsApp() {
@@ -1737,15 +1628,11 @@ class DetailsActivity : AppCompatActivity() {
 
         lifecycleScope.launch {
             try {
-                Log.d("DetailsActivity", "Preparing to launch WhatsApp intent for pack: ${pack.id} isAnimated=${pack.isAnimated} stickers=${pack.stickers.size} tray=${pack.tray}")
+                Log.d("DetailsActivity", "Preparing to launch WhatsApp intent for pack: ${pack.id}")
 
                 // KRITIK: Provider'ın veriyi bulabilmesi için cache'i diske kaydet
                 // UI'ı dondurmamak için IO thread'inde yap
                 withContext(Dispatchers.IO) {
-                    // Invalidate provider cache so it picks up fresh data
-                    contentResolver.notifyChange(
-                        android.net.Uri.parse("content://${packageName}.stickers/metadata"), null
-                    )
                     val currentPacks = StickerRepository.allPacksCache
                     val packsToSave = if (currentPacks.any { it.id == pack.id }) {
                         currentPacks

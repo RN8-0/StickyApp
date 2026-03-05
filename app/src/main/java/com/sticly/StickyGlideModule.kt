@@ -37,7 +37,6 @@ class StickyGlideModule : AppGlideModule() {
         builder.setDefaultRequestOptions(
             com.bumptech.glide.request.RequestOptions()
                 .format(com.bumptech.glide.load.DecodeFormat.PREFER_ARGB_8888)
-                .disallowHardwareConfig() // Daha tutarlı memory cache davranışı
         )
     }
 
@@ -45,7 +44,7 @@ class StickyGlideModule : AppGlideModule() {
 
     override fun registerComponents(context: Context, glide: Glide, registry: Registry) {
         val client = OkHttpClient.Builder()
-            .connectionPool(ConnectionPool(6, 2, TimeUnit.MINUTES))
+            .connectionPool(ConnectionPool(10, 2, TimeUnit.MINUTES))
             .connectTimeout(8, TimeUnit.SECONDS)
             .readTimeout(10, TimeUnit.SECONDS)
             .build()
@@ -117,8 +116,12 @@ class StickyGlideModule : AppGlideModule() {
 
                     Log.d(TAG, "Preloading ${urls.size} sticker URLs from first $count packs")
 
-                    // 6 paralel indirme — hızlı doldur
-                    urls.chunked(6).forEach { batch ->
+                    // Priority tiers: first 30 URLs (visible) = HIGH, rest = LOW
+                    val highPriority = urls.take(30)
+                    val lowPriority = urls.drop(30)
+
+                    // Visible items first — 8 parallel downloads
+                    highPriority.chunked(8).forEach { batch ->
                         batch.map { url ->
                             async(Dispatchers.IO) {
                                 try {
@@ -126,6 +129,24 @@ class StickyGlideModule : AppGlideModule() {
                                         .asFile()
                                         .load(url)
                                         .diskCacheStrategy(DiskCacheStrategy.DATA)
+                                        .priority(Priority.HIGH)
+                                        .submit()
+                                        .get(6, TimeUnit.SECONDS)
+                                } catch (_: Exception) { null }
+                            }
+                        }.awaitAll()
+                    }
+
+                    // Rest at low priority — 4 parallel
+                    lowPriority.chunked(4).forEach { batch ->
+                        batch.map { url ->
+                            async(Dispatchers.IO) {
+                                try {
+                                    Glide.with(context.applicationContext)
+                                        .asFile()
+                                        .load(url)
+                                        .diskCacheStrategy(DiskCacheStrategy.DATA)
+                                        .priority(Priority.LOW)
                                         .submit()
                                         .get(8, TimeUnit.SECONDS)
                                 } catch (_: Exception) { null }

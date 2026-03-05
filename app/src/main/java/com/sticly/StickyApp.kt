@@ -22,14 +22,21 @@ class StickyApp : Application() {
         // Karanlık temayı tamamen devre dışı bırak (Hep açık tema)
         androidx.appcompat.app.AppCompatDelegate.setDefaultNightMode(androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_NO)
 
-        // SYNC: Disk cache'i hemen yükle (JSON parse, <50ms)
-        // Bu sayede MainActivity açıldığında paketler hazır olur
-        try {
-            val diskPacks = StickerRepository.loadCacheFromDisk(this)
-            if (diskPacks.isNotEmpty()) {
-                StickerRepository.allPacksCache = diskPacks
-            }
-        } catch (_: Exception) {}
+        // ASYNC: Disk cache'i IO thread'de yükle — main thread'i bloklamadan
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val diskPacks = StickerRepository.loadCacheFromDisk(this@StickyApp)
+                if (diskPacks.isNotEmpty()) {
+                    StickerRepository.allPacksCache = diskPacks
+                }
+            } catch (_: Exception) {}
+        }
+
+        // Preload frequently used Lottie compositions into memory cache (async, non-blocking)
+        val lottiesToPreload = listOf("Loading.json", "crown.json")
+        lottiesToPreload.forEach { name ->
+            com.airbnb.lottie.LottieCompositionFactory.fromAsset(this, name)
+        }
 
         // Reklam sistemini gecikmeli başlat (ilk karelerin hızlı render olması için)
         android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
