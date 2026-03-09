@@ -615,4 +615,46 @@
     <string name="google_account_connected">Your account is connected with Google</string>
     <string name="notification_channel_desc">Yeni çıkartma paketleriyle ilgili bildirimler</string>
     <string name="ai_loading_hint">Bu arka planda çalışırken diğer çıkartmaları keşfedebilirsiniz</string>
+
+    <!-- Profile -->
+    <string name="profile">Profil</string>
+    <string name="profile_guest">Misafir Kullanıcı</string>
+    <string name="profile_stat_published">Yayınlandı</string>
+    <string name="profile_stat_downloads">İndirilenler</string>
+    <string name="profile_stat_favorites">Favoriler</string>
+    <string name="profile_share_pack">Çıkartma Paketini Paylaş</string>
+    <string name="profile_my_published_packs">Yayınlanan Paketlerim</string>
+    <string name="profile_no_packs">Henüz herhangi bir paket yayınlamadınız.\nİlk paketinizi göndermek için \"Çıkartma Paketini Paylaş\"a dokunun!</string>
+    <string name="profile_login_title">Devam etmek için Oturum Açın</string>
+    <string name="profile_login_desc">Profilinizi oluşturmak, çıkartma paketleri yayınlamak ve istatistiklerinizi takip etmek için Google hesabınızla oturum açın.</string>
+    <string name="profile_sign_in">Google ile oturum açın</string>
+    <string name="profile_login_required">Lütfen önce oturum açın</string>
+    <string name="profile_loading">Profil yükleniyor…</string>
+
+    <!-- Submit Pack -->
+    <string name="submit_pack_title">Çıkartma Paketini Gönder</string>
+    <string name="submit_pack_name_hint">Paket Adı</string>
+    <string name="submit_category_label">Kategori</string>
+    <string name="submit_stickers_label">Çıkartmalar</string>
+    <string name="submit_stickers_hint">En az 3 çıkartma ekleyin (en fazla 30). Galeriden eklemek için dokunun.</string>
+    <string name="submit_add_sticker">Çıkartma Ekle</string>
+    <string name="submit_add_sticker_count">Çıkartma Ekle (%1$d/%2$d)</string>
+    <string name="submit_pack_button">Paketi Gönder</string>
+    <string name="submit_max_stickers">Paket başına maksimum %d çıkartma</string>
+    <string name="submit_min_stickers">Lütfen en az %d çıkartma ekleyin</string>
+    <string name="submit_name_required">Paket adı gerekli</string>
+    <string name="submit_uploading">Yükleniyor…</string>
+    <string name="submit_success">Çıkartma paketiniz incelenmek üzere gönderildi! 🎉</string>
+    <string name="submit_failed">Gönderim başarısız oldu: %s</string>
+
+    <!-- Content Report -->
+    <string name="report_content">İçeriği Bildir</string>
+    <string name="report_reason_hint">Bu paketi neden bildiriyorsunuz?</string>
+    <string name="report_inappropriate">Uygunsuz İçerik</string>
+    <string name="report_copyright">Telif Hakkı İhlali</string>
+    <string name="report_spam">İstenmeyen e-posta</string>
+    <string name="report_other">Diğer</string>
+    <string name="report_submitted">Rapor gönderildi. Teşekkür ederim!</string>
+    <string name="report_failed">Rapor gönderilemedi. Lütfen tekrar deneyin.</string>
+    <string name="report_select_reason">Lütfen bir neden seçin</string>
 </resources>

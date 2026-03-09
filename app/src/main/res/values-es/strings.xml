@@ -615,4 +615,46 @@
     <string name="google_account_connected">Your account is connected with Google</string>
     <string name="notification_channel_desc">Notificaciones sobre nuevos paquetes de pegatinas.</string>
     <string name="ai_loading_hint">Puedes explorar otras pegatinas mientras esto se ejecuta en segundo plano.</string>
+
+    <!-- Profile -->
+    <string name="profile">Perfil</string>
+    <string name="profile_guest">Usuario invitado</string>
+    <string name="profile_stat_published">Publicado</string>
+    <string name="profile_stat_downloads">Descargas</string>
+    <string name="profile_stat_favorites">Favoritos</string>
+    <string name="profile_share_pack">Compartir paquete de pegatinas</string>
+    <string name="profile_my_published_packs">Mis packs publicados</string>
+    <string name="profile_no_packs">Aún no has publicado ningún paquete.\n¡Toca \"Compartir paquete de pegatinas\" para enviar tu primer paquete!</string>
+    <string name="profile_login_title">Inicia sesión para continuar</string>
+    <string name="profile_login_desc">Inicie sesión con su cuenta de Google para crear su perfil, publicar paquetes de pegatinas y realizar un seguimiento de sus estadísticas.</string>
+    <string name="profile_sign_in">Iniciar sesión con Google</string>
+    <string name="profile_login_required">Por favor inicia sesión primero</string>
+    <string name="profile_loading">Cargando perfil…</string>
+
+    <!-- Submit Pack -->
+    <string name="submit_pack_title">Enviar paquete de pegatinas</string>
+    <string name="submit_pack_name_hint">Nombre del paquete</string>
+    <string name="submit_category_label">Categoría</string>
+    <string name="submit_stickers_label">Pegatinas</string>
+    <string name="submit_stickers_hint">Añade al menos 3 pegatinas (máximo 30). Toque para agregar desde la galería.</string>
+    <string name="submit_add_sticker">Agregar pegatinas</string>
+    <string name="submit_add_sticker_count">Agregar pegatinas (%1$d/%2$d)</string>
+    <string name="submit_pack_button">Enviar paquete</string>
+    <string name="submit_max_stickers">Máximo de %d pegatinas por paquete</string>
+    <string name="submit_min_stickers">Añade al menos %d pegatinas</string>
+    <string name="submit_name_required">El nombre del paquete es obligatorio.</string>
+    <string name="submit_uploading">Subiendo…</string>
+    <string name="submit_success">¡Tu paquete de stickers ha sido enviado para revisión! 🎉</string>
+    <string name="submit_failed">Envío fallido: %s</string>
+
+    <!-- Content Report -->
+    <string name="report_content">Informar contenido</string>
+    <string name="report_reason_hint">¿Por qué estás denunciando este paquete?</string>
+    <string name="report_inappropriate">Contenido inapropiado</string>
+    <string name="report_copyright">Violación de derechos de autor</string>
+    <string name="report_spam">Correo basura</string>
+    <string name="report_other">Otro</string>
+    <string name="report_submitted">Informe presentado. ¡Gracias!</string>
+    <string name="report_failed">No se pudo enviar el informe. Por favor inténtalo de nuevo.</string>
+    <string name="report_select_reason">Por favor seleccione un motivo</string>
 </resources>

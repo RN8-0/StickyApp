@@ -615,4 +615,46 @@
     <string name="google_account_connected">Your account is connected with Google</string>
     <string name="notification_channel_desc">Benachrichtigungen über neue Stickerpakete</string>
     <string name="ai_loading_hint">Sie können andere Aufkleber erkunden, während dies im Hintergrund läuft</string>
+
+    <!-- Profile -->
+    <string name="profile">Profil</string>
+    <string name="profile_guest">Gastbenutzer</string>
+    <string name="profile_stat_published">Veröffentlicht</string>
+    <string name="profile_stat_downloads">Downloads</string>
+    <string name="profile_stat_favorites">Favoriten</string>
+    <string name="profile_share_pack">Teilen Sie das Sticker-Paket</string>
+    <string name="profile_my_published_packs">Meine veröffentlichten Pakete</string>
+    <string name="profile_no_packs">Sie haben noch keine Pakete veröffentlicht.\nTippen Sie auf „Stickerpaket teilen“, um Ihr erstes Paket einzusenden!</string>
+    <string name="profile_login_title">Melden Sie sich an, um fortzufahren</string>
+    <string name="profile_login_desc">Melden Sie sich mit Ihrem Google-Konto an, um Ihr Profil zu erstellen, Stickerpakete zu veröffentlichen und Ihre Statistiken zu verfolgen.</string>
+    <string name="profile_sign_in">Melden Sie sich mit Google an</string>
+    <string name="profile_login_required">Bitte melden Sie sich zuerst an</string>
+    <string name="profile_loading">Profil wird geladen…</string>
+
+    <!-- Submit Pack -->
+    <string name="submit_pack_title">Stickerpaket einreichen</string>
+    <string name="submit_pack_name_hint">Paketname</string>
+    <string name="submit_category_label">Kategorie</string>
+    <string name="submit_stickers_label">Aufkleber</string>
+    <string name="submit_stickers_hint">Fügen Sie mindestens 3 Aufkleber hinzu (maximal 30). Tippen Sie hier, um aus der Galerie hinzuzufügen.</string>
+    <string name="submit_add_sticker">Fügen Sie Aufkleber hinzu</string>
+    <string name="submit_add_sticker_count">Aufkleber hinzufügen (%1$d/%2$d)</string>
+    <string name="submit_pack_button">Paket einreichen</string>
+    <string name="submit_max_stickers">Maximal %d Aufkleber pro Packung</string>
+    <string name="submit_min_stickers">Bitte fügen Sie mindestens %d Aufkleber hinzu</string>
+    <string name="submit_name_required">Paketname ist erforderlich</string>
+    <string name="submit_uploading">Hochladen…</string>
+    <string name="submit_success">Ihr Stickerpaket wurde zur Überprüfung eingereicht! 🎉</string>
+    <string name="submit_failed">Übermittlung fehlgeschlagen: %s</string>
+
+    <!-- Content Report -->
+    <string name="report_content">Inhalt melden</string>
+    <string name="report_reason_hint">Warum melden Sie dieses Paket?</string>
+    <string name="report_inappropriate">Unangemessener Inhalt</string>
+    <string name="report_copyright">Urheberrechtsverletzung</string>
+    <string name="report_spam">Spam</string>
+    <string name="report_other">Andere</string>
+    <string name="report_submitted">Bericht eingereicht. Danke schön!</string>
+    <string name="report_failed">Bericht konnte nicht übermittelt werden. Bitte versuchen Sie es erneut.</string>
+    <string name="report_select_reason">Bitte wählen Sie einen Grund aus</string>
 </resources>

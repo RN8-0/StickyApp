@@ -615,4 +615,46 @@
     <string name="google_account_connected">Your account is connected with Google</string>
     <string name="notification_channel_desc">Notifications sur les nouveaux packs d\'autocollants</string>
     <string name="ai_loading_hint">Vous pouvez explorer d\'autres autocollants pendant que cela s\'exécute en arrière-plan</string>
+
+    <!-- Profile -->
+    <string name="profile">Profil</string>
+    <string name="profile_guest">Utilisateur invité</string>
+    <string name="profile_stat_published">Publié</string>
+    <string name="profile_stat_downloads">Téléchargements</string>
+    <string name="profile_stat_favorites">Favoris</string>
+    <string name="profile_share_pack">Partager le pack d’autocollants</string>
+    <string name="profile_my_published_packs">Mes packs publiés</string>
+    <string name="profile_no_packs">Vous n\'avez pas encore publié de packs.\nAppuyez sur « Partager le pack d\'autocollants » pour soumettre votre premier pack !</string>
+    <string name="profile_login_title">Connectez-vous pour continuer</string>
+    <string name="profile_login_desc">Connectez-vous avec votre compte Google pour créer votre profil, publier des packs d\'autocollants et suivre vos statistiques.</string>
+    <string name="profile_sign_in">Connectez-vous avec Google</string>
+    <string name="profile_login_required">Veuillez d\'abord vous connecter</string>
+    <string name="profile_loading">Chargement du profil…</string>
+
+    <!-- Submit Pack -->
+    <string name="submit_pack_title">Soumettre le pack d\'autocollants</string>
+    <string name="submit_pack_name_hint">Nom du pack</string>
+    <string name="submit_category_label">Catégorie</string>
+    <string name="submit_stickers_label">Autocollants</string>
+    <string name="submit_stickers_hint">Ajoutez au moins 3 autocollants (max 30). Appuyez pour ajouter depuis la galerie.</string>
+    <string name="submit_add_sticker">Ajouter des autocollants</string>
+    <string name="submit_add_sticker_count">Ajouter des autocollants (%1$d/%2$d)</string>
+    <string name="submit_pack_button">Soumettre le pack</string>
+    <string name="submit_max_stickers">Maximum de %d autocollants par paquet</string>
+    <string name="submit_min_stickers">Veuillez ajouter au moins %d autocollants</string>
+    <string name="submit_name_required">Le nom du pack est requis</string>
+    <string name="submit_uploading">Téléchargement…</string>
+    <string name="submit_success">Votre pack d\'autocollants a été soumis pour examen ! 🎉</string>
+    <string name="submit_failed">Échec de la soumission : %s</string>
+
+    <!-- Content Report -->
+    <string name="report_content">Contenu du rapport</string>
+    <string name="report_reason_hint">Pourquoi signalez-vous ce pack ?</string>
+    <string name="report_inappropriate">Contenu inapproprié</string>
+    <string name="report_copyright">Violation du droit d\'auteur</string>
+    <string name="report_spam">Courrier indésirable</string>
+    <string name="report_other">Autre</string>
+    <string name="report_submitted">Rapport soumis. Merci!</string>
+    <string name="report_failed">Impossible de soumettre le rapport. Veuillez réessayer.</string>
+    <string name="report_select_reason">Veuillez sélectionner une raison</string>
 </resources>
