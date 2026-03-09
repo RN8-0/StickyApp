@@ -4,6 +4,7 @@ import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.res.ColorStateList
 import android.graphics.*
 import android.net.Uri
 import android.os.Bundle
@@ -51,15 +52,13 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
     }
 
     // Views
-    private lateinit var typeSelectionContainer: View
     private lateinit var editorContainer: View
     private lateinit var photoEditorView: PhotoEditorView
     private lateinit var photoEditorCard: View
-    private lateinit var rvTools: RecyclerView
     private lateinit var toolOptionsPanel: FrameLayout
     private lateinit var loadingOverlay: View
     private lateinit var lottieLoading: LottieAnimationView
-    private lateinit var btnSaveSticker: MaterialButton
+    private lateinit var btnSaveSticker: View
     private lateinit var btnUndo: ImageButton
     private lateinit var btnRedo: ImageButton
     private lateinit var btnClose: ImageButton
@@ -68,6 +67,16 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
     private lateinit var emptyStatePlaceholder: View
     private lateinit var btnSelectImagePlaceholder: View
     private lateinit var undoRedoContainer: View
+
+    // Top-bar tool buttons
+    private lateinit var btnToolCrop: ImageButton
+    private lateinit var btnToolRemoveBg: ImageButton
+    private lateinit var btnToolEmoji: ImageButton
+    private lateinit var btnToolText: ImageButton
+    private lateinit var btnToolBrush: ImageButton
+    private lateinit var btnToolEraser: ImageButton
+    private lateinit var btnToolBorder: ImageButton
+    private var activeToolButton: ImageButton? = null
 
     // PhotoEditor
     private lateinit var photoEditor: PhotoEditor
@@ -177,42 +186,43 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
         // ML Kit Subject Segmentation modelini önceden başlat
         initSegmenter()
         initViews()
-        setupToolsRecyclerView()
+        setupToolButtons()
         setupClickListeners()
         setupEraserTouchListener()
         loadAds()
 
         targetPackId = intent.getStringExtra("packId")
 
-        // Skip type selection and go straight to editor + photo picker
-        if (intent.getBooleanExtra("skipTypeSelection", false)) {
-            showEditor()
-            imagePickerLauncher.launch("image/*")
-        }
+        // Editor is the primary view; set initial empty state
+        showEditor()
 
-        // Direct image edit from AI sticker generator
+        // Handle launch intents
         val editImageUri = intent.getStringExtra("editImageUri")
-        if (editImageUri != null) {
-            showEditor()
-            // Defer image loading until the view is fully laid out to prevent crash
-            photoEditorView.post {
-                try {
-                    loadImageAfterCrop(android.net.Uri.parse(editImageUri))
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                    Toast.makeText(this, getString(R.string.error_loading_image), Toast.LENGTH_SHORT).show()
+        when {
+            intent.getBooleanExtra("skipTypeSelection", false) -> {
+                imagePickerLauncher.launch("image/*")
+            }
+            editImageUri != null -> {
+                photoEditorView.post {
+                    try {
+                        loadImageAfterCrop(android.net.Uri.parse(editImageUri))
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                        Toast.makeText(this, getString(R.string.error_loading_image), Toast.LENGTH_SHORT).show()
+                    }
                 }
+            }
+            else -> {
+                showTypeSelectionDialog()
             }
         }
     }
 
 
     private fun initViews() {
-        typeSelectionContainer = findViewById(R.id.typeSelectionContainer)
         editorContainer = findViewById(R.id.editorContainer)
         photoEditorView = findViewById(R.id.photoEditorView)
         photoEditorCard = findViewById(R.id.photoEditorCard)
-        rvTools = findViewById(R.id.rvTools)
         toolOptionsPanel = findViewById(R.id.toolOptionsPanel)
         loadingOverlay = findViewById(R.id.loadingOverlay)
         lottieLoading = findViewById(R.id.lottieLoading)
@@ -225,6 +235,23 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
         emptyStatePlaceholder = findViewById(R.id.emptyStatePlaceholder)
         btnSelectImagePlaceholder = findViewById(R.id.btnSelectImagePlaceholder)
         undoRedoContainer = findViewById(R.id.undoRedoContainer)
+
+        // Top-bar tool buttons
+        btnToolCrop = findViewById(R.id.btnToolCrop)
+        btnToolRemoveBg = findViewById(R.id.btnToolRemoveBg)
+        btnToolEmoji = findViewById(R.id.btnToolEmoji)
+        btnToolText = findViewById(R.id.btnToolText)
+        btnToolBrush = findViewById(R.id.btnToolBrush)
+        btnToolEraser = findViewById(R.id.btnToolEraser)
+        btnToolBorder = findViewById(R.id.btnToolBorder)
+
+        // Dark status/nav bars
+        window.statusBarColor = Color.parseColor("#1B1B1B")
+        window.navigationBarColor = Color.parseColor("#1B1B1B")
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            window.decorView.systemUiVisibility =
+                window.decorView.systemUiVisibility and View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR.inv()
+        }
 
         // Setup Lottie
         lottieLoading.setAnimation("material_wave_loading.json")
@@ -339,26 +366,24 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
         }
     }
 
-    private fun setupToolsRecyclerView() {
-        rvTools.layoutManager = LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false)
-        rvTools.adapter = ToolsAdapter(tools) { tool ->
-            onToolSelected(tool)
+    private fun setupToolButtons() {
+        val toolMap = mapOf(
+            btnToolCrop to ToolType.CROP,
+            btnToolRemoveBg to ToolType.REMOVE_BG,
+            btnToolEmoji to ToolType.EMOJI,
+            btnToolText to ToolType.TEXT,
+            btnToolBrush to ToolType.BRUSH,
+            btnToolEraser to ToolType.ERASER,
+            btnToolBorder to ToolType.BORDER
+        )
+        for ((button, type) in toolMap) {
+            button.setOnClickListener {
+                onToolSelected(EditorTool(type, "", 0))
+            }
         }
     }
 
     private fun setupClickListeners() {
-        // Type Selection
-        findViewById<View>(R.id.cardStaticType).setOnClickListener {
-            showEditor()
-        }
-
-        // Animated Sticker
-        findViewById<View>(R.id.cardAnimatedType).setOnClickListener {
-            val intent = Intent(this, AnimatedStickerActivity::class.java)
-            targetPackId?.let { intent.putExtra("packId", it) }
-            startActivity(intent)
-        }
-
         // Editor buttons
         btnClose.setOnClickListener {
             showExitConfirmDialog()
@@ -584,7 +609,6 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
     }
 
     private fun showEditor() {
-        typeSelectionContainer.visibility = View.GONE
         editorContainer.visibility = View.VISIBLE
         // If image is loaded, hide placeholder and show editor view
         if (currentBitmap != null) {
@@ -628,10 +652,7 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
         }
 
         when (tool.type) {
-            ToolType.REMOVE_BG -> {
-                if (tool.name == getString(R.string.reset_short)) restoreOriginalImage()
-                else removeBackground()
-            }
+            ToolType.REMOVE_BG -> removeBackground()
             ToolType.CROP -> startCrop()
             ToolType.BRUSH -> {
                 if (isBrushModeActive && !isEraserMode) {
@@ -656,6 +677,7 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
             ToolType.EMOJI -> showEmojiPicker()
             ToolType.BORDER -> showBorderOptions()
         }
+        updateToolHighlight()
     }
 
     // ==================== Remove Background (ML Kit) ====================
@@ -1833,11 +1855,7 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
 
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
-        if (editorContainer.visibility == View.VISIBLE) {
-            showExitConfirmDialog()
-        } else {
-            super.onBackPressed()
-        }
+        showExitConfirmDialog()
     }
 
     override fun onDestroy() {

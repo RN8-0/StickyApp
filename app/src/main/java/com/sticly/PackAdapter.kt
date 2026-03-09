@@ -107,6 +107,20 @@ class PackAdapter(
 
         // Single instance. DateFormat is NOT thread-safe, but PackAdapter only runs on Main Thread
         private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+
+        // Native ad cache keyed by slotIndex — one request per slot, served from cache on rebind
+        private val nativeAdCache = android.util.SparseArray<NativeAd>()
+        // Slots currently waiting for an ad response — prevents duplicate requests
+        private val pendingSlots = mutableSetOf<Int>()
+
+        /** Destroy all cached NativeAd objects and reset slot state. Call when ads are no longer needed. */
+        fun clearNativeAdCache() {
+            for (i in 0 until nativeAdCache.size()) {
+                nativeAdCache.valueAt(i).destroy()
+            }
+            nativeAdCache.clear()
+            pendingSlots.clear()
+        }
     }
 
     class VH(v: View) : RecyclerView.ViewHolder(v) {
@@ -150,63 +164,55 @@ class PackAdapter(
     override fun onBindViewHolder(holder: VH, pos: Int) {
         val item = items[pos]
         if (item is BannerAdPlaceholder) {
+            val slotIndex = item.slotIndex
             val adView = holder.itemView as? NativeAdView ?: return
             val content = adView.findViewById<View>(R.id.adContent)
             val placeholder = adView.findViewById<View>(R.id.adPlaceholder)
-            val currentTag = adView.tag
-            if (currentTag == "loaded") {
-                // Already loaded — show it
-                adView.visibility = View.VISIBLE
-                val lp = adView.layoutParams
-                lp.height = ViewGroup.LayoutParams.WRAP_CONTENT
-                adView.layoutParams = lp
-                content?.visibility = View.VISIBLE
+
+            // Tag the ViewHolder with the current slot index so async callbacks can
+            // verify the ViewHolder hasn't been recycled to a different slot.
+            adView.tag = slotIndex
+
+            // Serve from cache — no new network request needed
+            val cachedAd = nativeAdCache[slotIndex]
+            if (cachedAd != null) {
+                populateNativeAdIntoView(adView, cachedAd, content, placeholder)
+                return
+            }
+
+            // Request already in flight for this slot — hide and wait
+            if (pendingSlots.contains(slotIndex)) {
+                adView.visibility = View.GONE
+                adView.layoutParams.height = 0
+                content?.visibility = View.GONE
                 placeholder?.visibility = View.GONE
                 return
             }
-            if (currentTag == "loading") return
-            // New slot or previously failed — (re)load
-            adView.tag = "loading"
+
+            // First request for this slot
+            pendingSlots.add(slotIndex)
+            adView.visibility = View.GONE
+            adView.layoutParams.height = 0
             content?.visibility = View.GONE
             placeholder?.visibility = View.GONE
-            // Start hidden — only show when ad actually loads
-            adView.visibility = View.GONE
-            val lp = adView.layoutParams
-            lp.height = 0
-            adView.layoutParams = lp
 
             val adLoader = AdLoader.Builder(holder.itemView.context, AdManager.FEED_AD_ID)
                 .forNativeAd { nativeAd ->
-                    adView.headlineView = adView.findViewById(R.id.ad_headline)
-                    adView.bodyView = adView.findViewById(R.id.ad_body)
-                    adView.callToActionView = adView.findViewById(R.id.ad_call_to_action)
-                    adView.iconView = adView.findViewById(R.id.ad_app_icon)
-                    adView.mediaView = adView.findViewById<MediaView>(R.id.ad_media)
-
-                    (adView.headlineView as? TextView)?.text = nativeAd.headline
-                    (adView.bodyView as? TextView)?.text = nativeAd.body
-                    (adView.callToActionView as? Button)?.text = nativeAd.callToAction
-                    nativeAd.icon?.drawable?.let { (adView.iconView as? ImageView)?.setImageDrawable(it) }
-                    nativeAd.mediaContent?.let { adView.mediaView?.setMediaContent(it) }
-
-                    adView.setNativeAd(nativeAd)
-                    placeholder?.visibility = View.GONE
-                    content?.visibility = View.VISIBLE
-                    adView.visibility = View.VISIBLE
-                    val adLp = adView.layoutParams
-                    adLp.height = ViewGroup.LayoutParams.WRAP_CONTENT
-                    adView.layoutParams = adLp
-                    adView.tag = "loaded"
+                    nativeAdCache.put(slotIndex, nativeAd)
+                    pendingSlots.remove(slotIndex)
+                    // Only update the view if this ViewHolder is still bound to this slot
+                    if (adView.tag == slotIndex) {
+                        populateNativeAdIntoView(adView, nativeAd, content, placeholder)
+                    }
                 }
                 .withAdListener(object : AdListener() {
                     override fun onAdFailedToLoad(error: LoadAdError) {
-                        Log.e("PackAdapter", "Feed ad failed: ${error.message} (code=${error.code})")
-                        adView.tag = null
-                        // Collapse the entire ad slot when load fails
-                        adView.visibility = View.GONE
-                        val failLp = adView.layoutParams
-                        failLp.height = 0
-                        adView.layoutParams = failLp
+                        Log.e("PackAdapter", "Feed ad failed slot=$slotIndex: ${error.message} (code=${error.code})")
+                        pendingSlots.remove(slotIndex)
+                        if (adView.tag == slotIndex) {
+                            adView.visibility = View.GONE
+                            adView.layoutParams.height = 0
+                        }
                     }
                 })
                 .withNativeAdOptions(
@@ -228,12 +234,9 @@ class PackAdapter(
     override fun onViewRecycled(holder: VH) {
         super.onViewRecycled(holder)
         if (holder.itemView is NativeAdView) {
-            // Keep the "loaded" tag so successfully-loaded ads are not re-requested
-            // when the same ViewHolder is rebound to the same ad slot.
-            // Only clear "loading" state (request in-flight for a now-invisible slot).
-            if (holder.itemView.tag == "loading") {
-                holder.itemView.tag = null
-            }
+            // Clear the slot tag — the companion-object cache tracks ad availability,
+            // so the next bind will correctly serve from cache or skip a pending request.
+            holder.itemView.tag = null
             return
         }
         val container = holder.stickerPreviewContainer ?: return
@@ -249,6 +252,40 @@ class PackAdapter(
             }
             holder.tray?.let { glide.clear(it); it.setImageDrawable(null) }
         } catch (_: Exception) { }
+    }
+
+    override fun onDetachedFromRecyclerView(recyclerView: RecyclerView) {
+        super.onDetachedFromRecyclerView(recyclerView)
+        clearNativeAdCache()
+    }
+
+    /** Populates a NativeAdView with data from a loaded NativeAd and makes it visible. */
+    private fun populateNativeAdIntoView(
+        adView: NativeAdView,
+        nativeAd: NativeAd,
+        content: View?,
+        placeholder: View?
+    ) {
+        adView.headlineView = adView.findViewById(R.id.ad_headline)
+        adView.bodyView = adView.findViewById(R.id.ad_body)
+        adView.callToActionView = adView.findViewById(R.id.ad_call_to_action)
+        adView.iconView = adView.findViewById(R.id.ad_app_icon)
+        // Register the MediaView so AdMob SDK is satisfied, but keep it 0×0 hidden
+        adView.mediaView = adView.findViewById<MediaView>(R.id.ad_media)
+
+        (adView.headlineView as? TextView)?.text = nativeAd.headline
+        (adView.bodyView as? TextView)?.text = nativeAd.body
+        (adView.callToActionView as? Button)?.text = nativeAd.callToAction
+        nativeAd.icon?.drawable?.let { (adView.iconView as? ImageView)?.setImageDrawable(it) }
+        // MediaView intentionally kept hidden — compact row layout (icon + text + CTA only)
+
+        adView.setNativeAd(nativeAd)
+        placeholder?.visibility = View.GONE
+        content?.visibility = View.VISIBLE
+        adView.visibility = View.VISIBLE
+        val lp = adView.layoutParams
+        lp.height = ViewGroup.LayoutParams.WRAP_CONTENT
+        adView.layoutParams = lp
     }
 
     private val timeAgoCache = java.util.concurrent.ConcurrentHashMap<String, String>(64)

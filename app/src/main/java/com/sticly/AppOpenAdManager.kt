@@ -100,6 +100,10 @@ class AppOpenAdManager(private val application: Application) :
                 override fun onAdFailedToLoad(error: LoadAdError) {
                     isLoadingAd = false
                     Log.d(TAG, "App open ad failed to load: ${error.message}")
+                    // Retry after 60 seconds — avoids hammering the server on repeated failures
+                    android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                        loadAd()
+                    }, 60_000L)
                 }
             })
     }

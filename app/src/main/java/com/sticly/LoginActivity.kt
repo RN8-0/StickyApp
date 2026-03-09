@@ -17,6 +17,10 @@ import kotlinx.coroutines.launch
 
 class LoginActivity : AppCompatActivity() {
 
+    override fun attachBaseContext(newBase: android.content.Context) {
+        super.attachBaseContext(LocaleHelper.onAttach(newBase))
+    }
+
     private lateinit var googleSignInClient: GoogleSignInClient
     private val auth = FirebaseAuth.getInstance()
     private var loadingOverlay: View? = null

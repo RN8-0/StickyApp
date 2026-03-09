@@ -32,6 +32,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
 import com.google.android.material.button.MaterialButton
 import kotlinx.coroutines.*
+import kotlinx.coroutines.tasks.await
 import java.io.File
 import java.util.concurrent.atomic.AtomicInteger
 import android.animation.ValueAnimator
@@ -68,6 +69,9 @@ class DetailsActivity : AppCompatActivity() {
     private var pendingDeletePackId: String? = null
     private var wasPackInWhatsAppBeforeDelete = false
     private var waitingForWhatsAppReturn = false
+    // Set to true immediately after a rewarded ad completes for a pack.
+    // Prevents showing an interstitial right on top of a just-finished rewarded ad.
+    private var rewardedJustCompleted = false
     
     // Modern Activity Result API Launchers
     private val addPackLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -353,6 +357,9 @@ class DetailsActivity : AppCompatActivity() {
 
         // Butonları ayarla
         setupButtons(pack, hasAccess)
+
+        // Report button
+        setupReportButton(pack)
 
         // İlgili paketleri gecikmeli yükle (ilk render'ı bloklamasın)
         rv.post { setupRelatedPacks(pack) }
@@ -763,6 +770,72 @@ class DetailsActivity : AppCompatActivity() {
         rvRelated.adapter = relatedAdapter
     }
 
+    private fun setupReportButton(pack: Pack) {
+        val btnReport = findViewById<android.widget.TextView>(R.id.btnReportContent) ?: return
+        // Hide report for user's own custom packs
+        if (pack.id.startsWith("custom_")) {
+            btnReport.visibility = View.GONE
+            return
+        }
+        btnReport.visibility = View.VISIBLE
+        btnReport.setOnClickListener {
+            showReportDialog(pack)
+        }
+    }
+
+    private fun showReportDialog(pack: Pack) {
+        val reasons = arrayOf(
+            getString(R.string.report_inappropriate),
+            getString(R.string.report_copyright),
+            getString(R.string.report_spam),
+            getString(R.string.report_other)
+        )
+        val reasonKeys = arrayOf("inappropriate", "copyright", "spam", "other")
+        var selectedIndex = -1
+
+        AlertDialog.Builder(this)
+            .setTitle(getString(R.string.report_content))
+            .setSingleChoiceItems(reasons, -1) { _, which ->
+                selectedIndex = which
+            }
+            .setPositiveButton(getString(R.string.send)) { dialog, _ ->
+                if (selectedIndex < 0) {
+                    Toast.makeText(this, getString(R.string.report_select_reason), Toast.LENGTH_SHORT).show()
+                    return@setPositiveButton
+                }
+                submitReport(pack, reasonKeys[selectedIndex])
+                dialog.dismiss()
+            }
+            .setNegativeButton(getString(R.string.cancel), null)
+            .show()
+    }
+
+    private fun submitReport(pack: Pack, reason: String) {
+        val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+        val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+
+        val report = hashMapOf(
+            "pack_id" to pack.id,
+            "pack_name" to pack.localizedName,
+            "reason" to reason,
+            "reporter_uid" to (user?.uid ?: "anonymous"),
+            "reporter_email" to (user?.email ?: ""),
+            "status" to "pending",
+            "created_at" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+        )
+
+        lifecycleScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    db.collection("content_reports").add(report).await()
+                }
+                Toast.makeText(this@DetailsActivity, getString(R.string.report_submitted), Toast.LENGTH_SHORT).show()
+            } catch (e: Exception) {
+                Toast.makeText(this@DetailsActivity, getString(R.string.report_failed), Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
     private fun launchPremiumPurchase() {
         startActivity(Intent(this, PremiumActivity::class.java))
     }
@@ -1088,6 +1161,7 @@ class DetailsActivity : AppCompatActivity() {
         AdManager.showRewardedAd(this,
             onRewarded = {
                 // Ödül kazanıldı → Pack'i aç
+                rewardedJustCompleted = true
                 PreferencesHelper.unlockPack(this, pack.id)
                 updateButton()
                 // Sticker'ları WhatsApp'a ekle
@@ -1580,8 +1654,16 @@ class DetailsActivity : AppCompatActivity() {
         showLoadingState(false)
         Log.d("DetailsActivity", "sendToWhatsApp called for pack=${pack.id}, isPremium=${pack.isPremium}")
 
-        // Premium kullanıcılar hiç reklam görmez, non-premium paketlerde interstitial göster (her 2 indirmede bir)
-        if (!pack.isPremium && !PreferencesHelper.isPremium(this)) {
+        // Premium kullanıcılar hiç reklam görmez.
+        // Rewarded izlendikten hemen sonra interstitial gösterme (çift tam ekran kötü UX).
+        // Diğer tüm durumlarda (ücretsiz ve premium paket) interstitial göster.
+        if (!PreferencesHelper.isPremium(this)) {
+            val skipForReward = rewardedJustCompleted
+            rewardedJustCompleted = false
+            if (skipForReward) {
+                launchWhatsAppIntent(pack)
+                return
+            }
             // Prepare WhatsApp intent in background WHILE ad is showing
             val intentDeferred = lifecycleScope.async(Dispatchers.IO) {
                 val currentPacks = StickerRepository.allPacksCache

@@ -227,35 +227,57 @@ object PreferencesHelper {
         return isPremium(context) || isPackPurchased(context, packId) || isPackUnlocked(context, packId)
     }
 
-    // ========== REWARDED AD: Kalıcı Kilit Açma ==========
-    private const val KEY_PACK_UNLOCK_PREFIX = "pack_unlock_"
+    // ========== REWARDED AD: Süreli Kilit Açma (7 Gün) ==========
+    private const val KEY_PACK_UNLOCK_PREFIX = "pack_unlock_"         // legacy permanent key
+    private const val KEY_PACK_UNLOCK_EXPIRY_PREFIX = "pack_unlock_exp_"  // new expiry key
+    private const val UNLOCK_DURATION_MS = 7 * 24 * 60 * 60 * 1000L  // 7 days
 
     /**
-     * Paketi kalıcı olarak aç (reklam izledikten sonra)
+     * Paketi 7 gün boyunca aç (reklam izledikten sonra).
+     * Eski kalıcı kilit varsa üzerine yazar — artık süreli olacak.
      */
     fun unlockPack(context: Context, packId: String) {
-        getPrefs(context).edit().putBoolean(KEY_PACK_UNLOCK_PREFIX + packId, true).apply()
-        Log.d(TAG, "Pack $packId unlocked permanently via ad")
+        val expiry = System.currentTimeMillis() + UNLOCK_DURATION_MS
+        getPrefs(context).edit()
+            .putLong(KEY_PACK_UNLOCK_EXPIRY_PREFIX + packId, expiry)
+            .remove(KEY_PACK_UNLOCK_PREFIX + packId)  // eski kalıcı anahtarı sil
+            .apply()
+        Log.d(TAG, "Pack $packId unlocked for 7 days (expires: $expiry)")
     }
 
     /**
-     * Paket açıldı mı? (Reklam izlenerek)
-     * Not: Eski sürümlerde 'Long' (timestamp) idi, yeni sürümde 'Boolean'. 
-     * Çökmeyi önlemek için güvenli okuma yapıyoruz.
+     * Paket reklam izlenerek açıldı mı ve süresi geçmedi mi?
+     * Eski kalıcı (Boolean) formata da geriye dönük uyumlu.
      */
     fun isPackUnlocked(context: Context, packId: String): Boolean {
         val prefs = getPrefs(context)
-        val key = KEY_PACK_UNLOCK_PREFIX + packId
-        
+
+        // Yeni format: expiry timestamp
+        val expiry = prefs.getLong(KEY_PACK_UNLOCK_EXPIRY_PREFIX + packId, 0L)
+        if (expiry > 0) {
+            return System.currentTimeMillis() < expiry
+        }
+
+        // Eski format: kalıcı Boolean (migrate edeceğiz ama mevcut kullanıcılar için geçici destek)
         return try {
-            // Yeni format: Boolean
-            prefs.getBoolean(key, false)
+            val permanent = prefs.getBoolean(KEY_PACK_UNLOCK_PREFIX + packId, false)
+            if (permanent) {
+                // Yeni formata geç: şu andan itibaren 7 gün ver
+                val migratedExpiry = System.currentTimeMillis() + UNLOCK_DURATION_MS
+                prefs.edit()
+                    .putLong(KEY_PACK_UNLOCK_EXPIRY_PREFIX + packId, migratedExpiry)
+                    .remove(KEY_PACK_UNLOCK_PREFIX + packId)
+                    .apply()
+                true
+            } else false
         } catch (e: ClassCastException) {
-            // Eski format: Long (Migrate to permanent)
-            val legacyValue = prefs.getLong(key, 0L)
+            val legacyValue = prefs.getLong(KEY_PACK_UNLOCK_PREFIX + packId, 0L)
             if (legacyValue > 0) {
-                // Kalıcıya çevir
-                prefs.edit().putBoolean(key, true).apply()
+                val migratedExpiry = System.currentTimeMillis() + UNLOCK_DURATION_MS
+                prefs.edit()
+                    .putLong(KEY_PACK_UNLOCK_EXPIRY_PREFIX + packId, migratedExpiry)
+                    .remove(KEY_PACK_UNLOCK_PREFIX + packId)
+                    .apply()
                 true
             } else false
         }

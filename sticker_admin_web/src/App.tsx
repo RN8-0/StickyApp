@@ -70,7 +70,14 @@ import {
   Zap,
   List,
   Star,
-  AlertTriangle
+  AlertTriangle,
+  FileText,
+  Eye,
+  Flag,
+  UserPlus,
+  Inbox,
+  ThumbsUp,
+  ThumbsDown
 } from 'lucide-react';
 import { translateTextAllLanguages, TARGET_LANGUAGES } from './utils/translator';
 import {
@@ -82,7 +89,7 @@ import {
   Tooltip,
   ResponsiveContainer
 } from 'recharts';
-import type { StickerPack, Sticker, ContactMessage, StickerSuggestion, UserData, SubscriptionHistoryItem } from './types';
+import type { StickerPack, Sticker, ContactMessage, StickerSuggestion, UserData, SubscriptionHistoryItem, PublisherUser, UserSubmission } from './types';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { stickerProcessor } from './utils/stickerProcessor';
@@ -289,7 +296,7 @@ function App() {
   const [panelDragIdx, setPanelDragIdx] = useState<number | null>(null);
   const [panelDragOverIdx, setPanelDragOverIdx] = useState<number | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'packs' | 'stats' | 'messages' | 'notifications' | 'users' | 'batch'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'packs' | 'stats' | 'messages' | 'notifications' | 'users' | 'batch' | 'submissions'>('dashboard');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'passive' | 'animated' | 'static' | 'premium' | 'new'>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [statsFilter, setStatsFilter] = useState<'all' | 'active' | 'passive' | 'premium' | 'normal' | 'popular'>('all');
@@ -323,6 +330,7 @@ function App() {
     name_pt: '',
     publisher: 'Sticky',
     publisher_email: 'contact@arain.digital',
+    publisher_user_id: '',
     privacy_policy_website: '',
     license_agreement_website: '',
     category: 'humor',
@@ -360,6 +368,20 @@ function App() {
   const [selectedUser, setSelectedUser] = useState<UserData | null>(null);
   const [editingSubscription, setEditingSubscription] = useState(false);
   const [subPlan, setSubPlan] = useState('none');
+
+  // Publisher Users State
+  const [publisherUsers, setPublisherUsers] = useState<PublisherUser[]>([]);
+  const [usersSubTab, setUsersSubTab] = useState<'users' | 'publishers'>('users');
+  const [showPublisherModal, setShowPublisherModal] = useState(false);
+  const [editingPublisher, setEditingPublisher] = useState<PublisherUser | null>(null);
+  const [publisherFormData, setPublisherFormData] = useState({
+    display_name: '', avatar_url: '', bio: '', category: 'community', is_active: true
+  });
+
+  // Submissions State
+  const [userSubmissions, setUserSubmissions] = useState<UserSubmission[]>([]);
+  const [submissionFilter, setSubmissionFilter] = useState<'all' | 'pending' | 'flagged' | 'approved' | 'rejected'>('all');
+  const [selectedSubmission, setSelectedSubmission] = useState<UserSubmission | null>(null);
 
   const [showVideoBgModal, setShowVideoBgModal] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
@@ -516,6 +538,115 @@ function App() {
       unsubSuggestions();
     };
   }, [activeTab]);
+
+  // Realtime listener for publisher_users (always active)
+  useEffect(() => {
+    const unsubPublishers = onSnapshot(collection(db, 'publisher_users'), (snapshot) => {
+      const pubs: PublisherUser[] = snapshot.docs.map(d => ({
+        id: d.id,
+        ...d.data()
+      } as PublisherUser));
+      setPublisherUsers(pubs.sort((a, b) => (a.display_name || '').localeCompare(b.display_name || '')));
+    }, (e) => console.error("Publisher users load error:", e));
+
+    const unsubSubmissions = onSnapshot(collection(db, 'user_submissions'), (snapshot) => {
+      const subs: UserSubmission[] = snapshot.docs.map(d => ({
+        id: d.id,
+        ...d.data()
+      } as UserSubmission));
+      setUserSubmissions(subs.sort((a, b) => {
+        const aTime = a.created_at?.seconds || 0;
+        const bTime = b.created_at?.seconds || 0;
+        return bTime - aTime;
+      }));
+    }, (e) => console.error("User submissions load error:", e));
+
+    return () => {
+      unsubPublishers();
+      unsubSubmissions();
+    };
+  }, []);
+
+  // Publisher User CRUD handlers
+  const handleSavePublisher = async () => {
+    try {
+      const id = editingPublisher?.id || publisherFormData.display_name.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') + '_' + Date.now();
+      await setDoc(doc(db, 'publisher_users', id), {
+        display_name: publisherFormData.display_name,
+        avatar_url: publisherFormData.avatar_url,
+        bio: publisherFormData.bio,
+        category: publisherFormData.category,
+        is_active: publisherFormData.is_active,
+        ...(editingPublisher ? {} : { packs_published: 0, total_downloads: 0, created_at: serverTimestamp() }),
+      }, { merge: true });
+      setShowPublisherModal(false);
+      setEditingPublisher(null);
+      setPublisherFormData({ display_name: '', avatar_url: '', bio: '', category: 'community', is_active: true });
+    } catch (e) {
+      console.error("Publisher save error:", e);
+      alert("Failed to save publisher user.");
+    }
+  };
+
+  const handleDeletePublisher = async (id: string) => {
+    if (!window.confirm("Are you sure you want to delete this publisher user?")) return;
+    try {
+      await deleteDoc(doc(db, 'publisher_users', id));
+    } catch (e) {
+      console.error("Publisher delete error:", e);
+      alert("Failed to delete publisher user.");
+    }
+  };
+
+  // Submission handlers
+  const handleApproveSubmission = async (submission: UserSubmission) => {
+    if (!window.confirm(`Approve "${submission.pack_name}" and move to stickers collection?`)) return;
+    try {
+      const packId = submission.pack_name.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') + '_' + Date.now();
+      const stickers: Sticker[] = submission.stickers.map(s => ({
+        image_file: s.name,
+        url: s.image_url,
+        emojis: ['⭐']
+      }));
+      await setDoc(doc(db, 'stickers', packId), {
+        name: submission.pack_name,
+        publisher: submission.display_name,
+        publisher_email: submission.user_email,
+        category: submission.category || 'community',
+        is_premium: false,
+        is_animated: false,
+        download_count: 0,
+        view_count: 0,
+        favorite_count: 0,
+        fake_download_base: Math.floor(Math.random() * 3000) + 1000,
+        sticker_count: stickers.length,
+        image_data_version: "1",
+        is_active: true,
+        is_popular: false,
+        stickers,
+        tray_image_file: stickers[0]?.image_file || '',
+        tray_url: stickers[0]?.url || '',
+        privacy_policy_website: '',
+        license_agreement_website: '',
+        created_at: serverTimestamp(),
+      });
+      await updateDoc(doc(db, 'user_submissions', submission.id), { status: 'approved', processed_at: serverTimestamp() });
+      alert(`"${submission.pack_name}" approved and published!`);
+    } catch (e) {
+      console.error("Approve error:", e);
+      alert("Failed to approve submission.");
+    }
+  };
+
+  const handleRejectSubmission = async (submission: UserSubmission) => {
+    if (!window.confirm(`Reject "${submission.pack_name}"?`)) return;
+    try {
+      await updateDoc(doc(db, 'user_submissions', submission.id), { status: 'rejected', processed_at: serverTimestamp() });
+    } catch (e) {
+      console.error("Reject error:", e);
+      alert("Failed to reject submission.");
+    }
+  };
 
   const markMessageAsRead = async (messageId: string) => {
     try {
@@ -1190,6 +1321,7 @@ function App() {
         name: newPackData.name,
         publisher: newPackData.publisher,
         publisher_email: newPackData.publisher_email,
+        publisher_user_id: newPackData.publisher_user_id || '',
         category: newPackData.category,
         is_premium: newPackData.is_premium,
         is_animated: newPackData.is_animated ?? true,
@@ -1248,6 +1380,7 @@ function App() {
         name_pt: '',
         publisher: 'Sticky',
         publisher_email: 'contact@arain.digital',
+        publisher_user_id: '',
         privacy_policy_website: '',
         license_agreement_website: '',
         category: 'humor',
@@ -2173,7 +2306,8 @@ function App() {
                 { id: 'stats', label: 'Statistics', icon: BarChart3 },
                 { id: 'messages', label: 'Messages', icon: Mail, count: messages.filter(m => m.status === 'unread').length },
                 { id: 'notifications', label: 'Notifications', icon: Bell },
-                { id: 'users', label: 'Users', icon: Users }
+                { id: 'users', label: 'Users', icon: Users },
+                { id: 'submissions', label: 'Submissions', icon: Inbox, count: userSubmissions.filter(s => s.status === 'pending' || s.status === 'flagged').length }
               ].map((item) => (
                 <button
                   key={item.id}
@@ -2224,6 +2358,7 @@ function App() {
               { id: 'messages', icon: Mail, label: 'Messages', count: messages.filter(m => m.status === 'unread').length },
               { id: 'notifications', icon: Bell, label: 'Notifications' },
               { id: 'users', icon: Users, label: 'Users' },
+              { id: 'submissions', icon: Inbox, label: 'Submissions', count: userSubmissions.filter(s => s.status === 'pending' || s.status === 'flagged').length },
               { id: 'batch', icon: Zap, label: 'Batch Generator' }
             ].map(item => (
               <button
@@ -3881,6 +4016,29 @@ function App() {
                 </div>
               </div>
 
+              {/* Users/Publishers Sub-Tabs */}
+              <div className="flex gap-2">
+                {[
+                  { id: 'users' as const, label: 'Users', icon: Users },
+                  { id: 'publishers' as const, label: 'Publisher Users', icon: UserPlus }
+                ].map(tab => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setUsersSubTab(tab.id)}
+                    className={cn(
+                      "flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all border",
+                      usersSubTab === tab.id
+                        ? "bg-primary/20 text-primary border-primary/30"
+                        : "bg-white/5 text-textSec border-transparent hover:bg-white/10"
+                    )}
+                  >
+                    <tab.icon size={14} />
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+
+              {usersSubTab === 'users' ? (<>
               {/* Stats Cards */}
               <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                 <div className="glass rounded-xl p-4 border border-white/5">
@@ -4387,6 +4545,334 @@ function App() {
                   ) : null}
                 </div>
               )}
+              </>) : (
+              /* Publisher Users Management */
+              <div className="space-y-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-lg font-black text-white">Publisher Users</h2>
+                    <p className="text-xs text-textSec mt-0.5">Manage virtual publisher accounts for packs</p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setEditingPublisher(null);
+                      setPublisherFormData({ display_name: '', avatar_url: '', bio: '', category: 'community', is_active: true });
+                      setShowPublisherModal(true);
+                    }}
+                    className="flex items-center gap-2 px-4 py-2.5 bg-primary hover:bg-primary/80 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-primary/20"
+                  >
+                    <Plus size={14} />
+                    Add Publisher
+                  </button>
+                </div>
+
+                {/* Publisher Stats */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div className="glass rounded-xl p-4 border border-white/5">
+                    <p className="text-xl font-black text-white">{publisherUsers.length}</p>
+                    <p className="text-[10px] text-textSec uppercase tracking-widest">Total</p>
+                  </div>
+                  <div className="glass rounded-xl p-4 border border-white/5">
+                    <p className="text-xl font-black text-green-400">{publisherUsers.filter(p => p.is_active).length}</p>
+                    <p className="text-[10px] text-textSec uppercase tracking-widest">Active</p>
+                  </div>
+                  <div className="glass rounded-xl p-4 border border-white/5">
+                    <p className="text-xl font-black text-purple-400">{publisherUsers.reduce((sum, p) => sum + (p.packs_published || 0), 0)}</p>
+                    <p className="text-[10px] text-textSec uppercase tracking-widest">Total Packs</p>
+                  </div>
+                  <div className="glass rounded-xl p-4 border border-white/5">
+                    <p className="text-xl font-black text-blue-400">{publisherUsers.reduce((sum, p) => sum + (p.total_downloads || 0), 0).toLocaleString()}</p>
+                    <p className="text-[10px] text-textSec uppercase tracking-widest">Total Downloads</p>
+                  </div>
+                </div>
+
+                {/* Publisher List */}
+                <div className="space-y-3">
+                  {publisherUsers.length === 0 ? (
+                    <div className="glass rounded-2xl p-12 border border-white/5 text-center">
+                      <UserPlus size={40} className="text-textSec mx-auto mb-3 opacity-40" />
+                      <p className="text-textSec text-sm">No publisher users yet. Create one to get started.</p>
+                    </div>
+                  ) : publisherUsers.map(pub => (
+                    <div key={pub.id} className="glass rounded-xl p-4 border border-white/5 hover:border-white/10 transition-all">
+                      <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 rounded-xl overflow-hidden bg-white/5 flex items-center justify-center shrink-0">
+                          {pub.avatar_url ? (
+                            <img src={pub.avatar_url} alt={pub.display_name} className="w-full h-full object-cover" />
+                          ) : (
+                            <UserIcon size={20} className="text-textSec" />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <h3 className="text-sm font-black text-white truncate">{pub.display_name}</h3>
+                            <span className={cn(
+                              "text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full",
+                              pub.category === 'official' ? "bg-yellow-500/20 text-yellow-400" :
+                              pub.category === 'artist' ? "bg-purple-500/20 text-purple-400" :
+                              "bg-blue-500/20 text-blue-400"
+                            )}>
+                              {pub.category}
+                            </span>
+                            {!pub.is_active && (
+                              <span className="text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full bg-red-500/20 text-red-400">Inactive</span>
+                            )}
+                          </div>
+                          <p className="text-xs text-textSec truncate mt-0.5">{pub.bio || 'No bio'}</p>
+                          <div className="flex items-center gap-4 mt-1">
+                            <span className="text-[10px] text-textSec"><Package size={10} className="inline mr-1" />{pub.packs_published || 0} packs</span>
+                            <span className="text-[10px] text-textSec"><TrendingUp size={10} className="inline mr-1" />{(pub.total_downloads || 0).toLocaleString()} downloads</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button
+                            onClick={() => {
+                              setEditingPublisher(pub);
+                              setPublisherFormData({
+                                display_name: pub.display_name,
+                                avatar_url: pub.avatar_url || '',
+                                bio: pub.bio || '',
+                                category: pub.category || 'community',
+                                is_active: pub.is_active
+                              });
+                              setShowPublisherModal(true);
+                            }}
+                            className="p-2 bg-white/5 hover:bg-white/10 rounded-lg transition-all"
+                            title="Edit"
+                          >
+                            <Edit3 size={14} className="text-textSec" />
+                          </button>
+                          <button
+                            onClick={() => handleDeletePublisher(pub.id)}
+                            className="p-2 bg-red-500/10 hover:bg-red-500/20 rounded-lg transition-all"
+                            title="Delete"
+                          >
+                            <Trash2 size={14} className="text-red-400" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Publisher Create/Edit Modal */}
+                {showPublisherModal && (
+                  <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                    <div className="bg-card rounded-2xl border border-white/10 p-6 w-full max-w-md space-y-4 shadow-2xl">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-lg font-black text-white">{editingPublisher ? 'Edit Publisher' : 'New Publisher'}</h3>
+                        <button onClick={() => { setShowPublisherModal(false); setEditingPublisher(null); }} className="p-2 bg-white/5 rounded-lg hover:bg-white/10 transition-all">
+                          <X size={16} className="text-textSec" />
+                        </button>
+                      </div>
+                      <div className="space-y-3">
+                        <div>
+                          <label className="text-xs font-bold text-textSec uppercase mb-1 block">Display Name</label>
+                          <input
+                            className="w-full bg-hover rounded-xl px-4 py-2.5 text-sm outline-none border-none text-white"
+                            value={publisherFormData.display_name}
+                            onChange={(e) => setPublisherFormData({ ...publisherFormData, display_name: e.target.value })}
+                            placeholder="Publisher name"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs font-bold text-textSec uppercase mb-1 block">Avatar URL</label>
+                          <input
+                            className="w-full bg-hover rounded-xl px-4 py-2.5 text-sm outline-none border-none text-white"
+                            value={publisherFormData.avatar_url}
+                            onChange={(e) => setPublisherFormData({ ...publisherFormData, avatar_url: e.target.value })}
+                            placeholder="https://..."
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs font-bold text-textSec uppercase mb-1 block">Bio</label>
+                          <textarea
+                            className="w-full bg-hover rounded-xl px-4 py-2.5 text-sm outline-none border-none text-white resize-none"
+                            rows={3}
+                            value={publisherFormData.bio}
+                            onChange={(e) => setPublisherFormData({ ...publisherFormData, bio: e.target.value })}
+                            placeholder="Short description..."
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs font-bold text-textSec uppercase mb-1 block">Category</label>
+                          <select
+                            className="w-full bg-hover rounded-xl px-4 py-2.5 text-sm outline-none border-none text-white cursor-pointer"
+                            value={publisherFormData.category}
+                            onChange={(e) => setPublisherFormData({ ...publisherFormData, category: e.target.value })}
+                          >
+                            <option value="official">Official</option>
+                            <option value="artist">Artist</option>
+                            <option value="community">Community</option>
+                          </select>
+                        </div>
+                        <label className="flex items-center gap-3 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={publisherFormData.is_active}
+                            onChange={(e) => setPublisherFormData({ ...publisherFormData, is_active: e.target.checked })}
+                            className="w-4 h-4 accent-primary"
+                          />
+                          <span className="text-sm text-white font-bold">Active</span>
+                        </label>
+                      </div>
+                      <div className="flex gap-3 pt-2">
+                        <button
+                          onClick={() => { setShowPublisherModal(false); setEditingPublisher(null); }}
+                          className="flex-1 py-2.5 bg-white/5 hover:bg-white/10 text-textSec rounded-xl text-xs font-black uppercase tracking-widest transition-all"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={handleSavePublisher}
+                          disabled={!publisherFormData.display_name}
+                          className="flex-1 py-2.5 bg-primary hover:bg-primary/80 disabled:opacity-50 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-primary/20"
+                        >
+                          <Save size={14} className="inline mr-1" />
+                          {editingPublisher ? 'Update' : 'Create'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+              )}
+            </div>
+          </div>
+        ) : activeTab === 'submissions' ? (
+          <div className="flex-1 overflow-y-auto p-4 md:p-12 custom-scrollbar bg-background">
+            <div className="max-w-7xl mx-auto space-y-6 md:space-y-8 animate-in fade-in duration-500">
+              {/* Submissions Header */}
+              <div className="glass rounded-2xl p-5 md:p-6 border border-white/5">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                  <div className="flex items-center gap-4">
+                    <div className="w-14 h-14 bg-gradient-to-br from-green-500/20 to-emerald-500/20 rounded-2xl flex items-center justify-center border border-green-500/10 shadow-lg shadow-green-500/5">
+                      <Inbox size={26} className="text-green-400" />
+                    </div>
+                    <div>
+                      <h1 className="text-2xl font-black text-white tracking-tight">User Submissions</h1>
+                      <p className="text-xs text-textSec mt-0.5">Review and manage user-submitted sticker packs</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-textSec">
+                    <span className="px-2 py-1 bg-yellow-500/10 text-yellow-400 rounded-lg font-bold">{userSubmissions.filter(s => s.status === 'pending').length} Pending</span>
+                    <span className="px-2 py-1 bg-red-500/10 text-red-400 rounded-lg font-bold">{userSubmissions.filter(s => s.status === 'flagged').length} Flagged</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Filter Tabs */}
+              <div className="flex gap-2 flex-wrap">
+                {(['all', 'pending', 'flagged', 'approved', 'rejected'] as const).map(f => (
+                  <button
+                    key={f}
+                    onClick={() => setSubmissionFilter(f)}
+                    className={cn(
+                      "px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all border",
+                      submissionFilter === f
+                        ? "bg-primary/20 text-primary border-primary/30"
+                        : "bg-white/5 text-textSec border-transparent hover:bg-white/10"
+                    )}
+                  >
+                    {f === 'all' ? `All (${userSubmissions.length})` :
+                     f === 'pending' ? `Pending (${userSubmissions.filter(s => s.status === 'pending').length})` :
+                     f === 'flagged' ? `Flagged (${userSubmissions.filter(s => s.status === 'flagged').length})` :
+                     f === 'approved' ? `Approved (${userSubmissions.filter(s => s.status === 'approved').length})` :
+                     `Rejected (${userSubmissions.filter(s => s.status === 'rejected').length})`}
+                  </button>
+                ))}
+              </div>
+
+              {/* Submissions List */}
+              <div className="space-y-3">
+                {userSubmissions.filter(s => submissionFilter === 'all' || s.status === submissionFilter).length === 0 ? (
+                  <div className="glass rounded-2xl p-12 border border-white/5 text-center">
+                    <Inbox size={40} className="text-textSec mx-auto mb-3 opacity-40" />
+                    <p className="text-textSec text-sm">No submissions found.</p>
+                  </div>
+                ) : userSubmissions.filter(s => submissionFilter === 'all' || s.status === submissionFilter).map(sub => (
+                  <div key={sub.id} className="glass rounded-xl p-4 border border-white/5 hover:border-white/10 transition-all">
+                    <div className="flex items-start gap-4">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h3 className="text-sm font-black text-white">{sub.pack_name}</h3>
+                          <span className={cn(
+                            "text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full",
+                            sub.status === 'pending' ? "bg-yellow-500/20 text-yellow-400" :
+                            sub.status === 'flagged' ? "bg-red-500/20 text-red-400" :
+                            sub.status === 'approved' ? "bg-green-500/20 text-green-400" :
+                            sub.status === 'rejected' ? "bg-gray-500/20 text-gray-400" :
+                            sub.status === 'processing' ? "bg-blue-500/20 text-blue-400" :
+                            "bg-orange-500/20 text-orange-400"
+                          )}>
+                            {sub.status}
+                          </span>
+                          {sub.category && (
+                            <span className="text-[9px] font-bold text-textSec bg-white/5 px-2 py-0.5 rounded-full">{sub.category}</span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-4 mt-1.5 text-[10px] text-textSec">
+                          <span><UserIcon size={10} className="inline mr-1" />{sub.display_name || sub.user_email}</span>
+                          <span><ImageIcon size={10} className="inline mr-1" />{sub.stickers?.length || 0} stickers</span>
+                          <span><Clock size={10} className="inline mr-1" />{sub.created_at?.seconds ? new Date(sub.created_at.seconds * 1000).toLocaleDateString() : 'Unknown'}</span>
+                        </div>
+                        {sub.status === 'flagged' && sub.flag_reasons && sub.flag_reasons.length > 0 && (
+                          <div className="mt-2 flex items-start gap-2 p-2 bg-red-500/10 rounded-lg">
+                            <Flag size={12} className="text-red-400 mt-0.5 shrink-0" />
+                            <div className="text-[10px] text-red-300">
+                              {sub.flag_reasons.map((reason, i) => (
+                                <span key={i} className="block">{reason}</span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        {/* Sticker Preview */}
+                        {selectedSubmission?.id === sub.id && sub.stickers && sub.stickers.length > 0 && (
+                          <div className="mt-3 grid grid-cols-6 md:grid-cols-10 gap-2">
+                            {sub.stickers.slice(0, 20).map((s, i) => (
+                              <div key={i} className="aspect-square rounded-lg overflow-hidden bg-white/5 border border-white/5">
+                                <img src={s.image_url} alt={s.name} className="w-full h-full object-contain" />
+                              </div>
+                            ))}
+                            {sub.stickers.length > 20 && (
+                              <div className="aspect-square rounded-lg bg-white/5 border border-white/5 flex items-center justify-center text-[10px] text-textSec font-bold">
+                                +{sub.stickers.length - 20}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          onClick={() => setSelectedSubmission(selectedSubmission?.id === sub.id ? null : sub)}
+                          className="p-2 bg-white/5 hover:bg-white/10 rounded-lg transition-all"
+                          title="View Details"
+                        >
+                          <Eye size={14} className="text-textSec" />
+                        </button>
+                        {(sub.status === 'pending' || sub.status === 'flagged') && (
+                          <>
+                            <button
+                              onClick={() => handleApproveSubmission(sub)}
+                              className="p-2 bg-green-500/10 hover:bg-green-500/20 rounded-lg transition-all"
+                              title="Approve"
+                            >
+                              <ThumbsUp size={14} className="text-green-400" />
+                            </button>
+                            <button
+                              onClick={() => handleRejectSubmission(sub)}
+                              className="p-2 bg-red-500/10 hover:bg-red-500/20 rounded-lg transition-all"
+                              title="Reject"
+                            >
+                              <ThumbsDown size={14} className="text-red-400" />
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         ) : activeTab === 'batch' ? (
@@ -5466,114 +5952,14 @@ function App() {
                         </div>
 
                         {/* Multi-Language Support */}
-                        <div className="bg-gradient-to-r from-primary/10 to-transparent border border-primary/20 rounded-2xl p-4 space-y-4">
-                          <div className="flex items-center gap-2 mb-2">
+                        <div className="bg-gradient-to-r from-primary/10 to-transparent border border-primary/20 rounded-2xl p-4 space-y-3">
+                          <div className="flex items-center gap-2">
                             <Globe className="text-primary" size={20} />
                             <span className="text-sm font-bold text-white">Multi-Language Support</span>
-                            <span className="text-xs text-textSec ml-auto">Displayed based on selected language in the app</span>
                           </div>
-
-                          <div className="grid grid-cols-2 gap-3">
-                            <div className="col-span-2">
-                              {/* Header */}
-                              <div className="flex items-center justify-between mb-3">
-                                <label className="flex items-center gap-2 text-primary font-bold text-sm">
-                                  <Globe size={18} />
-                                  Multi-Language Support ({TARGET_LANGUAGES.length} languages)
-                                </label>
-                                <button
-                                  onClick={() => handleAutoTranslate(false, true)}
-                                  disabled={isTranslating || !draftEditData.name}
-                                  type="button"
-                                  className="px-4 py-2 bg-gradient-to-r from-primary to-accent text-white rounded-xl flex items-center gap-2 hover:opacity-90 transition-all font-bold text-sm disabled:opacity-40 disabled:cursor-not-allowed shadow-lg"
-                                >
-                                  {isTranslating ? <RefreshCcw size={16} className="animate-spin" /> : <Sparkles size={16} />}
-                                  {isTranslating ? 'AI Translating...' : '✨ Auto Translate'}
-                                </button>
-                              </div>
-
-                              {/* English Name */}
-                              <div className="mb-3">
-                                <label className="flex items-center gap-2 text-xs font-bold text-white/80 mb-1.5">
-                                  🇬🇧 English (Main Name) <span className="text-red-400">*</span>
-                                </label>
-                                <div className="flex gap-2">
-                                  <input
-                                    type="text"
-                                    placeholder="e.g. Funny Cats, Love Stickers..."
-                                    className="flex-1 bg-bgSecondary border-2 border-primary/50 rounded-xl p-3 text-white placeholder:text-white/30 text-base focus:border-primary outline-none transition-all"
-                                    value={draftEditData.name || ''}
-                                    onChange={(e) => setDraftEditData((prev: any) => ({ ...prev, name: e.target.value, name_en: e.target.value }))}
-                                  />
-                                  <button
-                                    type="button"
-                                    onClick={async () => {
-                                      const newName = await generateCreativeName(draftEditData.name || "");
-                                      setDraftEditData((prev: any) => ({ ...prev, name: newName, name_en: newName }));
-                                    }}
-                                    className="px-4 bg-accent/10 border-2 border-accent/20 hover:bg-accent/20 hover:border-accent/50 text-accent rounded-xl transition-all flex items-center justify-center active:scale-95 group"
-                                    title="Suggest Creative Name"
-                                  >
-                                    <Wand2 size={24} className="group-hover:rotate-12 transition-transform" />
-                                  </button>
-                                </div>
-                              </div>
-
-                              {/* Language Search */}
-                              <div className="relative mb-3">
-                                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-textSec" />
-                                <input
-                                  type="text"
-                                  placeholder="Dil ara... (Turkish, German, Japanese...)"
-                                  className="w-full bg-bgSecondary border border-white/10 rounded-xl py-2.5 pl-10 pr-4 text-sm text-white placeholder:text-white/30"
-                                  value={draftLangSearch}
-                                  onChange={(e) => setDraftLangSearch(e.target.value)}
-                                />
-                              </div>
-
-                              {/* Fill Status */}
-                              <div className="flex items-center gap-4 mb-3 text-xs">
-                                <span className="flex items-center gap-1.5">
-                                  <span className="w-2 h-2 rounded-full bg-violet-500"></span>
-                                  Dolu: {TARGET_LANGUAGES.filter(l => draftEditData[`name_${l.code}`]).length}
-                                </span>
-                                <span className="flex items-center gap-1.5">
-                                  <span className="w-2 h-2 rounded-full bg-white/20"></span>
-                                  Empty: {TARGET_LANGUAGES.filter(l => !draftEditData[`name_${l.code}`]).length}
-                                </span>
-                              </div>
-
-                              {/* Language List */}
-                              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-[280px] overflow-y-auto pr-2 p-3 bg-black/20 rounded-xl border border-white/5">
-                                {TARGET_LANGUAGES
-                                  .filter(lang => lang.code !== 'en')
-                                  .filter(lang =>
-                                    draftLangSearch === '' ||
-                                    lang.name.toLowerCase().includes(draftLangSearch.toLowerCase()) ||
-                                    lang.code.toLowerCase().includes(draftLangSearch.toLowerCase())
-                                  )
-                                  .map((lang) => {
-                                    const value = draftEditData[`name_${lang.code}`] || '';
-                                    const isFilled = value.length > 0;
-                                    return (
-                                      <div key={lang.code} className="space-y-1">
-                                        <label className={`flex items-center gap-1.5 text-xs font-medium ${isFilled ? 'text-violet-400' : 'text-textSec'}`}>
-                                          <span>{lang.flag}</span> {lang.name}
-                                          {isFilled && <Check size={12} className="text-violet-400" />}
-                                        </label>
-                                        <input
-                                          type="text"
-                                          placeholder={`${lang.name}...`}
-                                          className={`w-full bg-bgSecondary border rounded-lg p-2 text-sm text-white placeholder:text-white/20 ${isFilled ? 'border-violet-500/30' : 'border-white/10'}`}
-                                          value={value}
-                                          onChange={(e) => setDraftEditData((prev: any) => ({ ...prev, [`name_${lang.code}`]: e.target.value }))}
-                                        />
-                                      </div>
-                                    );
-                                  })}
-                              </div>
-                            </div>
-                          </div>
+                          <p className="text-xs text-textSec">
+                            🌍 Translations are handled automatically. Pack names will be translated to all supported languages via Cloud Function when saved.
+                          </p>
                         </div>
 
                         {/* Publisher */}
@@ -5582,6 +5968,22 @@ function App() {
                           value={draftEditData.publisher || ''}
                           onChange={(e: any) => setDraftEditData((prev: any) => ({ ...prev, publisher: e.target.value }))}
                         />
+                        <div>
+                          <label className="text-xs font-bold text-textSec uppercase mb-2 block">Published By</label>
+                          <select
+                            className="w-full bg-hover rounded-xl px-4 py-2.5 text-sm outline-none border-none text-white cursor-pointer"
+                            value={draftEditData.publisher_user_id || ''}
+                            onChange={(e) => {
+                              const pub = publisherUsers.find(p => p.id === e.target.value);
+                              setDraftEditData((prev: any) => ({ ...prev, publisher_user_id: e.target.value, publisher: pub?.display_name || prev.publisher }));
+                            }}
+                          >
+                            <option value="">— Select Publisher —</option>
+                            {publisherUsers.filter(p => p.is_active).map(p => (
+                              <option key={p.id} value={p.id}>{p.display_name} ({p.category})</option>
+                            ))}
+                          </select>
+                        </div>
                         <Input
                           label="Publisher Email"
                           value={draftEditData.publisher_email || ''}
@@ -5714,115 +6116,14 @@ function App() {
           <p className="text-sm text-textSec">Manually add a new pack directly to the StickyApp database.</p>
 
           {/* Çoklu Dil Desteği */}
-          <div className="bg-gradient-to-r from-primary/10 to-transparent border border-primary/20 rounded-2xl p-4 space-y-4">
-            <div className="flex items-center gap-2 mb-2">
+          <div className="bg-gradient-to-r from-primary/10 to-transparent border border-primary/20 rounded-2xl p-4 space-y-3">
+            <div className="flex items-center gap-2">
               <Globe className="text-primary" size={20} />
               <span className="text-sm font-bold text-white">Multi-Language Support</span>
-              <span className="text-xs text-textSec ml-auto">Displayed based on selected language in the app</span>
             </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div className="col-span-2">
-                {/* Header */}
-                <div className="flex items-center justify-between mb-3">
-                  <label className="flex items-center gap-2 text-primary font-bold text-sm">
-                    <Globe size={18} />
-                    Multi-Language Support ({TARGET_LANGUAGES.length} languages)
-                  </label>
-                  <button
-                    onClick={() => handleAutoTranslate(false)}
-                    disabled={isTranslating || !newPackData.name}
-                    type="button"
-                    className="px-4 py-2 bg-gradient-to-r from-primary to-accent text-white rounded-xl flex items-center gap-2 hover:opacity-90 transition-all font-bold text-sm disabled:opacity-40 disabled:cursor-not-allowed shadow-lg"
-                  >
-                    {isTranslating ? <RefreshCcw size={16} className="animate-spin" /> : <Sparkles size={16} />}
-                    {isTranslating ? 'AI Translating...' : '✨ Auto Translate'}
-                  </button>
-                </div>
-
-                {/* Ana İsim (İngilizce) */}
-                <div className="mb-3">
-                  <label className="flex items-center gap-2 text-xs font-bold text-white/80 mb-1.5">
-                    🇬🇧 English (Main Name) <span className="text-red-400">*</span>
-                  </label>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      placeholder="e.g. Funny Cats, Love Stickers..."
-                      className="flex-1 bg-bgSecondary border-2 border-primary/50 rounded-xl p-3 text-white placeholder:text-white/30 text-base focus:border-primary outline-none transition-all"
-                      value={newPackData.name}
-                      onChange={(e) => setNewPackData({ ...newPackData, name: e.target.value, name_en: e.target.value })}
-                    />
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        const newName = await generateCreativeName(newPackData.name);
-                        setNewPackData({ ...newPackData, name: newName, name_en: newName });
-                      }}
-                      className="px-4 bg-accent/10 border-2 border-accent/20 hover:bg-accent/20 hover:border-accent/50 text-accent rounded-xl transition-all flex items-center justify-center active:scale-95 group"
-                      title="Suggest Creative Name"
-                    >
-                      <Wand2 size={24} className="group-hover:rotate-12 transition-transform" />
-                    </button>
-                  </div>
-                  <p className="text-xs text-textSec mt-1">Enter the English name, then click the "Auto Translate" button</p>
-                </div>
-
-                {/* Arama */}
-                <div className="relative mb-3">
-                  <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-textSec" />
-                  <input
-                    type="text"
-                    placeholder="Search language... (Turkish, German, Japanese...)"
-                    className="w-full bg-bgSecondary border border-white/10 rounded-xl py-2.5 pl-10 pr-4 text-sm text-white placeholder:text-white/30"
-                    value={langSearch}
-                    onChange={(e) => setLangSearch(e.target.value)}
-                  />
-                </div>
-
-                {/* Doluluk Durumu */}
-                <div className="flex items-center gap-4 mb-3 text-xs">
-                  <span className="flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-violet-500"></span>
-                    Dolu: {TARGET_LANGUAGES.filter(l => (newPackData as any)[`name_${l.code}`]).length}
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-white/20"></span>
-                    Empty: {TARGET_LANGUAGES.filter(l => !(newPackData as any)[`name_${l.code}`]).length}
-                  </span>
-                </div>
-
-                {/* Dil Listesi */}
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-[280px] overflow-y-auto pr-2 p-3 bg-black/20 rounded-xl border border-white/5">
-                  {TARGET_LANGUAGES
-                    .filter(lang => lang.code !== 'en') // İngilizce zaten yukarıda
-                    .filter(lang =>
-                      langSearch === '' ||
-                      lang.name.toLowerCase().includes(langSearch.toLowerCase()) ||
-                      lang.code.toLowerCase().includes(langSearch.toLowerCase())
-                    )
-                    .map((lang) => {
-                      const value = (newPackData as any)[`name_${lang.code}`] || '';
-                      const isFilled = value.length > 0;
-                      return (
-                        <div key={lang.code} className="space-y-1">
-                          <label className={`flex items-center gap-1.5 text-xs font-medium ${isFilled ? 'text-violet-400' : 'text-textSec'}`}>
-                            <span>{lang.flag}</span> {lang.name}
-                            {isFilled && <Check size={12} className="text-violet-400" />}
-                          </label>
-                          <input
-                            type="text"
-                            placeholder={`${lang.name}...`}
-                            className={`w-full bg-bgSecondary border rounded-lg p-2 text-sm text-white placeholder:text-white/20 ${isFilled ? 'border-violet-500/30' : 'border-white/10'}`}
-                            value={value}
-                            onChange={(e) => setNewPackData({ ...newPackData, [`name_${lang.code}`]: e.target.value })}
-                          />
-                        </div>
-                      );
-                    })}
-                </div>
-              </div>
-            </div>
+            <p className="text-xs text-textSec">
+              🌍 Translations are handled automatically. Pack names will be translated to all supported languages via Cloud Function when saved.
+            </p>
           </div>
           <Input
             label="Publisher"
@@ -5830,6 +6131,22 @@ function App() {
             value={newPackData.publisher}
             onChange={(e: any) => setNewPackData({ ...newPackData, publisher: e.target.value })}
           />
+          <div>
+            <label className="text-xs font-bold text-textSec uppercase mb-2 block">Published By</label>
+            <select
+              className="w-full bg-hover rounded-xl px-4 py-2.5 text-sm outline-none border-none text-white cursor-pointer"
+              value={newPackData.publisher_user_id || ''}
+              onChange={(e) => {
+                const pub = publisherUsers.find(p => p.id === e.target.value);
+                setNewPackData({ ...newPackData, publisher_user_id: e.target.value, publisher: pub?.display_name || newPackData.publisher });
+              }}
+            >
+              <option value="">— Select Publisher —</option>
+              {publisherUsers.filter(p => p.is_active).map(p => (
+                <option key={p.id} value={p.id}>{p.display_name} ({p.category})</option>
+              ))}
+            </select>
+          </div>
           <Input
             label="Publisher Email"
             value={newPackData.publisher_email}
@@ -5884,120 +6201,36 @@ function App() {
         {selectedPack && (
           <div className="space-y-6">
             {/* Çoklu Dil Desteği */}
-            <div className="bg-gradient-to-r from-primary/10 to-transparent border border-primary/20 rounded-2xl p-4 space-y-4">
-              <div className="flex items-center gap-2 mb-2">
+            <div className="bg-gradient-to-r from-primary/10 to-transparent border border-primary/20 rounded-2xl p-4 space-y-3">
+              <div className="flex items-center gap-2">
                 <Globe className="text-primary" size={20} />
                 <span className="text-sm font-bold text-white">Multi-Language Support</span>
-                <span className="text-xs text-textSec ml-auto">Displayed based on selected language in the app</span>
               </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="col-span-2">
-                  {/* Header */}
-                  <div className="flex items-center justify-between mb-3">
-                    <label className="flex items-center gap-2 text-primary font-bold text-sm">
-                      <Globe size={18} />
-                      Multi-Language Support ({TARGET_LANGUAGES.length} languages)
-                    </label>
-                    <button
-                      onClick={() => handleAutoTranslate(true)}
-                      disabled={isTranslating || !editFormData.name}
-                      type="button"
-                      className="px-4 py-2 bg-gradient-to-r from-primary to-accent text-white rounded-xl flex items-center gap-2 hover:opacity-90 transition-all font-bold text-sm disabled:opacity-40 disabled:cursor-not-allowed shadow-lg"
-                    >
-                      {isTranslating ? <RefreshCcw size={16} className="animate-spin" /> : <Sparkles size={16} />}
-                      {isTranslating ? 'AI Translating...' : '✨ Auto Translate'}
-                    </button>
-                  </div>
-
-                  {/* Ana İsim (İngilizce) */}
-                  <div className="mb-3">
-                    <label className="flex items-center gap-2 text-xs font-bold text-white/80 mb-1.5">
-                      🇬🇧 English (Main Name) <span className="text-red-400">*</span>
-                    </label>
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        placeholder="e.g. Funny Cats, Love Stickers..."
-                        className="flex-1 bg-bgSecondary border-2 border-primary/50 rounded-xl p-3 text-white placeholder:text-white/30 text-base focus:border-primary outline-none transition-all"
-                        value={editFormData.name || ''}
-                        onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value, name_en: e.target.value })}
-                      />
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          const newName = await generateCreativeName(editFormData.name || "");
-                          setEditFormData({ ...editFormData, name: newName, name_en: newName });
-                        }}
-                        className="px-4 bg-accent/10 border-2 border-accent/20 hover:bg-accent/20 hover:border-accent/50 text-accent rounded-xl transition-all flex items-center justify-center active:scale-95 group"
-                        title="Suggest Creative Name"
-                      >
-                        <Wand2 size={24} className="group-hover:rotate-12 transition-transform" />
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Arama */}
-                  <div className="relative mb-3">
-                    <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-textSec" />
-                    <input
-                      type="text"
-                      placeholder="Dil ara... (Turkish, German, Japanese...)"
-                      className="w-full bg-bgSecondary border border-white/10 rounded-xl py-2.5 pl-10 pr-4 text-sm text-white placeholder:text-white/30"
-                      value={langSearch}
-                      onChange={(e) => setLangSearch(e.target.value)}
-                    />
-                  </div>
-
-                  {/* Doluluk Durumu */}
-                  <div className="flex items-center gap-4 mb-3 text-xs">
-                    <span className="flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-violet-500"></span>
-                      Dolu: {TARGET_LANGUAGES.filter(l => (editFormData as any)[`name_${l.code}`]).length}
-                    </span>
-                    <span className="flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-white/20"></span>
-                      Empty: {TARGET_LANGUAGES.filter(l => !(editFormData as any)[`name_${l.code}`]).length}
-                    </span>
-                  </div>
-
-                  {/* Dil Listesi */}
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-[280px] overflow-y-auto pr-2 p-3 bg-black/20 rounded-xl border border-white/5">
-                    {TARGET_LANGUAGES
-                      .filter(lang => lang.code !== 'en')
-                      .filter(lang =>
-                        langSearch === '' ||
-                        lang.name.toLowerCase().includes(langSearch.toLowerCase()) ||
-                        lang.code.toLowerCase().includes(langSearch.toLowerCase())
-                      )
-                      .map((lang) => {
-                        const value = (editFormData as any)[`name_${lang.code}`] || '';
-                        const isFilled = value.length > 0;
-                        return (
-                          <div key={lang.code} className="space-y-1">
-                            <label className={`flex items-center gap-1.5 text-xs font-medium ${isFilled ? 'text-violet-400' : 'text-textSec'}`}>
-                              <span>{lang.flag}</span> {lang.name}
-                              {isFilled && <Check size={12} className="text-violet-400" />}
-                            </label>
-                            <input
-                              type="text"
-                              placeholder={`${lang.name}...`}
-                              className={`w-full bg-bgSecondary border rounded-lg p-2 text-sm text-white placeholder:text-white/20 ${isFilled ? 'border-violet-500/30' : 'border-white/10'}`}
-                              value={value}
-                              onChange={(e) => setEditFormData({ ...editFormData, [`name_${lang.code}`]: e.target.value })}
-                            />
-                          </div>
-                        );
-                      })}
-                  </div>
-                </div>
-              </div>
+              <p className="text-xs text-textSec">
+                🌍 Translations are handled automatically. Pack names will be translated to all supported languages via Cloud Function when saved.
+              </p>
             </div>
             <Input
               label="Publisher"
               value={editFormData.publisher}
               onChange={(e: any) => setEditFormData({ ...editFormData, publisher: e.target.value })}
             />
+            <div>
+              <label className="text-xs font-bold text-textSec uppercase mb-2 block">Published By</label>
+              <select
+                className="w-full bg-hover rounded-xl px-4 py-2.5 text-sm outline-none border-none text-white cursor-pointer"
+                value={(editFormData as any).publisher_user_id || ''}
+                onChange={(e) => {
+                  const pub = publisherUsers.find(p => p.id === e.target.value);
+                  setEditFormData({ ...editFormData, publisher_user_id: e.target.value, publisher: pub?.display_name || editFormData.publisher } as any);
+                }}
+              >
+                <option value="">— Select Publisher —</option>
+                {publisherUsers.filter(p => p.is_active).map(p => (
+                  <option key={p.id} value={p.id}>{p.display_name} ({p.category})</option>
+                ))}
+              </select>
+            </div>
             <Input
               label="Publisher Email"
               value={editFormData.publisher_email}

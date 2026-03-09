@@ -1,15 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- White background -->
-    <item android:drawable="@color/white" />
-    <!-- Small thick purple circle -->
-    <item
-        android:width="56dp"
-        android:height="56dp"
-        android:gravity="center">
-        <shape android:shape="oval">
-            <stroke android:width="10dp" android:color="#6C5CE7" />
-            <solid android:color="@android:color/transparent" />
+    <!-- Main screen background color -->
+    <item android:drawable="@color/background" />
+    <!-- Purple toolbar area at the top -->
+    <item android:gravity="top|fill_horizontal"
+        android:height="100dp">
+        <shape android:shape="rectangle">
+            <solid android:color="#5A4BD1" />
         </shape>
     </item>
 </layer-list>

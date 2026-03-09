@@ -47,6 +47,8 @@ object AdManager {
     private var interstitialAd: com.google.android.gms.ads.interstitial.InterstitialAd? = null
     private var isInterstitialLoading = false
     private var downloadCount = 0
+    private const val INTERSTITIAL_PREFS_NAME = "admob_interstitial_prefs"
+    private const val KEY_DOWNLOAD_COUNT = "download_count"
 
     // Track if any fullscreen ad was shown this session (for promo dialog)
     var adShownThisSession = false
@@ -269,7 +271,11 @@ object AdManager {
             return
         }
 
-        downloadCount++
+        // Persist download count across app restarts so every 2nd download triggers an ad
+        val prefs = activity.getSharedPreferences(INTERSTITIAL_PREFS_NAME, 0)
+        downloadCount = prefs.getInt(KEY_DOWNLOAD_COUNT, 0) + 1
+        prefs.edit().putInt(KEY_DOWNLOAD_COUNT, downloadCount).apply()
+
         Log.d(TAG, "Interstitial check: downloadCount=$downloadCount")
         if (downloadCount % 2 != 0) {
             Log.d(TAG, "Interstitial skip: not every 2nd (count=$downloadCount)")

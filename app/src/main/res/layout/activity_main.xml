@@ -453,9 +453,16 @@
                     android:layout_width="match_parent"
                     android:layout_height="match_parent" />
 
+                <!-- Profile Content (lazy-loaded via ViewStub for performance) -->
+                <ViewStub
+                    android:id="@+id/profileContentStub"
+                    android:layout="@layout/profile_content"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent" />
+
             </FrameLayout>
 
-            <!-- Bottom Navigation Bar (4 tabs: Favorites, Explore, AI Create, My Stickers) -->
+            <!-- Bottom Navigation Bar (5 tabs: Favorites, Explore, AI Create, My Stickers, Profile) -->
             <LinearLayout
                 android:id="@+id/bottomNav"
                 android:layout_width="match_parent"
@@ -561,6 +568,31 @@
                         android:layout_height="wrap_content"
                         android:visibility="gone"
                         android:text="@string/my_stickers_tab"
+                        android:textSize="10sp"
+                        android:textColor="@color/bottom_nav_inactive" />
+                </LinearLayout>
+
+                <!-- Tab: Profile -->
+                <LinearLayout
+                    android:id="@+id/tabProfile"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:gravity="center"
+                    android:background="?selectableItemBackground">
+                    <ImageView
+                        android:id="@+id/iconProfile"
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        android:src="@drawable/ic_person"
+                        app:tint="@color/bottom_nav_inactive" />
+                    <TextView
+                        android:id="@+id/textProfile"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:visibility="gone"
+                        android:text="@string/profile"
                         android:textSize="10sp"
                         android:textColor="@color/bottom_nav_inactive" />
                 </LinearLayout>

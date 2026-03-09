@@ -64,6 +64,8 @@ import java.net.URL
 import android.view.inputmethod.InputMethodManager
 import com.google.android.material.button.MaterialButton
 import androidx.cardview.widget.CardView
+import android.app.Activity
+import kotlinx.coroutines.tasks.await
 
 class MainActivity : AppCompatActivity() {
 
@@ -90,14 +92,17 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tabFavorites: View
     private lateinit var tabMyStickers: LinearLayout
     private lateinit var tabAICreate: View
+    private lateinit var tabProfile: View
     private lateinit var iconExplore: ImageView
     private lateinit var iconFavorites: ImageView
     private lateinit var iconMyStickers: ImageView
     private lateinit var iconAICreate: ImageView
+    private lateinit var iconProfile: ImageView
     private lateinit var textExplore: TextView
     private lateinit var textFavorites: TextView
     private lateinit var textMyStickers: TextView
     private lateinit var textAICreate: TextView
+    private lateinit var textProfile: TextView
     private var searchBarLayoutCached: View? = null
     private var btnPremiumHeaderCached: View? = null
     private var navActiveColor = 0
@@ -125,6 +130,10 @@ class MainActivity : AppCompatActivity() {
     private val AI_MAX_QUEUE = 4
     private var aiHistoryAdapter: AiHistoryAdapter? = null
     private var aiUpdateGenerateButton: (() -> Unit)? = null
+
+    // Profile
+    private var profileContentContainer: View? = null
+    private var profileSetupDone = false
 
 
     // Category Chips
@@ -343,12 +352,15 @@ class MainActivity : AppCompatActivity() {
         // Initialize views FIRST so we can display cached content immediately
         initViews()
 
-        // INSTANT CONTENT: Show cached packs immediately (no loading screen needed)
+        // Always show the main screen structure instantly — never block on a loading overlay.
+        // The RecyclerView will update smoothly when data arrives from cache or Firebase.
+        showContent()
+
+        // Load data: memory cache → disk cache → Firebase (in priority order)
         if (StickerRepository.allPacksCache.isNotEmpty()) {
             displayPacks(StickerRepository.allPacksCache)
         } else {
             // Disk cache'i arka planda oku — main thread'i bloklama
-            // Loading overlay kalır, displayPacks() gelince showContent() çağrılır
             lifecycleScope.launch {
                 val diskPacks = withContext(Dispatchers.IO) {
                     StickerRepository.loadCacheFromDisk(this@MainActivity)
@@ -359,11 +371,6 @@ class MainActivity : AppCompatActivity() {
                 } else if (StickerRepository.allPacksCache.isNotEmpty()) {
                     displayPacks(StickerRepository.allPacksCache)
                 }
-            }
-            // Güvenlik: cache boşsa kısa süre sonra yine de içeriği göster
-            lifecycleScope.launch {
-                delay(500)
-                if (!contentShown) showContent()
             }
         }
 
@@ -487,14 +494,17 @@ class MainActivity : AppCompatActivity() {
         tabFavorites = findViewById(R.id.tabFavorites)
         tabMyStickers = findViewById(R.id.tabMyStickers)
         tabAICreate = findViewById(R.id.tabAICreate)
+        tabProfile = findViewById(R.id.tabProfile)
         iconExplore = findViewById(R.id.iconExplore)
         iconFavorites = findViewById(R.id.iconFavorites)
         iconMyStickers = findViewById(R.id.iconMyStickers)
         iconAICreate = findViewById(R.id.iconAICreate)
+        iconProfile = findViewById(R.id.iconProfile)
         textExplore = findViewById(R.id.textExplore)
         textFavorites = findViewById(R.id.textFavorites)
         textMyStickers = findViewById(R.id.textMyStickers)
         textAICreate = findViewById(R.id.textAICreate)
+        textProfile = findViewById(R.id.textProfile)
         searchBarLayoutCached = findViewById(R.id.searchBarLayout)
         btnPremiumHeaderCached = findViewById(R.id.btnPremiumHeader)
         navActiveColor = ContextCompat.getColor(this, R.color.bottom_nav_active)
@@ -609,6 +619,14 @@ class MainActivity : AppCompatActivity() {
             hideHomeSections()
         }
 
+        tabProfile.setOnClickListener {
+            saveExploreState()
+            currentFilter = FilterType.PROFILE
+            ensureProfileInflated()
+            updateBottomNavUI()
+            loadProfileData()
+        }
+
         updateBottomNavUI()
     }
 
@@ -629,6 +647,9 @@ class MainActivity : AppCompatActivity() {
         iconMyStickers.setColorFilter(inactiveColor)
         textMyStickers.setTextColor(inactiveColor)
 
+        iconProfile.setColorFilter(inactiveColor)
+        textProfile.setTextColor(inactiveColor)
+
         if (currentFilter == FilterType.AI) {
             // Show AI content, hide everything else
             mainContent.visibility = View.GONE
@@ -648,8 +669,29 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        // Non-AI tabs: restore normal UI
+        if (currentFilter == FilterType.PROFILE) {
+            // Show Profile content, hide everything else
+            mainContent.visibility = View.GONE
+            emptyStateView.visibility = View.GONE
+            searchBarLayoutCached?.visibility = View.GONE
+            categoryChipGroup.visibility = View.GONE
+            hideHomeSections()
+            btnAddStickerHeader.visibility = View.GONE
+            btnPremiumHeaderCached?.visibility = View.GONE
+            menuBtn.visibility = View.VISIBLE
+            toolbarTitle.text = getString(R.string.profile)
+            toolbarSubtitle.visibility = View.GONE
+            aiContentContainer?.visibility = View.GONE
+            profileContentContainer?.visibility = View.VISIBLE
+
+            iconProfile.setColorFilter(activeColor)
+            textProfile.setTextColor(activeColor)
+            return
+        }
+
+        // Non-AI/Profile tabs: restore normal UI
         aiContentContainer?.visibility = View.GONE
+        profileContentContainer?.visibility = View.GONE
         mainContent.visibility = View.VISIBLE
         searchBarLayoutCached?.visibility = View.VISIBLE
         btnPremiumHeaderCached?.visibility = View.VISIBLE
@@ -1704,6 +1746,229 @@ Rules:
         aiSignInLauncher.launch(client.signInIntent)
     }
 
+    // ─── Profile Logic ──────────────────────────────────────────────────
+
+    private fun ensureProfileInflated() {
+        if (profileContentContainer != null) return
+        try {
+            val stub = findViewById<android.view.ViewStub>(R.id.profileContentStub)
+            stub?.inflate()
+        } catch (_: Exception) { /* already inflated */ }
+        profileContentContainer = findViewById(R.id.profileContentContainer)
+        setupProfileContent()
+    }
+
+    private fun setupProfileContent() {
+        if (profileSetupDone) return
+        profileSetupDone = true
+
+        val btnSharePack = findViewById<MaterialButton>(R.id.btnShareStickerPack)
+        val btnLogin = findViewById<MaterialButton>(R.id.btnProfileLogin)
+
+        btnSharePack?.setOnClickListener {
+            val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+            if (user == null) {
+                Toast.makeText(this, getString(R.string.profile_login_required), Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            startActivity(Intent(this, SubmitPackActivity::class.java))
+            overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left)
+        }
+
+        btnLogin?.setOnClickListener {
+            profileSignIn()
+        }
+    }
+
+    private fun loadProfileData() {
+        val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+        val loginPrompt = findViewById<View>(R.id.profileLoginPrompt)
+        val profileHeader = profileContentContainer?.let { it } ?: return
+
+        val avatar = findViewById<ImageView>(R.id.profileAvatar)
+        val displayName = findViewById<TextView>(R.id.profileDisplayName)
+        val email = findViewById<TextView>(R.id.profileEmail)
+        val statsRow = findViewById<View>(R.id.profileStatsRow)
+        val btnSharePack = findViewById<MaterialButton>(R.id.btnShareStickerPack)
+        val packsTitle = findViewById<TextView>(R.id.profilePacksTitle)
+        val rvPublished = findViewById<RecyclerView>(R.id.rvPublishedPacks)
+        val emptyState = findViewById<View>(R.id.profileEmptyState)
+
+        if (user == null) {
+            loginPrompt?.visibility = View.VISIBLE
+            statsRow?.visibility = View.GONE
+            btnSharePack?.visibility = View.GONE
+            packsTitle?.visibility = View.GONE
+            rvPublished?.visibility = View.GONE
+            emptyState?.visibility = View.GONE
+            displayName?.text = getString(R.string.profile_guest)
+            email?.text = ""
+            avatar?.setImageResource(R.drawable.ic_person)
+            return
+        }
+
+        loginPrompt?.visibility = View.GONE
+        statsRow?.visibility = View.VISIBLE
+        btnSharePack?.visibility = View.VISIBLE
+        packsTitle?.visibility = View.VISIBLE
+
+        displayName?.text = user.displayName ?: getString(R.string.profile_guest)
+        email?.text = user.email ?: ""
+
+        // Load avatar with Glide
+        user.photoUrl?.let { photoUrl ->
+            avatar?.let {
+                com.bumptech.glide.Glide.with(this)
+                    .load(photoUrl)
+                    .circleCrop()
+                    .placeholder(R.drawable.ic_person)
+                    .into(it)
+            }
+        }
+
+        // Ensure user profile exists in Firestore
+        val db = FirebaseFirestore.getInstance()
+        val profileRef = db.collection("user_profiles").document(user.uid)
+
+        lifecycleScope.launch {
+            try {
+                val doc = withContext(Dispatchers.IO) {
+                    profileRef.get().await()
+                }
+
+                if (!doc.exists()) {
+                    // Create profile on first access
+                    val profileData = hashMapOf(
+                        "display_name" to (user.displayName ?: ""),
+                        "email" to (user.email ?: ""),
+                        "photo_url" to (user.photoUrl?.toString() ?: ""),
+                        "packs_published" to 0L,
+                        "total_downloads" to 0L,
+                        "total_favorites" to 0L,
+                        "joined_at" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                    )
+                    withContext(Dispatchers.IO) {
+                        profileRef.set(profileData).await()
+                    }
+                    findViewById<TextView>(R.id.statPublished)?.text = "0"
+                    findViewById<TextView>(R.id.statDownloads)?.text = "0"
+                    findViewById<TextView>(R.id.statFavorites)?.text = "0"
+                } else {
+                    // Update stats from Firestore
+                    val published = doc.getLong("packs_published") ?: 0
+                    val downloads = doc.getLong("total_downloads") ?: 0
+                    val favorites = doc.getLong("total_favorites") ?: 0
+                    findViewById<TextView>(R.id.statPublished)?.text = published.toString()
+                    findViewById<TextView>(R.id.statDownloads)?.text = downloads.toString()
+                    findViewById<TextView>(R.id.statFavorites)?.text = favorites.toString()
+                }
+
+                // Load user's submitted packs
+                loadUserSubmissions(user.uid, rvPublished, emptyState)
+
+            } catch (e: Exception) {
+                Log.e("Profile", "Error loading profile", e)
+            }
+        }
+    }
+
+    private fun loadUserSubmissions(userId: String, rv: RecyclerView?, emptyState: View?) {
+        val db = FirebaseFirestore.getInstance()
+        lifecycleScope.launch {
+            try {
+                val submissions = withContext(Dispatchers.IO) {
+                    db.collection("user_submissions")
+                        .whereEqualTo("user_id", userId)
+                        .get()
+                        .await()
+                }
+
+                if (submissions.isEmpty) {
+                    rv?.visibility = View.GONE
+                    emptyState?.visibility = View.VISIBLE
+                } else {
+                    rv?.visibility = View.VISIBLE
+                    emptyState?.visibility = View.GONE
+                    rv?.layoutManager = LinearLayoutManager(this@MainActivity)
+                    rv?.adapter = SubmissionAdapter(submissions.documents.mapNotNull { doc ->
+                        val name = doc.getString("pack_name") ?: return@mapNotNull null
+                        val status = doc.getString("status") ?: "pending"
+                        val stickerCount = (doc.get("stickers") as? List<*>)?.size ?: 0
+                        SubmissionItem(doc.id, name, status, stickerCount)
+                    })
+                }
+            } catch (e: Exception) {
+                Log.e("Profile", "Error loading submissions", e)
+                rv?.visibility = View.GONE
+                emptyState?.visibility = View.VISIBLE
+            }
+        }
+    }
+
+    private data class SubmissionItem(val id: String, val name: String, val status: String, val stickerCount: Int)
+
+    private inner class SubmissionAdapter(private val items: List<SubmissionItem>) :
+        RecyclerView.Adapter<SubmissionAdapter.VH>() {
+
+        inner class VH(view: View) : RecyclerView.ViewHolder(view) {
+            val name: TextView = view.findViewById(android.R.id.text1)
+            val detail: TextView = view.findViewById(android.R.id.text2)
+        }
+
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
+            val view = LayoutInflater.from(parent.context)
+                .inflate(android.R.layout.simple_list_item_2, parent, false)
+            return VH(view)
+        }
+
+        override fun onBindViewHolder(holder: VH, position: Int) {
+            val item = items[position]
+            holder.name.text = item.name
+            holder.name.setTextColor(ContextCompat.getColor(this@MainActivity, R.color.text_primary))
+            val statusEmoji = when (item.status) {
+                "approved" -> "✅"
+                "rejected" -> "❌"
+                else -> "⏳"
+            }
+            holder.detail.text = "$statusEmoji ${item.status.replaceFirstChar { it.uppercase() }} · ${item.stickerCount} stickers"
+            holder.detail.setTextColor(ContextCompat.getColor(this@MainActivity, R.color.text_secondary))
+        }
+
+        override fun getItemCount(): Int = items.size
+    }
+
+    private val profileSignInLauncher = registerForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK && result.data != null) {
+            try {
+                val task = com.google.android.gms.auth.api.signin.GoogleSignIn.getSignedInAccountFromIntent(result.data)
+                val account = task.getResult(com.google.android.gms.common.api.ApiException::class.java)
+                val credential = com.google.firebase.auth.GoogleAuthProvider.getCredential(account.idToken, null)
+                com.google.firebase.auth.FirebaseAuth.getInstance().signInWithCredential(credential)
+                    .addOnSuccessListener {
+                        loadProfileData()
+                    }
+                    .addOnFailureListener { e ->
+                        Toast.makeText(this, "Sign-in failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                    }
+            } catch (e: Exception) {
+                Toast.makeText(this, "Sign-in failed", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    private fun profileSignIn() {
+        val gso = com.google.android.gms.auth.api.signin.GoogleSignInOptions.Builder(
+            com.google.android.gms.auth.api.signin.GoogleSignInOptions.DEFAULT_SIGN_IN
+        )
+            .requestIdToken(getString(R.string.default_web_client_id))
+            .requestEmail()
+            .build()
+        val client = com.google.android.gms.auth.api.signin.GoogleSignIn.getClient(this, gso)
+        profileSignInLauncher.launch(client.signInIntent)
+    }
+
     private fun setupRegionalSection() {
         regionalAdapter = RegionalAdapter(
             packs = emptyList(),
@@ -2197,12 +2462,17 @@ Rules:
             aiContentContainer?.post { aiLoadHistory() }
         }
 
+        // Reload profile data when on Profile tab
+        if (currentFilter == FilterType.PROFILE && profileContentContainer != null) {
+            loadProfileData()
+        }
+
         // Ensure pack list is visible after returning from background
         // (some OEMs like TECNO aggressively reclaim memory)
         if (::adapter.isInitialized && adapter.getItems().isEmpty() && allPacks.isNotEmpty()
-            && currentFilter != FilterType.AI) {
+            && currentFilter != FilterType.AI && currentFilter != FilterType.PROFILE) {
             applyFilters()
-        } else if (allPacks.isEmpty() && currentFilter != FilterType.AI) {
+        } else if (allPacks.isEmpty() && currentFilter != FilterType.AI && currentFilter != FilterType.PROFILE) {
             loadPacksFromFirebase()
         }
 
@@ -2405,7 +2675,7 @@ Rules:
         loadPacksFromFirebase(forceRefresh = true)
     }
 
-    enum class FilterType { ALL, INSTALLED, PREMIUM, FAVORITES, PURCHASED, CUSTOM, AI }
+    enum class FilterType { ALL, INSTALLED, PREMIUM, FAVORITES, PURCHASED, CUSTOM, AI, PROFILE }
 
     private fun applyFilters() {
         filterJob?.cancel()
@@ -2581,7 +2851,7 @@ Rules:
     override fun onBackPressed() {
         if (drawer.isDrawerOpen(GravityCompat.END)) {
             drawer.closeDrawer(GravityCompat.END)
-        } else if (currentFilter == FilterType.CUSTOM || currentFilter == FilterType.FAVORITES) {
+        } else if (currentFilter == FilterType.CUSTOM || currentFilter == FilterType.FAVORITES || currentFilter == FilterType.PROFILE) {
             currentFilter = FilterType.ALL
             applyFilters()
             updateBottomNavUI()

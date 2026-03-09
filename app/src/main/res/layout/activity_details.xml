@@ -197,6 +197,23 @@
 
             </LinearLayout>
 
+            <!-- Report Content Button -->
+            <TextView
+                android:id="@+id/btnReportContent"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_horizontal"
+                android:layout_marginTop="12dp"
+                android:layout_marginBottom="8dp"
+                android:drawableStart="@drawable/ic_flag"
+                android:drawablePadding="6dp"
+                android:gravity="center"
+                android:text="@string/report_content"
+                android:textColor="@color/text_secondary"
+                android:textSize="12sp"
+                android:background="?selectableItemBackground"
+                android:padding="8dp" />
+
             <!-- Related Packs Section -->
             <LinearLayout
                 android:id="@+id/relatedPacksSection"

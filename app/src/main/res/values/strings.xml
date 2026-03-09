@@ -702,4 +702,46 @@
     <string name="google_account_connected">Your account is connected with Google</string>
     <string name="notification_channel_desc">Notifications about new sticker packs</string>
     <string name="ai_loading_hint">You can explore other stickers while this runs in the background</string>
+
+    <!-- Profile Tab -->
+    <string name="profile">Profile</string>
+    <string name="profile_guest">Guest User</string>
+    <string name="profile_stat_published">Published</string>
+    <string name="profile_stat_downloads">Downloads</string>
+    <string name="profile_stat_favorites">Favorites</string>
+    <string name="profile_share_pack">Share Sticker Pack</string>
+    <string name="profile_my_published_packs">My Published Packs</string>
+    <string name="profile_no_packs">You haven\'t published any packs yet.\nTap \"Share Sticker Pack\" to submit your first pack!</string>
+    <string name="profile_login_title">Sign In to Continue</string>
+    <string name="profile_login_desc">Sign in with your Google account to create your profile, publish sticker packs, and track your stats.</string>
+    <string name="profile_sign_in">Sign in with Google</string>
+    <string name="profile_login_required">Please sign in first</string>
+    <string name="profile_loading">Loading profile…</string>
+
+    <!-- Submit Pack -->
+    <string name="submit_pack_title">Submit Sticker Pack</string>
+    <string name="submit_pack_name_hint">Pack Name</string>
+    <string name="submit_category_label">Category</string>
+    <string name="submit_stickers_label">Stickers</string>
+    <string name="submit_stickers_hint">Add at least 3 stickers (max 30). Tap to add from gallery.</string>
+    <string name="submit_add_sticker">Add Stickers</string>
+    <string name="submit_add_sticker_count">Add Stickers (%1$d/%2$d)</string>
+    <string name="submit_pack_button">Submit Pack</string>
+    <string name="submit_max_stickers">Maximum %d stickers per pack</string>
+    <string name="submit_min_stickers">Please add at least %d stickers</string>
+    <string name="submit_name_required">Pack name is required</string>
+    <string name="submit_uploading">Uploading…</string>
+    <string name="submit_success">Your sticker pack has been submitted for review! 🎉</string>
+    <string name="submit_failed">Submission failed: %s</string>
+
+    <!-- Content Report -->
+    <string name="report_content">Report Content</string>
+    <string name="report_reason_hint">Why are you reporting this pack?</string>
+    <string name="report_inappropriate">Inappropriate Content</string>
+    <string name="report_copyright">Copyright Violation</string>
+    <string name="report_spam">Spam</string>
+    <string name="report_other">Other</string>
+    <string name="report_submitted">Report submitted. Thank you!</string>
+    <string name="report_failed">Could not submit report. Please try again.</string>
+    <string name="report_select_reason">Please select a reason</string>
 </resources>

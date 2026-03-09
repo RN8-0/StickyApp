@@ -93,3 +93,29 @@ export interface SubscriptionHistoryItem {
     date_str: string;
     details?: string;
 }
+
+export interface PublisherUser {
+    id: string;
+    display_name: string;
+    avatar_url: string;
+    bio: string;
+    category: string;
+    packs_published: number;
+    total_downloads: number;
+    created_at: any;
+    is_active: boolean;
+}
+
+export interface UserSubmission {
+    id: string;
+    user_id: string;
+    user_email: string;
+    display_name: string;
+    pack_name: string;
+    category: string;
+    stickers: Array<{ name: string; image_url: string }>;
+    status: 'pending' | 'processing' | 'approved' | 'flagged' | 'rejected' | 'error';
+    flag_reasons?: string[];
+    created_at: any;
+    processed_at?: any;
+}

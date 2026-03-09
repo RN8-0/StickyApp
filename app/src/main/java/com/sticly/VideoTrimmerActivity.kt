@@ -30,6 +30,10 @@ import java.io.File
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class VideoTrimmerActivity : AppCompatActivity() {
 
+    override fun attachBaseContext(newBase: android.content.Context) {
+        super.attachBaseContext(LocaleHelper.onAttach(newBase))
+    }
+
     companion object {
         private const val TAG = "VideoTrimmer"
         private const val FRAME_COUNT = 10

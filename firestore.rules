@@ -1,69 +1,124 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Sticker paketleri - herkes okuyabilir, herkes istatistik güncelleyebilir
-    match /stickers/{document=**} {
+    
+    // Helper: Check if the user is an admin
+    function isAdmin() {
+      return request.auth != null && 
+             exists(/databases/$(database)/documents/admins/$(request.auth.token.email));
+    }
+    
+    // Helper: Check if user is authenticated
+    function isAuth() {
+      return request.auth != null;
+    }
+
+    // Sticker paketleri - herkes okuyabilir, sadece admin yazabilir
+    // İstatistik güncellemeleri sadece belirli alanlara izin verir
+    match /stickers/{packId} {
       allow read: if true;
-      allow update: if true; // İstatistiklerin artması için anonim izne ihtiyaç var
-      allow create, delete: if request.auth != null;
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() || (
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['download_count', 'favorite_count', 'view_count', 'whatsapp_add_count'])
+      );
     }
     
     // Premium sticker paketleri
-    match /premium_stickers/{document=**} {
+    match /premium_stickers/{packId} {
       allow read: if true;
-      allow update: if true; 
-      allow create, delete: if request.auth != null;
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() || (
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['download_count', 'favorite_count', 'view_count', 'whatsapp_add_count'])
+      );
     }
     
-    // Ayarlar - herkes okuyabilir, sadece auth yazabilir
+    // Ayarlar - herkes okuyabilir, sadece admin yazabilir
     match /settings/{document=**} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow write: if isAdmin();
     }
     
-    // Mesajlar - herkes yazabilir (anonim kullanıcılar için), sadece auth okuyabilir
+    // Mesajlar - herkes yazabilir (iletişim formu), sadece admin okuyabilir
     match /messages/{document=**} {
       allow create: if true;
-      allow read, update, delete: if request.auth != null;
+      allow read, update, delete: if isAdmin();
     }
     
-    // Öneriler - herkes yazabilir (anonim kullanıcılar için), sadece auth okuyabilir
+    // Öneriler - herkes yazabilir, sadece admin okuyabilir
     match /suggestions/{document=**} {
       allow create: if true;
-      allow read, update, delete: if request.auth != null;
+      allow read, update, delete: if isAdmin();
     }
 
-    // Bildirimler - sadece auth yazabilir (Admin), herkes okuyabilir
+    // Bildirimler - sadece admin yazabilir, herkes okuyabilir
     match /notifications/{document=**} {
       allow read: if true;
-      allow create, update, delete: if request.auth != null;
+      allow create, update, delete: if isAdmin();
     }
 
-    // Otomasyon Taslakları - sadece auth (Admin) okuyabilir ve yönetebilir
+    // Otomasyon Taslakları - sadece admin
     match /automation_drafts/{document=**} {
-      allow read, write: if request.auth != null;
+      allow read, write: if isAdmin();
     }
 
-    // Batch Generator Taslakları - sadece auth (Admin) okuyabilir ve yönetebilir
+    // Batch Generator Taslakları - sadece admin
     match /draft_stickers/{document=**} {
-      allow read, write: if request.auth != null;
+      allow read, write: if isAdmin();
     }
 
-    // Admin Listesi - Giriş kontrolü için herkes (veya auth) okuyabilmeli
+    // Admin Listesi - sadece admin okuyabilir, kimse yazamaz
     match /admins/{email} {
-      allow read: if true;
-      allow write: if false; // Sadece manuel müdahale
+      allow read: if isAdmin();
+      allow write: if false;
     }
 
-    // Kullanıcı Verileri - Herkes sadece kendi verisini yönetebilir, Adminler hepsini yönetebilir
+    // Kullanıcı Verileri - kendi verisini okuyabilir/yazabilir, admin hepsini yönetebilir
     match /users/{userId} {
-      allow read, write: if (request.auth != null && request.auth.uid == userId) || 
-                          (request.auth != null && exists(/databases/$(database)/documents/admins/$(request.auth.token.email)));
+      allow read, write: if (isAuth() && request.auth.uid == userId) || isAdmin();
     }
 
-    // Satın Alınan Paketler
+    // Satın Alınan Paketler - sadece kendi verilerini, admin hepsini
     match /purchased_packs/{docId} {
-      allow read, write: if true; // Basitlik için true, gerekirse auth.uid kontrolü eklenebilir
+      allow read: if isAuth();
+      allow create: if isAuth();
+      allow update, delete: if isAdmin();
+    }
+
+    // ========== UGC (User Generated Content) Koleksiyonları ==========
+    
+    // Kullanıcı sticker gönderimleri
+    match /user_submissions/{submissionId} {
+      allow read: if isAuth() && (
+        resource.data.user_id == request.auth.uid || isAdmin()
+      );
+      allow create: if isAuth() && request.resource.data.user_id == request.auth.uid;
+      allow update: if isAdmin() || (
+        isAuth() && resource.data.user_id == request.auth.uid && 
+        resource.data.status == 'draft'
+      );
+      allow delete: if isAdmin();
+    }
+    
+    // Yayıncı kullanıcılar (admin tarafından oluşturulan sanal hesaplar)
+    match /publisher_users/{publisherId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    // Kullanıcı profilleri (public)
+    match /user_profiles/{userId} {
+      allow read: if true;
+      allow create: if isAuth() && request.auth.uid == userId;
+      allow update: if (isAuth() && request.auth.uid == userId) || isAdmin();
+      allow delete: if isAdmin();
+    }
+    
+    // İçerik raporları
+    match /content_reports/{reportId} {
+      allow create: if isAuth();
+      allow read, update, delete: if isAdmin();
     }
   }
 }
