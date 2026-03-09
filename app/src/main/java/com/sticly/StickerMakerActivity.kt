@@ -1863,49 +1863,42 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
         subjectSegmenter.close()
     }
 
-    // ==================== Tools Adapter ====================
+    // ==================== Tool Highlight ====================
 
-    inner class ToolsAdapter(
-        private val tools: List<EditorTool>,
-        private val onToolClick: (EditorTool) -> Unit
-    ) : RecyclerView.Adapter<ToolsAdapter.ToolViewHolder>() {
-
-        private var selectedPosition = -1
-
-        inner class ToolViewHolder(view: View) : RecyclerView.ViewHolder(view) {
-            val card: MaterialCardView = view.findViewById(R.id.cardView)
-            val icon: ImageView = view.findViewById(R.id.icon)
-            val title: TextView = view.findViewById(R.id.title)
+    private fun updateToolHighlight() {
+        val allButtons = listOf(btnToolCrop, btnToolRemoveBg, btnToolEmoji,
+            btnToolText, btnToolBrush, btnToolEraser, btnToolBorder)
+        val white = ColorStateList.valueOf(Color.WHITE)
+        val accent = ColorStateList.valueOf(ContextCompat.getColor(this, R.color.modern_primary))
+        for (btn in allButtons) {
+            btn.imageTintList = white
         }
-
-        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ToolViewHolder {
-            val view = LayoutInflater.from(parent.context)
-                .inflate(R.layout.item_editor_tool, parent, false)
-            return ToolViewHolder(view)
+        when {
+            isBrushModeActive && !isEraserMode -> btnToolBrush.imageTintList = accent
+            isEraserMode -> btnToolEraser.imageTintList = accent
         }
+    }
 
-        override fun onBindViewHolder(holder: ToolViewHolder, position: Int) {
-            val tool = tools[position]
-            holder.icon.setImageResource(tool.iconRes)
-            holder.title.text = tool.name
-
-            val isSelected = position == selectedPosition
-            holder.card.strokeWidth = if (isSelected) 2.dpToPx() else 0
-            holder.card.strokeColor = if (isSelected)
-                ContextCompat.getColor(this@StickerMakerActivity, R.color.accent)
-            else
-                Color.TRANSPARENT
-
-            holder.itemView.setOnClickListener {
-                val oldPos = selectedPosition
-                selectedPosition = holder.adapterPosition
-                notifyItemChanged(oldPos)
-                notifyItemChanged(selectedPosition)
-                onToolClick(tool)
+    private fun showTypeSelectionDialog() {
+        val options = arrayOf(
+            "\uD83D\uDCF8 ${getString(R.string.static_sticker_title)}",
+            "\uD83C\uDFAC ${getString(R.string.animated_sticker_title)}"
+        )
+        AlertDialog.Builder(this, R.style.MaterialAlertDialogTheme)
+            .setTitle(getString(R.string.how_to_create_sticker))
+            .setItems(options) { _, which ->
+                when (which) {
+                    0 -> { /* Static sticker: editor already showing */ }
+                    1 -> {
+                        val intent = Intent(this, AnimatedStickerActivity::class.java)
+                        targetPackId?.let { intent.putExtra("packId", it) }
+                        startActivity(intent)
+                        finish()
+                    }
+                }
             }
-        }
-
-        override fun getItemCount() = tools.size
+            .setOnCancelListener { /* Stay on editor */ }
+            .show()
     }
 
     // ==================== Pack Selection Adapter ====================
