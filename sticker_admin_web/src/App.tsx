@@ -75,12 +75,9 @@ import {
   Star,
   AlertTriangle,
   FileText,
-  Eye,
   Flag,
   UserPlus,
   Inbox,
-  ThumbsUp,
-  ThumbsDown
 } from 'lucide-react';
 import { translateTextAllLanguages, TARGET_LANGUAGES } from './utils/translator';
 import {
@@ -670,6 +667,16 @@ function App() {
     } catch (e) {
       console.error("Reject error:", e);
       alert("Failed to reject submission.");
+    }
+  };
+
+  const handleDeleteSubmission = async (submission: UserSubmission) => {
+    if (!window.confirm(`Permanently delete "${submission.pack_name}"? This cannot be undone.`)) return;
+    try {
+      await deleteDoc(doc(db, 'user_submissions', submission.id));
+    } catch (e) {
+      console.error("Delete submission error:", e);
+      alert("Failed to delete submission.");
     }
   };
 
@@ -4845,14 +4852,28 @@ function App() {
                           <div className="mt-2 flex items-start gap-2 p-2 bg-red-500/10 rounded-lg">
                             <Flag size={12} className="text-red-400 mt-0.5 shrink-0" />
                             <div className="text-[10px] text-red-300">
-                              {sub.flag_reasons.map((reason, i) => (
-                                <span key={i} className="block">{reason}</span>
-                              ))}
+                              {sub.flag_reasons.some(r => r.includes('vision_api_error')) ? (
+                                <span className="block text-orange-300">⚠ Automatic content scan unavailable — please review images manually before approving or rejecting.</span>
+                              ) : (
+                                sub.flag_reasons.map((reason, i) => (
+                                  <span key={i} className="block">{reason}</span>
+                                ))
+                              )}
                             </div>
                           </div>
                         )}
-                        {/* Sticker Preview */}
-                        {selectedSubmission?.id === sub.id && sub.stickers && sub.stickers.length > 0 && (
+                        {sub.status === 'rejected' && sub.rejection_reason && (
+                          <div className="mt-2 flex items-start gap-2 p-2 bg-gray-500/10 rounded-lg">
+                            <span className="text-[10px] text-gray-300"><span className="font-bold text-gray-400">Rejection reason:</span> {sub.rejection_reason}</span>
+                          </div>
+                        )}
+                        {sub.note && (
+                          <div className="mt-2 flex items-start gap-2 p-2 bg-blue-500/10 rounded-lg">
+                            <span className="text-[10px] text-blue-300">{sub.note}</span>
+                          </div>
+                        )}
+                        {/* Sticker Preview — always visible */}
+                        {sub.stickers && sub.stickers.length > 0 && (
                           <div className="mt-3 grid grid-cols-6 md:grid-cols-10 gap-2">
                             {sub.stickers.slice(0, 20).map((s, i) => (
                               <div key={i} className="aspect-square rounded-lg overflow-hidden bg-white/5 border border-white/5">
@@ -4867,32 +4888,29 @@ function App() {
                           </div>
                         )}
                       </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <button
-                          onClick={() => setSelectedSubmission(selectedSubmission?.id === sub.id ? null : sub)}
-                          className="p-2 bg-white/5 hover:bg-white/10 rounded-lg transition-all"
-                          title="View Details"
-                        >
-                          <Eye size={14} className="text-textSec" />
-                        </button>
+                      <div className="flex flex-col items-end gap-2 shrink-0">
                         {(sub.status === 'pending' || sub.status === 'flagged') && (
                           <>
                             <button
                               onClick={() => handleApproveSubmission(sub)}
-                              className="p-2 bg-green-500/10 hover:bg-green-500/20 rounded-lg transition-all"
-                              title="Approve"
+                              className="flex items-center gap-1.5 px-3 py-1.5 bg-green-500/15 hover:bg-green-500/25 text-green-400 rounded-lg text-[11px] font-bold transition-all border border-green-500/20"
                             >
-                              <ThumbsUp size={14} className="text-green-400" />
+                              <Check size={12} /> Approve
                             </button>
                             <button
                               onClick={() => handleRejectSubmission(sub)}
-                              className="p-2 bg-red-500/10 hover:bg-red-500/20 rounded-lg transition-all"
-                              title="Reject"
+                              className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500/15 hover:bg-red-500/25 text-red-400 rounded-lg text-[11px] font-bold transition-all border border-red-500/20"
                             >
-                              <ThumbsDown size={14} className="text-red-400" />
+                              <X size={12} /> Reject
                             </button>
                           </>
                         )}
+                        <button
+                          onClick={() => handleDeleteSubmission(sub)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-white/5 hover:bg-red-500/15 text-textSec hover:text-red-400 rounded-lg text-[11px] font-bold transition-all border border-white/5"
+                        >
+                          <Trash2 size={12} /> Delete
+                        </button>
                       </div>
                     </div>
                   </div>

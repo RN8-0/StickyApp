@@ -299,8 +299,8 @@ async function checkContentSafety(imageUrl) {
     };
   } catch (error) {
     console.error('[NSFW Check] Vision API error:', error.message);
-    // If Vision API fails, flag for manual review
-    return { safe: false, reason: 'vision_api_error' };
+    // If Vision API fails, keep as pending for manual admin review (don't flag as NSFW)
+    return { safe: null, reason: 'vision_api_error' };
   }
 }
 
@@ -324,21 +324,42 @@ exports.onUserSubmission = onDocumentCreated('user_submissions/{submissionId}', 
     // Check all sticker images for NSFW content
     let allSafe = true;
     let flagReasons = [];
+    let visionErrors = 0;
     
     if (submission.stickers && submission.stickers.length > 0) {
       for (const sticker of submission.stickers) {
         if (sticker.image_url) {
           const safety = await checkContentSafety(sticker.image_url);
-          if (!safety.safe) {
+          if (safety.safe === null) {
+            // Vision API scan failed — don't flag, count as error
+            visionErrors++;
+          } else if (!safety.safe) {
             allSafe = false;
             flagReasons.push(`${sticker.name || 'sticker'}: ${safety.reason}`);
           }
         }
       }
     }
+
+    // If Vision API failed for all stickers but none were explicitly NSFW, keep pending for manual review
+    if (allSafe && visionErrors > 0 && flagReasons.length === 0) {
+      await snap.ref.update({
+        status: 'pending',
+        note: 'Automatic content scan unavailable. Please review images manually.',
+        processed_at: admin.firestore.FieldValue.serverTimestamp()
+      });
+      console.log(`[UGC] Vision API errors for ${submissionId} — set to pending for manual review`);
+      return;
+    }
     
     if (allSafe) {
       // Auto-approve: Move to stickers collection
+      // Map sticker fields to match StickerRepository.parsePackDocument expectations (image_file + url)
+      const mappedStickers = (submission.stickers || []).map(s => ({
+        image_file: s.name,
+        url: s.image_url,
+        emojis: ['⭐']
+      }));
       const packData = {
         name: submission.pack_name,
         name_en: submission.pack_name,
@@ -346,8 +367,10 @@ exports.onUserSubmission = onDocumentCreated('user_submissions/{submissionId}', 
         publisher_email: submission.user_email || '',
         publisher_user_id: submission.user_id,
         category: submission.category || 'community',
-        stickers: submission.stickers || [],
-        sticker_count: (submission.stickers || []).length,
+        stickers: mappedStickers,
+        tray_image_file: mappedStickers[0]?.image_file || '',
+        tray_url: mappedStickers[0]?.url || '',
+        sticker_count: mappedStickers.length,
         is_active: true,
         is_premium: false,
         is_animated: false,

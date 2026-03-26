@@ -1891,10 +1891,9 @@ Rules:
 
     private fun loadUserSubmissions(userId: String, rv: RecyclerView?, emptyState: View?) {
         val db = FirebaseFirestore.getInstance()
-        // Real-time listener so profile updates instantly when admin approves/rejects
+        // Real-time listener — no orderBy to avoid requiring Firestore composite index
         db.collection("user_submissions")
             .whereEqualTo("user_id", userId)
-            .orderBy("created_at", com.google.firebase.firestore.Query.Direction.DESCENDING)
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
                     Log.e("Profile", "Error loading submissions", error)
@@ -1916,8 +1915,14 @@ Rules:
                         val rejectionReason = doc.getString("rejection_reason")
                         val createdAt = doc.getTimestamp("created_at")
                         SubmissionItem(doc.id, name, status, stickerCount, rejectionReason, createdAt)
-                    }
+                    }.sortedByDescending { it.createdAt?.toDate() }
                     rv?.adapter = SubmissionAdapter(items)
+
+                    // Update published count from approved submissions (no Firestore counter needed)
+                    val approvedCount = items.count { it.status == "approved" }
+                    runOnUiThread {
+                        findViewById<TextView>(R.id.statPublished)?.text = approvedCount.toString()
+                    }
                 }
             }
     }
@@ -1940,6 +1945,7 @@ Rules:
             val tvMeta: TextView = view.findViewById(R.id.tvSubmissionMeta)
             val rejectionContainer: View = view.findViewById(R.id.rejectionContainer)
             val tvRejectionReason: TextView = view.findViewById(R.id.tvRejectionReason)
+            val btnDelete: com.google.android.material.button.MaterialButton = view.findViewById(R.id.btnDeleteSubmission)
         }
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
@@ -1974,6 +1980,32 @@ Rules:
                 holder.tvRejectionReason.text = item.rejectionReason
             } else {
                 holder.rejectionContainer.visibility = View.GONE
+            }
+
+            // Show delete button for rejected or flagged packs
+            if (item.status == "rejected" || item.status == "flagged") {
+                holder.btnDelete.visibility = View.VISIBLE
+                holder.btnDelete.setOnClickListener {
+                    android.app.AlertDialog.Builder(this@MainActivity)
+                        .setTitle("Delete Submission")
+                        .setMessage("Delete \"${item.name}\"? This cannot be undone.")
+                        .setPositiveButton("Delete") { _, _ ->
+                            FirebaseFirestore.getInstance()
+                                .collection("user_submissions")
+                                .document(item.id)
+                                .delete()
+                                .addOnSuccessListener {
+                                    Toast.makeText(this@MainActivity, "Submission deleted", Toast.LENGTH_SHORT).show()
+                                }
+                                .addOnFailureListener {
+                                    Toast.makeText(this@MainActivity, "Delete failed", Toast.LENGTH_SHORT).show()
+                                }
+                        }
+                        .setNegativeButton("Cancel", null)
+                        .show()
+                }
+            } else {
+                holder.btnDelete.visibility = View.GONE
             }
         }
 

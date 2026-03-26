@@ -111,11 +111,18 @@ export interface UserSubmission {
     user_id: string;
     user_email: string;
     display_name: string;
+    publisher_name?: string;
     pack_name: string;
+    description?: string;
     category: string;
     stickers: Array<{ name: string; image_url: string }>;
     status: 'pending' | 'processing' | 'approved' | 'flagged' | 'rejected' | 'error';
     flag_reasons?: string[];
+    rejection_reason?: string;
+    sticker_count?: number;
     created_at: any;
     processed_at?: any;
+    approved_at?: any;
+    auto_approved?: boolean;
+    note?: string;
 }
