@@ -73,6 +73,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var rv: RecyclerView
     private lateinit var loadingOverlay: View
     private lateinit var loadingAnimation: com.airbnb.lottie.LottieAnimationView
+    private lateinit var skeletonContainer: com.facebook.shimmer.ShimmerFrameLayout
     private lateinit var swipeRefresh: SwipeRefreshLayout
     private lateinit var mainContent: View
     private lateinit var adapter: PackAdapter
@@ -86,6 +87,9 @@ class MainActivity : AppCompatActivity() {
 
     // Header Add Button
     private lateinit var btnAddStickerHeader: ImageButton
+
+    // FAB for My Stickers
+    private var btnCreateFab: com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton? = null
 
     // Bottom Nav
     private lateinit var tabExplore: View
@@ -352,14 +356,15 @@ class MainActivity : AppCompatActivity() {
         // Initialize views FIRST so we can display cached content immediately
         initViews()
 
-        // Always show the main screen structure instantly — never block on a loading overlay.
-        // The RecyclerView will update smoothly when data arrives from cache or Firebase.
+        // Always show the main screen structure instantly
         showContent()
 
         // Load data: memory cache → disk cache → Firebase (in priority order)
         if (StickerRepository.allPacksCache.isNotEmpty()) {
             displayPacks(StickerRepository.allPacksCache)
         } else {
+            // Show skeleton while loading
+            showSkeleton()
             // Disk cache'i arka planda oku — main thread'i bloklama
             lifecycleScope.launch {
                 val diskPacks = withContext(Dispatchers.IO) {
@@ -371,6 +376,7 @@ class MainActivity : AppCompatActivity() {
                 } else if (StickerRepository.allPacksCache.isNotEmpty()) {
                     displayPacks(StickerRepository.allPacksCache)
                 }
+                // If still nothing after disk cache, Firebase will populate it
             }
         }
 
@@ -457,7 +463,7 @@ class MainActivity : AppCompatActivity() {
         rv = findViewById(R.id.rv)
         loadingOverlay = findViewById(R.id.loadingOverlay)
         loadingAnimation = findViewById(R.id.loadingAnimation)
-        // Animasyon veri gelene kadar sonsuz döngüde oynar
+        skeletonContainer = findViewById(R.id.skeletonContainer)
         swipeRefresh = findViewById(R.id.swipeRefresh)
         menuBtn = findViewById(R.id.menuBtn)
         toolbarTitle = findViewById(R.id.toolbarTitle)
@@ -473,8 +479,11 @@ class MainActivity : AppCompatActivity() {
         aiContentContainer = findViewById(R.id.aiContentContainer) // null until ViewStub inflated
         btnCreateFirstSticker = findViewById(R.id.btnCreateFirstSticker)
         btnAddStickerHeader = findViewById(R.id.btnAddStickerHeader)
-        
-        btnAddStickerHeader.setOnClickListener {
+        btnAddStickerHeader.visibility = View.GONE // hidden; FAB is used instead on My Stickers
+
+        // FAB for My Stickers tab
+        btnCreateFab = findViewById(R.id.btnCreateFab)
+        btnCreateFab?.setOnClickListener {
             showStickerTypeChooser()
         }
 
@@ -580,51 +589,72 @@ class MainActivity : AppCompatActivity() {
 
     private fun setupBottomNav() {
         tabExplore.setOnClickListener {
-            currentFilter = FilterType.ALL
-            currentCategory = "all"
-            updateBottomNavUI()
-            updateCategoryChipSelection()
-            categoryChipGroup.visibility = View.VISIBLE
-            showHomeSections()
-            // Directly restore cached Explore list + scroll — no async, no flicker
-            if (!restoreExploreState()) {
-                applyFilters()
+            try {
+                currentFilter = FilterType.ALL
+                currentCategory = "all"
+                updateBottomNavUI()
+                updateCategoryChipSelection()
+                categoryChipGroup.visibility = View.VISIBLE
+                showHomeSections()
+                if (!restoreExploreState()) {
+                    applyFilters()
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("BottomNav", "Explore tab error", e)
             }
         }
 
         tabFavorites.setOnClickListener {
-            saveExploreState()
-            currentFilter = FilterType.FAVORITES
-            pendingScrollToTop = true
-            applyFilters()
-            updateBottomNavUI()
+            try {
+                saveExploreState()
+                currentFilter = FilterType.FAVORITES
+                pendingScrollToTop = true
+                updateBottomNavUI()
+                applyFilters()
+            } catch (e: Exception) {
+                android.util.Log.e("BottomNav", "Favorites tab error", e)
+            }
         }
 
         tabAICreate.setOnClickListener {
-            saveExploreState()
-            currentFilter = FilterType.AI
-            // Inflate AI content ViewStub on first use (before updateBottomNavUI accesses it)
-            ensureAiInflated()
-            updateBottomNavUI()
-            aiContentContainer?.post { aiLoadHistory() }
+            try {
+                saveExploreState()
+                currentFilter = FilterType.AI
+                ensureAiInflated()
+                updateBottomNavUI()
+                aiContentContainer?.post { aiLoadHistory() }
+            } catch (e: Exception) {
+                android.util.Log.e("BottomNav", "AI tab error", e)
+                // Navigation still happened (currentFilter already set), just reinforce UI
+                updateBottomNavUI()
+            }
         }
 
         tabMyStickers.setOnClickListener {
-            saveExploreState()
-            currentFilter = FilterType.CUSTOM
-            pendingScrollToTop = true
-            applyFilters()
-            updateBottomNavUI()
-            categoryChipGroup.visibility = View.GONE
-            hideHomeSections()
+            try {
+                saveExploreState()
+                currentFilter = FilterType.CUSTOM
+                pendingScrollToTop = true
+                updateBottomNavUI()
+                categoryChipGroup.visibility = View.GONE
+                hideHomeSections()
+                applyFilters()
+            } catch (e: Exception) {
+                android.util.Log.e("BottomNav", "MyStickers tab error", e)
+            }
         }
 
         tabProfile.setOnClickListener {
-            saveExploreState()
-            currentFilter = FilterType.PROFILE
-            ensureProfileInflated()
-            updateBottomNavUI()
-            loadProfileData()
+            try {
+                saveExploreState()
+                currentFilter = FilterType.PROFILE
+                ensureProfileInflated()
+                updateBottomNavUI()
+                loadProfileData()
+            } catch (e: Exception) {
+                android.util.Log.e("BottomNav", "Profile tab error", e)
+                updateBottomNavUI()
+            }
         }
 
         updateBottomNavUI()
@@ -634,8 +664,8 @@ class MainActivity : AppCompatActivity() {
         val activeColor = navActiveColor
         val inactiveColor = navInactiveColor
 
-        // Reset all
-        iconExplore.setColorFilter(inactiveColor)
+        // Reset all (iconExplore always white - it sits on purple circular bg)
+        iconExplore.setColorFilter(android.graphics.Color.WHITE)
         textExplore.setTextColor(inactiveColor)
         
         iconFavorites.setColorFilter(inactiveColor)
@@ -693,15 +723,17 @@ class MainActivity : AppCompatActivity() {
         aiContentContainer?.visibility = View.GONE
         profileContentContainer?.visibility = View.GONE
         mainContent.visibility = View.VISIBLE
-        searchBarLayoutCached?.visibility = View.VISIBLE
         btnPremiumHeaderCached?.visibility = View.VISIBLE
         menuBtn.visibility = View.VISIBLE
         toolbarTitle.text = getString(R.string.app_name)
+        // FAB only on My Stickers
+        btnCreateFab?.visibility = View.GONE
 
         // Activate selected
         when (currentFilter) {
             FilterType.ALL, FilterType.PREMIUM, FilterType.PURCHASED -> {
-                iconExplore.setColorFilter(activeColor)
+                searchBarLayoutCached?.visibility = View.VISIBLE
+                iconExplore.setColorFilter(android.graphics.Color.WHITE)
                 textExplore.setTextColor(activeColor)
                 
                 menuBtn.setImageResource(R.drawable.ic_menu)
@@ -710,6 +742,7 @@ class MainActivity : AppCompatActivity() {
                 showHomeSections()
             }
             FilterType.FAVORITES -> {
+                searchBarLayoutCached?.visibility = View.VISIBLE
                 iconFavorites.setColorFilter(activeColor)
                 textFavorites.setTextColor(activeColor)
                 
@@ -720,6 +753,7 @@ class MainActivity : AppCompatActivity() {
                 hideHomeSections()
             }
             FilterType.INSTALLED -> {
+                searchBarLayoutCached?.visibility = View.VISIBLE
                 iconFavorites.setColorFilter(activeColor)
                 textFavorites.setTextColor(activeColor)
                 
@@ -730,6 +764,8 @@ class MainActivity : AppCompatActivity() {
                 hideHomeSections()
             }
             FilterType.CUSTOM -> {
+                // My Stickers: hide search bar, show FAB
+                searchBarLayoutCached?.visibility = View.GONE
                 iconMyStickers.setColorFilter(activeColor)
                 textMyStickers.setTextColor(activeColor)
                 
@@ -738,14 +774,13 @@ class MainActivity : AppCompatActivity() {
                 toolbarSubtitle.text = getString(R.string.your_stickers)
                 categoryChipGroup.visibility = View.GONE
                 hideHomeSections()
-                btnAddStickerHeader.visibility = View.VISIBLE
+                btnCreateFab?.visibility = View.VISIBLE
             }
-            else -> {}
+            else -> {
+                searchBarLayoutCached?.visibility = View.VISIBLE
+            }
         }
-        
-        if (currentFilter != FilterType.CUSTOM) {
-            btnAddStickerHeader.visibility = View.GONE
-        }
+        btnAddStickerHeader.visibility = View.GONE
     }
 
     // ─── AI Inline Logic ────────────────────────────────────────────────
@@ -2615,6 +2650,7 @@ Rules:
                     if (!contentShown) displayPacks(StickerRepository.allPacksCache)
                 } else {
                     // Disk cache'ten oku (sadece memory boşsa)
+                    showSkeleton()
                     val diskPacks = withContext(Dispatchers.IO) {
                         StickerRepository.loadCacheFromDisk(this@MainActivity)
                     }
@@ -2640,15 +2676,26 @@ Rules:
 
     private var contentShown = false
 
+    private fun showSkeleton() {
+        if (!::skeletonContainer.isInitialized) return
+        skeletonContainer.visibility = View.VISIBLE
+        skeletonContainer.startShimmer()
+    }
+
+    private fun hideSkeleton() {
+        if (!::skeletonContainer.isInitialized) return
+        skeletonContainer.stopShimmer()
+        skeletonContainer.visibility = View.GONE
+    }
+
     private fun showContent() {
         if (contentShown) return
         contentShown = true
-        loadingAnimation.cancelAnimation()
+        hideSkeleton()
         loadingOverlay.visibility = View.GONE
         mainContent.visibility = View.VISIBLE
         mainContent.alpha = 1f
         swipeRefresh.visibility = View.VISIBLE
-        // Ensure search/filter bar is ready
         rv.visibility = View.VISIBLE
     }
 

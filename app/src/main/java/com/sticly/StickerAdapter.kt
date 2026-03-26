@@ -163,29 +163,32 @@ class StickerAdapter(
             sticker.url.isNotEmpty() -> {
                 val request = glideManager.asDrawable()
                     .load(sticker.url)
+                    .thumbnail(0.25f) // Show blurred thumbnail instantly while full image loads
                     .placeholder(R.drawable.sticker_placeholder)
                     .error(R.drawable.sticker_placeholder)
                     .diskCacheStrategy(DiskCacheStrategy.DATA)
                     .listener(clearBgListener)
 
-                // Static stickers için boyut optimize et
                 if (!isAnimated) {
-                    request.override(384, 384).dontAnimate()
+                    request.override(256, 256).dontAnimate()
                 }
                 request.into(h.img)
             }
             // 3. URL yoksa direkt storage URL hesapla ve yükle
             storagePath.isNotEmpty() -> {
                 val directUrl = StickerRepository.getStickerDirectUrl(packId, sticker.file, storagePath)
+                // Update the sticker URL for future use
+                sticker.url = directUrl
                 val request = glideManager.asDrawable()
                     .load(directUrl)
+                    .thumbnail(0.25f)
                     .placeholder(R.drawable.sticker_placeholder)
                     .error(R.drawable.sticker_placeholder)
                     .diskCacheStrategy(DiskCacheStrategy.DATA)
                     .listener(clearBgListener)
 
                 if (!isAnimated) {
-                    request.override(384, 384).dontAnimate()
+                    request.override(256, 256).dontAnimate()
                 }
                 request.into(h.img)
             }

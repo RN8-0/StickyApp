@@ -744,4 +744,13 @@
     <string name="report_submitted">Report submitted. Thank you!</string>
     <string name="report_failed">Could not submit report. Please try again.</string>
     <string name="report_select_reason">Please select a reason</string>
+
+    <!-- Publish Pack -->
+    <string name="publish_pack">Publish to Store</string>
+    <string name="publish_pack_success">Your pack has been submitted for review! 🎉\nWe\'ll notify you once it\'s approved.</string>
+    <string name="publish_pack_failed">Could not submit pack. Please try again.</string>
+    <string name="publish_pack_login_required">Please sign in to publish your pack.</string>
+    <string name="publish_pack_already_submitted">This pack is already under review.</string>
+    <string name="publish_pack_min_stickers">You need at least 3 stickers to publish a pack.</string>
+    <string name="publishing">Publishing…</string>
 </resources>

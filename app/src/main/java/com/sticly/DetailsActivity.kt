@@ -287,16 +287,25 @@ class DetailsActivity : AppCompatActivity() {
 
         val rv = findViewById<RecyclerView>(R.id.rv)
         rv.layoutManager = GridLayoutManager(this, 3).apply {
-            initialPrefetchItemCount = 3 // Sadece ilk satırı prefetch et
+            initialPrefetchItemCount = 6
         }
         rv.setHasFixedSize(true)
-        rv.setItemViewCacheSize(12)
+        rv.setItemViewCacheSize(20)
         rv.itemAnimator = null
-        rv.setRecycledViewPool(RecyclerView.RecycledViewPool().apply { setMaxRecycledViews(0, 20) })
+        rv.setRecycledViewPool(RecyclerView.RecycledViewPool().apply { setMaxRecycledViews(0, 30) })
 
         val hasAccess = !pack.isPremium || PreferencesHelper.hasAccessToPack(this, pack.id)
         val storagePath = pack.storagePath
-        android.util.Log.d("DetailsDebug", "setupUI pack=${pack.id} stickers.size=${pack.stickers.size} stickers=${pack.stickers.map { it.file }}")
+
+        // Pre-compute URLs synchronously (pure string construction, no network) so adapter
+        // can immediately start Glide requests without waiting for a background coroutine.
+        if (!pack.id.startsWith("custom_")) {
+            pack.stickers.forEach { sticker ->
+                if (sticker.url.isEmpty()) {
+                    sticker.url = StickerRepository.getStickerDirectUrl(pack.id, sticker.file, storagePath)
+                }
+            }
+        }
 
         // Kilitli paketlerde rastgele 3 çıkartmayı başa al
         val displayStickers = if (!hasAccess && pack.stickers.size > 3) {
@@ -306,26 +315,18 @@ class DetailsActivity : AppCompatActivity() {
             pack.stickers
         }
 
-        // URL hesaplama + preload arka planda
-        lifecycleScope.launch {
-            withContext(Dispatchers.Default) {
-                pack.stickers.forEach { sticker ->
-                    if (sticker.url.isEmpty()) {
-                        sticker.url = StickerRepository.getStickerDirectUrl(pack.id, sticker.file, storagePath)
-                    }
-                }
-            }
+        // Arka planda preload başlat — adapter zaten render ediyor, bu sadece cache ısıtma
+        lifecycleScope.launch(Dispatchers.IO) {
             preloadAllStickers(pack, displayStickers)
         }
 
-        // Şimdi adapter oluştur - URL'ler HAZIR
         adapter = StickerAdapter(
             packId = pack.id,
             items = displayStickers,
             isPackPremium = pack.isPremium,
             hasAccess = hasAccess,
             storagePath = pack.storagePath,
-            isAnimated = pack.isAnimated, // Animated pack için FPS koruması
+            isAnimated = pack.isAnimated,
             selectedPositions = selectedIndices,
             onStickerClick = { sticker, _ ->
                 val isLocked = !PreferencesHelper.hasAccessToPack(this, pack.id)
@@ -357,9 +358,6 @@ class DetailsActivity : AppCompatActivity() {
 
         // Butonları ayarla
         setupButtons(pack, hasAccess)
-
-        // Report button
-        setupReportButton(pack)
 
         // İlgili paketleri gecikmeli yükle (ilk render'ı bloklamasın)
         rv.post { setupRelatedPacks(pack) }
@@ -716,6 +714,20 @@ class DetailsActivity : AppCompatActivity() {
                 showDeletePackDialog(pack)
                 true
             }
+
+            // Publish to Store button
+            val btnPublish = findViewById<MaterialButton>(R.id.btnPublishPack)
+            if (btnPublish != null) {
+                btnPublish.visibility = View.VISIBLE
+                checkIfAlreadySubmitted(pack.id) { alreadySubmitted ->
+                    if (alreadySubmitted) {
+                        btnPublish.text = getString(R.string.publish_pack_already_submitted)
+                        btnPublish.isEnabled = false
+                    } else {
+                        btnPublish.setOnClickListener { publishPackToStore(pack) }
+                    }
+                }
+            }
         }
 
         // Her durumda UI'ı WhatsApp senkronizasyonu ile güncelle
@@ -770,74 +782,107 @@ class DetailsActivity : AppCompatActivity() {
         rvRelated.adapter = relatedAdapter
     }
 
-    private fun setupReportButton(pack: Pack) {
-        val btnReport = findViewById<android.widget.TextView>(R.id.btnReportContent) ?: return
-        // Hide report for user's own custom packs
-        if (pack.id.startsWith("custom_")) {
-            btnReport.visibility = View.GONE
+    private fun launchPremiumPurchase() {
+        startActivity(Intent(this, PremiumActivity::class.java))
+    }
+
+    private fun checkIfAlreadySubmitted(packId: String, callback: (Boolean) -> Unit) {
+        val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+        if (user == null) { callback(false); return }
+        val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+        lifecycleScope.launch {
+            try {
+                val existing = withContext(Dispatchers.IO) {
+                    db.collection("user_submissions")
+                        .whereEqualTo("user_id", user.uid)
+                        .whereEqualTo("source_pack_id", packId)
+                        .whereNotEqualTo("status", "rejected")
+                        .get()
+                        .await()
+                }
+                callback(!existing.isEmpty)
+            } catch (_: Exception) {
+                callback(false)
+            }
+        }
+    }
+
+    private fun publishPackToStore(pack: Pack) {
+        val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+        if (user == null) {
+            Toast.makeText(this, getString(R.string.publish_pack_login_required), Toast.LENGTH_SHORT).show()
             return
         }
-        btnReport.visibility = View.VISIBLE
-        btnReport.setOnClickListener {
-            showReportDialog(pack)
+
+        val stickers = pack.stickers
+        if (stickers.size < 3) {
+            Toast.makeText(this, getString(R.string.publish_pack_min_stickers), Toast.LENGTH_SHORT).show()
+            return
         }
-    }
 
-    private fun showReportDialog(pack: Pack) {
-        val reasons = arrayOf(
-            getString(R.string.report_inappropriate),
-            getString(R.string.report_copyright),
-            getString(R.string.report_spam),
-            getString(R.string.report_other)
-        )
-        val reasonKeys = arrayOf("inappropriate", "copyright", "spam", "other")
-        var selectedIndex = -1
+        val btnPublish = findViewById<MaterialButton>(R.id.btnPublishPack) ?: return
+        btnPublish.isEnabled = false
+        btnPublish.text = getString(R.string.publishing)
 
-        AlertDialog.Builder(this)
-            .setTitle(getString(R.string.report_content))
-            .setSingleChoiceItems(reasons, -1) { _, which ->
-                selectedIndex = which
-            }
-            .setPositiveButton(getString(R.string.send)) { dialog, _ ->
-                if (selectedIndex < 0) {
-                    Toast.makeText(this, getString(R.string.report_select_reason), Toast.LENGTH_SHORT).show()
-                    return@setPositiveButton
-                }
-                submitReport(pack, reasonKeys[selectedIndex])
-                dialog.dismiss()
-            }
-            .setNegativeButton(getString(R.string.cancel), null)
-            .show()
-    }
-
-    private fun submitReport(pack: Pack, reason: String) {
-        val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
         val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
-
-        val report = hashMapOf(
-            "pack_id" to pack.id,
-            "pack_name" to pack.localizedName,
-            "reason" to reason,
-            "reporter_uid" to (user?.uid ?: "anonymous"),
-            "reporter_email" to (user?.email ?: ""),
-            "status" to "pending",
-            "created_at" to com.google.firebase.firestore.FieldValue.serverTimestamp()
-        )
+        val storage = com.google.firebase.storage.FirebaseStorage.getInstance()
+        val submissionId = java.util.UUID.randomUUID().toString()
 
         lifecycleScope.launch {
             try {
+                val stickersList = mutableListOf<Map<String, String>>()
+                val basePath = "user_uploads/${user.uid}/$submissionId"
+
+                // Upload local sticker files to Firebase Storage
                 withContext(Dispatchers.IO) {
-                    db.collection("content_reports").add(report).await()
+                    stickers.forEachIndexed { index, sticker ->
+                        val localFile = CustomStickerManager.getCustomStickerPath(this@DetailsActivity, pack.id, sticker.file)
+                        if (localFile.exists()) {
+                            val fileName = "sticker_${index + 1}.webp"
+                            val ref = storage.reference.child("$basePath/$fileName")
+                            ref.putFile(android.net.Uri.fromFile(localFile)).await()
+                            val url = ref.downloadUrl.await().toString()
+                            stickersList.add(mapOf("name" to sticker.file, "image_url" to url))
+                        } else if (sticker.url.isNotEmpty()) {
+                            stickersList.add(mapOf("name" to sticker.file, "image_url" to sticker.url))
+                        }
+                    }
                 }
-                Toast.makeText(this@DetailsActivity, getString(R.string.report_submitted), Toast.LENGTH_SHORT).show()
+
+                if (stickersList.isEmpty()) {
+                    Toast.makeText(this@DetailsActivity, getString(R.string.publish_pack_failed), Toast.LENGTH_SHORT).show()
+                    btnPublish.isEnabled = true
+                    btnPublish.text = getString(R.string.publish_pack)
+                    return@launch
+                }
+
+                val submission = hashMapOf(
+                    "user_id" to user.uid,
+                    "user_email" to (user.email ?: ""),
+                    "display_name" to (user.displayName ?: ""),
+                    "pack_name" to pack.localizedName,
+                    "category" to (pack.category.ifEmpty { "other" }),
+                    "stickers" to stickersList,
+                    "sticker_count" to stickersList.size,
+                    "source_pack_id" to pack.id,
+                    "is_animated" to pack.isAnimated,
+                    "status" to "pending",
+                    "created_at" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                )
+
+                withContext(Dispatchers.IO) {
+                    db.collection("user_submissions").document(submissionId).set(submission).await()
+                }
+
+                Toast.makeText(this@DetailsActivity, getString(R.string.publish_pack_success), Toast.LENGTH_LONG).show()
+                btnPublish.text = getString(R.string.publish_pack_already_submitted)
+
             } catch (e: Exception) {
-                Toast.makeText(this@DetailsActivity, getString(R.string.report_failed), Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@DetailsActivity, getString(R.string.publish_pack_failed), Toast.LENGTH_SHORT).show()
+                btnPublish.isEnabled = true
+                btnPublish.text = getString(R.string.publish_pack)
             }
         }
-    }
-
-    private fun launchPremiumPurchase() {
-        startActivity(Intent(this, PremiumActivity::class.java))
     }
 
     private fun handleButtonClick(pack: Pack) {
