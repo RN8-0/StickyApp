@@ -724,7 +724,7 @@ class DetailsActivity : AppCompatActivity() {
                         btnPublish.text = getString(R.string.publish_pack_already_submitted)
                         btnPublish.isEnabled = false
                     } else {
-                        btnPublish.setOnClickListener { publishPackToStore(pack) }
+                    btnPublish.setOnClickListener { showPublishDialog(pack) }
                     }
                 }
             }
@@ -807,35 +807,95 @@ class DetailsActivity : AppCompatActivity() {
         }
     }
 
-    private fun publishPackToStore(pack: Pack) {
+    private fun showPublishDialog(pack: Pack) {
         val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
         if (user == null) {
             Toast.makeText(this, getString(R.string.publish_pack_login_required), Toast.LENGTH_SHORT).show()
             return
         }
-
-        val stickers = pack.stickers
-        if (stickers.size < 3) {
+        if (pack.stickers.size < 3) {
             Toast.makeText(this, getString(R.string.publish_pack_min_stickers), Toast.LENGTH_SHORT).show()
             return
         }
 
-        val btnPublish = findViewById<MaterialButton>(R.id.btnPublishPack) ?: return
-        btnPublish.isEnabled = false
-        btnPublish.text = getString(R.string.publishing)
+        val dialog = com.google.android.material.bottomsheet.BottomSheetDialog(this, R.style.RoundedBottomSheetDialog)
+        val view = layoutInflater.inflate(R.layout.bottom_sheet_publish, null)
+        dialog.setContentView(view)
 
+        val etPackName     = view.findViewById<com.google.android.material.textfield.TextInputEditText>(R.id.etPackName)
+        val etPublisher    = view.findViewById<com.google.android.material.textfield.TextInputEditText>(R.id.etPublisherName)
+        val etDesc         = view.findViewById<com.google.android.material.textfield.TextInputEditText>(R.id.etDescription)
+        val tilPackName    = view.findViewById<com.google.android.material.textfield.TextInputLayout>(R.id.tilPackName)
+        val tilPublisher   = view.findViewById<com.google.android.material.textfield.TextInputLayout>(R.id.tilPublisherName)
+        val progressSection = view.findViewById<android.view.View>(R.id.progressSection)
+        val tvProgress     = view.findViewById<android.widget.TextView>(R.id.tvProgressLabel)
+        val progressBar    = view.findViewById<android.widget.ProgressBar>(R.id.publishProgressBar)
+        val btnCancel      = view.findViewById<MaterialButton>(R.id.btnCancelPublish)
+        val btnSubmit      = view.findViewById<MaterialButton>(R.id.btnSubmitPublish)
+
+        etPackName.setText(pack.localizedName)
+        etPublisher.setText(user.displayName ?: "")
+
+        btnCancel.setOnClickListener { dialog.dismiss() }
+
+        btnSubmit.setOnClickListener {
+            val packName      = etPackName.text?.toString()?.trim() ?: ""
+            val publisherName = etPublisher.text?.toString()?.trim() ?: ""
+            val description   = etDesc.text?.toString()?.trim() ?: ""
+
+            tilPackName.error  = null
+            tilPublisher.error = null
+
+            if (packName.isEmpty()) {
+                tilPackName.error = getString(R.string.field_required); return@setOnClickListener
+            }
+            if (publisherName.isEmpty()) {
+                tilPublisher.error = getString(R.string.field_required); return@setOnClickListener
+            }
+
+            btnSubmit.isEnabled = false
+            btnCancel.isEnabled = false
+            dialog.setCancelable(false)
+            progressSection.visibility = android.view.View.VISIBLE
+
+            uploadAndSubmitPack(pack, packName, publisherName, description, progressBar, tvProgress) {
+                dialog.dismiss()
+            }
+        }
+
+        dialog.show()
+    }
+
+    private fun uploadAndSubmitPack(
+        pack: Pack,
+        packName: String,
+        publisherName: String,
+        description: String,
+        progressBar: android.widget.ProgressBar,
+        tvProgress: android.widget.TextView,
+        onDone: () -> Unit
+    ) {
+        val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser ?: return
+        val stickers = pack.stickers
         val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
         val storage = com.google.firebase.storage.FirebaseStorage.getInstance()
         val submissionId = java.util.UUID.randomUUID().toString()
+        val btnPublish = findViewById<MaterialButton>(R.id.btnPublishPack)
+        btnPublish?.isEnabled = false
+        btnPublish?.text = getString(R.string.publishing)
 
         lifecycleScope.launch {
             try {
                 val stickersList = mutableListOf<Map<String, String>>()
                 val basePath = "user_uploads/${user.uid}/$submissionId"
+                val total = stickers.size
 
-                // Upload local sticker files to Firebase Storage
                 withContext(Dispatchers.IO) {
                     stickers.forEachIndexed { index, sticker ->
+                        withContext(Dispatchers.Main) {
+                            progressBar.progress = ((index) * 100 / total)
+                            tvProgress.text = getString(R.string.uploading_stickers) + " ${index + 1}/$total"
+                        }
                         val localFile = CustomStickerManager.getCustomStickerPath(this@DetailsActivity, pack.id, sticker.file)
                         if (localFile.exists()) {
                             val fileName = "sticker_${index + 1}.webp"
@@ -849,25 +909,32 @@ class DetailsActivity : AppCompatActivity() {
                     }
                 }
 
+                withContext(Dispatchers.Main) {
+                    progressBar.progress = 100
+                    tvProgress.text = getString(R.string.saving_submission)
+                }
+
                 if (stickersList.isEmpty()) {
                     Toast.makeText(this@DetailsActivity, getString(R.string.publish_pack_failed), Toast.LENGTH_SHORT).show()
-                    btnPublish.isEnabled = true
-                    btnPublish.text = getString(R.string.publish_pack)
+                    btnPublish?.isEnabled = true
+                    btnPublish?.text = getString(R.string.publish_pack)
+                    onDone()
                     return@launch
                 }
 
                 val submission = hashMapOf(
-                    "user_id" to user.uid,
-                    "user_email" to (user.email ?: ""),
-                    "display_name" to (user.displayName ?: ""),
-                    "pack_name" to pack.localizedName,
-                    "category" to (pack.category.ifEmpty { "other" }),
-                    "stickers" to stickersList,
-                    "sticker_count" to stickersList.size,
+                    "user_id"        to user.uid,
+                    "user_email"     to (user.email ?: ""),
+                    "display_name"   to publisherName,
+                    "pack_name"      to packName,
+                    "description"    to description,
+                    "category"       to (pack.category.ifEmpty { "other" }),
+                    "stickers"       to stickersList,
+                    "sticker_count"  to stickersList.size,
                     "source_pack_id" to pack.id,
-                    "is_animated" to pack.isAnimated,
-                    "status" to "pending",
-                    "created_at" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                    "is_animated"    to pack.isAnimated,
+                    "status"         to "pending",
+                    "created_at"     to com.google.firebase.firestore.FieldValue.serverTimestamp()
                 )
 
                 withContext(Dispatchers.IO) {
@@ -875,12 +942,15 @@ class DetailsActivity : AppCompatActivity() {
                 }
 
                 Toast.makeText(this@DetailsActivity, getString(R.string.publish_pack_success), Toast.LENGTH_LONG).show()
-                btnPublish.text = getString(R.string.publish_pack_already_submitted)
+                btnPublish?.text = getString(R.string.publish_pack_already_submitted)
+                onDone()
 
             } catch (e: Exception) {
+                e.printStackTrace()
                 Toast.makeText(this@DetailsActivity, getString(R.string.publish_pack_failed), Toast.LENGTH_SHORT).show()
-                btnPublish.isEnabled = true
-                btnPublish.text = getString(R.string.publish_pack)
+                btnPublish?.isEnabled = true
+                btnPublish?.text = getString(R.string.publish_pack)
+                onDone()
             }
         }
     }

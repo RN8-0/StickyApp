@@ -72,8 +72,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var drawer: DrawerLayout
     private lateinit var rv: RecyclerView
     private lateinit var loadingOverlay: View
-    private lateinit var loadingAnimation: com.airbnb.lottie.LottieAnimationView
-    private lateinit var skeletonContainer: com.facebook.shimmer.ShimmerFrameLayout
+    // skeleton removed
     private lateinit var swipeRefresh: SwipeRefreshLayout
     private lateinit var mainContent: View
     private lateinit var adapter: PackAdapter
@@ -89,7 +88,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnAddStickerHeader: ImageButton
 
     // FAB for My Stickers
-    private var btnCreateFab: com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton? = null
+    private var btnCreateFab: com.google.android.material.floatingactionbutton.FloatingActionButton? = null
 
     // Bottom Nav
     private lateinit var tabExplore: View
@@ -353,31 +352,15 @@ class MainActivity : AppCompatActivity() {
             currentSearchQuery = s.getString("currentSearchQuery", "") ?: ""
         }
 
-        // Initialize views FIRST so we can display cached content immediately
+        // Initialize views FIRST
         initViews()
 
-        // Always show the main screen structure instantly
-        showContent()
-
-        // Load data: memory cache → disk cache → Firebase (in priority order)
+        // If we have cached data, show it immediately; otherwise show loading spinner
         if (StickerRepository.allPacksCache.isNotEmpty()) {
             displayPacks(StickerRepository.allPacksCache)
         } else {
-            // Show skeleton while loading
-            showSkeleton()
-            // Disk cache'i arka planda oku — main thread'i bloklama
-            lifecycleScope.launch {
-                val diskPacks = withContext(Dispatchers.IO) {
-                    StickerRepository.loadCacheFromDisk(this@MainActivity)
-                }
-                if (diskPacks.isNotEmpty() && StickerRepository.allPacksCache.isEmpty()) {
-                    StickerRepository.allPacksCache = diskPacks
-                    displayPacks(diskPacks)
-                } else if (StickerRepository.allPacksCache.isNotEmpty()) {
-                    displayPacks(StickerRepository.allPacksCache)
-                }
-                // If still nothing after disk cache, Firebase will populate it
-            }
+            // Show loading overlay — hidden by showContent() when first data arrives
+            loadingOverlay.visibility = View.VISIBLE
         }
 
         // Show blocking bottom sheet if no internet
@@ -462,8 +445,7 @@ class MainActivity : AppCompatActivity() {
         drawer.setStatusBarBackgroundColor(androidx.core.content.ContextCompat.getColor(this, R.color.toolbar_bg))
         rv = findViewById(R.id.rv)
         loadingOverlay = findViewById(R.id.loadingOverlay)
-        loadingAnimation = findViewById(R.id.loadingAnimation)
-        skeletonContainer = findViewById(R.id.skeletonContainer)
+
         swipeRefresh = findViewById(R.id.swipeRefresh)
         menuBtn = findViewById(R.id.menuBtn)
         toolbarTitle = findViewById(R.id.toolbarTitle)
@@ -1909,68 +1891,95 @@ Rules:
 
     private fun loadUserSubmissions(userId: String, rv: RecyclerView?, emptyState: View?) {
         val db = FirebaseFirestore.getInstance()
-        lifecycleScope.launch {
-            try {
-                val submissions = withContext(Dispatchers.IO) {
-                    db.collection("user_submissions")
-                        .whereEqualTo("user_id", userId)
-                        .get()
-                        .await()
+        // Real-time listener so profile updates instantly when admin approves/rejects
+        db.collection("user_submissions")
+            .whereEqualTo("user_id", userId)
+            .orderBy("created_at", com.google.firebase.firestore.Query.Direction.DESCENDING)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    Log.e("Profile", "Error loading submissions", error)
+                    rv?.visibility = View.GONE
+                    emptyState?.visibility = View.VISIBLE
+                    return@addSnapshotListener
                 }
-
-                if (submissions.isEmpty) {
+                if (snapshot == null || snapshot.isEmpty) {
                     rv?.visibility = View.GONE
                     emptyState?.visibility = View.VISIBLE
                 } else {
                     rv?.visibility = View.VISIBLE
                     emptyState?.visibility = View.GONE
-                    rv?.layoutManager = LinearLayoutManager(this@MainActivity)
-                    rv?.adapter = SubmissionAdapter(submissions.documents.mapNotNull { doc ->
+                    if (rv?.layoutManager == null) rv?.layoutManager = LinearLayoutManager(this@MainActivity)
+                    val items = snapshot.documents.mapNotNull { doc ->
                         val name = doc.getString("pack_name") ?: return@mapNotNull null
                         val status = doc.getString("status") ?: "pending"
                         val stickerCount = (doc.get("stickers") as? List<*>)?.size ?: 0
-                        SubmissionItem(doc.id, name, status, stickerCount)
-                    })
+                        val rejectionReason = doc.getString("rejection_reason")
+                        val createdAt = doc.getTimestamp("created_at")
+                        SubmissionItem(doc.id, name, status, stickerCount, rejectionReason, createdAt)
+                    }
+                    rv?.adapter = SubmissionAdapter(items)
                 }
-            } catch (e: Exception) {
-                Log.e("Profile", "Error loading submissions", e)
-                rv?.visibility = View.GONE
-                emptyState?.visibility = View.VISIBLE
             }
-        }
     }
 
-    private data class SubmissionItem(val id: String, val name: String, val status: String, val stickerCount: Int)
+    private data class SubmissionItem(
+        val id: String,
+        val name: String,
+        val status: String,
+        val stickerCount: Int,
+        val rejectionReason: String?,
+        val createdAt: com.google.firebase.Timestamp?
+    )
 
     private inner class SubmissionAdapter(private val items: List<SubmissionItem>) :
         RecyclerView.Adapter<SubmissionAdapter.VH>() {
 
         inner class VH(view: View) : RecyclerView.ViewHolder(view) {
-            val name: TextView = view.findViewById(android.R.id.text1)
-            val detail: TextView = view.findViewById(android.R.id.text2)
+            val tvName: TextView = view.findViewById(R.id.tvSubmissionName)
+            val tvStatus: TextView = view.findViewById(R.id.tvSubmissionStatus)
+            val tvMeta: TextView = view.findViewById(R.id.tvSubmissionMeta)
+            val rejectionContainer: View = view.findViewById(R.id.rejectionContainer)
+            val tvRejectionReason: TextView = view.findViewById(R.id.tvRejectionReason)
         }
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
             val view = LayoutInflater.from(parent.context)
-                .inflate(android.R.layout.simple_list_item_2, parent, false)
+                .inflate(R.layout.item_submission, parent, false)
             return VH(view)
         }
 
         override fun onBindViewHolder(holder: VH, position: Int) {
             val item = items[position]
-            holder.name.text = item.name
-            holder.name.setTextColor(ContextCompat.getColor(this@MainActivity, R.color.text_primary))
-            val statusEmoji = when (item.status) {
-                "approved" -> "✅"
-                "rejected" -> "❌"
-                else -> "⏳"
+            holder.tvName.text = item.name
+
+            val (statusLabel, statusBg, statusTextColor) = when (item.status) {
+                "approved"   -> Triple(getString(R.string.status_approved),   0x1A2ECC71, 0xFF2ECC71.toInt())
+                "rejected"   -> Triple(getString(R.string.status_rejected),   0x1AE74C3C, 0xFFE74C3C.toInt())
+                "flagged"    -> Triple(getString(R.string.status_flagged),    0x1AE67E22, 0xFFE67E22.toInt())
+                "processing" -> Triple("Processing 🔄",                       0x1A3498DB, 0xFF3498DB.toInt())
+                else         -> Triple(getString(R.string.status_pending),    0x1AF39C12, 0xFFF39C12.toInt())
             }
-            holder.detail.text = "$statusEmoji ${item.status.replaceFirstChar { it.uppercase() }} · ${item.stickerCount} stickers"
-            holder.detail.setTextColor(ContextCompat.getColor(this@MainActivity, R.color.text_secondary))
+            holder.tvStatus.text = statusLabel
+            holder.tvStatus.setBackgroundColor(statusBg)
+            holder.tvStatus.setTextColor(statusTextColor)
+
+            val dateStr = item.createdAt?.let {
+                java.text.SimpleDateFormat("MMM d, yyyy", java.util.Locale.getDefault())
+                    .format(it.toDate())
+            } ?: ""
+            holder.tvMeta.text = "${item.stickerCount} stickers" + if (dateStr.isNotEmpty()) "  ·  $dateStr" else ""
+
+            if (item.status == "rejected" && !item.rejectionReason.isNullOrBlank()) {
+                holder.rejectionContainer.visibility = View.VISIBLE
+                holder.tvRejectionReason.text = item.rejectionReason
+            } else {
+                holder.rejectionContainer.visibility = View.GONE
+            }
         }
 
         override fun getItemCount(): Int = items.size
     }
+
 
     private val profileSignInLauncher = registerForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
@@ -2575,6 +2584,8 @@ Rules:
 
     private fun showNoInternetBottomSheet() {
         if (noInternetDialog?.isShowing == true) return
+        // Make sure content is visible even without internet (empty state shown)
+        showContent()
 
         noInternetDialog = com.google.android.material.bottomsheet.BottomSheetDialog(this, R.style.RoundedBottomSheetDialog).apply {
             setContentView(R.layout.bottom_sheet_no_internet)
@@ -2647,7 +2658,7 @@ Rules:
             try {
                 // 1. Memory cache ANINDA göster
                 if (StickerRepository.allPacksCache.isNotEmpty()) {
-                    if (!contentShown) displayPacks(StickerRepository.allPacksCache)
+                    displayPacks(StickerRepository.allPacksCache)
                 } else {
                     // Disk cache'ten oku (sadece memory boşsa)
                     showSkeleton()
@@ -2677,15 +2688,11 @@ Rules:
     private var contentShown = false
 
     private fun showSkeleton() {
-        if (!::skeletonContainer.isInitialized) return
-        skeletonContainer.visibility = View.VISIBLE
-        skeletonContainer.startShimmer()
+        // skeleton removed — no-op
     }
 
     private fun hideSkeleton() {
-        if (!::skeletonContainer.isInitialized) return
-        skeletonContainer.stopShimmer()
-        skeletonContainer.visibility = View.GONE
+        // skeleton removed — no-op
     }
 
     private fun showContent() {

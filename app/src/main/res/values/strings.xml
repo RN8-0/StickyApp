@@ -753,4 +753,23 @@
     <string name="publish_pack_already_submitted">This pack is already under review.</string>
     <string name="publish_pack_min_stickers">You need at least 3 stickers to publish a pack.</string>
     <string name="publishing">Publishing…</string>
+
+    <!-- Publish Dialog -->
+    <string name="publish_dialog_title">Publish Sticker Pack</string>
+    <string name="publish_dialog_subtitle">Fill in the details below. Your pack will be reviewed before going live.</string>
+    <string name="publish_field_pack_name">Pack Name</string>
+    <string name="publish_field_publisher">Publisher / Creator Name</string>
+    <string name="publish_field_description">Description (optional)</string>
+    <string name="uploading_stickers">Uploading stickers…</string>
+    <string name="saving_submission">Saving submission…</string>
+    <string name="field_required">This field is required.</string>
+
+    <!-- Submission Status (Profile) -->
+    <string name="status_pending">Under Review</string>
+    <string name="status_approved">Published ✅</string>
+    <string name="status_rejected">Rejected ❌</string>
+    <string name="status_flagged">Flagged ⚠️</string>
+    <string name="rejection_reason_label">Rejection Reason</string>
+    <string name="my_published_packs">My Submitted Packs</string>
+    <string name="no_submissions_yet">You haven\'t submitted any packs yet.</string>
 </resources>

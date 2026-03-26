@@ -3,13 +3,23 @@ package com.sticly
 import android.annotation.SuppressLint
 import android.content.Context
 import android.util.AttributeSet
+import android.view.GestureDetector
 import android.view.MotionEvent
 import android.view.ScaleGestureDetector
 import android.widget.FrameLayout
 
 /**
- * FrameLayout that intercepts touch gestures for zoom/pan.
- * Uses pivot at (0,0) and translation to avoid pivot-shift issues.
+ * FrameLayout that intercepts 2-finger pinch/pan for canvas zoom ONLY
+ * when no child (sticker/text/emoji) is actively handling the touch.
+ *
+ * Logic:
+ *  - ACTION_DOWN is never intercepted → children get first shot
+ *  - If a child handles ACTION_DOWN → selfHandledDown = false
+ *    → ACTION_POINTER_DOWN is NOT intercepted → child handles 2-finger resize
+ *  - If no child handles ACTION_DOWN → we get onTouchEvent(ACTION_DOWN), selfHandledDown = true
+ *    → subsequent events (including ACTION_POINTER_DOWN) come to our onTouchEvent
+ *    → ScaleGestureDetector handles canvas zoom
+ *  - Double-tap on empty area → reset zoom
  */
 class ZoomableFrameLayout @JvmOverloads constructor(
     context: Context, attrs: AttributeSet? = null, defStyle: Int = 0
@@ -25,17 +35,18 @@ class ZoomableFrameLayout @JvmOverloads constructor(
     private var lastMidX = 0f
     private var lastMidY = 0f
 
+    // True only if WE handled ACTION_DOWN (no child consumed it → empty area touch)
+    private var selfHandledDown = false
+
     var targetView: android.view.View? = null
     var zoomEnabled = true
-    var interceptAll = false
 
     private val scaleDetector = ScaleGestureDetector(context, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
         override fun onScale(detector: ScaleGestureDetector): Boolean {
             val target = targetView ?: return false
             val oldScale = currentScale
-            currentScale = (currentScale * detector.scaleFactor).coerceIn(1f, 5f)
+            currentScale = (currentScale * detector.scaleFactor).coerceIn(0.3f, 6f)
             val factor = currentScale / oldScale
-            // Zoom around the focus point
             val fx = detector.focusX
             val fy = detector.focusY
             currentTransX = fx - factor * (fx - currentTransX)
@@ -43,9 +54,12 @@ class ZoomableFrameLayout @JvmOverloads constructor(
             applyTransform(target)
             return true
         }
+    })
 
-        override fun onScaleEnd(detector: ScaleGestureDetector) {
-            if (currentScale < 1.05f) resetZoom()
+    private val doubleTapDetector = GestureDetector(context, object : GestureDetector.SimpleOnGestureListener() {
+        override fun onDoubleTap(e: MotionEvent): Boolean {
+            resetZoom()
+            return true
         }
     })
 
@@ -60,25 +74,28 @@ class ZoomableFrameLayout @JvmOverloads constructor(
 
     override fun onInterceptTouchEvent(ev: MotionEvent): Boolean {
         if (!zoomEnabled) return false
-        if (interceptAll) return true
-        if (ev.pointerCount >= 2) {
-            parent?.requestDisallowInterceptTouchEvent(true)
-            return true
+        return when (ev.actionMasked) {
+            // Never intercept first touch — let children (stickers/text) handle it first
+            MotionEvent.ACTION_DOWN -> false
+            // Intercept second finger ONLY if we own the touch sequence (empty area)
+            MotionEvent.ACTION_POINTER_DOWN -> selfHandledDown
+            else -> false
         }
-        return false
     }
 
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(event: MotionEvent): Boolean {
         if (!zoomEnabled) return false
+
         scaleDetector.onTouchEvent(event)
-        val target = targetView ?: return false
+        doubleTapDetector.onTouchEvent(event)
 
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
+                // We only get here if no child handled ACTION_DOWN → empty area
+                selfHandledDown = true
                 lastMidX = event.x
                 lastMidY = event.y
-                parent?.requestDisallowInterceptTouchEvent(true)
                 return true
             }
             MotionEvent.ACTION_POINTER_DOWN -> {
@@ -89,7 +106,8 @@ class ZoomableFrameLayout @JvmOverloads constructor(
                 return true
             }
             MotionEvent.ACTION_MOVE -> {
-                if (event.pointerCount >= 2) {
+                val target = targetView ?: return true
+                if (event.pointerCount >= 2 && !scaleDetector.isInProgress) {
                     val midX = (event.getX(0) + event.getX(1)) / 2f
                     val midY = (event.getY(0) + event.getY(1)) / 2f
                     currentTransX += midX - lastMidX
@@ -97,17 +115,11 @@ class ZoomableFrameLayout @JvmOverloads constructor(
                     applyTransform(target)
                     lastMidX = midX
                     lastMidY = midY
-                } else if (interceptAll) {
-                    currentTransX += event.x - lastMidX
-                    currentTransY += event.y - lastMidY
-                    applyTransform(target)
-                    lastMidX = event.x
-                    lastMidY = event.y
                 }
                 return true
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                parent?.requestDisallowInterceptTouchEvent(false)
+                selfHandledDown = false
                 return true
             }
             MotionEvent.ACTION_POINTER_UP -> {
@@ -122,7 +134,6 @@ class ZoomableFrameLayout @JvmOverloads constructor(
         return false
     }
 
-    /** Map a point from screen/overlay space to the target view's local (unzoomed) space */
     fun screenToLocal(x: Float, y: Float): FloatArray {
         val lx = (x - currentTransX) / currentScale
         val ly = (y - currentTransY) / currentScale

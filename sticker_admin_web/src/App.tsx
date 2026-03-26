@@ -12,7 +12,10 @@ import {
   serverTimestamp,
   onSnapshot,
   getDoc,
-  arrayUnion
+  arrayUnion,
+  increment,
+  where,
+  query
 } from 'firebase/firestore';
 import {
   ref,
@@ -630,7 +633,20 @@ function App() {
         license_agreement_website: '',
         created_at: serverTimestamp(),
       });
-      await updateDoc(doc(db, 'user_submissions', submission.id), { status: 'approved', processed_at: serverTimestamp() });
+      await updateDoc(doc(db, 'user_submissions', submission.id), {
+        status: 'approved',
+        processed_at: serverTimestamp(),
+        rejection_reason: null,
+      });
+      // Update user's published pack counter
+      try {
+        const userQuery = await getDocs(query(collection(db, 'users'), where('uid', '==', submission.user_id)));
+        if (!userQuery.empty) {
+          await updateDoc(userQuery.docs[0].ref, {
+            packs_published: increment(1)
+          });
+        }
+      } catch (_) {}
       alert(`"${submission.pack_name}" approved and published!`);
     } catch (e) {
       console.error("Approve error:", e);
@@ -639,9 +655,18 @@ function App() {
   };
 
   const handleRejectSubmission = async (submission: UserSubmission) => {
-    if (!window.confirm(`Reject "${submission.pack_name}"?`)) return;
+    const reason = window.prompt(
+      `Reject "${submission.pack_name}"?\n\nPlease enter a rejection reason (shown to the user):`,
+      ''
+    );
+    if (reason === null) return; // cancelled
     try {
-      await updateDoc(doc(db, 'user_submissions', submission.id), { status: 'rejected', processed_at: serverTimestamp() });
+      await updateDoc(doc(db, 'user_submissions', submission.id), {
+        status: 'rejected',
+        rejection_reason: reason.trim() || 'Your submission did not meet our content guidelines.',
+        processed_at: serverTimestamp(),
+      });
+      alert(`"${submission.pack_name}" rejected. Reason saved and will be shown to the user.`);
     } catch (e) {
       console.error("Reject error:", e);
       alert("Failed to reject submission.");

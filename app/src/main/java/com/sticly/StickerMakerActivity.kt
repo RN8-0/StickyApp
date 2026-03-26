@@ -9,7 +9,9 @@ import android.graphics.*
 import android.net.Uri
 import android.os.Bundle
 
+import android.view.GestureDetector
 import android.view.LayoutInflater
+import android.view.ScaleGestureDetector
 import android.view.View
 import android.view.MotionEvent
 import android.view.ViewGroup
@@ -66,7 +68,6 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
     private lateinit var eraserOverlay: View
     private lateinit var emptyStatePlaceholder: View
     private lateinit var btnSelectImagePlaceholder: View
-    private lateinit var undoRedoContainer: View
 
     // Top-bar tool buttons
     private lateinit var btnToolCrop: ImageButton
@@ -76,6 +77,7 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
     private lateinit var btnToolBrush: ImageButton
     private lateinit var btnToolEraser: ImageButton
     private lateinit var btnToolBorder: ImageButton
+    private lateinit var btnToolSticker: ImageButton
     private var activeToolButton: ImageButton? = null
 
     // PhotoEditor
@@ -234,7 +236,6 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
         eraserOverlay = findViewById(R.id.eraserOverlay)
         emptyStatePlaceholder = findViewById(R.id.emptyStatePlaceholder)
         btnSelectImagePlaceholder = findViewById(R.id.btnSelectImagePlaceholder)
-        undoRedoContainer = findViewById(R.id.undoRedoContainer)
 
         // Top-bar tool buttons
         btnToolCrop = findViewById(R.id.btnToolCrop)
@@ -244,6 +245,7 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
         btnToolBrush = findViewById(R.id.btnToolBrush)
         btnToolEraser = findViewById(R.id.btnToolEraser)
         btnToolBorder = findViewById(R.id.btnToolBorder)
+        btnToolSticker = findViewById(R.id.btnToolSticker)
 
         // Dark status/nav bars
         window.statusBarColor = Color.parseColor("#1B1B1B")
@@ -264,6 +266,10 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
         photoEditor.setOnPhotoEditorListener(this)
 
         shapeBuilder = ShapeBuilder()
+
+        setupCheckerboard()
+        setupPinchZoom()
+        setActiveToolButton(null)
     }
 
     @SuppressLint("ClickableViewAccessibility")
@@ -378,8 +384,13 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
         )
         for ((button, type) in toolMap) {
             button.setOnClickListener {
+                setActiveToolButton(button)
                 onToolSelected(EditorTool(type, "", 0))
             }
+        }
+        btnToolSticker.setOnClickListener {
+            setActiveToolButton(btnToolSticker)
+            showGiphyStickerPicker()
         }
     }
 
@@ -614,11 +625,9 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
         if (currentBitmap != null) {
             emptyStatePlaceholder.visibility = View.GONE
             photoEditorCard.visibility = View.VISIBLE
-            undoRedoContainer.visibility = View.VISIBLE
         } else {
             emptyStatePlaceholder.visibility = View.VISIBLE
             photoEditorCard.visibility = View.GONE
-            undoRedoContainer.visibility = View.GONE
             toolOptionsPanel.removeAllViews()
             toolOptionsPanel.visibility = View.GONE
         }
@@ -974,159 +983,156 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
 
     // ==================== Text ====================
 
+    private var textEditorOverlay: View? = null
+
+    @SuppressLint("ClickableViewAccessibility")
     private fun showTextDialog() {
-        val dialog = BottomSheetDialog(this, R.style.RoundedBottomSheetDialog)
-        val view = layoutInflater.inflate(R.layout.dialog_add_text, null)
-        dialog.setContentView(view)
+        if (currentBitmap == null) {
+            Toast.makeText(this, getString(R.string.error_select_image_first), Toast.LENGTH_SHORT).show()
+            setActiveToolButton(null)
+            return
+        }
 
-        val inputText = view.findViewById<TextInputEditText>(R.id.etStickerText)
-        val btnAdd = view.findViewById<MaterialButton>(R.id.btnAddText)
-        val tvPreview = view.findViewById<TextView>(R.id.tvTextPreviewInDialog)
-        val fontGrid = view.findViewById<GridLayout>(R.id.fontSelectionLayout)
+        // Add overlay to content view (below status bar) — not decorView
+        val rootView = findViewById<android.widget.FrameLayout>(android.R.id.content)
+        val overlay = layoutInflater.inflate(R.layout.dialog_text_editor_fullscreen, rootView, false)
+        rootView.addView(overlay)
+        textEditorOverlay = overlay
 
-        var selectedColor = Color.WHITE
-        val fixedTextSize = 28f // Fixed size, no slider
-        var selectedColorView: View? = null
-        var selectedFontView: View? = null
+        // Adjust resize so keyboard pushes content up
+        window.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+
+        val etText = overlay.findViewById<android.widget.EditText>(R.id.etTextOverlay)
+        val btnClose = overlay.findViewById<View>(R.id.btnTextClose)
+        val btnDone = overlay.findViewById<View>(R.id.btnTextDone)
+        val colorDots = overlay.findViewById<LinearLayout>(R.id.textColorDots)
+        val fontRow = overlay.findViewById<LinearLayout>(R.id.textFontRow)
+
+        var selectedColor = android.graphics.Color.WHITE
+        var selectedColorDotView: View? = null
         var selectedTypeface: Typeface? = null
+        var selectedFontView: TextView? = null
 
-        // Font list with display names
-        val fonts = listOf(
-            "Default" to Typeface.DEFAULT,
-            "Bold" to Typeface.DEFAULT_BOLD,
-            "Serif" to Typeface.SERIF,
-            "Sans Serif" to Typeface.SANS_SERIF,
-            "Monospace" to Typeface.MONOSPACE,
-            "Serif Bold" to Typeface.create(Typeface.SERIF, Typeface.BOLD),
-            "Sans Bold" to Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD),
-            "Mono Bold" to Typeface.create(Typeface.MONOSPACE, Typeface.BOLD),
-            "Serif Italic" to Typeface.create(Typeface.SERIF, Typeface.ITALIC),
-            "Sans Italic" to Typeface.create(Typeface.SANS_SERIF, Typeface.ITALIC),
-            "Bold Italic" to Typeface.create(Typeface.DEFAULT, Typeface.BOLD_ITALIC),
-            "Serif B.Italic" to Typeface.create(Typeface.SERIF, Typeface.BOLD_ITALIC),
-            "Condensed" to Typeface.create("sans-serif-condensed", Typeface.NORMAL),
-            "Condensed Bold" to Typeface.create("sans-serif-condensed", Typeface.BOLD),
-            "Light" to Typeface.create("sans-serif-light", Typeface.NORMAL),
-            "Thin" to Typeface.create("sans-serif-thin", Typeface.NORMAL),
-            "Medium" to Typeface.create("sans-serif-medium", Typeface.NORMAL),
-            "Black" to Typeface.create("sans-serif-black", Typeface.NORMAL),
-            "Casual" to Typeface.create("casual", Typeface.NORMAL),
-            "Cursive" to Typeface.create("cursive", Typeface.NORMAL),
-            "Serif Medium" to Typeface.create("serif", Typeface.NORMAL),
-            "Small Caps" to Typeface.create("sans-serif-smallcaps", Typeface.NORMAL)
+        fun dismissOverlay() {
+            val imm = getSystemService(android.content.Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
+            imm.hideSoftInputFromWindow(etText.windowToken, 0)
+            rootView.removeView(overlay)
+            textEditorOverlay = null
+            window.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_PAN)
+            setActiveToolButton(null)
+        }
+
+        // Fonts: load from assets for reliable visual distinction
+        fun assetFont(file: String): Typeface = try {
+            Typeface.createFromAsset(assets, "fonts/$file")
+        } catch (e: Exception) { Typeface.DEFAULT }
+
+        val fontList = listOf(
+            "Roboto"     to assetFont("Roboto.ttf"),
+            "Bold"       to assetFont("DroidSansBold.ttf"),
+            "Serif"      to assetFont("DroidSerif.ttf"),
+            "Serif Bold" to assetFont("DroidSerifBold.ttf"),
+            "Serif It."  to assetFont("DroidSerifItalic.ttf"),
+            "Mono"       to assetFont("DroidSansMono.ttf"),
+            "DroidSans"  to assetFont("DroidSans.ttf"),
+            "Light"      to assetFont("RobotoLight.ttf"),
+            "Thin"       to assetFont("RobotoThin.ttf"),
+            "Medium"     to assetFont("RobotoMedium.ttf"),
+            "Condensed"  to Typeface.create("sans-serif-condensed", Typeface.BOLD),
+            "Black"      to Typeface.create("sans-serif-black", Typeface.NORMAL)
         )
+        selectedTypeface = fontList[0].second
 
-        // Setup font grid
-        fontGrid.columnCount = 2
-        fonts.forEachIndexed { index, (name, typeface) ->
-            val fontCard = MaterialCardView(this).apply {
-                layoutParams = GridLayout.LayoutParams().apply {
-                    width = 0
-                    height = GridLayout.LayoutParams.WRAP_CONTENT
-                    columnSpec = GridLayout.spec(GridLayout.UNDEFINED, 1f)
-                    setMargins(4.dpToPx(), 4.dpToPx(), 4.dpToPx(), 4.dpToPx())
-                }
-                radius = 12.dpToPx().toFloat()
-                cardElevation = 2.dpToPx().toFloat()
-                setCardBackgroundColor(ContextCompat.getColor(this@StickerMakerActivity, R.color.card_bg))
-                strokeWidth = if (index == 0) 2.dpToPx() else 0
-                strokeColor = ContextCompat.getColor(this@StickerMakerActivity, R.color.accent)
-
-                val fontTextView = TextView(this@StickerMakerActivity).apply {
-                    text = name
-                    typeface?.let { setTypeface(it) }
-                    textSize = 12f
-                    setTextColor(ContextCompat.getColor(this@StickerMakerActivity, R.color.text_primary))
-                    setPadding(10.dpToPx(), 6.dpToPx(), 10.dpToPx(), 6.dpToPx())
-                    gravity = android.view.Gravity.CENTER
-                }
-                addView(fontTextView)
-
-                setOnClickListener {
-                    selectedFontView?.let { prev ->
-                        (prev as MaterialCardView).strokeWidth = 0
-                    }
-                    strokeWidth = 2.dpToPx()
-                    selectedFontView = this
-                    selectedTypeface = typeface
-                    tvPreview.typeface = typeface
-                }
-
-                if (index == 0) {
-                    selectedFontView = this
-                    selectedTypeface = typeface
-                }
+        fun selectFont(chip: TextView, tf: Typeface) {
+            selectedFontView?.let { prev ->
+                prev.setTextColor(android.graphics.Color.parseColor("#AAAAAA"))
+                prev.setBackgroundResource(R.drawable.bg_style_chip_inactive)
             }
-            fontGrid.addView(fontCard)
+            chip.setTextColor(android.graphics.Color.BLACK)
+            chip.setBackgroundResource(R.drawable.bg_style_chip_active)
+            selectedFontView = chip
+            selectedTypeface = tf
+            etText.typeface = tf
         }
 
-        // Color picker
-        val colors = listOf(Color.WHITE, Color.BLACK, Color.RED, Color.BLUE, Color.GREEN, Color.YELLOW,
-            Color.MAGENTA, Color.CYAN, 0xFFFF5722.toInt(), 0xFF9C27B0.toInt())
-        val colorContainer = view.findViewById<LinearLayout>(R.id.colorSelectionLayout)
-
-        fun updateColorSelection(newSelected: View, color: Int) {
-            selectedColorView?.let { prev ->
-                val prevBg = prev.background as? GradientDrawable
-                prevBg?.setStroke(2.dpToPx(), Color.DKGRAY)
+        fontList.forEachIndexed { index, (name, tf) ->
+            val chip = TextView(this).apply {
+                // Show "Abc" in each font so user can see the difference clearly
+                text = "Abc"
+                textSize = 15f
+                typeface = tf
+                gravity = android.view.Gravity.CENTER
+                setPadding(12.dpToPx(), 6.dpToPx(), 12.dpToPx(), 6.dpToPx())
+                val params = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    36.dpToPx()
+                ).apply { marginEnd = 6.dpToPx() }
+                layoutParams = params
+                contentDescription = name
             }
-            val newBg = newSelected.background as? GradientDrawable
-            newBg?.setStroke(3.dpToPx(), ContextCompat.getColor(this, R.color.accent))
-            selectedColorView = newSelected
-            selectedColor = color
-            tvPreview.setTextColor(color)
+            chip.setOnClickListener { selectFont(chip, tf) }
+            if (index == 0) {
+                chip.setTextColor(android.graphics.Color.BLACK)
+                chip.setBackgroundResource(R.drawable.bg_style_chip_active)
+                selectedFontView = chip
+            } else {
+                chip.setTextColor(android.graphics.Color.parseColor("#CCCCCC"))
+                chip.setBackgroundResource(R.drawable.bg_style_chip_inactive)
+            }
+            fontRow.addView(chip)
         }
 
+        // Color dots
+        val colors = listOf(
+            0xFFFFFFFF.toInt(), 0xFF000000.toInt(), 0xFFFF0000.toInt(),
+            0xFF00C853.toInt(), 0xFF2196F3.toInt(), 0xFFFF9800.toInt(),
+            0xFFE91E63.toInt(), 0xFF9C27B0.toInt(), 0xFFFFEB3B.toInt(),
+            0xFF00BCD4.toInt(), 0xFFFF5722.toInt(), 0xFF607D8B.toInt()
+        )
         colors.forEachIndexed { index, color ->
-            val colorView = View(this).apply {
-                layoutParams = LinearLayout.LayoutParams(32.dpToPx(), 32.dpToPx()).apply {
-                    marginEnd = 6.dpToPx()
-                }
-                val bg = GradientDrawable()
-                bg.shape = GradientDrawable.OVAL
-                bg.setColor(color)
-                if (index == 0) {
-                    bg.setStroke(3.dpToPx(), ContextCompat.getColor(this@StickerMakerActivity, R.color.accent))
-                } else {
-                    bg.setStroke(2.dpToPx(), Color.DKGRAY)
+            val dot = View(this).apply {
+                val dotSize = 34.dpToPx()
+                layoutParams = LinearLayout.LayoutParams(dotSize, dotSize).apply { marginEnd = 8.dpToPx() }
+                val bg = GradientDrawable().apply {
+                    shape = GradientDrawable.OVAL
+                    setColor(color)
+                    if (index == 0) setStroke(3.dpToPx(), Color.parseColor("#6C5CE7"))
                 }
                 background = bg
-                elevation = 4f
                 setOnClickListener {
-                    updateColorSelection(this, color)
+                    selectedColorDotView?.let { prev ->
+                        (prev.background as? GradientDrawable)?.setStroke(0, 0)
+                    }
+                    bg.setStroke(3.dpToPx(), Color.parseColor("#6C5CE7"))
+                    selectedColor = color
+                    selectedColorDotView = this
+                    etText.setTextColor(color)
                 }
             }
-            if (index == 0) {
-                selectedColorView = colorView
-            }
-            colorContainer.addView(colorView)
+            if (index == 0) selectedColorDotView = dot
+            colorDots.addView(dot)
         }
 
-        // Set preview text size to fixed value
-        tvPreview.textSize = fixedTextSize
+        // Show keyboard
+        etText.requestFocus()
+        etText.postDelayed({
+            val imm = getSystemService(android.content.Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
+            imm.showSoftInput(etText, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT)
+        }, 150)
 
-        // Live preview
-        inputText.addTextChangedListener(object : android.text.TextWatcher {
-            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
-                tvPreview.text = s?.toString() ?: "Preview"
-            }
-            override fun afterTextChanged(s: android.text.Editable?) {}
-        })
+        btnClose.setOnClickListener { dismissOverlay() }
 
-        btnAdd.setOnClickListener {
-            val text = inputText.text?.toString() ?: ""
+        btnDone.setOnClickListener {
+            val text = etText.text?.toString()?.trim() ?: ""
             if (text.isNotEmpty()) {
-                val textStyleBuilder = TextStyleBuilder()
-                textStyleBuilder.withTextColor(selectedColor)
-                textStyleBuilder.withTextSize(fixedTextSize)
-                selectedTypeface?.let { textStyleBuilder.withTextFont(it) }
-                photoEditor.addText(text, textStyleBuilder)
-                dialog.dismiss()
+                val tsb = TextStyleBuilder()
+                tsb.withTextColor(selectedColor)
+                tsb.withTextSize(28f)
+                selectedTypeface?.let { tsb.withTextFont(it) }
+                photoEditor.addText(text, tsb)
             }
+            dismissOverlay()
         }
-
-        dialog.show()
     }
 
     // ==================== Emoji ====================
@@ -1219,10 +1225,10 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
             emojis.forEach { emoji ->
                 val emojiView = TextView(this).apply {
                     text = emoji
-                    textSize = 28f
-                    setPadding(12.dpToPx(), 12.dpToPx(), 12.dpToPx(), 12.dpToPx())
+                    textSize = 32f
+                    setPadding(8.dpToPx(), 8.dpToPx(), 8.dpToPx(), 8.dpToPx())
                     gravity = android.view.Gravity.CENTER
-                    background = ContextCompat.getDrawable(this@StickerMakerActivity, R.drawable.bg_emoji_item)
+                    background = null
                     setOnClickListener {
                         photoEditor.addEmoji(emoji)
                         dialog.dismiss()
@@ -1245,16 +1251,16 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
                 text = category
                 textSize = 14f
                 setPadding(16.dpToPx(), 8.dpToPx(), 16.dpToPx(), 8.dpToPx())
-                setTextColor(if (index == 0) ContextCompat.getColor(this@StickerMakerActivity, R.color.white)
-                             else ContextCompat.getColor(this@StickerMakerActivity, R.color.text_secondary))
+                setTextColor(if (index == 0) android.graphics.Color.WHITE
+                             else android.graphics.Color.parseColor("#AAAAAA"))
                 background = if (index == 0) ContextCompat.getDrawable(this@StickerMakerActivity, R.drawable.bg_category_selected)
-                             else ContextCompat.getDrawable(this@StickerMakerActivity, R.drawable.bg_category_unselected)
+                             else null
                 setOnClickListener {
                     selectedTab?.let { prev ->
-                        prev.setTextColor(ContextCompat.getColor(this@StickerMakerActivity, R.color.text_secondary))
-                        prev.background = ContextCompat.getDrawable(this@StickerMakerActivity, R.drawable.bg_category_unselected)
+                        prev.setTextColor(android.graphics.Color.parseColor("#AAAAAA"))
+                        prev.background = null
                     }
-                    setTextColor(ContextCompat.getColor(this@StickerMakerActivity, R.color.white))
+                    setTextColor(android.graphics.Color.WHITE)
                     background = ContextCompat.getDrawable(this@StickerMakerActivity, R.drawable.bg_category_selected)
                     selectedTab = this
                     updateEmojiGrid(emojiCategories[category] ?: emptyList())
@@ -1273,6 +1279,177 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
         // Initialize with first category
         updateEmojiGrid(currentEmojis)
 
+        dialog.show()
+    }
+
+    // ==================== GIPHY Sticker Picker ====================
+
+    private val giphyApiKey = "LLWhfEaYJSNyuhTXUEnSol15YU00raps"
+
+    private fun showGiphyStickerPicker() {
+        if (currentBitmap == null) {
+            Toast.makeText(this, getString(R.string.error_select_image_first), Toast.LENGTH_SHORT).show()
+            setActiveToolButton(null)
+            return
+        }
+        val dialog = BottomSheetDialog(this, R.style.RoundedBottomSheetDialog)
+        val view = layoutInflater.inflate(R.layout.dialog_giphy_sticker, null)
+        dialog.setContentView(view)
+
+        dialog.setOnShowListener {
+            val bs = dialog.findViewById<View>(com.google.android.material.R.id.design_bottom_sheet)
+            bs?.let { sheet ->
+                val behavior = com.google.android.material.bottomsheet.BottomSheetBehavior.from(sheet)
+                behavior.state = com.google.android.material.bottomsheet.BottomSheetBehavior.STATE_EXPANDED
+                behavior.skipCollapsed = true
+            }
+        }
+
+        val rvStickers = view.findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.rvGiphyStickers)
+        val etSearch = view.findViewById<android.widget.EditText>(R.id.etGiphySearch)
+        val categoryTabs = view.findViewById<LinearLayout>(R.id.giphyCategoryTabs)
+        val btnCancel = view.findViewById<View>(R.id.btnGiphyCancel)
+
+        data class GiphyItem(val id: String, val previewUrl: String, val originalUrl: String)
+        val items = mutableListOf<GiphyItem>()
+
+        val adapter = object : androidx.recyclerview.widget.RecyclerView.Adapter<androidx.recyclerview.widget.RecyclerView.ViewHolder>() {
+            override fun onCreateViewHolder(parent: android.view.ViewGroup, viewType: Int): androidx.recyclerview.widget.RecyclerView.ViewHolder {
+                val iv = android.widget.ImageView(this@StickerMakerActivity).apply {
+                    layoutParams = androidx.recyclerview.widget.RecyclerView.LayoutParams(
+                        android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                        (parent.width / 4).coerceAtLeast(80)
+                    )
+                    scaleType = android.widget.ImageView.ScaleType.CENTER_CROP
+                    setPadding(4.dpToPx(), 4.dpToPx(), 4.dpToPx(), 4.dpToPx())
+                }
+                return object : androidx.recyclerview.widget.RecyclerView.ViewHolder(iv) {}
+            }
+            override fun getItemCount() = items.size
+            override fun onBindViewHolder(holder: androidx.recyclerview.widget.RecyclerView.ViewHolder, position: Int) {
+                val item = items[position]
+                val iv = holder.itemView as android.widget.ImageView
+                com.bumptech.glide.Glide.with(this@StickerMakerActivity)
+                    .asGif()
+                    .load(item.previewUrl)
+                    .placeholder(R.drawable.sticker_placeholder)
+                    .into(iv)
+                iv.setOnClickListener {
+                    dialog.dismiss()
+                    lifecycleScope.launch(Dispatchers.IO) {
+                        try {
+                            val url = java.net.URL(item.originalUrl)
+                            val connection = url.openConnection() as java.net.HttpURLConnection
+                            connection.connect()
+                            val input = connection.inputStream
+                            val gifBytes = input.readBytes()
+                            connection.disconnect()
+                            val bmp = android.graphics.BitmapFactory.decodeByteArray(gifBytes, 0, gifBytes.size)
+                                ?: return@launch
+                            val scaled = android.graphics.Bitmap.createScaledBitmap(bmp, 200, 200, true)
+                            withContext(Dispatchers.Main) {
+                                photoEditor.addImage(scaled)
+                            }
+                        } catch (e: Exception) {
+                            withContext(Dispatchers.Main) {
+                                Toast.makeText(this@StickerMakerActivity, "Failed to add sticker", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        rvStickers.layoutManager = androidx.recyclerview.widget.GridLayoutManager(this, 4)
+        rvStickers.adapter = adapter
+
+        fun loadGiphy(query: String) {
+            lifecycleScope.launch(Dispatchers.IO) {
+                try {
+                    val encodedQuery = java.net.URLEncoder.encode(query, "UTF-8")
+                    val url = if (query == "trending") {
+                        "https://api.giphy.com/v1/stickers/trending?api_key=$giphyApiKey&limit=50&rating=g"
+                    } else {
+                        "https://api.giphy.com/v1/stickers/search?api_key=$giphyApiKey&q=$encodedQuery&limit=50&rating=g"
+                    }
+                    val connection = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+                    connection.requestMethod = "GET"
+                    connection.connect()
+                    val response = connection.inputStream.bufferedReader().readText()
+                    connection.disconnect()
+                    val json = org.json.JSONObject(response)
+                    val dataArray = json.getJSONArray("data")
+                    val newItems = mutableListOf<GiphyItem>()
+                    for (i in 0 until dataArray.length()) {
+                        val obj = dataArray.getJSONObject(i)
+                        val id = obj.getString("id")
+                        val images = obj.getJSONObject("images")
+                        val previewUrl = images.getJSONObject("fixed_width_small").getString("url")
+                        val origUrl = images.getJSONObject("original").getString("url")
+                        newItems.add(GiphyItem(id, previewUrl, origUrl))
+                    }
+                    withContext(Dispatchers.Main) {
+                        items.clear()
+                        items.addAll(newItems)
+                        adapter.notifyDataSetChanged()
+                    }
+                } catch (e: Exception) {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(this@StickerMakerActivity, "Error loading stickers", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        }
+
+        val categories = listOf("trending", "effects", "bubble", "love", "funny", "animals", "food")
+        val displayNames = listOf("Trending", "Effects", "Bubble", "Love", "Funny", "Animals", "Food")
+        var selectedTabView: TextView? = null
+
+        categories.forEachIndexed { index, cat ->
+            val tab = TextView(this).apply {
+                text = displayNames[index]
+                textSize = 13f
+                setPadding(14.dpToPx(), 6.dpToPx(), 14.dpToPx(), 6.dpToPx())
+                setTextColor(if (index == 0) android.graphics.Color.WHITE else android.graphics.Color.parseColor("#888888"))
+                if (index == 0) {
+                    background = android.graphics.drawable.GradientDrawable().apply {
+                        shape = android.graphics.drawable.GradientDrawable.RECTANGLE
+                        cornerRadius = 16.dpToPx().toFloat()
+                        setColor(android.graphics.Color.parseColor("#6C5CE7"))
+                    }
+                    selectedTabView = this
+                }
+                val params = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.MATCH_PARENT).apply {
+                    marginEnd = 6.dpToPx()
+                }
+                layoutParams = params
+                setOnClickListener {
+                    selectedTabView?.let { prev ->
+                        prev.setTextColor(android.graphics.Color.parseColor("#888888"))
+                        prev.background = null
+                    }
+                    setTextColor(android.graphics.Color.WHITE)
+                    background = android.graphics.drawable.GradientDrawable().apply {
+                        shape = android.graphics.drawable.GradientDrawable.RECTANGLE
+                        cornerRadius = 16.dpToPx().toFloat()
+                        setColor(android.graphics.Color.parseColor("#6C5CE7"))
+                    }
+                    selectedTabView = this
+                    loadGiphy(cat)
+                }
+            }
+            categoryTabs.addView(tab)
+        }
+
+        etSearch.setOnEditorActionListener { v, _, _ ->
+            val q = v.text.toString().trim()
+            if (q.isNotEmpty()) loadGiphy(q)
+            true
+        }
+
+        btnCancel.setOnClickListener { dialog.dismiss() }
+        dialog.setOnDismissListener { setActiveToolButton(null) }
+
+        loadGiphy("trending")
         dialog.show()
     }
 
@@ -1378,8 +1555,8 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
             override fun onSuccess(imagePath: String) {
                 val bitmap = BitmapFactory.decodeFile(imagePath)
                 runOnUiThread {
-                    // Arka planı geri yükle
-                    photoEditorView.setBackgroundResource(R.drawable.chat_wallpaper_pattern)
+                    // Restore checkerboard background
+                    setupCheckerboard()
                     hideLoading()
                     showPackSelectionDialog(bitmap)
                 }
@@ -1387,8 +1564,8 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
 
             override fun onFailure(exception: Exception) {
                 runOnUiThread {
-                    // Arka planı geri yükle
-                    photoEditorView.setBackgroundResource(R.drawable.chat_wallpaper_pattern)
+                    // Restore checkerboard background
+                    setupCheckerboard()
                     hideLoading()
                     Toast.makeText(this@StickerMakerActivity, getString(R.string.error_save_failed, exception.message), Toast.LENGTH_SHORT).show()
                 }
@@ -1556,49 +1733,37 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
     }
     override fun onAddViewListener(viewType: ViewType?, numberOfAddedViews: Int) {
         updateUndoRedoState()
-        
-        // Add rotation support to text and emoji views
-        if (viewType == ViewType.TEXT || viewType == ViewType.EMOJI) {
-            // Find the last added view (PhotoEditor adds views to a container)
+        if (viewType == ViewType.TEXT || viewType == ViewType.EMOJI || viewType == ViewType.IMAGE) {
             photoEditorView.post {
-                findAndEnhanceLastAddedView()
-            }
-        }
-    }
-    
-    private fun findAndEnhanceLastAddedView() {
-        val drawingView = findDrawingView(photoEditorView)
-        if (drawingView != null && drawingView is ViewGroup) {
-            drawingView.clipChildren = false
-            drawingView.clipToPadding = false
-            
-            val childCount = drawingView.childCount
-            if (childCount > 0) {
-                val lastView = drawingView.getChildAt(childCount - 1)
-                if (lastView is ViewGroup) {
-                    val extraPadding = (60 * resources.displayMetrics.density).toInt()
-                    lastView.setPadding(extraPadding, extraPadding, extraPadding, extraPadding)
-                    lastView.clipChildren = false
-                    lastView.clipToPadding = false
-                }
+                expandStickerTouchArea()
             }
         }
     }
 
-    private fun findDrawingView(parent: View): View? {
-        if (parent is ViewGroup) {
-            for (i in 0 until parent.childCount) {
-                val child = parent.getChildAt(i)
-                if (child.javaClass.simpleName.contains("Drawing") || 
-                    child.javaClass.simpleName.contains("drawing")) {
-                    return child
-                }
-                val result = findDrawingView(child)
-                if (result != null) return result
-            }
+    /**
+     * PhotoEditor adds sticker/text/emoji views as direct children of photoEditorView
+     * (a RelativeLayout). Built-in children are DrawingView, ImageFilterView, FilterImageView.
+     * We find the last non-built-in child and expand its touch area with padding + transparent bg.
+     */
+    private fun expandStickerTouchArea() {
+        val builtinNames = setOf("DrawingView", "FilterImageView", "ImageFilterView", "ImageView")
+        val extraPad = (80 * resources.displayMetrics.density).toInt()
+
+        for (i in photoEditorView.childCount - 1 downTo 0) {
+            val child = photoEditorView.getChildAt(i) as? ViewGroup ?: continue
+            val name = child.javaClass.simpleName
+            if (builtinNames.any { name.contains(it) }) continue
+
+            // This is a sticker container. Expand its touch area.
+            child.setPadding(extraPad, extraPad, extraPad, extraPad)
+            child.clipChildren = false
+            child.clipToPadding = false
+            // Non-null transparent background ensures touch events register in padded area
+            child.setBackgroundColor(android.graphics.Color.TRANSPARENT)
+            break
         }
-        return null
     }
+
 
     private fun showEditTextDialog(textView: View, currentText: String, currentColor: Int) {
         val dialog = BottomSheetDialog(this, R.style.RoundedBottomSheetDialog)
@@ -1866,17 +2031,63 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
     // ==================== Tool Highlight ====================
 
     private fun updateToolHighlight() {
-        val allButtons = listOf(btnToolCrop, btnToolRemoveBg, btnToolEmoji,
-            btnToolText, btnToolBrush, btnToolEraser, btnToolBorder)
-        val white = ColorStateList.valueOf(Color.WHITE)
-        val accent = ColorStateList.valueOf(ContextCompat.getColor(this, R.color.modern_primary))
-        for (btn in allButtons) {
-            btn.imageTintList = white
-        }
         when {
-            isBrushModeActive && !isEraserMode -> btnToolBrush.imageTintList = accent
-            isEraserMode -> btnToolEraser.imageTintList = accent
+            isBrushModeActive && !isEraserMode -> setActiveToolButton(btnToolBrush)
+            isEraserMode -> setActiveToolButton(btnToolEraser)
+            else -> { /* keep current active button as-is */ }
         }
+    }
+
+    private fun setActiveToolButton(active: ImageButton?) {
+        val allButtons = listOf(btnToolRemoveBg, btnToolCrop, btnToolBrush, btnToolEraser, btnToolText, btnToolEmoji, btnToolBorder, btnToolSticker)
+        val activeColor = ContextCompat.getColor(this, R.color.modern_primary)
+        val inactiveColor = Color.parseColor("#AAAAAA")
+        for (btn in allButtons) {
+            val isActive = btn == active
+            btn.imageTintList = ColorStateList.valueOf(if (isActive) activeColor else inactiveColor)
+            val parent = btn.parent as? ViewGroup
+            parent?.let {
+                for (i in 0 until it.childCount) {
+                    val child = it.getChildAt(i)
+                    if (child is TextView) {
+                        child.setTextColor(if (isActive) activeColor else inactiveColor)
+                    }
+                }
+            }
+        }
+        activeToolButton = active
+    }
+
+    @SuppressLint("ClickableViewAccessibility")
+    private fun setupPinchZoom() {
+        val zoomLayout = findViewById<ZoomableFrameLayout>(R.id.canvasContainer) ?: return
+        val photoCard = findViewById<View>(R.id.photoEditorCard) ?: return
+        zoomLayout.targetView = photoCard
+        zoomLayout.zoomEnabled = true
+    }
+
+    private fun setupCheckerboard() {
+        val size = 24
+        val px = (size * resources.displayMetrics.density).toInt()
+        val bitmap = Bitmap.createBitmap(px * 2, px * 2, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        val paint1 = Paint().apply { color = Color.parseColor("#3A3A3A") }
+        val paint2 = Paint().apply { color = Color.parseColor("#2A2A2A") }
+        canvas.drawRect(0f, 0f, px.toFloat(), px.toFloat(), paint1)
+        canvas.drawRect(px.toFloat(), 0f, (px * 2).toFloat(), px.toFloat(), paint2)
+        canvas.drawRect(0f, px.toFloat(), px.toFloat(), (px * 2).toFloat(), paint2)
+        canvas.drawRect(px.toFloat(), px.toFloat(), (px * 2).toFloat(), (px * 2).toFloat(), paint1)
+        @Suppress("DEPRECATION")
+        val bitmapDrawable = android.graphics.drawable.BitmapDrawable(resources, bitmap).apply {
+            tileModeX = android.graphics.Shader.TileMode.REPEAT
+            tileModeY = android.graphics.Shader.TileMode.REPEAT
+        }
+        // Only set checkerboard on the FIXED canvasContainer background.
+        // photoEditorView stays transparent so its transparent pixels show through
+        // to this fixed checkerboard — image floats over the grid, grid never moves.
+        photoEditorView.setBackgroundColor(Color.TRANSPARENT)
+        @Suppress("DEPRECATION")
+        findViewById<ZoomableFrameLayout>(R.id.canvasContainer)?.setBackgroundDrawable(bitmapDrawable)
     }
 
     private fun showTypeSelectionDialog() {
