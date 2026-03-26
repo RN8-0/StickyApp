@@ -363,23 +363,7 @@
                         android:textAlignment="center"
                         android:lineSpacingExtra="4dp" />
 
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btnCreateFirstSticker"
-                        android:layout_width="wrap_content"
-                        android:layout_height="48dp"
-                        android:layout_marginTop="24dp"
-                        android:paddingHorizontal="32dp"
-                        android:text="@string/create_sticker_option"
-                        android:textSize="13sp"
-                        android:textStyle="bold"
-                        android:textAllCaps="false"
-                        app:icon="@drawable/ic_add"
-                        app:iconGravity="textStart"
-                        app:iconPadding="8dp"
-                        app:cornerRadius="24dp"
-                        app:backgroundTint="@color/accent"
-                        android:textColor="@color/white"
-                        app:elevation="4dp" />
+                    <!-- Make Sticker button removed — use the FAB (+) at bottom-right -->
 
                 </LinearLayout>
 

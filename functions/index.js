@@ -391,7 +391,8 @@ exports.onUserSubmission = onDocumentCreated('user_submissions/{submissionId}', 
       await snap.ref.update({ 
         status: 'approved', 
         approved_at: admin.firestore.FieldValue.serverTimestamp(),
-        auto_approved: true
+        auto_approved: true,
+        sticker_pack_id: submissionId,
       });
       
       // Update user profile stats

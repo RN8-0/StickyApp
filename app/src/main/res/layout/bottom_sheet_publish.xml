@@ -75,14 +75,13 @@
             android:maxLength="40" />
     </com.google.android.material.textfield.TextInputLayout>
 
-    <!-- Description -->
     <com.google.android.material.textfield.TextInputLayout
         android:id="@+id/tilDescription"
         style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:hint="@string/publish_field_description"
-        android:layout_marginBottom="20dp"
+        android:layout_marginBottom="14dp"
         app:boxCornerRadiusBottomEnd="12dp"
         app:boxCornerRadiusBottomStart="12dp"
         app:boxCornerRadiusTopEnd="12dp"
@@ -96,6 +95,28 @@
             android:minLines="2"
             android:maxLines="4"
             android:maxLength="200" />
+    </com.google.android.material.textfield.TextInputLayout>
+
+    <!-- Category -->
+    <com.google.android.material.textfield.TextInputLayout
+        android:id="@+id/tilCategory"
+        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="@string/publish_field_category"
+        android:layout_marginBottom="20dp"
+        app:boxCornerRadiusBottomEnd="12dp"
+        app:boxCornerRadiusBottomStart="12dp"
+        app:boxCornerRadiusTopEnd="12dp"
+        app:boxCornerRadiusTopStart="12dp">
+
+        <AutoCompleteTextView
+            android:id="@+id/spinnerCategory"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:inputType="none"
+            android:text="General"
+            android:focusable="false" />
     </com.google.android.material.textfield.TextInputLayout>
 
     <!-- Upload Progress Section (hidden initially) -->

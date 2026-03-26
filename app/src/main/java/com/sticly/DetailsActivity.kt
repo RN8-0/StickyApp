@@ -822,16 +822,22 @@ class DetailsActivity : AppCompatActivity() {
         val view = layoutInflater.inflate(R.layout.bottom_sheet_publish, null)
         dialog.setContentView(view)
 
-        val etPackName     = view.findViewById<com.google.android.material.textfield.TextInputEditText>(R.id.etPackName)
-        val etPublisher    = view.findViewById<com.google.android.material.textfield.TextInputEditText>(R.id.etPublisherName)
-        val etDesc         = view.findViewById<com.google.android.material.textfield.TextInputEditText>(R.id.etDescription)
-        val tilPackName    = view.findViewById<com.google.android.material.textfield.TextInputLayout>(R.id.tilPackName)
-        val tilPublisher   = view.findViewById<com.google.android.material.textfield.TextInputLayout>(R.id.tilPublisherName)
+        val etPackName      = view.findViewById<com.google.android.material.textfield.TextInputEditText>(R.id.etPackName)
+        val etPublisher     = view.findViewById<com.google.android.material.textfield.TextInputEditText>(R.id.etPublisherName)
+        val etDesc          = view.findViewById<com.google.android.material.textfield.TextInputEditText>(R.id.etDescription)
+        val spinnerCategory = view.findViewById<android.widget.AutoCompleteTextView>(R.id.spinnerCategory)
+        val tilPackName     = view.findViewById<com.google.android.material.textfield.TextInputLayout>(R.id.tilPackName)
+        val tilPublisher    = view.findViewById<com.google.android.material.textfield.TextInputLayout>(R.id.tilPublisherName)
         val progressSection = view.findViewById<android.view.View>(R.id.progressSection)
-        val tvProgress     = view.findViewById<android.widget.TextView>(R.id.tvProgressLabel)
-        val progressBar    = view.findViewById<android.widget.ProgressBar>(R.id.publishProgressBar)
-        val btnCancel      = view.findViewById<MaterialButton>(R.id.btnCancelPublish)
-        val btnSubmit      = view.findViewById<MaterialButton>(R.id.btnSubmitPublish)
+        val tvProgress      = view.findViewById<android.widget.TextView>(R.id.tvProgressLabel)
+        val progressBar     = view.findViewById<android.widget.ProgressBar>(R.id.publishProgressBar)
+        val btnCancel       = view.findViewById<MaterialButton>(R.id.btnCancelPublish)
+        val btnSubmit       = view.findViewById<MaterialButton>(R.id.btnSubmitPublish)
+
+        val categories = listOf("General", "Animals", "Memes", "Emotions", "Sports", "Love", "Food", "Nature", "Art", "Pop Culture", "Games", "Music", "Travel", "Holidays", "Other")
+        val catAdapter = android.widget.ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, categories)
+        spinnerCategory.setAdapter(catAdapter)
+        spinnerCategory.setText("General", false)
 
         etPackName.setText(pack.localizedName)
         etPublisher.setText(user.displayName ?: "")
@@ -842,6 +848,7 @@ class DetailsActivity : AppCompatActivity() {
             val packName      = etPackName.text?.toString()?.trim() ?: ""
             val publisherName = etPublisher.text?.toString()?.trim() ?: ""
             val description   = etDesc.text?.toString()?.trim() ?: ""
+            val category      = spinnerCategory.text?.toString()?.trim()?.lowercase() ?: "general"
 
             tilPackName.error  = null
             tilPublisher.error = null
@@ -858,7 +865,7 @@ class DetailsActivity : AppCompatActivity() {
             dialog.setCancelable(false)
             progressSection.visibility = android.view.View.VISIBLE
 
-            uploadAndSubmitPack(pack, packName, publisherName, description, progressBar, tvProgress) {
+            uploadAndSubmitPack(pack, packName, publisherName, description, category, progressBar, tvProgress) {
                 dialog.dismiss()
             }
         }
@@ -871,6 +878,7 @@ class DetailsActivity : AppCompatActivity() {
         packName: String,
         publisherName: String,
         description: String,
+        category: String,
         progressBar: android.widget.ProgressBar,
         tvProgress: android.widget.TextView,
         onDone: () -> Unit
@@ -926,9 +934,10 @@ class DetailsActivity : AppCompatActivity() {
                     "user_id"        to user.uid,
                     "user_email"     to (user.email ?: ""),
                     "display_name"   to publisherName,
+                    "publisher_name" to publisherName,
                     "pack_name"      to packName,
                     "description"    to description,
-                    "category"       to (pack.category.ifEmpty { "other" }),
+                    "category"       to category.ifEmpty { "general" },
                     "stickers"       to stickersList,
                     "sticker_count"  to stickersList.size,
                     "source_pack_id" to pack.id,

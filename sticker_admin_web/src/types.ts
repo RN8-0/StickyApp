@@ -120,6 +120,7 @@ export interface UserSubmission {
     flag_reasons?: string[];
     rejection_reason?: string;
     sticker_count?: number;
+    sticker_pack_id?: string;
     created_at: any;
     processed_at?: any;
     approved_at?: any;

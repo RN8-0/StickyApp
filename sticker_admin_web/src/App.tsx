@@ -15,7 +15,8 @@ import {
   arrayUnion,
   increment,
   where,
-  query
+  query,
+  addDoc
 } from 'firebase/firestore';
 import {
   ref,
@@ -634,6 +635,7 @@ function App() {
         status: 'approved',
         processed_at: serverTimestamp(),
         rejection_reason: null,
+        sticker_pack_id: packId,
       });
       // Update user's published pack counter
       try {
@@ -671,12 +673,42 @@ function App() {
   };
 
   const handleDeleteSubmission = async (submission: UserSubmission) => {
-    if (!window.confirm(`Permanently delete "${submission.pack_name}"? This cannot be undone.`)) return;
+    const msg = submission.status === 'approved'
+      ? `Permanently delete "${submission.pack_name}"? This will also remove it from the public sticker store.`
+      : `Permanently delete "${submission.pack_name}"? This cannot be undone.`;
+    if (!window.confirm(msg)) return;
     try {
       await deleteDoc(doc(db, 'user_submissions', submission.id));
+      // Cascade: remove from public stickers collection if approved
+      if (submission.status === 'approved' && submission.sticker_pack_id) {
+        await deleteDoc(doc(db, 'stickers', submission.sticker_pack_id)).catch(() => {});
+      }
     } catch (e) {
       console.error("Delete submission error:", e);
       alert("Failed to delete submission.");
+    }
+  };
+
+  const handleSendFeedback = async (submission: UserSubmission) => {
+    const message = window.prompt(
+      `Send a message to ${submission.display_name || submission.user_email} about "${submission.pack_name}":`,
+      ''
+    );
+    if (!message || !message.trim()) return;
+    try {
+      const notifRef = collection(db, 'user_notifications', submission.user_id, 'notifications');
+      await addDoc(notifRef, {
+        title: `Regarding your pack: ${submission.pack_name}`,
+        message: message.trim(),
+        pack_id: submission.id,
+        from: 'admin',
+        read: false,
+        created_at: serverTimestamp(),
+      });
+      alert("Message sent to user.");
+    } catch (e) {
+      console.error("Send feedback error:", e);
+      alert("Failed to send message.");
     }
   };
 
@@ -4910,6 +4942,12 @@ function App() {
                           className="flex items-center gap-1.5 px-3 py-1.5 bg-white/5 hover:bg-red-500/15 text-textSec hover:text-red-400 rounded-lg text-[11px] font-bold transition-all border border-white/5"
                         >
                           <Trash2 size={12} /> Delete
+                        </button>
+                        <button
+                          onClick={() => handleSendFeedback(sub)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 rounded-lg text-[11px] font-bold transition-all border border-blue-500/20"
+                        >
+                          <MessageSquare size={12} /> Message
                         </button>
                       </div>
                     </div>

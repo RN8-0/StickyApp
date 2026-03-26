@@ -46,6 +46,31 @@
         android:textColor="@color/text_secondary"
         android:layout_marginTop="4dp" />
 
+    <!-- Sticker image preview row -->
+    <HorizontalScrollView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:scrollbars="none">
+
+        <android.widget.LinearLayout
+            android:id="@+id/stickerPreviewRow"
+            android:layout_width="wrap_content"
+            android:layout_height="48dp"
+            android:orientation="horizontal" />
+
+    </HorizontalScrollView>
+
+    <!-- Analytics (downloads + favorites) for approved packs -->
+    <TextView
+        android:id="@+id/tvAnalytics"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textSize="11sp"
+        android:textColor="@color/text_secondary"
+        android:layout_marginTop="6dp"
+        android:visibility="gone" />
+
     <!-- Rejection reason (hidden when not rejected) -->
     <LinearLayout
         android:id="@+id/rejectionContainer"

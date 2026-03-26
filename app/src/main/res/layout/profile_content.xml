@@ -192,6 +192,33 @@
             android:textColor="@color/text_primary"
             android:fontFamily="sans-serif-medium" />
 
+        <!-- Admin Messages Section -->
+        <LinearLayout
+            android:id="@+id/adminMessagesContainer"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone"
+            android:paddingHorizontal="12dp"
+            android:paddingBottom="8dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="📬 Messages from Admin"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:textColor="@color/text_secondary"
+                android:paddingBottom="6dp" />
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/rvAdminMessages"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:nestedScrollingEnabled="false" />
+
+        </LinearLayout>
+
         <!-- Published Packs RecyclerView -->
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/rvPublishedPacks"

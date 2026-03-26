@@ -760,6 +760,7 @@
     <string name="publish_field_pack_name">Pack Name</string>
     <string name="publish_field_publisher">Publisher / Creator Name</string>
     <string name="publish_field_description">Description (optional)</string>
+    <string name="publish_field_category">Category</string>
     <string name="uploading_stickers">Uploading stickers…</string>
     <string name="saving_submission">Saving submission…</string>
     <string name="field_required">This field is required.</string>

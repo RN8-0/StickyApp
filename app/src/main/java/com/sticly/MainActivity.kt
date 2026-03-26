@@ -82,7 +82,7 @@ class MainActivity : AppCompatActivity() {
 
     // Empty State
     private lateinit var emptyStateView: View
-    private lateinit var btnCreateFirstSticker: View
+    // btnCreateFirstSticker removed from layout — FAB (+) is used instead
 
     // Header Add Button
     private lateinit var btnAddStickerHeader: ImageButton
@@ -459,7 +459,7 @@ class MainActivity : AppCompatActivity() {
         mainContent = findViewById(R.id.mainContent)
         emptyStateView = findViewById(R.id.emptyStateView)
         aiContentContainer = findViewById(R.id.aiContentContainer) // null until ViewStub inflated
-        btnCreateFirstSticker = findViewById(R.id.btnCreateFirstSticker)
+        // btnCreateFirstSticker removed from layout
         btnAddStickerHeader = findViewById(R.id.btnAddStickerHeader)
         btnAddStickerHeader.visibility = View.GONE // hidden; FAB is used instead on My Stickers
 
@@ -538,9 +538,7 @@ class MainActivity : AppCompatActivity() {
             overridePendingTransition(R.anim.fade_in, R.anim.fade_out)
         }
 
-        btnCreateFirstSticker.setOnClickListener {
-            showStickerTypeChooser()
-        }
+        // btnCreateFirstSticker removed — FAB handles this action
     }
 
     private fun saveExploreState() {
@@ -1882,6 +1880,8 @@ Rules:
 
                 // Load user's submitted packs
                 loadUserSubmissions(user.uid, rvPublished, emptyState)
+                // Load admin messages
+                loadAdminNotifications(user.uid)
 
             } catch (e: Exception) {
                 Log.e("Profile", "Error loading profile", e)
@@ -1914,7 +1914,12 @@ Rules:
                         val stickerCount = (doc.get("stickers") as? List<*>)?.size ?: 0
                         val rejectionReason = doc.getString("rejection_reason")
                         val createdAt = doc.getTimestamp("created_at")
-                        SubmissionItem(doc.id, name, status, stickerCount, rejectionReason, createdAt)
+                        val storePackId = doc.getString("sticker_pack_id")
+                        @Suppress("UNCHECKED_CAST")
+                        val stickerUrls = (doc.get("stickers") as? List<Map<String, Any>>)
+                            ?.mapNotNull { it["image_url"] as? String }
+                            ?.take(6) ?: emptyList()
+                        SubmissionItem(doc.id, name, status, stickerCount, rejectionReason, createdAt, stickerUrls, storePackId)
                     }.sortedByDescending { it.createdAt?.toDate() }
                     rv?.adapter = SubmissionAdapter(items)
 
@@ -1927,13 +1932,55 @@ Rules:
             }
     }
 
+    private fun loadAdminNotifications(userId: String) {
+        val db = FirebaseFirestore.getInstance()
+        val container = profileContentContainer?.rootView?.findViewById<android.widget.LinearLayout>(R.id.adminMessagesContainer)
+        val rv = profileContentContainer?.rootView?.findViewById<RecyclerView>(R.id.rvAdminMessages)
+        if (container == null || rv == null) return
+
+        db.collection("user_notifications").document(userId).collection("notifications")
+            .addSnapshotListener { snapshot, _ ->
+                if (snapshot == null || snapshot.isEmpty) {
+                    container?.visibility = View.GONE
+                    return@addSnapshotListener
+                }
+                val msgs = snapshot.documents.mapNotNull { doc ->
+                    val title = doc.getString("title") ?: return@mapNotNull null
+                    val body  = doc.getString("message") ?: ""
+                    val ts    = doc.getTimestamp("created_at")
+                    Triple(title, body, ts)
+                }.sortedByDescending { it.third?.toDate() }
+
+                if (msgs.isEmpty()) { container?.visibility = View.GONE; return@addSnapshotListener }
+                container?.visibility = View.VISIBLE
+                if (rv?.layoutManager == null) rv?.layoutManager = LinearLayoutManager(this@MainActivity)
+                rv?.adapter = object : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
+                    override fun getItemCount() = msgs.size
+                    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int) =
+                        object : RecyclerView.ViewHolder(LayoutInflater.from(parent.context)
+                            .inflate(R.layout.item_admin_message, parent, false)) {}
+                    override fun onBindViewHolder(holder: RecyclerView.ViewHolder, pos: Int) {
+                        val (title, body, ts) = msgs[pos]
+                        holder.itemView.findViewById<TextView>(R.id.tvMsgTitle).text = title
+                        holder.itemView.findViewById<TextView>(R.id.tvMsgBody).text = body
+                        val dateStr = ts?.let { java.text.SimpleDateFormat("MMM d, yyyy", java.util.Locale.getDefault()).format(it.toDate()) } ?: ""
+                        holder.itemView.findViewById<TextView>(R.id.tvMsgDate).text = dateStr
+                    }
+                }
+            }
+    }
+
     private data class SubmissionItem(
         val id: String,
         val name: String,
         val status: String,
         val stickerCount: Int,
         val rejectionReason: String?,
-        val createdAt: com.google.firebase.Timestamp?
+        val createdAt: com.google.firebase.Timestamp?,
+        val stickerUrls: List<String> = emptyList(),
+        val storePackId: String? = null,
+        val downloadCount: Int = 0,
+        val favoriteCount: Int = 0
     )
 
     private inner class SubmissionAdapter(private val items: List<SubmissionItem>) :
@@ -1946,6 +1993,8 @@ Rules:
             val rejectionContainer: View = view.findViewById(R.id.rejectionContainer)
             val tvRejectionReason: TextView = view.findViewById(R.id.tvRejectionReason)
             val btnDelete: com.google.android.material.button.MaterialButton = view.findViewById(R.id.btnDeleteSubmission)
+            val stickerPreviewRow: android.widget.LinearLayout = view.findViewById(R.id.stickerPreviewRow)
+            val tvAnalytics: TextView = view.findViewById(R.id.tvAnalytics)
         }
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
@@ -1975,6 +2024,7 @@ Rules:
             } ?: ""
             holder.tvMeta.text = "${item.stickerCount} stickers" + if (dateStr.isNotEmpty()) "  ·  $dateStr" else ""
 
+            // Rejection reason
             if (item.status == "rejected" && !item.rejectionReason.isNullOrBlank()) {
                 holder.rejectionContainer.visibility = View.VISIBLE
                 holder.tvRejectionReason.text = item.rejectionReason
@@ -1982,30 +2032,62 @@ Rules:
                 holder.rejectionContainer.visibility = View.GONE
             }
 
-            // Show delete button for rejected or flagged packs
-            if (item.status == "rejected" || item.status == "flagged") {
-                holder.btnDelete.visibility = View.VISIBLE
-                holder.btnDelete.setOnClickListener {
-                    android.app.AlertDialog.Builder(this@MainActivity)
-                        .setTitle("Delete Submission")
-                        .setMessage("Delete \"${item.name}\"? This cannot be undone.")
-                        .setPositiveButton("Delete") { _, _ ->
-                            FirebaseFirestore.getInstance()
-                                .collection("user_submissions")
-                                .document(item.id)
-                                .delete()
-                                .addOnSuccessListener {
-                                    Toast.makeText(this@MainActivity, "Submission deleted", Toast.LENGTH_SHORT).show()
-                                }
-                                .addOnFailureListener {
-                                    Toast.makeText(this@MainActivity, "Delete failed", Toast.LENGTH_SHORT).show()
-                                }
-                        }
-                        .setNegativeButton("Cancel", null)
-                        .show()
+            // Sticker image preview (up to 6 thumbnails)
+            holder.stickerPreviewRow.removeAllViews()
+            if (item.stickerUrls.isNotEmpty()) {
+                holder.stickerPreviewRow.visibility = View.VISIBLE
+                val dp48 = (48 * resources.displayMetrics.density).toInt()
+                val dp6  = (6  * resources.displayMetrics.density).toInt()
+                item.stickerUrls.forEach { url ->
+                    val img = android.widget.ImageView(this@MainActivity).apply {
+                        layoutParams = android.widget.LinearLayout.LayoutParams(dp48, dp48).apply { marginEnd = dp6 }
+                        scaleType = android.widget.ImageView.ScaleType.CENTER_CROP
+                        background = androidx.core.content.ContextCompat.getDrawable(this@MainActivity, R.drawable.bg_category_unselected)
+                        clipToOutline = true
+                    }
+                    com.bumptech.glide.Glide.with(this@MainActivity).load(url).centerCrop().into(img)
+                    holder.stickerPreviewRow.addView(img)
                 }
             } else {
-                holder.btnDelete.visibility = View.GONE
+                holder.stickerPreviewRow.visibility = View.GONE
+            }
+
+            // Analytics (downloads / favorites) for approved packs
+            if (item.status == "approved" && item.storePackId != null) {
+                holder.tvAnalytics.visibility = View.VISIBLE
+                FirebaseFirestore.getInstance().collection("stickers").document(item.storePackId)
+                    .get()
+                    .addOnSuccessListener { doc ->
+                        val dl  = doc.getLong("download_count") ?: 0L
+                        val fav = doc.getLong("favorite_count") ?: 0L
+                        holder.tvAnalytics.text = "📥 ${dl}  ❤️ ${fav}"
+                    }
+                    .addOnFailureListener { holder.tvAnalytics.visibility = View.GONE }
+            } else {
+                holder.tvAnalytics.visibility = View.GONE
+            }
+
+            // Delete button for ALL statuses
+            holder.btnDelete.visibility = View.VISIBLE
+            holder.btnDelete.setOnClickListener {
+                val msg = if (item.status == "approved")
+                    "Delete \"${item.name}\"? This will also remove it from the public sticker store."
+                else
+                    "Delete \"${item.name}\"? This cannot be undone."
+                android.app.AlertDialog.Builder(this@MainActivity)
+                    .setTitle("Delete Submission")
+                    .setMessage(msg)
+                    .setPositiveButton("Delete") { _, _ ->
+                        val db = FirebaseFirestore.getInstance()
+                        db.collection("user_submissions").document(item.id).delete()
+                        // If approved, also remove from public stickers collection
+                        if (item.status == "approved" && item.storePackId != null) {
+                            db.collection("stickers").document(item.storePackId).delete()
+                        }
+                        Toast.makeText(this@MainActivity, "Submission deleted", Toast.LENGTH_SHORT).show()
+                    }
+                    .setNegativeButton("Cancel", null)
+                    .show()
             }
         }
 
@@ -2139,7 +2221,8 @@ Rules:
             .sortedByDescending { parseDateCached(it.createdAt) }
             .take(20)
 
-        if (recentPacks.isNotEmpty() && (currentFilter == FilterType.ALL || currentFilter == FilterType.PREMIUM)) {
+        if (recentPacks.isNotEmpty() && (currentFilter == FilterType.ALL || currentFilter == FilterType.PREMIUM)
+            && currentSearchQuery.isEmpty()) {
             storyContainer.visibility = View.VISIBLE
             storyAdapter?.updateData(recentPacks)
         } else {
@@ -2456,9 +2539,14 @@ Rules:
             override fun afterTextChanged(s: Editable?) {
                 searchJob?.cancel()
                 searchJob = lifecycleScope.launch {
-                    delay(500) // Debounce
+                    delay(400) // Debounce
                     currentSearchQuery = s?.toString() ?: ""
                     applyFilters()
+                    // If search returns no results, silently refresh from server once
+                    if (currentSearchQuery.isNotEmpty() && ::adapter.isInitialized && adapter.getItems().isEmpty()) {
+                        delay(300)
+                        loadPacksFromFirebase(forceRefresh = true)
+                    }
                 }
             }
         })
@@ -2889,12 +2977,11 @@ Rules:
                         rv.visibility = View.GONE
                         emptyStateView.visibility = View.VISIBLE
                         findViewById<TextView>(R.id.emptyStateText).setText(R.string.no_custom_packs)
-                        btnCreateFirstSticker.visibility = View.VISIBLE
+                        // FAB (+) is available at bottom-right — no inline button needed
                     } else if (currentFilter == FilterType.FAVORITES) {
                         rv.visibility = View.GONE
                         emptyStateView.visibility = View.VISIBLE
                         findViewById<TextView>(R.id.emptyStateText).setText(R.string.no_favorites_yet)
-                        btnCreateFirstSticker.visibility = View.GONE
                     } else if (currentFilter == FilterType.INSTALLED) {
                         // Installed but empty?
                         rv.visibility = View.VISIBLE
