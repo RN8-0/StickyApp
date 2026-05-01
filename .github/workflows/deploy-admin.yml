@@ -11,6 +11,15 @@ on:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+    env:
+      VITE_PB_URL: ${{ secrets.VITE_PB_URL }}
+      VITE_APP_URL: ${{ secrets.VITE_APP_URL }}
+      VITE_OAUTH_REDIRECT_URL: ${{ secrets.VITE_OAUTH_REDIRECT_URL }}
+      COOLIFY_WEBHOOK_URL: ${{ secrets.COOLIFY_WEBHOOK_URL }}
+      COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+      SSH_HOST: ${{ secrets.SSH_HOST }}
+      SSH_USER: ${{ secrets.SSH_USER }}
+      SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
     steps:
       - uses: actions/checkout@v4
 
@@ -28,13 +37,9 @@ jobs:
       - name: Build
         working-directory: sticker_admin_web
         run: npm run build
-        env:
-          VITE_PB_URL: ${{ secrets.VITE_PB_URL }}
-          VITE_APP_URL: ${{ secrets.VITE_APP_URL }}
-          VITE_OAUTH_REDIRECT_URL: ${{ secrets.VITE_OAUTH_REDIRECT_URL }}
 
       - name: Deploy via Coolify webhook
-        if: ${{ secrets.COOLIFY_WEBHOOK_URL != '' }}
+        if: ${{ env.COOLIFY_WEBHOOK_URL != '' }}
         run: |
           curl -X POST "${{ secrets.COOLIFY_WEBHOOK_URL }}" \
             -H "Authorization: Bearer ${{ secrets.COOLIFY_TOKEN }}" \
@@ -42,12 +47,12 @@ jobs:
             --fail
 
       - name: Deploy via SSH (fallback)
-        if: ${{ secrets.SSH_HOST != '' && secrets.COOLIFY_WEBHOOK_URL == '' }}
+        if: ${{ env.SSH_HOST != '' && env.COOLIFY_WEBHOOK_URL == '' }}
         uses: appleboy/scp-action@v0.1.7
         with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          host: ${{ env.SSH_HOST }}
+          username: ${{ env.SSH_USER }}
+          key: ${{ env.SSH_PRIVATE_KEY }}
           source: 'sticker_admin_web/dist/'
           target: '/opt/sticky-admin/dist'
           strip_components: 2
