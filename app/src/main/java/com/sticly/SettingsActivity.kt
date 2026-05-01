@@ -17,6 +17,10 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
 import com.sticly.LocaleHelper
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class SettingsActivity : AppCompatActivity() {
     override fun attachBaseContext(newBase: android.content.Context) {
@@ -46,52 +50,32 @@ class SettingsActivity : AppCompatActivity() {
         updateLoginSwitches()
     }
 
+    private fun isUserLoggedIn(): Boolean {
+        val email = getSharedPreferences("sticky_prefs", MODE_PRIVATE).getString("user_email", "") ?: ""
+        return email.trim().isNotEmpty()
+    }
+
     private fun updateLoginSwitches() {
-        val user = auth.currentUser
+        val isLoggedIn = isUserLoggedIn()
         val switchG = findViewById<androidx.appcompat.widget.SwitchCompat>(R.id.switchGoogle)
-        
-        // Ensure imports are available: android.content.res.ColorStateList
-        
-        if (user != null) {
-            val isGoogleUser = user.providerData.any { it.providerId == "google.com" }
-            
-            if (isGoogleUser) {
-                // CONNECTED -> GREEN
-                switchG.isChecked = true
-                switchG.isEnabled = true // Keep enabled for visibility
-                switchG.alpha = 1.0f
-                
-                // Force Green
-                val greenColor = ContextCompat.getColor(this, R.color.accent)
-                val greenTrack = ContextCompat.getColor(this, R.color.accent_light)
-                
-                switchG.thumbTintList = ColorStateList.valueOf(greenColor)
-                switchG.trackTintList = ColorStateList.valueOf(greenTrack)
-            } else {
-                // NOT CONNECTED -> GREY
-                switchG.isChecked = false
-                switchG.isEnabled = true
-                switchG.alpha = 1.0f
-                
-                // Force Grey
-                val greyColor = ContextCompat.getColor(this, R.color.text_hint)
-                val greyTrack = ContextCompat.getColor(this, R.color.divider)
-                
-                switchG.thumbTintList = ColorStateList.valueOf(greyColor)
-                switchG.trackTintList = ColorStateList.valueOf(greyTrack)
-            }
-        } else {
-            // NOT LOGGED IN -> GREY
-            switchG.isChecked = false
+
+        if (isLoggedIn) {
+            // CONNECTED -> GREEN
+            switchG.isChecked = true
             switchG.isEnabled = true
             switchG.alpha = 1.0f
-            
-            // Force Grey
-            val greyColor = ContextCompat.getColor(this, R.color.text_hint)
-            val greyTrack = ContextCompat.getColor(this, R.color.divider)
-            
-            switchG.thumbTintList = ColorStateList.valueOf(greyColor)
-            switchG.trackTintList = ColorStateList.valueOf(greyTrack)
+            val greenColor = ContextCompat.getColor(this, R.color.accent)
+            val greenTrack = ContextCompat.getColor(this, R.color.accent_light)
+            switchG.thumbTintList = ColorStateList.valueOf(greenColor)
+            switchG.trackTintList = ColorStateList.valueOf(greenTrack)
+        } else {
+            // NOT CONNECTED -> GREY
+            switchG.isChecked = false
+            switchG.isEnabled = true
+            switchG.alpha = 0.7f
+            val grayColor = ContextCompat.getColor(this, R.color.text_secondary)
+            switchG.thumbTintList = ColorStateList.valueOf(grayColor)
+            switchG.trackTintList = ColorStateList.valueOf(grayColor)
         }
     }
 
@@ -157,15 +141,10 @@ class SettingsActivity : AppCompatActivity() {
 
         // Restore Purchases
         findViewById<View>(R.id.btnRestore).setOnClickListener {
-            val currentUser = auth.currentUser
-            val isGoogleUser = currentUser?.providerData?.any { it.providerId == "google.com" } == true
-
-            if (isGoogleUser) {
-                // Already signed in with Google - show notification and restore
+            if (isUserLoggedIn()) {
                 Toast.makeText(this, R.string.google_already_signed_in, Toast.LENGTH_SHORT).show()
                 performRestore()
             } else {
-                // Not signed in with Google - start Google sign-in, then restore
                 restoreAfterGoogleLogin = true
                 loginWithGoogle()
             }
@@ -189,29 +168,16 @@ class SettingsActivity : AppCompatActivity() {
         // Connection switch
         val switchG = findViewById<androidx.appcompat.widget.SwitchCompat>(R.id.switchGoogle)
 
-        // Custom logic to prevent disconnection
         switchG.setOnClickListener {
-            val user = auth.currentUser
-            val isGoogleUser = user?.providerData?.any { it.providerId == "google.com" } == true
-            
-            if (isGoogleUser) {
-                // Already connected, user tried to click it -> Prevent change
-                switchG.isChecked = true // Force back to checked
-                Toast.makeText(this, R.string.google_account_connected, Toast.LENGTH_SHORT).show()
+            if (isUserLoggedIn()) {
+                switchG.isChecked = true
+                val email = getSharedPreferences("sticky_prefs", MODE_PRIVATE).getString("user_email", "") ?: ""
+                Toast.makeText(this, getString(R.string.google_account_connected) + if (email.isNotEmpty()) " ($email)" else "", Toast.LENGTH_SHORT).show()
             } else {
-                // Not connected, user clicked it -> Start login
-                // Note: switch toggle logic fires before click, so 'isChecked' might be true now.
-                // We want to ensure we initiate login.
-                if (switchG.isChecked) {
-                    loginWithGoogle()
-                } else {
-                    // This case shouldn't happen usually for 'connecting' flow unless cancelled,
-                    // but if it turns off, we just let it be off.
-                }
+                switchG.isChecked = true
+                loginWithGoogle()
             }
         }
-        
-        // Remove standard CheckedChangeListener to avoid conflicts
         switchG.setOnCheckedChangeListener(null)
     }
 
@@ -222,7 +188,6 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private lateinit var googleSignInClient: com.google.android.gms.auth.api.signin.GoogleSignInClient
-    private val auth = com.google.firebase.auth.FirebaseAuth.getInstance()
 
     private fun loginWithGoogle() {
         val gso = com.google.android.gms.auth.api.signin.GoogleSignInOptions.Builder(com.google.android.gms.auth.api.signin.GoogleSignInOptions.DEFAULT_SIGN_IN)
@@ -238,10 +203,21 @@ class SettingsActivity : AppCompatActivity() {
             val task = com.google.android.gms.auth.api.signin.GoogleSignIn.getSignedInAccountFromIntent(result.data)
             try {
                 val account = task.getResult(com.google.android.gms.common.api.ApiException::class.java)!!
-                firebaseAuthWithGoogle(account.idToken!!)
-            } catch (e: Exception) {
-                Toast.makeText(this, "Google sign in failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                authWithPocketBase(account)
+            } catch (e: com.google.android.gms.common.api.ApiException) {
+                val msg = when (e.statusCode) {
+                    10 -> "Google sign-in config error (SHA-1)"
+                    7 -> "Network error, try again"
+                    12501 -> null
+                    else -> "Sign-in failed: ${e.statusCode}"
+                }
+                if (msg != null) Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
                 findViewById<androidx.appcompat.widget.SwitchCompat>(R.id.switchGoogle).isChecked = false
+                updateLoginSwitches()
+            } catch (e: Exception) {
+                Toast.makeText(this, "Google sign-in failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                findViewById<androidx.appcompat.widget.SwitchCompat>(R.id.switchGoogle).isChecked = false
+                updateLoginSwitches()
             }
         } else {
             findViewById<androidx.appcompat.widget.SwitchCompat>(R.id.switchGoogle).isChecked = false
@@ -249,22 +225,33 @@ class SettingsActivity : AppCompatActivity() {
         }
     }
 
-    private fun firebaseAuthWithGoogle(idToken: String) {
-        val credential = com.google.firebase.auth.GoogleAuthProvider.getCredential(idToken, null)
-        auth.signInWithCredential(credential).addOnCompleteListener(this) { task ->
-            if (task.isSuccessful) {
-                val user = auth.currentUser
-                if (user != null) {
-                    PreferencesHelper.syncUserDataWithFirebase(this, user.uid)
-                }
-                Toast.makeText(this, "Signed in with Google", Toast.LENGTH_SHORT).show()
+    private fun authWithPocketBase(account: com.google.android.gms.auth.api.signin.GoogleSignInAccount) {
+        CoroutineScope(Dispatchers.Main).launch {
+            try {
+                // Save profile locally first
+                PreferencesHelper.setUserProfile(
+                    this@SettingsActivity,
+                    account.email,
+                    account.displayName,
+                    account.photoUrl?.toString()
+                )
+                // Sync with PocketBase (optional)
+                try {
+                    val idToken = account.idToken ?: throw Exception("Missing ID token")
+                    withContext(Dispatchers.IO) {
+                        PocketBaseHelper.authWithOAuth("google", idToken)
+                    }
+                } catch (_: Exception) {}
+                val deviceId = PreferencesHelper.getDeviceId(this@SettingsActivity)
+                PreferencesHelper.syncUserDataWithPocketBase(this@SettingsActivity, deviceId)
+                Toast.makeText(this@SettingsActivity, "Signed in with Google", Toast.LENGTH_SHORT).show()
                 updateLoginSwitches()
                 if (restoreAfterGoogleLogin) {
                     restoreAfterGoogleLogin = false
                     performRestore()
                 }
-            } else {
-                Toast.makeText(this, "Auth failed", Toast.LENGTH_SHORT).show()
+            } catch (e: Exception) {
+                Toast.makeText(this@SettingsActivity, "Sign-in failed: ${e.message}", Toast.LENGTH_SHORT).show()
                 findViewById<androidx.appcompat.widget.SwitchCompat>(R.id.switchGoogle).isChecked = false
                 updateLoginSwitches()
                 restoreAfterGoogleLogin = false
@@ -324,13 +311,15 @@ class SettingsActivity : AppCompatActivity() {
     private fun logoutGoogle() {
         if (::googleSignInClient.isInitialized) {
             googleSignInClient.signOut().addOnCompleteListener {
-                auth.signOut()
+                getSharedPreferences("sticky_prefs", MODE_PRIVATE).edit()
+                    .remove("user_email").remove("user_display_name").remove("user_photo_url").apply()
                 Toast.makeText(this, "Logged out from Google", Toast.LENGTH_SHORT).show()
                 updateNotificationStatus()
                 updateLoginSwitches()
             }
         } else {
-            auth.signOut()
+            getSharedPreferences("sticky_prefs", MODE_PRIVATE).edit()
+                .remove("user_email").remove("user_display_name").remove("user_photo_url").apply()
             Toast.makeText(this, "Logged out", Toast.LENGTH_SHORT).show()
         }
     }

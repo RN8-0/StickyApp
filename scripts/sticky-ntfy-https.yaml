@@ -1,0 +1,26 @@
+http:
+  routers:
+    sticky-ntfy-https:
+      entryPoints:
+        - https
+      service: sticky-ntfy-svc
+      rule: "Host(`sticky-ntfy.46.225.95.201.sslip.io`)"
+      tls:
+        certresolver: letsencrypt
+    sticky-ntfy-http-redirect:
+      entryPoints:
+        - http
+      rule: "Host(`sticky-ntfy.46.225.95.201.sslip.io`)"
+      middlewares:
+        - sticky-ntfy-redirect-to-https
+      service: sticky-ntfy-svc
+  services:
+    sticky-ntfy-svc:
+      loadBalancer:
+        servers:
+          - url: "http://10.0.1.16:80"
+  middlewares:
+    sticky-ntfy-redirect-to-https:
+      redirectScheme:
+        scheme: https
+        permanent: true

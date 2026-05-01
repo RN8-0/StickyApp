@@ -724,7 +724,12 @@ class DetailsActivity : AppCompatActivity() {
                         btnPublish.text = getString(R.string.publish_pack_already_submitted)
                         btnPublish.isEnabled = false
                     } else {
-                    btnPublish.setOnClickListener { showPublishDialog(pack) }
+                        btnPublish.setOnClickListener {
+                            val intent = Intent(this, SubmitPackActivity::class.java)
+                            intent.putExtra("packId", pack.id)
+                            startActivity(intent)
+                            overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left)
+                        }
                     }
                 }
             }

@@ -1,34 +1,28 @@
 package com.sticly
 
-import android.app.Activity
-import android.content.Intent
-import android.net.Uri
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
+import android.widget.TextView
 import android.widget.Toast
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.lifecycleScope
-import androidx.recyclerview.widget.GridLayoutManager
+import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
 import com.google.android.material.button.MaterialButton
+import com.google.android.material.card.MaterialCardView
 import com.google.android.material.chip.Chip
 import com.google.android.material.chip.ChipGroup
 import com.google.android.material.textfield.TextInputEditText
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.storage.FirebaseStorage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
-import java.util.UUID
+import java.io.File
 
 class SubmitPackActivity : AppCompatActivity() {
 
@@ -39,32 +33,16 @@ class SubmitPackActivity : AppCompatActivity() {
     private lateinit var etPackName: TextInputEditText
     private lateinit var chipGroupCategory: ChipGroup
     private lateinit var rvStickerUpload: RecyclerView
-    private lateinit var btnAddSticker: MaterialButton
     private lateinit var btnSubmitPack: MaterialButton
 
-    private val stickerUris = mutableListOf<Uri>()
-    private var stickerAdapter: StickerUploadAdapter? = null
+    private var selectedPackId: String? = null
+    private var packAdapter: SelectablePackAdapter? = null
     private var isSubmitting = false
 
     private val categories = listOf(
         "humor", "love", "entertainment", "animals", "memes",
         "anime", "cute", "gaming", "sports", "food", "emoji", "other"
     )
-
-    private val pickImageLauncher = registerForActivityResult(
-        ActivityResultContracts.GetMultipleContents()
-    ) { uris ->
-        if (uris.isNotEmpty()) {
-            val remaining = MAX_STICKERS - stickerUris.size
-            val toAdd = uris.take(remaining)
-            stickerUris.addAll(toAdd)
-            stickerAdapter?.notifyDataSetChanged()
-            updateAddButtonState()
-            if (uris.size > remaining) {
-                Toast.makeText(this, getString(R.string.submit_max_stickers, MAX_STICKERS), Toast.LENGTH_SHORT).show()
-            }
-        }
-    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -73,7 +51,7 @@ class SubmitPackActivity : AppCompatActivity() {
         setupEdgeToEdge()
         initViews()
         setupCategories()
-        setupStickerGrid()
+        loadMyPacks()
         setupButtons()
     }
 
@@ -93,7 +71,6 @@ class SubmitPackActivity : AppCompatActivity() {
         etPackName = findViewById(R.id.etPackName)
         chipGroupCategory = findViewById(R.id.chipGroupCategory)
         rvStickerUpload = findViewById(R.id.rvStickerUpload)
-        btnAddSticker = findViewById(R.id.btnAddSticker)
         btnSubmitPack = findViewById(R.id.btnSubmitPack)
 
         findViewById<View>(R.id.btnBack).setOnClickListener { finish() }
@@ -116,45 +93,45 @@ class SubmitPackActivity : AppCompatActivity() {
             }
             chipGroupCategory.addView(chip)
         }
-        // Select first chip by default
         (chipGroupCategory.getChildAt(0) as? Chip)?.isChecked = true
     }
 
-    private fun setupStickerGrid() {
-        stickerAdapter = StickerUploadAdapter(stickerUris) { position ->
-            stickerUris.removeAt(position)
-            stickerAdapter?.notifyDataSetChanged()
-            updateAddButtonState()
+    private fun loadMyPacks() {
+        val packs = CustomStickerManager.getCustomPacks(this)
+        packAdapter = SelectablePackAdapter(packs) { pack ->
+            selectedPackId = pack.id
+            etPackName.setText(pack.name)
         }
-        rvStickerUpload.layoutManager = GridLayoutManager(this, 4)
-        rvStickerUpload.adapter = stickerAdapter
+        rvStickerUpload.layoutManager = LinearLayoutManager(this)
+        rvStickerUpload.adapter = packAdapter
+
+        // Pre-select pack if launched from DetailsActivity
+        val preselectedPackId = intent.getStringExtra("packId")
+        if (preselectedPackId != null) {
+            selectedPackId = preselectedPackId
+            packAdapter?.selectPack(preselectedPackId)
+            val pack = packs.firstOrNull { it.id == preselectedPackId }
+            if (pack != null) etPackName.setText(pack.name)
+        }
     }
 
     private fun setupButtons() {
-        btnAddSticker.setOnClickListener {
-            if (stickerUris.size >= MAX_STICKERS) {
-                Toast.makeText(this, getString(R.string.submit_max_stickers, MAX_STICKERS), Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
-            }
-            pickImageLauncher.launch("image/*")
-        }
-
-        btnSubmitPack.setOnClickListener {
-            submitPack()
-        }
-    }
-
-    private fun updateAddButtonState() {
-        btnAddSticker.isEnabled = stickerUris.size < MAX_STICKERS
-        btnAddSticker.text = getString(R.string.submit_add_sticker_count, stickerUris.size, MAX_STICKERS)
+        btnSubmitPack.setOnClickListener { submitPack() }
     }
 
     private fun submitPack() {
         if (isSubmitting) return
 
-        val user = FirebaseAuth.getInstance().currentUser
-        if (user == null) {
+        val prefs = getSharedPreferences("sticky_prefs", MODE_PRIVATE)
+        val email = prefs.getString("user_email", "") ?: ""
+        if (email.trim().isEmpty()) {
             Toast.makeText(this, getString(R.string.profile_login_required), Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val packId = selectedPackId
+        if (packId == null) {
+            Toast.makeText(this, getString(R.string.submit_select_pack_required), Toast.LENGTH_SHORT).show()
             return
         }
 
@@ -164,64 +141,52 @@ class SubmitPackActivity : AppCompatActivity() {
             return
         }
 
-        if (stickerUris.size < MIN_STICKERS) {
-            Toast.makeText(this, getString(R.string.submit_min_stickers, MIN_STICKERS), Toast.LENGTH_SHORT).show()
-            return
-        }
-
         val selectedChipId = chipGroupCategory.checkedChipId
         val selectedChip = chipGroupCategory.findViewById<Chip>(selectedChipId)
         val category = selectedChip?.tag as? String ?: "other"
+
+        val pack = CustomStickerManager.getCustomPacks(this).firstOrNull { it.id == packId }
+        if (pack == null || pack.stickerCount < 3) {
+            Toast.makeText(this, getString(R.string.submit_min_stickers, 3), Toast.LENGTH_SHORT).show()
+            return
+        }
 
         isSubmitting = true
         btnSubmitPack.isEnabled = false
         btnSubmitPack.text = getString(R.string.submit_uploading)
 
-        val packId = UUID.randomUUID().toString()
-        val storage = FirebaseStorage.getInstance()
-        val db = FirebaseFirestore.getInstance()
+        val deviceId = PreferencesHelper.getDeviceId(this)
+        val displayName = prefs.getString("user_display_name", "") ?: ""
+        val trayFile = File(filesDir, "custom_stickers/$packId/tray.webp")
+        val trayBase64 = if (trayFile.exists()) {
+            android.util.Base64.encodeToString(trayFile.readBytes(), android.util.Base64.NO_WRAP)
+        } else ""
 
         lifecycleScope.launch {
             try {
-                val stickersList = mutableListOf<Map<String, String>>()
-                val basePath = "user_uploads/${user.uid}/$packId"
-
-                withContext(Dispatchers.IO) {
-                    stickerUris.forEachIndexed { index, uri ->
-                        val fileName = "sticker_${index + 1}.webp"
-                        val ref = storage.reference.child("$basePath/$fileName")
-                        ref.putFile(uri).await()
-                        val downloadUrl = ref.downloadUrl.await().toString()
-                        stickersList.add(
-                            mapOf(
-                                "name" to "sticker_${index + 1}",
-                                "image_url" to downloadUrl
-                            )
-                        )
-                    }
+                val submissionData = org.json.JSONObject().apply {
+                    put("device_id", deviceId)
+                    put("user_email", email)
+                    put("display_name", displayName)
+                    put("pack_id", packId)
+                    put("pack_name", packName)
+                    put("category", category)
+                    put("sticker_count", pack.stickerCount)
+                    put("status", "pending")
+                    put("tray_image_base64", trayBase64)
                 }
-
-                val submission = hashMapOf(
-                    "user_id" to user.uid,
-                    "user_email" to (user.email ?: ""),
-                    "display_name" to (user.displayName ?: ""),
-                    "pack_name" to packName,
-                    "category" to category,
-                    "stickers" to stickersList,
-                    "status" to "pending",
-                    "created_at" to com.google.firebase.firestore.FieldValue.serverTimestamp()
-                )
-
                 withContext(Dispatchers.IO) {
-                    db.collection("user_submissions").document(packId).set(submission).await()
+                    PocketBaseHelper.createRecord("user_submissions", submissionData)
                 }
-
                 Toast.makeText(this@SubmitPackActivity, getString(R.string.submit_success), Toast.LENGTH_LONG).show()
-                setResult(Activity.RESULT_OK)
+                setResult(android.app.Activity.RESULT_OK)
                 finish()
-
             } catch (e: Exception) {
-                Toast.makeText(this@SubmitPackActivity, getString(R.string.submit_failed, e.message ?: ""), Toast.LENGTH_LONG).show()
+                Toast.makeText(
+                    this@SubmitPackActivity,
+                    getString(R.string.submit_failed, e.message ?: ""),
+                    Toast.LENGTH_LONG
+                ).show()
                 isSubmitting = false
                 btnSubmitPack.isEnabled = true
                 btnSubmitPack.text = getString(R.string.submit_pack_button)
@@ -229,36 +194,55 @@ class SubmitPackActivity : AppCompatActivity() {
         }
     }
 
-    // Inner adapter for sticker upload grid
-    inner class StickerUploadAdapter(
-        private val uris: List<Uri>,
-        private val onRemove: (Int) -> Unit
-    ) : RecyclerView.Adapter<StickerUploadAdapter.VH>() {
+    inner class SelectablePackAdapter(
+        private val packs: List<CustomStickerManager.CustomPack>,
+        private val onSelect: (CustomStickerManager.CustomPack) -> Unit
+    ) : RecyclerView.Adapter<SelectablePackAdapter.VH>() {
+
+        private var selectedId: String? = null
+
+        fun selectPack(packId: String) {
+            selectedId = packId
+            notifyDataSetChanged()
+        }
 
         inner class VH(view: View) : RecyclerView.ViewHolder(view) {
-            val image: ImageView = view.findViewById(R.id.stickerImage)
-            val btnRemove: View = view.findViewById(R.id.btnRemoveSticker)
+            val card: MaterialCardView = view.findViewById(R.id.packSelectionCard)
+            val cover: ImageView = view.findViewById(R.id.ivPackCover)
+            val name: TextView = view.findViewById(R.id.tvPackName)
+            val meta: TextView = view.findViewById(R.id.tvPackMeta)
+            val checkmark: ImageView = view.findViewById(R.id.ivSelected)
         }
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
             val view = LayoutInflater.from(parent.context)
-                .inflate(R.layout.item_sticker_upload, parent, false)
+                .inflate(R.layout.item_selectable_pack, parent, false)
             return VH(view)
         }
 
         override fun onBindViewHolder(holder: VH, position: Int) {
-            Glide.with(holder.itemView.context)
-                .load(uris[position])
-                .centerCrop()
-                .into(holder.image)
-            holder.btnRemove.setOnClickListener { onRemove(holder.adapterPosition) }
+            val pack = packs[position]
+            val isSelected = pack.id == selectedId
+
+            holder.name.text = pack.name
+            holder.meta.text = "${pack.stickerCount} stickers"
+
+            val trayFile = File(filesDir, "custom_stickers/${pack.id}/tray.webp")
+            if (trayFile.exists()) {
+                Glide.with(holder.cover.context).load(trayFile).centerCrop().into(holder.cover)
+            } else {
+                holder.cover.setImageResource(R.drawable.ic_sticker)
+            }
+
+            holder.checkmark.visibility = if (isSelected) View.VISIBLE else View.GONE
+            holder.card.strokeWidth = if (isSelected) 3 else 0
+            holder.card.setOnClickListener {
+                selectedId = pack.id
+                notifyDataSetChanged()
+                onSelect(pack)
+            }
         }
 
-        override fun getItemCount(): Int = uris.size
-    }
-
-    companion object {
-        private const val MAX_STICKERS = 30
-        private const val MIN_STICKERS = 3
+        override fun getItemCount(): Int = packs.size
     }
 }

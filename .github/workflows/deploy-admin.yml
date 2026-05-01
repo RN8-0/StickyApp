@@ -1,0 +1,53 @@
+name: Deploy Admin Panel
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'sticker_admin_web/**'
+      - '.github/workflows/deploy-admin.yml'
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: sticker_admin_web/package-lock.json
+
+      - name: Install dependencies
+        working-directory: sticker_admin_web
+        run: npm ci
+
+      - name: Build
+        working-directory: sticker_admin_web
+        run: npm run build
+        env:
+          VITE_PB_URL: ${{ secrets.VITE_PB_URL }}
+          VITE_APP_URL: ${{ secrets.VITE_APP_URL }}
+          VITE_OAUTH_REDIRECT_URL: ${{ secrets.VITE_OAUTH_REDIRECT_URL }}
+
+      - name: Deploy via Coolify webhook
+        if: ${{ secrets.COOLIFY_WEBHOOK_URL != '' }}
+        run: |
+          curl -X POST "${{ secrets.COOLIFY_WEBHOOK_URL }}" \
+            -H "Authorization: Bearer ${{ secrets.COOLIFY_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            --fail
+
+      - name: Deploy via SSH (fallback)
+        if: ${{ secrets.SSH_HOST != '' && secrets.COOLIFY_WEBHOOK_URL == '' }}
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: 'sticker_admin_web/dist/'
+          target: '/opt/sticky-admin/dist'
+          strip_components: 2

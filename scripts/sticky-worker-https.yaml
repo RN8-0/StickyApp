@@ -1,0 +1,26 @@
+http:
+  routers:
+    sticky-worker-https:
+      entryPoints:
+        - https
+      service: sticky-worker-svc
+      rule: "Host(`sticky-worker.46.225.95.201.sslip.io`)"
+      tls:
+        certresolver: letsencrypt
+    sticky-worker-http-redirect:
+      entryPoints:
+        - http
+      rule: "Host(`sticky-worker.46.225.95.201.sslip.io`)"
+      middlewares:
+        - sticky-worker-redirect-to-https
+      service: sticky-worker-svc
+  services:
+    sticky-worker-svc:
+      loadBalancer:
+        servers:
+          - url: "http://10.0.1.15:3000"
+  middlewares:
+    sticky-worker-redirect-to-https:
+      redirectScheme:
+        scheme: https
+        permanent: true

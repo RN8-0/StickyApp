@@ -104,7 +104,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
-                android:text="@string/submit_stickers_hint"
+                android:text="@string/submit_my_stickers_hint"
                 android:textSize="12sp"
                 android:textColor="@color/text_secondary" />
 
@@ -115,24 +115,6 @@
                 android:layout_marginTop="8dp"
                 android:nestedScrollingEnabled="false"
                 android:clipToPadding="false" />
-
-            <!-- Add Sticker Button -->
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnAddSticker"
-                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                android:layout_width="match_parent"
-                android:layout_height="48dp"
-                android:layout_marginTop="8dp"
-                android:text="@string/submit_add_sticker"
-                android:textColor="@color/primary"
-                android:textSize="14sp"
-                android:textAllCaps="false"
-                app:cornerRadius="12dp"
-                app:icon="@drawable/ic_add"
-                app:iconGravity="textStart"
-                app:iconTint="@color/primary"
-                app:strokeColor="@color/primary"
-                app:strokeWidth="1.5dp" />
 
         </LinearLayout>
 

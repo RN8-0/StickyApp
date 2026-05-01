@@ -1,0 +1,26 @@
+http:
+  routers:
+    sticky-images-https:
+      entryPoints:
+        - https
+      service: sticky-images-svc
+      rule: "Host(`sticky-images.46.225.95.201.sslip.io`)"
+      tls:
+        certresolver: letsencrypt
+    sticky-images-http-redirect:
+      entryPoints:
+        - http
+      rule: "Host(`sticky-images.46.225.95.201.sslip.io`)"
+      middlewares:
+        - sticky-images-redirect-to-https
+      service: sticky-images-svc
+  services:
+    sticky-images-svc:
+      loadBalancer:
+        servers:
+          - url: "http://10.0.1.14:80"
+  middlewares:
+    sticky-images-redirect-to-https:
+      redirectScheme:
+        scheme: https
+        permanent: true

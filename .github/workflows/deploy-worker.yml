@@ -1,0 +1,36 @@
+name: Deploy Worker
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'sticky-worker/**'
+      - '.github/workflows/deploy-worker.yml'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy via Coolify webhook
+        if: ${{ secrets.COOLIFY_WORKER_WEBHOOK_URL != '' }}
+        run: |
+          curl -X POST "${{ secrets.COOLIFY_WORKER_WEBHOOK_URL }}" \
+            -H "Authorization: Bearer ${{ secrets.COOLIFY_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            --fail
+
+      - name: Deploy via SSH (fallback)
+        if: ${{ secrets.SSH_HOST != '' && secrets.COOLIFY_WORKER_WEBHOOK_URL == '' }}
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd /opt/sticky-worker
+            git pull origin main
+            npm ci --omit=dev
+            pm2 restart sticky-worker || pm2 start server.js --name sticky-worker

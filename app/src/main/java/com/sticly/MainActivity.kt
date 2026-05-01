@@ -1204,12 +1204,45 @@ Rules:
 
     private suspend fun aiGenerateImage(prompt: String, onPoll: () -> Unit): Bitmap? =
         withContext(Dispatchers.IO) {
-            // Try api.airforce models sequentially — 1 req/min rate limit
-            // Models ordered: grok-imagine (best quality per user), flux-2-dev, z-image, flux-2-klein-4b
+            // Try Pollinations first (free, fast, no rate limit)
+            try {
+                val result = aiPollinationsRequest(prompt)
+                if (result != null) return@withContext result
+            } catch (_: Exception) {}
+
+            // Fallback to api.airforce models
             val models = listOf("grok-imagine", "flux-2-dev", "z-image", "flux-2-klein-4b")
             for (model in models) {
                 val result = aiApiAirforceRequest(prompt, model)
                 if (result != null) return@withContext result
+            }
+            null
+        }
+
+    private suspend fun aiPollinationsRequest(prompt: String): Bitmap? =
+        withContext(Dispatchers.IO) {
+            val encodedPrompt = java.net.URLEncoder.encode(prompt, "UTF-8")
+            for (model in listOf("turbo", "flux")) {
+                try {
+                    val urlStr = "https://image.pollinations.ai/prompt/$encodedPrompt?width=512&height=512&nologo=true&model=$model&seed=${System.currentTimeMillis()}"
+                    android.util.Log.d("AiGenerate", "Pollinations ($model) request")
+                    val conn = URL("https://image.pollinations.ai/prompt/$encodedPrompt?width=512&height=512&nologo=true&model=$model&seed=${System.currentTimeMillis()}").openConnection() as HttpURLConnection
+                    conn.requestMethod = "GET"
+                    conn.connectTimeout = 20000
+                    conn.readTimeout = 35000
+                    conn.instanceFollowRedirects = true
+                    conn.setRequestProperty("User-Agent", "StickyApp/1.0")
+                    val code = conn.responseCode
+                    android.util.Log.d("AiGenerate", "Pollinations ($model) response: $code")
+                    if (code == 200) {
+                        val bitmap = BitmapFactory.decodeStream(conn.inputStream)
+                        conn.disconnect()
+                        if (bitmap != null) return@withContext bitmap
+                    }
+                    conn.disconnect()
+                } catch (e: Exception) {
+                    android.util.Log.e("AiGenerate", "Pollinations $model failed: ${e.message}")
+                }
             }
             null
         }
@@ -1795,10 +1828,15 @@ Rules:
         }
     }
 
+    private fun isGoogleProfileSignedIn(): Boolean {
+        val prefs = getSharedPreferences("sticky_prefs", MODE_PRIVATE)
+        return !prefs.getString("user_email", "")?.trim().isNullOrEmpty()
+    }
+
     private fun loadProfileData() {
-        val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+        val deviceId = PreferencesHelper.getDeviceId(this)
         val loginPrompt = findViewById<View>(R.id.profileLoginPrompt)
-        val profileHeader = profileContentContainer?.let { it } ?: return
+        profileContentContainer ?: return
 
         val avatar = findViewById<ImageView>(R.id.profileAvatar)
         val displayName = findViewById<TextView>(R.id.profileDisplayName)
@@ -1809,16 +1847,16 @@ Rules:
         val rvPublished = findViewById<RecyclerView>(R.id.rvPublishedPacks)
         val emptyState = findViewById<View>(R.id.profileEmptyState)
 
-        if (user == null) {
+        if (!isGoogleProfileSignedIn()) {
             loginPrompt?.visibility = View.VISIBLE
             statsRow?.visibility = View.GONE
             btnSharePack?.visibility = View.GONE
             packsTitle?.visibility = View.GONE
             rvPublished?.visibility = View.GONE
             emptyState?.visibility = View.GONE
-            displayName?.text = getString(R.string.profile_guest)
+            avatar?.visibility = View.GONE
+            displayName?.visibility = View.GONE
             email?.text = ""
-            avatar?.setImageResource(R.drawable.ic_person)
             return
         }
 
@@ -1826,12 +1864,15 @@ Rules:
         statsRow?.visibility = View.VISIBLE
         btnSharePack?.visibility = View.VISIBLE
         packsTitle?.visibility = View.VISIBLE
+        avatar?.visibility = View.VISIBLE
+        displayName?.visibility = View.VISIBLE
 
-        displayName?.text = user.displayName ?: getString(R.string.profile_guest)
-        email?.text = user.email ?: ""
+        val prefs = getSharedPreferences("sticky_prefs", MODE_PRIVATE)
+        displayName?.text = prefs.getString("user_display_name", getString(R.string.profile_guest))
+        email?.text = prefs.getString("user_email", "") ?: ""
 
-        // Load avatar with Glide
-        user.photoUrl?.let { photoUrl ->
+        val photoUrl = prefs.getString("user_photo_url", null)
+        if (photoUrl != null) {
             avatar?.let {
                 com.bumptech.glide.Glide.with(this)
                     .load(photoUrl)
@@ -1841,50 +1882,71 @@ Rules:
             }
         }
 
-        // Ensure user profile exists in Firestore
-        val db = FirebaseFirestore.getInstance()
-        val profileRef = db.collection("user_profiles").document(user.uid)
-
+        // Ensure user profile exists on server
         lifecycleScope.launch {
             try {
-                val doc = withContext(Dispatchers.IO) {
-                    profileRef.get().await()
+                val records = withContext(Dispatchers.IO) {
+                    PocketBaseHelper.listRecords("user_profiles", filter = "device_id='$deviceId'")
                 }
+                val doc = records.firstOrNull()
 
-                if (!doc.exists()) {
-                    // Create profile on first access
-                    val profileData = hashMapOf(
-                        "display_name" to (user.displayName ?: ""),
-                        "email" to (user.email ?: ""),
-                        "photo_url" to (user.photoUrl?.toString() ?: ""),
-                        "packs_published" to 0L,
-                        "total_downloads" to 0L,
-                        "total_favorites" to 0L,
-                        "joined_at" to com.google.firebase.firestore.FieldValue.serverTimestamp()
-                    )
-                    withContext(Dispatchers.IO) {
-                        profileRef.set(profileData).await()
+                if (doc == null) {
+                    val profileData = org.json.JSONObject().apply {
+                        put("device_id", deviceId)
+                        put("display_name", prefs.getString("user_display_name", "") ?: "")
+                        put("email", prefs.getString("user_email", "") ?: "")
+                        put("photo_url", photoUrl ?: "")
+                        put("packs_published", 0)
+                        put("total_downloads", 0)
+                        put("total_favorites", 0)
+                        put("joined_at", java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US).format(java.util.Date()))
                     }
-                    findViewById<TextView>(R.id.statPublished)?.text = "0"
-                    findViewById<TextView>(R.id.statDownloads)?.text = "0"
-                    findViewById<TextView>(R.id.statFavorites)?.text = "0"
+                    withContext(Dispatchers.IO) {
+                        PocketBaseHelper.createRecord("user_profiles", profileData)
+                    }
+                    withContext(Dispatchers.Main) {
+                        findViewById<TextView>(R.id.statPublished)?.text = "0"
+                        findViewById<TextView>(R.id.statDownloads)?.text = "0"
+                        findViewById<TextView>(R.id.statFavorites)?.text = "0"
+                    }
                 } else {
-                    // Update stats from Firestore
-                    val published = doc.getLong("packs_published") ?: 0
-                    val downloads = doc.getLong("total_downloads") ?: 0
-                    val favorites = doc.getLong("total_favorites") ?: 0
-                    findViewById<TextView>(R.id.statPublished)?.text = published.toString()
-                    findViewById<TextView>(R.id.statDownloads)?.text = downloads.toString()
-                    findViewById<TextView>(R.id.statFavorites)?.text = favorites.toString()
+                    val published = doc.optInt("packs_published", 0)
+                    val downloads = doc.optInt("total_downloads", 0)
+                    val favorites = doc.optInt("total_favorites", 0)
+                    withContext(Dispatchers.Main) {
+                        findViewById<TextView>(R.id.statPublished)?.text = published.toString()
+                        findViewById<TextView>(R.id.statDownloads)?.text = downloads.toString()
+                        findViewById<TextView>(R.id.statFavorites)?.text = favorites.toString()
+                    }
                 }
 
-                // Load user's submitted packs
-                loadUserSubmissions(user.uid, rvPublished, emptyState)
-                // Load admin messages
-                loadAdminNotifications(user.uid)
-
+                loadUserSubmissionsFromPB(deviceId, rvPublished, emptyState)
             } catch (e: Exception) {
-                Log.e("Profile", "Error loading profile", e)
+                android.util.Log.e("Profile", "Error loading profile", e)
+            }
+        }
+    }
+
+    private fun loadUserSubmissionsFromPB(deviceId: String, rv: RecyclerView?, emptyState: View?) {
+        lifecycleScope.launch {
+            try {
+                val records = withContext(Dispatchers.IO) {
+                    PocketBaseHelper.listRecords("user_submissions", filter = "device_id='$deviceId'")
+                }
+                withContext(Dispatchers.Main) {
+                    if (records.isEmpty()) {
+                        rv?.visibility = View.GONE
+                        emptyState?.visibility = View.VISIBLE
+                    } else {
+                        rv?.visibility = View.VISIBLE
+                        emptyState?.visibility = View.GONE
+                    }
+                }
+            } catch (_: Exception) {
+                withContext(Dispatchers.Main) {
+                    rv?.visibility = View.GONE
+                    emptyState?.visibility = View.VISIBLE
+                }
             }
         }
     }
@@ -2102,16 +2164,40 @@ Rules:
             try {
                 val task = com.google.android.gms.auth.api.signin.GoogleSignIn.getSignedInAccountFromIntent(result.data)
                 val account = task.getResult(com.google.android.gms.common.api.ApiException::class.java)
-                val credential = com.google.firebase.auth.GoogleAuthProvider.getCredential(account.idToken, null)
-                com.google.firebase.auth.FirebaseAuth.getInstance().signInWithCredential(credential)
-                    .addOnSuccessListener {
+                lifecycleScope.launch {
+                    try {
+                        val idToken = account.idToken ?: throw Exception("Missing ID token")
+                        try {
+                            withContext(Dispatchers.IO) { PocketBaseHelper.authWithOAuth("google", idToken) }
+                        } catch (_: Exception) {
+                            // PocketBase sync is optional; continue with local profile
+                        }
+                        PreferencesHelper.setUserProfile(
+                            this@MainActivity,
+                            account.email,
+                            account.displayName,
+                            account.photoUrl?.toString()
+                        )
+                        PreferencesHelper.syncUserDataWithPocketBase(
+                            this@MainActivity,
+                            PreferencesHelper.getDeviceId(this@MainActivity)
+                        )
                         loadProfileData()
+                    } catch (e: Exception) {
+                        Toast.makeText(this@MainActivity, "Sign-in failed: ${e.message}", Toast.LENGTH_SHORT).show()
                     }
-                    .addOnFailureListener { e ->
-                        Toast.makeText(this, "Sign-in failed: ${e.message}", Toast.LENGTH_SHORT).show()
-                    }
+                }
+            } catch (e: com.google.android.gms.common.api.ApiException) {
+                val message = when (e.statusCode) {
+                    10 -> "Google sign-in configuration error. Check SHA-1 and OAuth client."
+                    7 -> "Network error. Please try again."
+                    12500 -> "Google Play Services configuration error."
+                    12501 -> null
+                    else -> "Sign-in failed: ${e.statusCode}"
+                }
+                if (message != null) Toast.makeText(this, message, Toast.LENGTH_LONG).show()
             } catch (e: Exception) {
-                Toast.makeText(this, "Sign-in failed", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "Sign-in failed: ${e.message ?: "Unknown error"}", Toast.LENGTH_SHORT).show()
             }
         }
     }

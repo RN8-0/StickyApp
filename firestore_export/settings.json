@@ -1,0 +1,63 @@
+[
+  {
+    "id": "billing",
+    "plans": [
+      {
+        "price_usd": "1,99",
+        "trial_days": 0,
+        "id": "sticky_weekly_plann",
+        "is_active": true,
+        "name": "Haftalik",
+        "type": "subscription",
+        "price_try": "29.99 TL",
+        "price_eur": "1,29"
+      },
+      {
+        "id": "sticky_monthly_premium",
+        "is_active": true,
+        "name": "Aylik",
+        "price_usd": "4,99",
+        "trial_days": 3,
+        "price_eur": "3,99",
+        "type": "subscription",
+        "price_try": "69.99 TL"
+      },
+      {
+        "name": "Yillik",
+        "price_usd": "29,99",
+        "trial_days": 0,
+        "discount_percentage": 40,
+        "price_eur": "24,99",
+        "type": "subscription",
+        "price_try": "499.00 TL",
+        "id": "sticky_yearly_premium",
+        "is_active": true
+      },
+      {
+        "price_try": "699.00 TL",
+        "type": "onetime",
+        "price_eur": "25,99",
+        "price_usd": "39,99",
+        "name": "Omur Boyu",
+        "is_active": true,
+        "id": "sticky_lifetime_premium"
+      }
+    ],
+    "sticker_pack_price_eur": "€0,89",
+    "google_play_prices_updated_at": "2026-04-14T20:51:25.412Z",
+    "price_usd": "7,99",
+    "sticker_pack_price_usd": "0,99",
+    "campaign_end_date": "",
+    "price_try": "69,99",
+    "updated_at": "2026-01-28T08:23:47.304Z",
+    "price_eur": "6,99",
+    "google_play_price_sticky_monthly_premium": "TRY 52.99",
+    "sticker_pack_price_try": "14.99 TL",
+    "campaign_name": "",
+    "google_play_price_sticky_lifetime_premium": "₺699,00",
+    "campaign_active": true,
+    "google_play_price_sticky_yearly_premium": "TRY 209.99",
+    "_createTime": "2026-01-21T23:06:55.150084Z",
+    "_updateTime": "2026-04-14T20:51:25.464926Z"
+  }
+]

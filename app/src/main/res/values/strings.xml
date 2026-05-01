@@ -724,6 +724,7 @@
     <string name="submit_category_label">Category</string>
     <string name="submit_stickers_label">Stickers</string>
     <string name="submit_stickers_hint">Add at least 3 stickers (max 30). Tap to add from gallery.</string>
+    <string name="submit_my_stickers_hint">Select a sticker pack from your collection to submit.</string>
     <string name="submit_add_sticker">Add Stickers</string>
     <string name="submit_add_sticker_count">Add Stickers (%1$d/%2$d)</string>
     <string name="submit_pack_button">Submit Pack</string>
@@ -733,6 +734,7 @@
     <string name="submit_uploading">Uploading…</string>
     <string name="submit_success">Your sticker pack has been submitted for review! 🎉</string>
     <string name="submit_failed">Submission failed: %s</string>
+    <string name="submit_select_pack_required">Please select a sticker pack to submit</string>
 
     <!-- Content Report -->
     <string name="report_content">Report Content</string>

@@ -6,6 +6,10 @@ import android.os.Build
 import android.util.Log
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.UUID
 
 object PreferencesHelper {
@@ -30,6 +34,50 @@ object PreferencesHelper {
     private const val KEY_TOTAL_STICKERS_ADDED = "total_stickers_added"
     private const val KEY_INITIAL_LOAD_DONE = "initial_load_done"
     private const val KEY_PACKS_SINCE_PROMO = "packs_since_promo"
+
+    // ========== User Profile (Google login via PocketBase) ==========
+
+    fun setUserProfile(context: Context, email: String?, displayName: String?, photoUrl: String?) {
+        getPrefs(context).edit()
+            .putString("user_email", email ?: "")
+            .putString("user_display_name", displayName ?: "")
+            .putString("user_photo_url", photoUrl ?: "")
+            .apply()
+    }
+
+    fun syncUserDataWithPocketBase(context: Context, deviceId: String) {
+        val prefs = getPrefs(context)
+        val email = prefs.getString("user_email", "") ?: ""
+        val displayName = prefs.getString("user_display_name", "") ?: ""
+        val photoUrl = prefs.getString("user_photo_url", "") ?: ""
+        if (email.isEmpty()) return
+
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val existing = PocketBaseHelper.listRecords(
+                    "user_profiles",
+                    filter = "device_id='$deviceId'"
+                )
+                val data = org.json.JSONObject().apply {
+                    put("device_id", deviceId)
+                    put("email", email)
+                    put("display_name", displayName)
+                    put("photo_url", photoUrl)
+                }
+                if (existing.isEmpty()) {
+                    data.put("packs_published", 0)
+                    data.put("total_downloads", 0)
+                    data.put("total_favorites", 0)
+                    PocketBaseHelper.createRecord("user_profiles", data)
+                } else {
+                    val id = existing.first().getString("id")
+                    PocketBaseHelper.updateRecord("user_profiles", id, data)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "syncUserDataWithPocketBase failed: ${e.message}")
+            }
+        }
+    }
 
     // In-memory caches to avoid repeated SharedPreferences disk reads during scrolling
     @Volatile private var installedPacksCache: Set<String>? = null

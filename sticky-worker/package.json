@@ -1,0 +1,17 @@
+{
+  "name": "sticky-worker",
+  "version": "1.0.0",
+  "description": "Sticky App backend worker - proxy endpoints + PocketBase hooks",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.0",
+    "firebase-admin": "^12.7.0",
+    "pocketbase": "^0.25.0",
+    "node-fetch": "^2.7.0",
+    "eventsource": "^2.0.2"
+  }
+}
