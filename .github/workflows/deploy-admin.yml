@@ -66,7 +66,7 @@ jobs:
                 --restart unless-stopped \
                 --network coolify \
                 -l "traefik.enable=true" \
-                -l "traefik.http.routers.sticky-admin.rule=Host(`sticky-admin.46.225.95.201.sslip.io`)" \
+                -l "traefik.http.routers.sticky-admin.rule=Host(\`sticky-admin.46.225.95.201.sslip.io\`)" \
                 -l "traefik.http.routers.sticky-admin.entrypoints=https" \
                 -l "traefik.http.routers.sticky-admin.tls=true" \
                 -l "traefik.http.routers.sticky-admin.tls.certresolver=letsencrypt" \
