@@ -13,7 +13,7 @@ server {
     index index.html;
     gzip on;
     gzip_types text/plain text/css application/javascript application/json image/svg+xml;
-    location /assets/ {
+    location /static/ {
         try_files $uri =404;
         expires 1y;
         add_header Cache-Control "public, immutable";
