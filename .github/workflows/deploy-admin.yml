@@ -12,31 +12,27 @@ jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
     env:
-      VITE_PB_URL: ${{ secrets.VITE_PB_URL }}
-      VITE_APP_URL: ${{ secrets.VITE_APP_URL }}
-      VITE_OAUTH_REDIRECT_URL: ${{ secrets.VITE_OAUTH_REDIRECT_URL }}
       COOLIFY_WEBHOOK_URL: ${{ secrets.COOLIFY_WEBHOOK_URL }}
-      COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
       SSH_HOST: ${{ secrets.SSH_HOST }}
       SSH_USER: ${{ secrets.SSH_USER }}
       SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: sticker_admin_web/package-lock.json
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-      - name: Install dependencies
-        working-directory: sticker_admin_web
-        run: npm ci
-
-      - name: Build
-        working-directory: sticker_admin_web
-        run: npm run build
+      - name: Build Docker image
+        run: |
+          docker build \
+            --build-arg VITE_PB_URL="${{ secrets.VITE_PB_URL }}" \
+            --build-arg VITE_PB_PUBLIC_URL="${{ secrets.VITE_PB_PUBLIC_URL }}" \
+            --build-arg VITE_APP_URL="${{ secrets.VITE_APP_URL }}" \
+            --build-arg VITE_OAUTH_REDIRECT_URL="${{ secrets.VITE_OAUTH_REDIRECT_URL }}" \
+            --build-arg VITE_WORKER_URL="${{ secrets.VITE_WORKER_URL }}" \
+            --build-arg VITE_IMAGE_PROXY_URL="${{ secrets.VITE_IMAGE_PROXY_URL }}" \
+            -t sticky-admin:latest \
+            sticker_admin_web/
 
       - name: Deploy via Coolify webhook
         if: ${{ env.COOLIFY_WEBHOOK_URL != '' }}
@@ -46,13 +42,36 @@ jobs:
             -H "Content-Type: application/json" \
             --fail
 
-      - name: Deploy via SSH (fallback)
+      - name: Deploy via SSH
         if: ${{ env.SSH_HOST != '' && env.COOLIFY_WEBHOOK_URL == '' }}
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ env.SSH_HOST }}
-          username: ${{ env.SSH_USER }}
-          key: ${{ env.SSH_PRIVATE_KEY }}
-          source: 'sticker_admin_web/dist/'
-          target: '/opt/sticky-admin/dist'
-          strip_components: 2
+        run: |
+          docker save sticky-admin:latest | gzip > /tmp/sticky-admin.tar.gz
+
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+
+          scp -i ~/.ssh/deploy_key \
+            /tmp/sticky-admin.tar.gz \
+            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/tmp/sticky-admin.tar.gz
+
+          ssh -i ~/.ssh/deploy_key \
+            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
+              docker load < /tmp/sticky-admin.tar.gz
+              docker stop sticky-admin 2>/dev/null || true
+              docker rm sticky-admin 2>/dev/null || true
+              docker run -d \
+                --name sticky-admin \
+                --restart unless-stopped \
+                --network coolify \
+                -l "traefik.enable=true" \
+                -l "traefik.http.routers.sticky-admin.rule=Host(`sticky-admin.46.225.95.201.sslip.io`)" \
+                -l "traefik.http.routers.sticky-admin.entrypoints=https" \
+                -l "traefik.http.routers.sticky-admin.tls=true" \
+                -l "traefik.http.routers.sticky-admin.tls.certresolver=letsencrypt" \
+                -l "traefik.http.services.sticky-admin.loadbalancer.server.port=80" \
+                sticky-admin:latest
+              rm -f /tmp/sticky-admin.tar.gz
+              echo "Deploy OK"
+            '
