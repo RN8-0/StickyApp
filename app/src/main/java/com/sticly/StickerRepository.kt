@@ -64,17 +64,23 @@ object StickerRepository {
             allPacks.addAll(customPacks)
             Log.d(TAG, "Loaded ${customPacks.size} custom packs")
 
-            // 2. Firebase paketlerini yükle
-            val packsFromFirestore = loadPacksFromFirestore(forceRefresh)
-            if (packsFromFirestore.isNotEmpty()) {
-                Log.d(TAG, "Loaded ${packsFromFirestore.size} packs from Firestore")
-                allPacks.addAll(packsFromFirestore)
+            // 2. Paketleri yükle: Önce PocketBase, yoksa Firestore, yoksa Storage
+            val packsFromPocketBase = loadPacksFromPocketBase()
+            if (packsFromPocketBase.isNotEmpty()) {
+                Log.d(TAG, "Loaded ${packsFromPocketBase.size} packs from PocketBase")
+                allPacks.addAll(packsFromPocketBase)
             } else {
-                // Firestore boşsa Storage'dan contents.json'u çek
-                val packsFromStorage = loadPacksFromStorage(context)
-                if (packsFromStorage.isNotEmpty()) {
-                    Log.d(TAG, "Loaded ${packsFromStorage.size} packs from Storage")
-                    allPacks.addAll(packsFromStorage)
+                val packsFromFirestore = loadPacksFromFirestore(forceRefresh)
+                if (packsFromFirestore.isNotEmpty()) {
+                    Log.d(TAG, "Loaded ${packsFromFirestore.size} packs from Firestore")
+                    allPacks.addAll(packsFromFirestore)
+                } else {
+                    // İkisi de boşsa Storage'dan contents.json'u çek
+                    val packsFromStorage = loadPacksFromStorage(context)
+                    if (packsFromStorage.isNotEmpty()) {
+                        Log.d(TAG, "Loaded ${packsFromStorage.size} packs from Storage")
+                        allPacks.addAll(packsFromStorage)
+                    }
                 }
             }
 
@@ -134,6 +140,84 @@ object StickerRepository {
         } catch (e: Exception) {
             Log.e(TAG, "Error loading cache from disk: ${e.message}")
             emptyList()
+        }
+    }
+
+    // ============================================================================
+    // POCKETBASE LOADING
+    // ============================================================================
+
+    private suspend fun loadPacksFromPocketBase(): List<Pack> = withContext(Dispatchers.IO) {
+        val allPacks = mutableListOf<Pack>()
+        try {
+            val stickersJob = kotlinx.coroutines.CoroutineScope(Dispatchers.IO).async {
+                try { PocketBaseHelper.listRecords("stickers", perPage = 500) }
+                catch (e: Exception) { Log.e(TAG, "PB stickers error: ${e.message}"); emptyList() }
+            }
+            val premiumJob = kotlinx.coroutines.CoroutineScope(Dispatchers.IO).async {
+                try { PocketBaseHelper.listRecords("premium_stickers", perPage = 500) }
+                catch (e: Exception) { Log.e(TAG, "PB premium error: ${e.message}"); emptyList() }
+            }
+            stickersJob.await().mapNotNull { parsePocketBasePack(it, false) }.let { allPacks.addAll(it) }
+            premiumJob.await().mapNotNull { parsePocketBasePack(it, true) }.let { allPacks.addAll(it) }
+            Log.d(TAG, "PocketBase: ${allPacks.size} packs loaded")
+        } catch (e: Exception) {
+            Log.e(TAG, "PocketBase loading failed: ${e.message}")
+        }
+        allPacks
+    }
+
+    private fun parsePocketBasePack(json: org.json.JSONObject, isPremium: Boolean): Pack? {
+        return try {
+            val stickersJson = json.optJSONArray("stickers") ?: return null
+            val stickers = (0 until stickersJson.length()).mapNotNull { i ->
+                val s = stickersJson.optJSONObject(i) ?: return@mapNotNull null
+                val file = s.optString("image_file").takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                val url = s.optString("url")
+                val emojisArr = s.optJSONArray("emojis")
+                val emojis = emojisArr?.let { arr -> (0 until arr.length()).map { arr.optString(it) } }
+                Sticker(file = file, emojis = emojis, url = url)
+            }
+            if (stickers.isEmpty()) return null
+            val id = json.optString("id").takeIf { it.isNotBlank() } ?: return null
+            Pack(
+                id = id,
+                name = json.optString("name").ifBlank { id },
+                nameTr = json.optString("name_tr"),
+                nameZh = json.optString("name_zh"),
+                nameEs = json.optString("name_es"),
+                nameAr = json.optString("name_ar"),
+                nameHi = json.optString("name_hi"),
+                namePt = json.optString("name_pt"),
+                pub = json.optString("publisher").ifBlank { "Sticky" },
+                email = json.optString("publisher_email").ifBlank { "contact@sticky.com" },
+                privacy = json.optString("privacy_policy_website"),
+                license = json.optString("license_agreement_website"),
+                version = json.optString("image_data_version").ifBlank { "1" },
+                avoidCache = json.optBoolean("avoid_cache", false),
+                tray = json.optString("tray_image_file").ifBlank { "tray.webp" },
+                trayUrl = json.optString("tray_url"),
+                stickers = stickers,
+                isPremium = isPremium,
+                productId = json.optString("product_id"),
+                storagePath = "stickers",
+                createdAt = json.optString("created"),
+                category = json.optString("category"),
+                downloadCount = json.optInt("download_count", 0),
+                fakeDownloadBase = json.optInt("fake_download_base", 0),
+                viewCount = json.optInt("view_count", 0),
+                favoriteCount = json.optInt("favorite_count", 0),
+                isAnimated = json.optBoolean("is_animated", false),
+                isActive = json.optBoolean("is_active", true),
+                isPopular = json.optBoolean("is_popular", false),
+                priceTRY = json.optString("price_try"),
+                priceUSD = json.optString("price_usd"),
+                priceEUR = json.optString("price_eur"),
+                translations = emptyMap()
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "PocketBase pack parse error: ${e.message}")
+            null
         }
     }
 

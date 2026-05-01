@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { db, storage, auth } from './firebase';
+import { pb } from './pocketbase';
 import {
   collection,
   getDocs,
@@ -480,8 +481,26 @@ function App() {
         setLoading(true);
         try {
           console.log("Admin kontrolü yapılıyor:", u.email);
-          const adminDoc = await getDoc(doc(db, 'admins', u.email));
-          if (!adminDoc.exists()) {
+          let isAdminUser = false;
+
+          // Önce PocketBase admins_list kontrolü
+          try {
+            const escapedEmail = u.email.replace(/'/g, "\\'");
+            const pbAdmins = await pb.collection('admins_list').getFullList({ filter: `email='${escapedEmail}'` });
+            if (pbAdmins.length > 0) isAdminUser = true;
+          } catch (pbErr) {
+            console.warn("PocketBase admin check failed, trying Firestore:", pbErr);
+          }
+
+          // PocketBase'de yoksa Firestore'daki eski admins koleksiyonuna bak
+          if (!isAdminUser) {
+            try {
+              const adminDoc = await getDoc(doc(db, 'admins', u.email));
+              if (adminDoc.exists()) isAdminUser = true;
+            } catch (_) { /* Firestore erişilemez olabilir */ }
+          }
+
+          if (!isAdminUser) {
             console.warn("YETKESİZ GİRİŞ DENEMESİ:", u.email);
             await signOut(auth);
             setUser(null);
@@ -490,13 +509,8 @@ function App() {
             return;
           }
 
-          const adminData = adminDoc.data();
-          const name = adminData?.name || adminData?.admin || u.email.split('@')[0];
-
-          // Go directly to panel, no welcome animation
           setLoading(false);
-
-          console.log("Admin login successful, name:", name);
+          console.log("Admin login successful:", u.email);
         } catch (error: any) {
           console.error("Admin yetkisi kontrol edilirken hata:", error);
           alert("Login Error: " + (error?.message || "Authorization check failed."));
@@ -813,79 +827,83 @@ function App() {
     }
   };
 
+  const mapPbRecord = (r: any, isPremium: boolean): StickerPack => ({
+    ...r,
+    is_premium: isPremium,
+    is_animated: r.is_animated ?? r.animated ?? false,
+    download_count: Number(r.download_count || 0),
+    fake_download_base: Number(r.fake_download_base || 0),
+    view_count: Number(r.view_count || 0),
+    favorite_count: Number(r.favorite_count || 0),
+    sticker_count: Number(r.sticker_count || (r.stickers as any[])?.length || 0),
+  } as StickerPack);
+
   const fetchPacks = async () => {
     setLoading(true);
     try {
-      const normalPacks = await getDocs(collection(db, 'stickers'));
-      const premiumPacks = await getDocs(collection(db, 'premium_stickers'));
+      let allPacks: StickerPack[] = [];
 
-      const allPacks: StickerPack[] = [
-        ...normalPacks.docs.map(d => {
-          const data = d.data();
-          const p = {
-            id: d.id,
-            ...data,
-            is_premium: false,
-            is_animated: data.is_animated ?? data.animated ?? false,
-            download_count: Number(data.download_count || data.downloadCount || data.downloads || 0),
-            fake_download_base: Number(data.fake_download_base || 0),
-            view_count: Number(data.view_count || data.viewCount || data.views || 0),
-            favorite_count: Number(data.favorite_count || data.favoriteCount || data.favorites || 0),
-            sticker_count: Number(data.sticker_count || data.stickers?.length || 0),
+      // 1. PocketBase'den oku (birincil kaynak)
+      try {
+        const [normalRecords, premiumRecords] = await Promise.all([
+          pb.collection('stickers').getFullList({ perPage: 500 }),
+          pb.collection('premium_stickers').getFullList({ perPage: 500 }),
+        ]);
+        allPacks = [
+          ...normalRecords.map(r => mapPbRecord(r, false)),
+          ...premiumRecords.map(r => mapPbRecord(r, true)),
+        ];
+        console.log(`PocketBase: ${allPacks.length} paket yüklendi`);
+      } catch (pbError) {
+        console.warn("PocketBase fetch başarısız, Firestore deneniyor:", pbError);
+      }
 
-          } as StickerPack;
-          return p;
-        }),
-        ...premiumPacks.docs.map(d => {
-          const data = d.data();
-          const p = {
-            id: d.id,
-            ...data,
-            is_premium: true,
-            is_animated: data.is_animated ?? data.animated ?? false,
-            download_count: Number(data.download_count || data.downloadCount || data.downloads || 0),
-            fake_download_base: Number(data.fake_download_base || 0),
-            view_count: Number(data.view_count || data.viewCount || data.views || 0),
-            favorite_count: Number(data.favorite_count || data.favoriteCount || data.favorites || 0),
-            sticker_count: Number(data.sticker_count || data.stickers?.length || 0),
-
-          } as StickerPack;
-          return p;
-        })
-      ];
-
-      // Fallback: Eğer hiç paket bulunamadıysa eski koleksiyonu (sticker_packs) kontrol et
+      // 2. PocketBase boşsa Firestore'a düş
       if (allPacks.length === 0) {
-        console.warn("Standart koleksiyonlar boş, 'sticker_packs' kontrol ediliyor...");
         try {
-          const oldPacks = await getDocs(collection(db, 'sticker_packs'));
-          const oldPacksData = oldPacks.docs.map(d => {
-            const data = d.data();
-            return {
-              id: d.id,
-              ...data,
-              is_premium: false,
-              is_animated: data.is_animated ?? data.animated ?? false,
-              download_count: Number(data.download_count || data.downloadCount || data.downloads || 0),
-              fake_download_base: Number(data.fake_download_base || 0),
-              view_count: Number(data.view_count || data.viewCount || data.views || 0),
-              favorite_count: Number(data.favorite_count || data.favoriteCount || data.favorites || 0),
-              sticker_count: Number(data.sticker_count || data.stickers?.length || 0),
-            } as StickerPack;
-          });
-          allPacks.push(...oldPacksData);
-        } catch (e) {
-          console.warn("Eski koleksiyon (sticker_packs) okunurken hata:", e);
+          const [normalPacks, premiumPacks] = await Promise.all([
+            getDocs(collection(db, 'stickers')),
+            getDocs(collection(db, 'premium_stickers')),
+          ]);
+          allPacks = [
+            ...normalPacks.docs.map(d => {
+              const data = d.data();
+              return {
+                id: d.id, ...data,
+                is_premium: false,
+                is_animated: data.is_animated ?? data.animated ?? false,
+                download_count: Number(data.download_count || 0),
+                fake_download_base: Number(data.fake_download_base || 0),
+                view_count: Number(data.view_count || 0),
+                favorite_count: Number(data.favorite_count || 0),
+                sticker_count: Number(data.sticker_count || data.stickers?.length || 0),
+              } as StickerPack;
+            }),
+            ...premiumPacks.docs.map(d => {
+              const data = d.data();
+              return {
+                id: d.id, ...data,
+                is_premium: true,
+                is_animated: data.is_animated ?? data.animated ?? false,
+                download_count: Number(data.download_count || 0),
+                fake_download_base: Number(data.fake_download_base || 0),
+                view_count: Number(data.view_count || 0),
+                favorite_count: Number(data.favorite_count || 0),
+                sticker_count: Number(data.sticker_count || data.stickers?.length || 0),
+              } as StickerPack;
+            }),
+          ];
+          console.log(`Firestore: ${allPacks.length} paket yüklendi`);
+        } catch (fsError) {
+          console.warn("Firestore fetch başarısız:", fsError);
         }
       }
 
-      console.log("FETCHED PACKS DATA:");
-      console.table(allPacks.map(p => ({ name: p.name, dl: p.download_count, views: p.view_count })));
-      // Güvenli sıralama (name undefined olabilir)
+      console.table(allPacks.slice(0, 10).map(p => ({ name: p.name, dl: p.download_count })));
       setPacks(allPacks.sort((a, b) => (a.name || '').localeCompare(b.name || '')));
     } catch (error: any) {
       console.error("Fetch error:", error);
-      alert("Firebase Data Fetch Error: " + (error?.message || "Unknown error"));
+      alert("Data Fetch Error: " + (error?.message || "Unknown error"));
     } finally {
       setLoading(false);
     }
@@ -1428,9 +1446,17 @@ function App() {
         }
       }
 
-      await setDoc(doc(db, collectionName, packId), packData);
+      // PocketBase'e kaydet (birincil), başarısız olursa Firestore'a düş
+      let createdId = packId;
+      try {
+        const created = await pb.collection(collectionName).create({ id: packId, ...packData });
+        createdId = created.id;
+      } catch (pbErr) {
+        console.warn("PocketBase create failed, falling back to Firestore:", pbErr);
+        await setDoc(doc(db, collectionName, packId), packData);
+      }
 
-      const createdPack = { id: packId, ...packData } as StickerPack;
+      const createdPack = { id: createdId, ...packData } as StickerPack;
       setPacks([createdPack, ...packs]);
       setSelectedPack(createdPack);
       setShowNewPackModal(false);
@@ -1506,31 +1532,41 @@ function App() {
       const newCollection = updatedData.is_premium ? 'premium_stickers' : 'stickers';
 
       if (oldCollection !== newCollection) {
-        // Koleksiyonlar arası geçiş - sadece database taşıma
-        console.log(`[UPDATE] ${oldCollection} -> ${newCollection} için ${selectedPack.id} paketi taşınıyor...`);
+        // Koleksiyonlar arası geçiş
+        console.log(`[UPDATE] ${oldCollection} -> ${newCollection} taşınıyor: ${selectedPack.id}`);
+        const fullData = { ...selectedPack, ...updatedData };
 
-        const fullData = {
-          ...selectedPack,
-          ...updatedData
-        };
-
-        // Yeni koleksiyona ekle
-        await setDoc(doc(db, newCollection, selectedPack.id), fullData);
-        console.log(`[UPDATE] Yeni döküman oluşturuldu: ${newCollection}/${selectedPack.id}`);
-
-        // Eski koleksiyondan sil
-        await deleteDoc(doc(db, oldCollection, selectedPack.id));
-        console.log(`[UPDATE] Eski döküman silindi: ${oldCollection}/${selectedPack.id}`);
+        // PocketBase: yeni koleksiyona ekle, eskisinden sil
+        let pbSuccess = false;
+        try {
+          await pb.collection(newCollection).create({ id: selectedPack.id, ...fullData });
+          try { await pb.collection(oldCollection).delete(selectedPack.id); } catch (_) {}
+          pbSuccess = true;
+        } catch (pbErr) {
+          console.warn("PocketBase collection move failed, using Firestore:", pbErr);
+        }
+        if (!pbSuccess) {
+          await setDoc(doc(db, newCollection, selectedPack.id), fullData);
+          await deleteDoc(doc(db, oldCollection, selectedPack.id));
+        }
 
         const updated = fullData as StickerPack;
         setPacks(packs.map(p => p.id === selectedPack.id ? updated : p));
         setSelectedPack(updated);
         setShowEditPackModal(false);
-
         alert(`Pack updated successfully.`);
       } else {
-        // Sadece bilgi güncelleme (tip değişikliği yok)
-        await updateDoc(doc(db, oldCollection, selectedPack.id), updatedData);
+        // Sadece bilgi güncelleme
+        let pbSuccess = false;
+        try {
+          await pb.collection(oldCollection).update(selectedPack.id, updatedData);
+          pbSuccess = true;
+        } catch (pbErr) {
+          console.warn("PocketBase update failed, using Firestore:", pbErr);
+        }
+        if (!pbSuccess) {
+          await updateDoc(doc(db, oldCollection, selectedPack.id), updatedData);
+        }
         const updated = { ...selectedPack, ...updatedData } as StickerPack;
         setPacks(packs.map(p => p.id === selectedPack.id ? updated : p));
         setSelectedPack(updated);
@@ -1704,13 +1740,15 @@ function App() {
         tray_image_file: newTrayFile
       };
 
-      await updateDoc(packRef, updatedData);
+      // PocketBase'e güncelle, başarısız olursa Firestore'a düş
+      try {
+        await pb.collection(collectionName).update(selectedPack.id, updatedData);
+      } catch (pbErr) {
+        console.warn("PocketBase sticker update failed, using Firestore:", pbErr);
+        await updateDoc(packRef, updatedData);
+      }
 
-      const updated = {
-        ...selectedPack,
-        ...updatedData
-      };
-
+      const updated = { ...selectedPack, ...updatedData };
       setPacks(packs.map(p => p.id === selectedPack.id ? updated : p));
       setSelectedPack(updated);
       alert(`${newStickers.length} stickers processed and added successfully. Cover image updated.`);
@@ -1871,10 +1909,15 @@ function App() {
         }
       } catch (e) { console.log('Storage silme hatası:', e); }
 
-      // 2. Firestore dokümanını sil
+      // 2. Veritabanından sil (PocketBase önce, Firestore fallback)
       setDeleteProgress({ deleting: true, message: 'Deleting from database...', current: 0, total: 1 });
       const collectionName = pack.is_premium ? 'premium_stickers' : 'stickers';
-      await deleteDoc(doc(db, collectionName, pack.id));
+      try {
+        await pb.collection(collectionName).delete(pack.id);
+      } catch (pbErr) {
+        console.warn("PocketBase delete failed, using Firestore:", pbErr);
+        await deleteDoc(doc(db, collectionName, pack.id));
+      }
 
       setPacks(packs.filter(p => p.id !== pack.id));
       if (selectedPack?.id === pack.id) setSelectedPack(null);
@@ -1894,11 +1937,23 @@ function App() {
 
       const newVersion = Date.now().toString();
       const newStickerCount = Math.max(0, (pack.stickers?.length || pack.sticker_count) - 1);
-      await updateDoc(packRef, {
-        stickers: arrayRemove(sticker),
-        sticker_count: newStickerCount,
-        image_data_version: newVersion
-      });
+      const newStickers = pack.stickers.filter(s => s.image_file !== sticker.image_file);
+
+      // PocketBase güncelle, başarısız olursa Firestore
+      try {
+        await pb.collection(collectionName).update(pack.id, {
+          stickers: newStickers,
+          sticker_count: newStickerCount,
+          image_data_version: newVersion,
+        });
+      } catch (pbErr) {
+        console.warn("PocketBase sticker delete failed, using Firestore:", pbErr);
+        await updateDoc(packRef, {
+          stickers: arrayRemove(sticker),
+          sticker_count: newStickerCount,
+          image_data_version: newVersion,
+        });
+      }
 
       // Storage'dan sil (tek klasör: stickers)
       const storagePath = `stickers/${pack.id}/${sticker.image_file}`;
