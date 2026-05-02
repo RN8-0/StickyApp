@@ -44,10 +44,17 @@ jobs:
             docker build -t sticky-worker:latest .
             docker stop sticky-worker 2>/dev/null || true
             docker rm sticky-worker 2>/dev/null || true
+            docker ps -aq --filter "name=^/sticky-worker-" | xargs -r docker rm -f
             docker run -d \
               --name sticky-worker \
               --restart unless-stopped \
               --network coolify \
+              -l "traefik.enable=true" \
+              -l "traefik.http.routers.sticky-worker.rule=Host(\`sticky-worker.46.225.95.201.sslip.io\`)" \
+              -l "traefik.http.routers.sticky-worker.entrypoints=https" \
+              -l "traefik.http.routers.sticky-worker.tls=true" \
+              -l "traefik.http.routers.sticky-worker.tls.certresolver=letsencrypt" \
+              -l "traefik.http.services.sticky-worker.loadbalancer.server.port=3000" \
               -e GOOGLE_APPLICATION_CREDENTIALS=/app/firebase-service-account.json \
               -e PB_URL=http://sh3xlf9j7symlj3otlw6s8rx-193542936752:8090 \
               -e PB_ADMIN_EMAIL=arainunger@gmail.com \
