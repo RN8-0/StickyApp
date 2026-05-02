@@ -1351,7 +1351,7 @@ class DetailsActivity : AppCompatActivity() {
                     Log.d("DetailsActivity", "Caching stickers dynamic...")
                     val storagePath = pack.storagePath
                     try {
-                        StickerRepository.downloadStickerToCache(this@DetailsActivity, pack.id, pack.tray, storagePath)
+                        StickerRepository.downloadStickerToCache(this@DetailsActivity, pack.id, pack.tray, storagePath, pack.trayUrl)
                         downloadedCount.incrementAndGet()
                     } catch (_: Exception) {}
 
@@ -1359,7 +1359,7 @@ class DetailsActivity : AppCompatActivity() {
                         chunk.map { sticker ->
                             async {
                                 try {
-                                    StickerRepository.downloadStickerToCache(this@DetailsActivity, pack.id, sticker.file, storagePath)
+                                    StickerRepository.downloadStickerToCache(this@DetailsActivity, pack.id, sticker.file, storagePath, sticker.url)
                                     downloadedCount.incrementAndGet()
                                 } catch (_: Exception) {}
                             }
@@ -1591,7 +1591,7 @@ class DetailsActivity : AppCompatActivity() {
                     kotlinx.coroutines.coroutineScope {
                         // Tray'i indir
                         val trayJob = async {
-                            StickerRepository.downloadStickerToCache(this@DetailsActivity, pack.id, pack.tray, storagePath)
+                            StickerRepository.downloadStickerToCache(this@DetailsActivity, pack.id, pack.tray, storagePath, pack.trayUrl)
                             val count = downloadedCount.incrementAndGet()
                             updateProgressText(count, totalFiles)
                         }
@@ -1600,7 +1600,7 @@ class DetailsActivity : AppCompatActivity() {
                         pack.stickers.chunked(16).forEach { chunk ->
                             chunk.map { sticker ->
                                 async {
-                                    StickerRepository.downloadStickerToCache(this@DetailsActivity, pack.id, sticker.file, storagePath)
+                                    StickerRepository.downloadStickerToCache(this@DetailsActivity, pack.id, sticker.file, storagePath, sticker.url)
                                     val count = downloadedCount.incrementAndGet()
                                     updateProgressText(count, totalFiles)
                                 }
@@ -1728,7 +1728,7 @@ class DetailsActivity : AppCompatActivity() {
                 withContext(Dispatchers.IO) {
                     kotlinx.coroutines.coroutineScope {
                         val trayJob = async {
-                            StickerRepository.downloadStickerToCache(this@DetailsActivity, pack.id, pack.tray, storagePath)
+                            StickerRepository.downloadStickerToCache(this@DetailsActivity, pack.id, pack.tray, storagePath, pack.trayUrl)
                             downloadedCount.incrementAndGet()
                         }
 
@@ -1736,7 +1736,7 @@ class DetailsActivity : AppCompatActivity() {
                         pack.stickers.chunked(30).forEach { chunk ->
                             chunk.map { sticker ->
                                 async {
-                                    StickerRepository.downloadStickerToCache(this@DetailsActivity, pack.id, sticker.file, storagePath)
+                                    StickerRepository.downloadStickerToCache(this@DetailsActivity, pack.id, sticker.file, storagePath, sticker.url)
                                     downloadedCount.incrementAndGet()
                                 }
                             }.awaitAll()

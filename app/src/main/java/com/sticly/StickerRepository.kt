@@ -538,7 +538,8 @@ object StickerRepository {
         context: Context,
         packId: String,
         fileName: String,
-        storagePath: String = STORAGE_PATH
+        storagePath: String = STORAGE_PATH,
+        directUrl: String = ""
     ): File? = withContext(Dispatchers.IO) {
         try {
             val cacheDir = File(context.cacheDir, "$CACHE_DIR/$packId")
@@ -546,13 +547,34 @@ object StickerRepository {
 
             val localFile = File(cacheDir, fileName)
 
-            // Zaten cache'de varsa tekrar indirme
             if (localFile.exists() && localFile.length() > 0) {
                 return@withContext localFile
             }
 
+            // PocketBase/sticky-images URL varsa oradan indir (birincil)
+            if (directUrl.isNotEmpty()) {
+                try {
+                    val conn = java.net.URL(directUrl).openConnection() as java.net.HttpURLConnection
+                    conn.connectTimeout = 15_000
+                    conn.readTimeout = 30_000
+                    conn.connect()
+                    if (conn.responseCode == 200) {
+                        conn.inputStream.use { input -> localFile.outputStream().use { input.copyTo(it) } }
+                        if (localFile.exists() && localFile.length() > 0) {
+                            Log.d(TAG, "Downloaded via URL: $directUrl")
+                            conn.disconnect()
+                            return@withContext localFile
+                        }
+                    }
+                    conn.disconnect()
+                } catch (urlEx: Exception) {
+                    Log.w(TAG, "URL download failed: $directUrl — ${urlEx.message}")
+                }
+            }
+
+            // Firebase Storage fallback (eski paketler için)
             val fullPath = "$storagePath/$packId/$fileName"
-            Log.d(TAG, "Downloading: $fullPath")
+            Log.d(TAG, "Downloading from Firebase Storage: $fullPath")
             val storageRef = storage.reference.child(fullPath)
             storageRef.getFile(localFile).await()
 
@@ -575,13 +597,13 @@ object StickerRepository {
                 coroutineScope {
                     // Tray image - ayrı olarak başlat
                     val trayJob = async {
-                        downloadStickerToCache(context, pack.id, pack.tray, storagePath)
+                        downloadStickerToCache(context, pack.id, pack.tray, storagePath, pack.trayUrl)
                     }
 
                     // Tüm stickerları paralel olarak indir (maksimum 6 eşzamanlı)
                     val stickerJobs = pack.stickers.map { sticker ->
                         async {
-                            downloadStickerToCache(context, pack.id, sticker.file, storagePath)
+                            downloadStickerToCache(context, pack.id, sticker.file, storagePath, sticker.url)
                         }
                     }
 
@@ -621,14 +643,14 @@ object StickerRepository {
                 coroutineScope {
                     // Tray image
                     val trayJob = async {
-                        downloadStickerToCache(context, pack.id, pack.tray, storagePath)
+                        downloadStickerToCache(context, pack.id, pack.tray, storagePath, pack.trayUrl)
                     }
 
                     // İlk N sticker'ı paralel olarak indir
                     val firstStickers = pack.stickers.take(count)
                     val stickerJobs = firstStickers.map { sticker ->
                         async {
-                            downloadStickerToCache(context, pack.id, sticker.file, storagePath)
+                            downloadStickerToCache(context, pack.id, sticker.file, storagePath, sticker.url)
                         }
                     }
 
