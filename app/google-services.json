@@ -14,6 +14,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "643314832062-5273dn3bvb72thq8cp5pdc5lk4t3k08k.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.sticly",
+            "certificate_hash": "2c419d72fd60f0f6c6500abacdc156394e4583cd"
+          }
+        },
+        {
           "client_id": "643314832062-92d390s20dp0079gcq0apea8am7uulrk.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
@@ -35,6 +43,14 @@
           "android_info": {
             "package_name": "com.sticly",
             "certificate_hash": "c29aebddf69ae96e8ae9f2e44a701dc9f6feb125"
+          }
+        },
+        {
+          "client_id": "643314832062-lcjonv7omjkk3g4hapnlvha3p86ipgl8.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.sticly",
+            "certificate_hash": "24eec3a3ec1d77f28fdd609fa68700579245a25b"
           }
         },
         {
