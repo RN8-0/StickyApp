@@ -636,7 +636,7 @@
     <string name="submit_pack_name_hint">Pangalan ng Pack</string>
     <string name="submit_category_label">Kategorya</string>
     <string name="submit_stickers_label">Mga sticker</string>
-    <string name="submit_stickers_hint">Magdagdag ng hindi bababa sa 3 sticker (max 30). I-tap para magdagdag mula sa gallery.</string>
+    <string name="submit_stickers_hint">Magdagdag ng hindi bababa sa 9 sticker (max 30). I-tap para magdagdag mula sa gallery.</string>
     <string name="submit_add_sticker">Magdagdag ng mga Sticker</string>
     <string name="submit_pack_button">Isumite ang Pack</string>
     <string name="submit_name_required">Kinakailangan ang pangalan ng pack</string>

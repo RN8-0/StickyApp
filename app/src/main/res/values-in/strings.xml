@@ -636,7 +636,7 @@
     <string name="submit_pack_name_hint">Nama Paket</string>
     <string name="submit_category_label">Kategori</string>
     <string name="submit_stickers_label">Stiker</string>
-    <string name="submit_stickers_hint">Tambahkan minimal 3 stiker (maks 30). Ketuk untuk menambahkan dari galeri.</string>
+    <string name="submit_stickers_hint">Tambahkan minimal 9 stiker (maks 30). Ketuk untuk menambahkan dari galeri.</string>
     <string name="submit_add_sticker">Tambahkan Stiker</string>
     <string name="submit_add_sticker_count">Tambahkan Stiker (%1$d/%2$d)</string>
     <string name="submit_pack_button">Kirim Paket</string>

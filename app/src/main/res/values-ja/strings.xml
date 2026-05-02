@@ -636,7 +636,7 @@
     <string name="submit_pack_name_hint">パック名</string>
     <string name="submit_category_label">カテゴリ</string>
     <string name="submit_stickers_label">ステッカー</string>
-    <string name="submit_stickers_hint">ステッカーを少なくとも 3 枚追加します (最大 30 枚)。タップしてギャラリーから追加します。</string>
+    <string name="submit_stickers_hint">ステッカーを少なくとも 9 枚追加します (最大 30 枚)。タップしてギャラリーから追加します。</string>
     <string name="submit_add_sticker">ステッカーを追加する</string>
     <string name="submit_add_sticker_count">ステッカーを追加 (%1$d/%2$d)</string>
     <string name="submit_pack_button">パックを送信する</string>

@@ -636,7 +636,7 @@
     <string name="submit_pack_name_hint">पैक का नाम</string>
     <string name="submit_category_label">वर्ग</string>
     <string name="submit_stickers_label">स्टिकर</string>
-    <string name="submit_stickers_hint">कम से कम 3 स्टिकर (अधिकतम 30) जोड़ें। गैलरी से जोड़ने के लिए टैप करें.</string>
+    <string name="submit_stickers_hint">कम से कम 9 स्टिकर (अधिकतम 30) जोड़ें। गैलरी से जोड़ने के लिए टैप करें.</string>
     <string name="submit_add_sticker">स्टिकर जोड़ें</string>
     <string name="submit_add_sticker_count">स्टिकर जोड़ें (%1$d/%2$d)</string>
     <string name="submit_pack_button">पैक जमा करें</string>

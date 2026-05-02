@@ -636,7 +636,7 @@
     <string name="submit_pack_name_hint">Nom du pack</string>
     <string name="submit_category_label">Catégorie</string>
     <string name="submit_stickers_label">Autocollants</string>
-    <string name="submit_stickers_hint">Ajoutez au moins 3 autocollants (max 30). Appuyez pour ajouter depuis la galerie.</string>
+    <string name="submit_stickers_hint">Ajoutez au moins 9 autocollants (max 30). Appuyez pour ajouter depuis la galerie.</string>
     <string name="submit_add_sticker">Ajouter des autocollants</string>
     <string name="submit_add_sticker_count">Ajouter des autocollants (%1$d/%2$d)</string>
     <string name="submit_pack_button">Soumettre le pack</string>

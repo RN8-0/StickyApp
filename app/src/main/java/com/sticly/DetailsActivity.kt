@@ -250,6 +250,7 @@ class DetailsActivity : AppCompatActivity() {
         lifecycleScope.launch { AdManager.loadInterstitialAd(this@DetailsActivity) }
 
         findViewById<android.widget.TextView>(R.id.name).text = pack.localizedName
+        setupPublisherStrip(pack)
 
         btnAction = findViewById(R.id.btnAction)
         btnWatchAd = findViewById(R.id.btnWatchAd)
@@ -669,6 +670,7 @@ class DetailsActivity : AppCompatActivity() {
 
     private fun setupButtons(pack: Pack, hasAccess: Boolean) {
         val isCustom = pack.category == "custom" || pack.id.startsWith("custom_")
+        val btnPublishTop = findViewById<android.widget.ImageButton>(R.id.btnPublishPackTop)
 
         // Ortak click listener'lar
         btnWatchAd.setOnClickListener {
@@ -695,6 +697,7 @@ class DetailsActivity : AppCompatActivity() {
 
         if (isCustom) {
             installedIcon.visibility = View.GONE // Custom packs don't use this icon
+            btnPublishTop?.visibility = View.VISIBLE
 
             // Custom pack add sticker, delete vs.
             btnGridAddSticker.setOnClickListener {
@@ -725,16 +728,26 @@ class DetailsActivity : AppCompatActivity() {
                     if (alreadySubmitted) {
                         btnPublish.text = getString(R.string.publish_pack_already_submitted)
                         btnPublish.isEnabled = false
+                        btnPublishTop?.isEnabled = false
+                        btnPublishTop?.alpha = 0.45f
                     } else {
-                        btnPublish.setOnClickListener {
+                        val publishClick = View.OnClickListener {
+                            if (pack.stickers.size < 9) {
+                                Toast.makeText(this, getString(R.string.submit_min_stickers, 9), Toast.LENGTH_SHORT).show()
+                                return@OnClickListener
+                            }
                             val intent = Intent(this, SubmitPackActivity::class.java)
                             intent.putExtra("packId", pack.id)
                             startActivity(intent)
                             overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left)
                         }
+                        btnPublish.setOnClickListener(publishClick)
+                        btnPublishTop?.setOnClickListener(publishClick)
                     }
                 }
             }
+        } else {
+            btnPublishTop?.visibility = View.GONE
         }
 
         // Her durumda UI'ı WhatsApp senkronizasyonu ile güncelle
@@ -793,17 +806,139 @@ class DetailsActivity : AppCompatActivity() {
         startActivity(Intent(this, PremiumActivity::class.java))
     }
 
+    private fun setupPublisherStrip(pack: Pack) {
+        val isCustom = pack.category == "custom" || pack.id.startsWith("custom_")
+        val strip = findViewById<LinearLayout>(R.id.publisherStrip) ?: return
+        if (isCustom || pack.pub.isBlank() || pack.pub.equals("Sticky", ignoreCase = true)) {
+            strip.visibility = View.GONE
+            return
+        }
+        val avatar = findViewById<ImageView>(R.id.publisherAvatar)
+        val name = findViewById<TextView>(R.id.tvPublisherName)
+        val followButton = findViewById<MaterialButton>(R.id.btnFollowPublisher)
+        strip.visibility = View.VISIBLE
+        name?.text = pack.pub
+        updateFollowButton(followButton, pack.email)
+        val clickListener = View.OnClickListener { showPublisherProfileDialog(pack) }
+        strip.setOnClickListener(clickListener)
+        avatar?.setOnClickListener(clickListener)
+        followButton?.setOnClickListener {
+            togglePublisherFollow(pack.email)
+            updateFollowButton(followButton, pack.email)
+        }
+
+        if (pack.email.isNotBlank()) {
+            lifecycleScope.launch {
+                val profile = withContext(Dispatchers.IO) {
+                    try {
+                        PocketBaseHelper.listRecords("user_profiles", filter = "email='${pack.email.replace("'", "\\'")}'", perPage = 1).firstOrNull()
+                    } catch (_: Exception) { null }
+                }
+                val photoUrl = profile?.optString("photo_url").orEmpty()
+                val displayName = profile?.let { it.optString("display_name", it.optString("name", pack.pub)) }.orEmpty()
+                if (displayName.isNotBlank()) name?.text = displayName
+                if (photoUrl.isNotBlank() && avatar != null) {
+                    Glide.with(this@DetailsActivity).load(photoUrl).circleCrop().placeholder(R.drawable.ic_person).into(avatar)
+                }
+            }
+        }
+    }
+
+    private fun isFollowingPublisher(email: String): Boolean {
+        if (email.isBlank()) return false
+        return getSharedPreferences("sticky_prefs", MODE_PRIVATE)
+            .getStringSet("followed_publishers", emptySet())
+            ?.contains(email) == true
+    }
+
+    private fun togglePublisherFollow(email: String) {
+        if (email.isBlank()) return
+        val prefs = getSharedPreferences("sticky_prefs", MODE_PRIVATE)
+        val current = prefs.getStringSet("followed_publishers", emptySet())?.toMutableSet() ?: mutableSetOf()
+        if (current.contains(email)) current.remove(email) else current.add(email)
+        prefs.edit().putStringSet("followed_publishers", current).apply()
+    }
+
+    private fun updateFollowButton(button: MaterialButton?, email: String) {
+        button ?: return
+        val following = isFollowingPublisher(email)
+        button.text = if (following) "Following" else "Follow"
+        button.alpha = if (following) 0.75f else 1f
+    }
+
+    private fun showPublisherProfileDialog(pack: Pack) {
+        val view = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(36, 24, 36, 8)
+        }
+        val title = TextView(this).apply {
+            text = pack.pub
+            textSize = 18f
+            setTextColor(ContextCompat.getColor(this@DetailsActivity, R.color.text_primary))
+            setTypeface(null, android.graphics.Typeface.BOLD)
+        }
+        val emailText = TextView(this).apply {
+            text = pack.email
+            textSize = 12f
+            setTextColor(ContextCompat.getColor(this@DetailsActivity, R.color.text_secondary))
+            setPadding(0, 4, 0, 12)
+        }
+        val packsText = TextView(this).apply {
+            text = "Loading packs..."
+            textSize = 13f
+            setTextColor(ContextCompat.getColor(this@DetailsActivity, R.color.text_secondary))
+        }
+        view.addView(title)
+        if (pack.email.isNotBlank()) view.addView(emailText)
+        view.addView(packsText)
+
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("Publisher profile")
+            .setView(view)
+            .setPositiveButton(if (isFollowingPublisher(pack.email)) "Following" else "Follow") { _, _ ->
+                togglePublisherFollow(pack.email)
+                setupPublisherStrip(pack)
+            }
+            .setNegativeButton(R.string.ok, null)
+            .show()
+
+        if (pack.email.isNotBlank()) {
+            lifecycleScope.launch {
+                val packs = withContext(Dispatchers.IO) {
+                    try {
+                        PocketBaseHelper.listRecords("stickers", filter = "publisher_email='${pack.email.replace("'", "\\'")}' && is_active=true", perPage = 20)
+                    } catch (_: Exception) { emptyList() }
+                }
+                packsText.text = if (packs.isEmpty()) {
+                    "No other public packs yet."
+                } else {
+                    packs.joinToString("\n") { "• ${it.optString("name", it.optString("pack_name", "Pack"))}" }
+                }
+                dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.text = if (isFollowingPublisher(pack.email)) "Following" else "Follow"
+            }
+        }
+    }
+
     private fun checkIfAlreadySubmitted(packId: String, callback: (Boolean) -> Unit) {
         val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
-        if (user == null) { callback(false); return }
+        val prefs = getSharedPreferences("user_prefs", MODE_PRIVATE)
+        val email = user?.email ?: prefs.getString("user_email", "").orEmpty()
+        if (user == null && email.isBlank()) { callback(false); return }
         lifecycleScope.launch {
             try {
                 val existing = withContext(Dispatchers.IO) {
-                    val escapedUid = user.uid.replace("'", "\\'")
+                    val escapedUid = user?.uid?.replace("'", "\\'").orEmpty()
+                    val escapedEmail = email.replace("'", "\\'")
+                    val escapedDeviceId = PreferencesHelper.getDeviceId(this@DetailsActivity).replace("'", "\\'")
                     val escapedPackId = packId.replace("'", "\\'")
+                    val ownerFilter = listOfNotNull(
+                        escapedUid.takeIf { it.isNotBlank() }?.let { "user_id='$it'" },
+                        escapedEmail.takeIf { it.isNotBlank() }?.let { "user_email='$it'" },
+                        "device_id='$escapedDeviceId'"
+                    ).joinToString(" || ")
                     PocketBaseHelper.listRecords(
                         "user_submissions",
-                        filter = "user_id='$escapedUid' && source_pack_id='$escapedPackId' && status!='rejected'",
+                        filter = "($ownerFilter) && source_pack_id='$escapedPackId' && status!='rejected'",
                         perPage = 1
                     )
                 }
@@ -820,7 +955,7 @@ class DetailsActivity : AppCompatActivity() {
             Toast.makeText(this, getString(R.string.publish_pack_login_required), Toast.LENGTH_SHORT).show()
             return
         }
-        if (pack.stickers.size < 3) {
+        if (pack.stickers.size < 9) {
             Toast.makeText(this, getString(R.string.publish_pack_min_stickers), Toast.LENGTH_SHORT).show()
             return
         }

@@ -576,8 +576,10 @@ class MainActivity : AppCompatActivity() {
                 updateCategoryChipSelection()
                 categoryChipGroup.visibility = View.VISIBLE
                 showHomeSections()
-                if (!restoreExploreState()) {
-                    applyFilters()
+                tabExplore.post {
+                    if (!restoreExploreState()) {
+                        applyFilters()
+                    }
                 }
             } catch (e: Exception) {
                 android.util.Log.e("BottomNav", "Explore tab error", e)
@@ -590,7 +592,7 @@ class MainActivity : AppCompatActivity() {
                 currentFilter = FilterType.FAVORITES
                 pendingScrollToTop = true
                 updateBottomNavUI()
-                applyFilters()
+                tabFavorites.post { applyFilters() }
             } catch (e: Exception) {
                 android.util.Log.e("BottomNav", "Favorites tab error", e)
             }
@@ -618,7 +620,7 @@ class MainActivity : AppCompatActivity() {
                 updateBottomNavUI()
                 categoryChipGroup.visibility = View.GONE
                 hideHomeSections()
-                applyFilters()
+                tabMyStickers.post { applyFilters() }
             } catch (e: Exception) {
                 android.util.Log.e("BottomNav", "MyStickers tab error", e)
             }
@@ -630,7 +632,7 @@ class MainActivity : AppCompatActivity() {
                 currentFilter = FilterType.PROFILE
                 ensureProfileInflated()
                 updateBottomNavUI()
-                loadProfileData()
+                tabProfile.post { loadProfileData() }
             } catch (e: Exception) {
                 android.util.Log.e("BottomNav", "Profile tab error", e)
                 updateBottomNavUI()
@@ -1284,13 +1286,10 @@ Rules:
                     android.util.Log.d("AiGenerate", "api.airforce ($model) response: $code")
 
                     if (code == 429) {
-                        conn.disconnect()
-                        // Parse retry delay from error message
                         val errBody = try { BufferedReader(InputStreamReader(conn.errorStream)).use { it.readText() } } catch (_: Exception) { "" }
-                        val waitSec = Regex("(\\d+) seconds").find(errBody)?.groupValues?.get(1)?.toLongOrNull() ?: (3L * attempt)
-                        android.util.Log.d("AiGenerate", "Rate limited, waiting ${waitSec}s")
-                        delay(waitSec * 1000 + 500)
-                        continue
+                        conn.disconnect()
+                        android.util.Log.d("AiGenerate", "Rate limited for $model, trying next model. Body: $errBody")
+                        return@withContext null
                     }
                     if (code != 200) { conn.disconnect(); return@withContext null }
 
@@ -1825,6 +1824,7 @@ Rules:
 
         val btnSharePack = findViewById<MaterialButton>(R.id.btnShareStickerPack)
         val btnLogin = findViewById<MaterialButton>(R.id.btnProfileLogin)
+        val btnNotifications = findViewById<android.widget.ImageButton>(R.id.btnProfileNotifications)
 
         btnSharePack?.setOnClickListener {
             val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
@@ -1838,6 +1838,10 @@ Rules:
 
         btnLogin?.setOnClickListener {
             profileSignIn()
+        }
+
+        btnNotifications?.setOnClickListener {
+            showProfileNotificationsDialog()
         }
     }
 
@@ -1856,17 +1860,21 @@ Rules:
         val email = findViewById<TextView>(R.id.profileEmail)
         val statsRow = findViewById<View>(R.id.profileStatsRow)
         val btnSharePack = findViewById<MaterialButton>(R.id.btnShareStickerPack)
+        val btnNotifications = findViewById<android.widget.ImageButton>(R.id.btnProfileNotifications)
         val packsTitle = findViewById<TextView>(R.id.profilePacksTitle)
         val rvPublished = findViewById<RecyclerView>(R.id.rvPublishedPacks)
         val emptyState = findViewById<View>(R.id.profileEmptyState)
+        val adminMessages = findViewById<View>(R.id.adminMessagesContainer)
 
         if (!isGoogleProfileSignedIn()) {
             loginPrompt?.visibility = View.VISIBLE
             statsRow?.visibility = View.GONE
             btnSharePack?.visibility = View.GONE
+            btnNotifications?.visibility = View.GONE
             packsTitle?.visibility = View.GONE
             rvPublished?.visibility = View.GONE
             emptyState?.visibility = View.GONE
+            adminMessages?.visibility = View.GONE
             avatar?.visibility = View.GONE
             displayName?.visibility = View.GONE
             email?.text = ""
@@ -1876,13 +1884,16 @@ Rules:
         loginPrompt?.visibility = View.GONE
         statsRow?.visibility = View.VISIBLE
         btnSharePack?.visibility = View.VISIBLE
+        btnNotifications?.visibility = View.VISIBLE
         packsTitle?.visibility = View.VISIBLE
         avatar?.visibility = View.VISIBLE
         displayName?.visibility = View.VISIBLE
 
         val prefs = getSharedPreferences("sticky_prefs", MODE_PRIVATE)
+        val firebaseUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+        val profileEmail = prefs.getString("user_email", "") ?: firebaseUser?.email.orEmpty()
         displayName?.text = prefs.getString("user_display_name", getString(R.string.profile_guest))
-        email?.text = prefs.getString("user_email", "") ?: ""
+        email?.text = profileEmail
 
         val photoUrl = prefs.getString("user_photo_url", null)
         if (photoUrl != null) {
@@ -1933,27 +1944,54 @@ Rules:
                     }
                 }
 
-                loadUserSubmissionsFromPB(deviceId, rvPublished, emptyState)
+                loadUserSubmissionsFromPB(deviceId, firebaseUser?.uid.orEmpty(), profileEmail, rvPublished, emptyState)
+                loadAdminNotificationsFromPB(deviceId, firebaseUser?.uid.orEmpty(), profileEmail)
             } catch (e: Exception) {
                 android.util.Log.e("Profile", "Error loading profile", e)
             }
         }
     }
 
-    private fun loadUserSubmissionsFromPB(deviceId: String, rv: RecyclerView?, emptyState: View?) {
+    private fun loadUserSubmissionsFromPB(deviceId: String, userId: String, email: String, rv: RecyclerView?, emptyState: View?) {
         lifecycleScope.launch {
             try {
                 val records = withContext(Dispatchers.IO) {
-                    PocketBaseHelper.listRecords("user_submissions", filter = "device_id='$deviceId'")
+                    PocketBaseHelper.listRecords("user_submissions", filter = ownerFilter(deviceId, userId, email))
                 }
+                val items = records.mapNotNull { record ->
+                    val name = record.optString("pack_name", record.optString("name", "")).takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                    val stickers = record.optJSONArray("stickers") ?: record.optJSONArray("sticker_data")
+                    val stickerUrls = mutableListOf<String>()
+                    if (stickers != null) {
+                        for (i in 0 until minOf(stickers.length(), 6)) {
+                            val obj = stickers.optJSONObject(i) ?: continue
+                            val url = obj.optString("image_url", obj.optString("url", ""))
+                            if (url.isNotBlank()) stickerUrls.add(url)
+                        }
+                    }
+                    SubmissionItem(
+                        id = record.optString("id"),
+                        name = name,
+                        status = record.optString("status", "pending"),
+                        stickerCount = record.optInt("sticker_count", stickers?.length() ?: 0),
+                        rejectionReason = record.optString("rejection_reason").takeIf { it.isNotBlank() },
+                        createdAt = parsePocketBaseTimestamp(record.optString("created_at", record.optString("created", ""))),
+                        stickerUrls = stickerUrls,
+                        storePackId = record.optString("sticker_pack_id").takeIf { it.isNotBlank() }
+                    )
+                }.sortedByDescending { it.createdAt?.toDate() }
+                val approvedCount = items.count { it.status == "approved" }
                 withContext(Dispatchers.Main) {
-                    if (records.isEmpty()) {
+                    if (items.isEmpty()) {
                         rv?.visibility = View.GONE
                         emptyState?.visibility = View.VISIBLE
                     } else {
                         rv?.visibility = View.VISIBLE
                         emptyState?.visibility = View.GONE
+                        if (rv?.layoutManager == null) rv?.layoutManager = LinearLayoutManager(this@MainActivity)
+                        rv?.adapter = SubmissionAdapter(items)
                     }
+                    findViewById<TextView>(R.id.statPublished)?.text = approvedCount.toString()
                 }
             } catch (_: Exception) {
                 withContext(Dispatchers.Main) {
@@ -1961,6 +1999,25 @@ Rules:
                     emptyState?.visibility = View.VISIBLE
                 }
             }
+        }
+    }
+
+    private fun ownerFilter(deviceId: String, userId: String, email: String): String {
+        fun escape(value: String) = value.replace("'", "\\'")
+        return listOfNotNull(
+            userId.takeIf { it.isNotBlank() }?.let { "user_id='${escape(it)}'" },
+            email.takeIf { it.isNotBlank() }?.let { "user_email='${escape(it)}'" },
+            deviceId.takeIf { it.isNotBlank() }?.let { "device_id='${escape(it)}'" }
+        ).joinToString(" || ").ifBlank { "device_id='${escape(deviceId)}'" }
+    }
+
+    private fun parsePocketBaseTimestamp(value: String): com.google.firebase.Timestamp? {
+        if (value.isBlank()) return null
+        return try {
+            val instant = java.time.Instant.parse(value)
+            com.google.firebase.Timestamp(java.util.Date.from(instant))
+        } catch (_: Exception) {
+            null
         }
     }
 
@@ -2044,6 +2101,127 @@ Rules:
                 }
             }
     }
+
+    private fun loadAdminNotificationsFromPB(deviceId: String, userId: String, email: String) {
+        val container = profileContentContainer?.rootView?.findViewById<android.widget.LinearLayout>(R.id.adminMessagesContainer)
+        val rv = profileContentContainer?.rootView?.findViewById<RecyclerView>(R.id.rvAdminMessages)
+        val badge = profileContentContainer?.rootView?.findViewById<TextView>(R.id.profileNotificationBadge)
+        if (container == null || rv == null) return
+
+        lifecycleScope.launch {
+            try {
+                val messages = withContext(Dispatchers.IO) { fetchProfileNotifications(deviceId, userId, email) }
+                val unreadCount = messages.count { !it.read }
+                withContext(Dispatchers.Main) {
+                    badge?.visibility = if (unreadCount > 0) View.VISIBLE else View.GONE
+                    badge?.text = unreadCount.coerceAtMost(99).toString()
+                    if (messages.isEmpty()) {
+                        container.visibility = View.GONE
+                        return@withContext
+                    }
+                    container.visibility = View.VISIBLE
+                    if (rv.layoutManager == null) rv.layoutManager = LinearLayoutManager(this@MainActivity)
+                    rv.adapter = object : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
+                        override fun getItemCount() = messages.size
+                        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int) =
+                            object : RecyclerView.ViewHolder(LayoutInflater.from(parent.context)
+                                .inflate(R.layout.item_admin_message, parent, false)) {}
+                        override fun onBindViewHolder(holder: RecyclerView.ViewHolder, pos: Int) {
+                            val msg = messages[pos]
+                            holder.itemView.findViewById<TextView>(R.id.tvMsgTitle).text = msg.title
+                            holder.itemView.findViewById<TextView>(R.id.tvMsgBody).text = msg.body
+                            holder.itemView.findViewById<TextView>(R.id.tvMsgDate).text = msg.dateLabel
+                            holder.itemView.alpha = if (msg.read) 0.75f else 1f
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("Profile", "Error loading PB notifications", e)
+                withContext(Dispatchers.Main) {
+                    container.visibility = View.GONE
+                    badge?.visibility = View.GONE
+                }
+            }
+        }
+    }
+
+    private suspend fun fetchProfileNotifications(deviceId: String, userId: String, email: String): List<ProfileNotification> {
+        fun escape(value: String) = value.replace("'", "\\'")
+        val filters = listOf(userId, email, deviceId)
+            .filter { it.isNotBlank() }
+            .distinct()
+            .joinToString(" || ") { "user_id='${escape(it)}'" }
+        if (filters.isBlank()) return emptyList()
+        return PocketBaseHelper.listRecords("notifications", filter = filters, perPage = 50)
+            .map { record ->
+                val timestamp = record.optString("timestamp", record.optString("created", ""))
+                val date = parsePocketBaseTimestamp(timestamp)?.toDate()
+                ProfileNotification(
+                    id = record.optString("id"),
+                    title = record.optString("title", getString(R.string.profile_notifications_title)),
+                    body = record.optString("body", record.optString("message", "")),
+                    read = record.optBoolean("read", false),
+                    dateLabel = date?.let { java.text.SimpleDateFormat("MMM d, yyyy", java.util.Locale.getDefault()).format(it) }.orEmpty(),
+                    timestamp = date?.time ?: 0L
+                )
+            }
+            .sortedByDescending { it.timestamp }
+    }
+
+    private fun showProfileNotificationsDialog() {
+        val deviceId = PreferencesHelper.getDeviceId(this)
+        val firebaseUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+        val prefs = getSharedPreferences("sticky_prefs", MODE_PRIVATE)
+        val email = prefs.getString("user_email", "") ?: firebaseUser?.email.orEmpty()
+        val userId = firebaseUser?.uid.orEmpty()
+        lifecycleScope.launch {
+            val messages = withContext(Dispatchers.IO) { fetchProfileNotifications(deviceId, userId, email) }
+            if (messages.isEmpty()) {
+                Toast.makeText(this@MainActivity, getString(R.string.no_notifications), Toast.LENGTH_SHORT).show()
+                return@launch
+            }
+            val content = android.widget.LinearLayout(this@MainActivity).apply {
+                orientation = android.widget.LinearLayout.VERTICAL
+                setPadding(32, 12, 32, 8)
+            }
+            messages.forEach { msg ->
+                val title = TextView(this@MainActivity).apply {
+                    text = msg.title
+                    setTextColor(ContextCompat.getColor(this@MainActivity, R.color.text_primary))
+                    textSize = 15f
+                    setTypeface(null, android.graphics.Typeface.BOLD)
+                }
+                val body = TextView(this@MainActivity).apply {
+                    text = if (msg.dateLabel.isBlank()) msg.body else "${msg.body}\n${msg.dateLabel}"
+                    setTextColor(ContextCompat.getColor(this@MainActivity, R.color.text_secondary))
+                    textSize = 13f
+                    setPadding(0, 4, 0, 18)
+                }
+                content.addView(title)
+                content.addView(body)
+            }
+            android.app.AlertDialog.Builder(this@MainActivity)
+                .setTitle(R.string.profile_notifications_title)
+                .setView(content)
+                .setPositiveButton(R.string.ok, null)
+                .show()
+            withContext(Dispatchers.IO) {
+                messages.filter { !it.read }.forEach { msg ->
+                    PocketBaseHelper.updateRecord("notifications", msg.id, org.json.JSONObject().put("read", true))
+                }
+            }
+            loadAdminNotificationsFromPB(deviceId, userId, email)
+        }
+    }
+
+    private data class ProfileNotification(
+        val id: String,
+        val title: String,
+        val body: String,
+        val read: Boolean,
+        val dateLabel: String,
+        val timestamp: Long
+    )
 
     private data class SubmissionItem(
         val id: String,
@@ -2153,13 +2331,16 @@ Rules:
                     .setTitle("Delete Submission")
                     .setMessage(msg)
                     .setPositiveButton("Delete") { _, _ ->
-                        val db = FirebaseFirestore.getInstance()
-                        db.collection("user_submissions").document(item.id).delete()
-                        // If approved, also remove from public stickers collection
-                        if (item.status == "approved" && item.storePackId != null) {
-                            db.collection("stickers").document(item.storePackId).delete()
+                        lifecycleScope.launch {
+                            withContext(Dispatchers.IO) {
+                                PocketBaseHelper.deleteRecord("user_submissions", item.id)
+                                if (item.status == "approved" && item.storePackId != null) {
+                                    PocketBaseHelper.deleteRecord("stickers", item.storePackId)
+                                }
+                            }
+                            Toast.makeText(this@MainActivity, "Submission deleted", Toast.LENGTH_SHORT).show()
+                            loadProfileData()
                         }
-                        Toast.makeText(this@MainActivity, "Submission deleted", Toast.LENGTH_SHORT).show()
                     }
                     .setNegativeButton("Cancel", null)
                     .show()
@@ -3216,8 +3397,8 @@ Rules:
     }
 
     private fun showLanguageDialog() {
-        val languages = arrayOf("English", "Türkçe", "简体中文", "Español", "\u200Eالعربية", "हिन्दी", "Português")
-        val codes = arrayOf("en", "tr", "zh", "es", "ar", "hi", "pt")
+        val languages = arrayOf("English", "Türkçe", "Español", "简体中文", "\u200Eالعربية", "हिन्दी", "Português", "Français", "Deutsch", "日本語")
+        val codes = arrayOf("en", "tr", "es", "zh", "ar", "hi", "pt", "fr", "de", "ja")
         val currentLang = PreferencesHelper.getLanguage(this)
         val selectedIndex = codes.indexOf(currentLang).takeIf { it >= 0 } ?: 0
 

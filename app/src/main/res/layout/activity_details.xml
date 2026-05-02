@@ -55,6 +55,16 @@
                 android:textSize="18sp"
                 android:textStyle="bold" />
 
+            <ImageButton
+                android:id="@+id/btnPublishPackTop"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:background="?selectableItemBackgroundBorderless"
+                android:src="@drawable/ic_share"
+                app:tint="@color/text_on_primary"
+                android:visibility="gone"
+                android:contentDescription="@string/publish_pack" />
+
             <!-- Installed Icon - WhatsApp'a eklenmiş paketi gösterir -->
             <ImageView
                 android:id="@+id/installedIcon"
@@ -98,6 +108,61 @@
             android:textColor="@color/text_on_primary_secondary"
             android:textStyle="normal"
             android:fontFamily="sans-serif" />
+
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/publisherStrip"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingHorizontal="16dp"
+        android:background="@color/surface"
+        android:visibility="gone">
+
+        <ImageView
+            android:id="@+id/publisherAvatar"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:src="@drawable/ic_person"
+            android:scaleType="centerCrop"
+            android:background="@drawable/circle_avatar_bg" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="10dp"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/tvPublisherName"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="@color/text_primary"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/tvPublisherHint"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="View profile"
+                android:textColor="@color/text_secondary"
+                android:textSize="11sp" />
+
+        </LinearLayout>
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnFollowPublisher"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:minWidth="84dp"
+            android:text="Follow"
+            android:textAllCaps="false"
+            android:textSize="12sp"
+            app:cornerRadius="18dp" />
 
     </LinearLayout>
 

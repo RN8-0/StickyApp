@@ -184,6 +184,15 @@ object StickerRepository {
             }
             if (stickers.isEmpty()) return null
             val id = json.optString("id").takeIf { it.isNotBlank() } ?: return null
+            val translations = mutableMapOf<String, String>()
+            val keys = json.keys()
+            while (keys.hasNext()) {
+                val key = keys.next()
+                if (key.startsWith("name_")) {
+                    val value = json.optString(key)
+                    if (value.isNotBlank()) translations[key.substringAfter("name_")] = value
+                }
+            }
             Pack(
                 id = id,
                 name = json.optString("name").ifBlank { id },
@@ -217,7 +226,7 @@ object StickerRepository {
                 priceTRY = json.optString("price_try"),
                 priceUSD = json.optString("price_usd"),
                 priceEUR = json.optString("price_eur"),
-                translations = emptyMap()
+                translations = translations
             )
         } catch (e: Exception) {
             Log.e(TAG, "PocketBase pack parse error: ${e.message}")
@@ -800,6 +809,7 @@ object StickerRepository {
 
         try {
             val collection = if (isPremium) "premium_stickers" else "stickers"
+            incrementPocketBaseCounter(collection, packId, "view_count", 1)
             val docRef = firestore.collection(collection).document(packId)
 
             // FieldValue.increment() kullan - alan yoksa otomatik oluşturur
@@ -833,6 +843,7 @@ object StickerRepository {
 
         try {
             val collection = if (isPremium) "premium_stickers" else "stickers"
+            incrementPocketBaseCounter(collection, packId, "download_count", 1)
             val docRef = firestore.collection(collection).document(packId)
 
             docRef.update("download_count", com.google.firebase.firestore.FieldValue.increment(1))
@@ -864,6 +875,7 @@ object StickerRepository {
 
         try {
             val collection = if (isPremium) "premium_stickers" else "stickers"
+            incrementPocketBaseCounter(collection, packId, "favorite_count", 1)
             val docRef = firestore.collection(collection).document(packId)
 
             docRef.update("favorite_count", com.google.firebase.firestore.FieldValue.increment(1))
@@ -895,6 +907,7 @@ object StickerRepository {
 
         try {
             val collection = if (isPremium) "premium_stickers" else "stickers"
+            incrementPocketBaseCounter(collection, packId, "favorite_count", -1)
             val docRef = firestore.collection(collection).document(packId)
 
             docRef.update("favorite_count", com.google.firebase.firestore.FieldValue.increment(-1))
@@ -906,6 +919,19 @@ object StickerRepository {
                 }
         } catch (e: Exception) {
             Log.e(TAG, "Error decrementing favorite count: ${e.message}")
+        }
+    }
+
+    private fun incrementPocketBaseCounter(collection: String, packId: String, field: String, delta: Int) {
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val record = PocketBaseHelper.getRecord(collection, packId)
+                val current = record.optInt(field, 0)
+                val next = (current + delta).coerceAtLeast(0)
+                PocketBaseHelper.updateRecord(collection, packId, org.json.JSONObject().put(field, next))
+            } catch (e: Exception) {
+                Log.e(TAG, "PB counter update failed for $collection/$packId $field: ${e.message}")
+            }
         }
     }
 

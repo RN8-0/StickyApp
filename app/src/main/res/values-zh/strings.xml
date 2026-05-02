@@ -636,7 +636,7 @@
     <string name="submit_pack_name_hint">包名称</string>
     <string name="submit_category_label">类别</string>
     <string name="submit_stickers_label">贴纸</string>
-    <string name="submit_stickers_hint">添加至少 3 个贴纸（最多 30 个）。点击即可从图库添加。</string>
+    <string name="submit_stickers_hint">添加至少 9 个贴纸（最多 30 个）。点击即可从图库添加。</string>
     <string name="submit_add_sticker">添加贴纸</string>
     <string name="submit_add_sticker_count">添加贴纸 (%1$d/%2$d)</string>
     <string name="submit_pack_button">提交包</string>

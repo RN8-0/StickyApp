@@ -22,6 +22,8 @@ import com.google.android.material.textfield.TextInputEditText
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
+import org.json.JSONObject
 import java.io.File
 
 class SubmitPackActivity : AppCompatActivity() {
@@ -38,6 +40,7 @@ class SubmitPackActivity : AppCompatActivity() {
     private var selectedPackId: String? = null
     private var packAdapter: SelectablePackAdapter? = null
     private var isSubmitting = false
+    private val minStoreStickerCount = 9
 
     private val categories = listOf(
         "humor", "love", "entertainment", "animals", "memes",
@@ -146,8 +149,8 @@ class SubmitPackActivity : AppCompatActivity() {
         val category = selectedChip?.tag as? String ?: "other"
 
         val pack = CustomStickerManager.getCustomPacks(this).firstOrNull { it.id == packId }
-        if (pack == null || pack.stickerCount < 3) {
-            Toast.makeText(this, getString(R.string.submit_min_stickers, 3), Toast.LENGTH_SHORT).show()
+        if (pack == null || pack.stickerCount < minStoreStickerCount) {
+            Toast.makeText(this, getString(R.string.submit_min_stickers, minStoreStickerCount), Toast.LENGTH_SHORT).show()
             return
         }
 
@@ -157,26 +160,56 @@ class SubmitPackActivity : AppCompatActivity() {
 
         val deviceId = PreferencesHelper.getDeviceId(this)
         val displayName = prefs.getString("user_display_name", "") ?: ""
-        val trayFile = File(filesDir, "custom_stickers/$packId/tray.webp")
-        val trayBase64 = if (trayFile.exists()) {
-            android.util.Base64.encodeToString(trayFile.readBytes(), android.util.Base64.NO_WRAP)
-        } else ""
+        val firebaseUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid.orEmpty()
+        val userId = firebaseUid.ifBlank { PocketBaseHelper.getAuthRecordId().orEmpty().ifBlank { email } }
 
         lifecycleScope.launch {
             try {
-                val submissionData = org.json.JSONObject().apply {
-                    put("device_id", deviceId)
-                    put("user_email", email)
-                    put("display_name", displayName)
-                    put("pack_id", packId)
-                    put("pack_name", packName)
-                    put("category", category)
-                    put("sticker_count", pack.stickerCount)
-                    put("status", "pending")
-                    put("tray_image_base64", trayBase64)
-                }
                 withContext(Dispatchers.IO) {
-                    PocketBaseHelper.createRecord("user_submissions", submissionData)
+                    val stickerFiles = CustomStickerManager.getStickerFiles(this@SubmitPackActivity, packId)
+                    if (stickerFiles.size < minStoreStickerCount) {
+                        throw IllegalStateException(getString(R.string.submit_min_stickers, minStoreStickerCount))
+                    }
+
+                    val uploadFiles = stickerFiles.mapIndexed { index, file ->
+                        PocketBaseHelper.UploadFile("images", "sticker_${index + 1}.webp", "image/webp", file.readBytes())
+                    }
+                    val fields = mapOf(
+                        "device_id" to deviceId,
+                        "user_id" to userId,
+                        "user_email" to email,
+                        "display_name" to displayName,
+                        "publisher_name" to displayName,
+                        "source_pack_id" to packId,
+                        "pack_name" to packName,
+                        "name" to packName,
+                        "category" to category,
+                        "sticker_count" to stickerFiles.size.toString(),
+                        "status" to "pending",
+                        "created_at" to java.time.Instant.now().toString(),
+                        "is_animated" to pack.isAnimated.toString(),
+                        "stickers" to "[]"
+                    )
+                    val created = PocketBaseHelper.createMultipartRecord("user_submissions", fields, uploadFiles)
+                    val recordId = created.getString("id")
+                    val uploadedImages = created.optJSONArray("images") ?: JSONArray()
+                    val stickersJson = JSONArray()
+                    for (index in 0 until uploadedImages.length()) {
+                        val uploadedFile = uploadedImages.optString(index)
+                        val url = PocketBaseHelper.getFileUrl("user_submissions", recordId, uploadedFile)
+                        stickersJson.put(JSONObject().apply {
+                            put("name", "sticker_${index + 1}")
+                            put("image_file", uploadedFile)
+                            put("image_url", url)
+                            put("url", url)
+                            put("emojis", JSONArray().put("⭐"))
+                        })
+                    }
+                    PocketBaseHelper.updateRecord("user_submissions", recordId, JSONObject().apply {
+                        put("stickers", stickersJson)
+                        put("sticker_data", stickersJson)
+                        put("sticker_count", stickersJson.length())
+                    })
                 }
                 Toast.makeText(this@SubmitPackActivity, getString(R.string.submit_success), Toast.LENGTH_LONG).show()
                 setResult(android.app.Activity.RESULT_OK)

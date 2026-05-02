@@ -361,6 +361,7 @@ function App() {
   const [userSubmissions, setUserSubmissions] = useState<UserSubmission[]>([]);
   const [submissionFilter, setSubmissionFilter] = useState<'all' | 'pending' | 'flagged' | 'approved' | 'rejected'>('all');
   const [selectedSubmission, setSelectedSubmission] = useState<UserSubmission | null>(null);
+  const [submissionEditData, setSubmissionEditData] = useState<UserSubmission | null>(null);
 
   const [showVideoBgModal, setShowVideoBgModal] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
@@ -493,11 +494,15 @@ function App() {
       try {
         const [publishers, submissions] = await Promise.all([
           pb.collection('publisher_users').getFullList({ sort: 'name' }).catch(() => []),
-          pb.collection('user_submissions').getFullList({ sort: '-created' }).catch(() => []),
+          pb.collection('user_submissions').getFullList({ sort: '-created_at' }).catch(() => []),
         ]);
         if (!mounted) return;
         setPublisherUsers((publishers as any[]).map(r => ({ id: r.id, display_name: r.display_name || r.name, avatar_url: r.avatar_url || '', bio: r.bio || '', category: r.category || '', packs_published: r.packs_published || 0, total_downloads: r.total_downloads || 0, created_at: r.created, is_active: r.is_active !== false } as PublisherUser)).sort((a, b) => (a.display_name || '').localeCompare(b.display_name || '')));
-        setUserSubmissions((submissions as any[]).map(r => ({ id: r.id, user_id: r.user_id || '', user_email: r.user_email || '', display_name: r.display_name || '', publisher_name: r.publisher_name, pack_name: r.pack_name || r.name || '', description: r.description, category: r.category || '', stickers: r.stickers || r.sticker_data || [], status: r.status || 'pending', flag_reasons: r.flag_reasons, rejection_reason: r.rejection_reason, sticker_count: r.sticker_count || 0, sticker_pack_id: r.sticker_pack_id, created_at: { seconds: new Date(r.created).getTime() / 1000 }, note: r.note } as UserSubmission)).sort((a, b) => (b.created_at?.seconds || 0) - (a.created_at?.seconds || 0)));
+        setUserSubmissions((submissions as any[]).map(r => {
+          const createdValue = r.created_at || r.created;
+          const createdMs = createdValue ? new Date(createdValue).getTime() : 0;
+          return { id: r.id, user_id: r.user_id || '', user_email: r.user_email || '', display_name: r.display_name || '', publisher_name: r.publisher_name, pack_name: r.pack_name || r.name || '', description: r.description, category: r.category || '', stickers: r.stickers || r.sticker_data || [], status: r.status || 'pending', flag_reasons: r.flag_reasons, rejection_reason: r.rejection_reason, sticker_count: r.sticker_count || (r.stickers || r.sticker_data || []).length || 0, sticker_pack_id: r.sticker_pack_id, created_at: { seconds: createdMs / 1000 }, note: r.note } as UserSubmission;
+        }).sort((a, b) => (b.created_at?.seconds || 0) - (a.created_at?.seconds || 0)));
       } catch (e) {
         console.error('PB publishers/submissions fetch error:', e);
       }
@@ -543,18 +548,88 @@ function App() {
   };
 
   // Submission handlers
+  const notifySubmissionUser = async (submission: UserSubmission, title: string, body: string, data: Record<string, unknown> = {}) => {
+    await pb.collection('notifications').create({
+      title,
+      body,
+      message: body,
+      user_id: submission.user_id || submission.user_email,
+      pack_id: submission.id,
+      from: 'admin',
+      read: false,
+      sent: false,
+      timestamp: new Date().toISOString(),
+      data,
+    }).catch((e) => console.warn('Submission notification skipped:', e));
+  };
+
+  const handleEditSubmission = (submission: UserSubmission) => {
+    setSelectedSubmission(submission);
+    setSubmissionEditData({ ...submission, stickers: [...(submission.stickers || [])] });
+  };
+
+  const handleRemoveSubmissionSticker = (index: number) => {
+    if (!submissionEditData) return;
+    setSubmissionEditData({
+      ...submissionEditData,
+      stickers: submissionEditData.stickers.filter((_, i) => i !== index),
+      sticker_count: Math.max(0, (submissionEditData.stickers?.length || 1) - 1),
+    });
+  };
+
+  const handleSaveSubmissionEdit = async () => {
+    if (!selectedSubmission || !submissionEditData) return;
+    const stickers = submissionEditData.stickers || [];
+    const updateData = {
+      pack_name: submissionEditData.pack_name,
+      name: submissionEditData.pack_name,
+      category: submissionEditData.category || 'other',
+      description: submissionEditData.description || '',
+      stickers,
+      sticker_data: stickers,
+      sticker_count: stickers.length,
+    };
+    try {
+      await pb.collection('user_submissions').update(selectedSubmission.id, updateData);
+      if (selectedSubmission.status === 'approved' && selectedSubmission.sticker_pack_id) {
+        const firstSticker: any = stickers[0] || {};
+        await pb.collection('stickers').update(selectedSubmission.sticker_pack_id, {
+          name: updateData.pack_name,
+          category: updateData.category,
+          stickers: stickers.map((s: any) => ({ image_file: s.image_file || s.name, url: s.image_url || s.url || '', emojis: s.emojis || ['⭐'] })),
+          sticker_count: stickers.length,
+          tray_image_file: firstSticker.image_file || firstSticker.name || '',
+          tray_url: firstSticker.image_url || firstSticker.url || '',
+        }).catch(() => {});
+      }
+      setUserSubmissions(userSubmissions.map(s => s.id === selectedSubmission.id ? { ...s, ...updateData } as UserSubmission : s));
+      setSelectedSubmission(null);
+      setSubmissionEditData(null);
+    } catch (e) {
+      console.error('Submission edit save error:', e);
+      alert('Failed to save submission changes.');
+    }
+  };
+
   const handleApproveSubmission = async (submission: UserSubmission) => {
     if (!window.confirm(`Approve "${submission.pack_name}" and move to stickers collection?`)) return;
     try {
       const stickers: Sticker[] = (submission.stickers || []).map((s: any) => ({
-        image_file: s.name || s.image_file,
+        image_file: s.image_file || s.name,
         url: s.image_url || s.url || '',
         emojis: s.emojis || ['⭐']
-      }));
+      })).filter(s => s.url);
+      if (stickers.length < 9) {
+        alert('A public pack must contain at least 9 stickers. Edit the submission or reject it with a reason.');
+        return;
+      }
       const packData = {
         name: submission.pack_name,
+        name_en: submission.pack_name,
         publisher: submission.display_name,
+        publisher_name: submission.display_name,
         publisher_email: submission.user_email,
+        publisher_user_id: submission.user_id || submission.user_email,
         category: submission.category || 'other',
         is_premium: false,
         is_animated: false,
@@ -569,14 +644,18 @@ function App() {
         stickers,
         tray_image_file: stickers[0]?.image_file || '',
         tray_url: stickers[0]?.url || '',
+        source: 'user_submission',
         privacy_policy_website: '',
         license_agreement_website: '',
+        created_at: new Date().toISOString(),
       };
       const created = await pb.collection('stickers').create(packData);
       await pb.collection('user_submissions').update(submission.id, {
         status: 'approved',
         sticker_pack_id: created.id,
+        processed_at: new Date().toISOString(),
       });
+      await notifySubmissionUser(submission, 'Sticker pack approved', `Your pack "${submission.pack_name}" was approved and is now live in Sticky.`, { type: 'submission_approved', sticker_pack_id: created.id });
       setUserSubmissions(userSubmissions.map(s => s.id === submission.id ? { ...s, status: 'approved' as any, sticker_pack_id: created.id } : s));
       alert(`"${submission.pack_name}" approved and published!`);
     } catch (e) {
@@ -595,8 +674,11 @@ function App() {
       await pb.collection('user_submissions').update(submission.id, {
         status: 'rejected',
         rejection_reason: reason.trim() || 'Your submission did not meet our content guidelines.',
+        processed_at: new Date().toISOString(),
       });
-      setUserSubmissions(userSubmissions.map(s => s.id === submission.id ? { ...s, status: 'rejected' as any } : s));
+      const rejectionReason = reason.trim() || 'Your submission did not meet our content guidelines.';
+      await notifySubmissionUser(submission, 'Sticker pack rejected', `Your pack "${submission.pack_name}" was rejected. Reason: ${rejectionReason}`, { type: 'submission_rejected', reason: rejectionReason });
+      setUserSubmissions(userSubmissions.map(s => s.id === submission.id ? { ...s, status: 'rejected' as any, rejection_reason: rejectionReason } : s));
       alert(`"${submission.pack_name}" rejected. Reason saved and will be shown to the user.`);
     } catch (e) {
       console.error('Reject error:', e);
@@ -4769,6 +4851,12 @@ function App() {
                         )}
                       </div>
                       <div className="flex flex-col items-end gap-2 shrink-0">
+                        <button
+                          onClick={() => handleEditSubmission(sub)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-violet-500/10 hover:bg-violet-500/20 text-violet-300 rounded-lg text-[11px] font-bold transition-all border border-violet-500/20"
+                        >
+                          <Edit3 size={12} /> Edit
+                        </button>
                         {(sub.status === 'pending' || sub.status === 'flagged') && (
                           <>
                             <button
@@ -4802,6 +4890,89 @@ function App() {
                   </div>
                 ))}
               </div>
+
+              {submissionEditData && selectedSubmission && (
+                <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                  <div className="bg-card rounded-2xl border border-white/10 w-full max-w-4xl max-h-[90vh] overflow-y-auto p-6 shadow-2xl space-y-5">
+                    <div className="flex items-center justify-between gap-4">
+                      <div>
+                        <h3 className="text-lg font-black text-white">Edit Submission</h3>
+                        <p className="text-xs text-textSec mt-0.5">Review name, category and remove unsuitable stickers before approval.</p>
+                      </div>
+                      <button onClick={() => { setSelectedSubmission(null); setSubmissionEditData(null); }} className="p-2 bg-white/5 rounded-lg hover:bg-white/10 transition-all">
+                        <X size={16} className="text-textSec" />
+                      </button>
+                    </div>
+
+                    <div className="grid md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-textSec uppercase tracking-widest">Pack Name</label>
+                        <input
+                          className="w-full bg-hover rounded-xl px-4 py-3 text-sm outline-none border border-white/5 text-white"
+                          value={submissionEditData.pack_name || ''}
+                          onChange={(e) => setSubmissionEditData({ ...submissionEditData, pack_name: e.target.value })}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-textSec uppercase tracking-widest">Category</label>
+                        <select
+                          className="w-full bg-hover rounded-xl px-4 py-3 text-sm outline-none border border-white/5 text-white"
+                          value={submissionEditData.category || 'other'}
+                          onChange={(e) => setSubmissionEditData({ ...submissionEditData, category: e.target.value })}
+                        >
+                          {CATEGORIES.map(cat => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-textSec uppercase tracking-widest">Description / Note</label>
+                      <textarea
+                        className="w-full bg-hover rounded-xl px-4 py-3 text-sm outline-none border border-white/5 text-white resize-none"
+                        rows={3}
+                        value={submissionEditData.description || ''}
+                        onChange={(e) => setSubmissionEditData({ ...submissionEditData, description: e.target.value })}
+                      />
+                    </div>
+
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <label className="text-[10px] font-black text-textSec uppercase tracking-widest">Stickers ({submissionEditData.stickers?.length || 0})</label>
+                        {(submissionEditData.stickers?.length || 0) < 9 && <span className="text-[10px] font-bold text-red-400">Minimum 9 required for approval</span>}
+                      </div>
+                      <div className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-8 gap-3">
+                        {(submissionEditData.stickers || []).map((sticker: any, index: number) => (
+                          <div key={`${sticker.image_url || sticker.url || sticker.name}-${index}`} className="relative aspect-square bg-white/5 rounded-xl border border-white/5 overflow-hidden group">
+                            <img src={sticker.image_url || sticker.url} alt={sticker.name || `Sticker ${index + 1}`} className="w-full h-full object-contain p-1" />
+                            <button
+                              onClick={() => handleRemoveSubmissionSticker(index)}
+                              className="absolute top-1 right-1 w-7 h-7 rounded-lg bg-red-500/90 text-white opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity flex items-center justify-center"
+                              title="Remove sticker"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                      <button
+                        onClick={handleSaveSubmissionEdit}
+                        className="flex-1 h-11 bg-primary hover:bg-primary/80 text-white rounded-xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-all"
+                      >
+                        <Save size={14} /> Save Changes
+                      </button>
+                      <button
+                        onClick={() => { setSelectedSubmission(null); setSubmissionEditData(null); }}
+                        className="h-11 px-5 bg-white/5 hover:bg-white/10 text-textSec rounded-xl font-black text-xs uppercase tracking-widest transition-all"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         ) : activeTab === 'batch' ? (

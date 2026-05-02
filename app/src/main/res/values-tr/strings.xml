@@ -636,7 +636,14 @@
     <string name="submit_pack_name_hint">Paket Adı</string>
     <string name="submit_category_label">Kategori</string>
     <string name="submit_stickers_label">Çıkartmalar</string>
-    <string name="submit_stickers_hint">En az 3 çıkartma ekleyin (en fazla 30). Galeriden eklemek için dokunun.</string>
+    <string name="submit_stickers_hint">En az 9 çıkartma ekleyin (en fazla 30). Galeriden eklemek için dokunun.</string>
+
+    <string name="publish_pack_min_stickers">Bir paketi yayınlamak için en az 9 çıkartma gerekir.</string>
+    <string name="status_pending">Onay bekleniyor</string>
+    <string name="status_approved">Onaylandı</string>
+    <string name="status_rejected">Reddedildi</string>
+    <string name="profile_notifications_title">Bildirimler</string>
+    <string name="no_notifications">Henüz bildirim yok</string>
     <string name="submit_add_sticker">Çıkartma Ekle</string>
     <string name="submit_add_sticker_count">Çıkartma Ekle (%1$d/%2$d)</string>
     <string name="submit_pack_button">Paketi Gönder</string>

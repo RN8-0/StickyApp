@@ -636,7 +636,7 @@
     <string name="submit_pack_name_hint">Tên gói</string>
     <string name="submit_category_label">Loại</string>
     <string name="submit_stickers_label">Nhãn dán</string>
-    <string name="submit_stickers_hint">Thêm ít nhất 3 nhãn dán (tối đa 30). Nhấn để thêm từ thư viện.</string>
+    <string name="submit_stickers_hint">Thêm ít nhất 9 nhãn dán (tối đa 30). Nhấn để thêm từ thư viện.</string>
     <string name="submit_add_sticker">Thêm hình dán</string>
     <string name="submit_add_sticker_count">Thêm Hình dán (%1$d/%2$d)</string>
     <string name="submit_pack_button">Gửi gói</string>

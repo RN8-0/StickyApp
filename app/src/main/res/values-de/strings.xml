@@ -636,7 +636,7 @@
     <string name="submit_pack_name_hint">Paketname</string>
     <string name="submit_category_label">Kategorie</string>
     <string name="submit_stickers_label">Aufkleber</string>
-    <string name="submit_stickers_hint">Fügen Sie mindestens 3 Aufkleber hinzu (maximal 30). Tippen Sie hier, um aus der Galerie hinzuzufügen.</string>
+    <string name="submit_stickers_hint">Fügen Sie mindestens 9 Aufkleber hinzu (maximal 30). Tippen Sie hier, um aus der Galerie hinzuzufügen.</string>
     <string name="submit_add_sticker">Fügen Sie Aufkleber hinzu</string>
     <string name="submit_add_sticker_count">Aufkleber hinzufügen (%1$d/%2$d)</string>
     <string name="submit_pack_button">Paket einreichen</string>

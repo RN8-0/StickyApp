@@ -636,7 +636,7 @@
     <string name="submit_pack_name_hint">ชื่อแพ็ค</string>
     <string name="submit_category_label">หมวดหมู่</string>
     <string name="submit_stickers_label">สติ๊กเกอร์</string>
-    <string name="submit_stickers_hint">เพิ่มสติกเกอร์อย่างน้อย 3 อัน (สูงสุด 30 อัน) แตะเพื่อเพิ่มจากแกลเลอรี</string>
+    <string name="submit_stickers_hint">เพิ่มสติกเกอร์อย่างน้อย 9 อัน (สูงสุด 30 อัน) แตะเพื่อเพิ่มจากแกลเลอรี</string>
     <string name="submit_add_sticker">เพิ่มสติ๊กเกอร์</string>
     <string name="submit_add_sticker_count">เพิ่มสติกเกอร์ (%1$d/%2$d)</string>
     <string name="submit_pack_button">ส่งแพ็ค</string>

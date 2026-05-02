@@ -636,7 +636,7 @@
     <string name="submit_pack_name_hint">Название пакета</string>
     <string name="submit_category_label">Категория</string>
     <string name="submit_stickers_label">Наклейки</string>
-    <string name="submit_stickers_hint">Добавьте минимум 3 стикера (максимум 30). Нажмите, чтобы добавить из галереи.</string>
+    <string name="submit_stickers_hint">Добавьте минимум 9 стикеров (максимум 30). Нажмите, чтобы добавить из галереи.</string>
     <string name="submit_add_sticker">Добавить наклейки</string>
     <string name="submit_add_sticker_count">Добавить стикеры (%1$d/%2$d)</string>
     <string name="submit_pack_button">Отправить пакет</string>

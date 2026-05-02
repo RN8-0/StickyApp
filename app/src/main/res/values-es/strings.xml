@@ -636,7 +636,7 @@
     <string name="submit_pack_name_hint">Nombre del paquete</string>
     <string name="submit_category_label">Categoría</string>
     <string name="submit_stickers_label">Pegatinas</string>
-    <string name="submit_stickers_hint">Añade al menos 3 pegatinas (máximo 30). Toque para agregar desde la galería.</string>
+    <string name="submit_stickers_hint">Añade al menos 9 pegatinas (máximo 30). Toque para agregar desde la galería.</string>
     <string name="submit_add_sticker">Agregar pegatinas</string>
     <string name="submit_add_sticker_count">Agregar pegatinas (%1$d/%2$d)</string>
     <string name="submit_pack_button">Enviar paquete</string>

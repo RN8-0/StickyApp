@@ -636,7 +636,7 @@
     <string name="submit_pack_name_hint">Nome del pacchetto</string>
     <string name="submit_category_label">Categoria</string>
     <string name="submit_stickers_label">Adesivi</string>
-    <string name="submit_stickers_hint">Aggiungi almeno 3 adesivi (max 30). Tocca per aggiungere dalla galleria.</string>
+    <string name="submit_stickers_hint">Aggiungi almeno 9 adesivi (max 30). Tocca per aggiungere dalla galleria.</string>
     <string name="submit_add_sticker">Aggiungi adesivi</string>
     <string name="submit_add_sticker_count">Aggiungi adesivi (%1$d/%2$d)</string>
     <string name="submit_pack_button">Invia pacchetto</string>

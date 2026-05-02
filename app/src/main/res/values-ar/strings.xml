@@ -636,7 +636,7 @@
     <string name="submit_pack_name_hint">اسم الحزمة</string>
     <string name="submit_category_label">فئة</string>
     <string name="submit_stickers_label">ملصقات</string>
-    <string name="submit_stickers_hint">أضف 3 ملصقات على الأقل (30 كحد أقصى). انقر للإضافة من المعرض.</string>
+    <string name="submit_stickers_hint">أضف 9 ملصقات على الأقل (30 كحد أقصى). انقر للإضافة من المعرض.</string>
     <string name="submit_add_sticker">إضافة ملصقات</string>
     <string name="submit_add_sticker_count">إضافة ملصقات (%1$d/%2$d)</string>
     <string name="submit_pack_button">إرسال الحزمة</string>
