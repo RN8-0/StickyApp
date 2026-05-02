@@ -61,6 +61,7 @@ jobs:
               docker load < /tmp/sticky-admin.tar.gz
               docker stop sticky-admin 2>/dev/null || true
               docker rm sticky-admin 2>/dev/null || true
+              docker ps -aq --filter "name=^/sticky-admin-" | xargs -r docker rm -f
               docker run -d \
                 --name sticky-admin \
                 --restart unless-stopped \

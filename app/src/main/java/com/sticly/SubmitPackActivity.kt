@@ -41,6 +41,7 @@ class SubmitPackActivity : AppCompatActivity() {
     private var packAdapter: SelectablePackAdapter? = null
     private var isSubmitting = false
     private val minStoreStickerCount = 9
+    private val maxStoreStickerCount = 30
 
     private val categories = listOf(
         "humor", "love", "entertainment", "animals", "memes",
@@ -149,8 +150,8 @@ class SubmitPackActivity : AppCompatActivity() {
         val category = selectedChip?.tag as? String ?: "other"
 
         val pack = CustomStickerManager.getCustomPacks(this).firstOrNull { it.id == packId }
-        if (pack == null || pack.stickerCount < minStoreStickerCount) {
-            Toast.makeText(this, getString(R.string.submit_min_stickers, minStoreStickerCount), Toast.LENGTH_SHORT).show()
+        if (pack == null || pack.stickerCount !in minStoreStickerCount..maxStoreStickerCount) {
+            Toast.makeText(this, getString(R.string.publish_pack_count_range), Toast.LENGTH_SHORT).show()
             return
         }
 
@@ -167,8 +168,8 @@ class SubmitPackActivity : AppCompatActivity() {
             try {
                 withContext(Dispatchers.IO) {
                     val stickerFiles = CustomStickerManager.getStickerFiles(this@SubmitPackActivity, packId)
-                    if (stickerFiles.size < minStoreStickerCount) {
-                        throw IllegalStateException(getString(R.string.submit_min_stickers, minStoreStickerCount))
+                    if (stickerFiles.size !in minStoreStickerCount..maxStoreStickerCount) {
+                        throw IllegalStateException(getString(R.string.publish_pack_count_range))
                     }
 
                     val uploadFiles = stickerFiles.mapIndexed { index, file ->

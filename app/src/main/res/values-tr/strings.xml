@@ -639,6 +639,7 @@
     <string name="submit_stickers_hint">En az 9 çıkartma ekleyin (en fazla 30). Galeriden eklemek için dokunun.</string>
 
     <string name="publish_pack_min_stickers">Bir paketi yayınlamak için en az 9 çıkartma gerekir.</string>
+    <string name="publish_pack_count_range">Bir sticker pack yayınlamak için 9–30 arası sticker içermelidir.</string>
     <string name="status_pending">Onay bekleniyor</string>
     <string name="status_approved">Onaylandı</string>
     <string name="status_rejected">Reddedildi</string>

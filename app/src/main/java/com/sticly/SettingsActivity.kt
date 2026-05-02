@@ -47,6 +47,7 @@ class SettingsActivity : AppCompatActivity() {
 
         setupListeners()
         updateNotificationStatus()
+        updateLanguageStatus()
         updateLoginSwitches()
     }
 
@@ -120,6 +121,10 @@ class SettingsActivity : AppCompatActivity() {
                 updateNotificationStatus()
                 Toast.makeText(this, R.string.notifications_disabled, Toast.LENGTH_SHORT).show()
             }
+        }
+
+        findViewById<View>(R.id.btnLanguage).setOnClickListener {
+            showLanguageDialog()
         }
 
         // Support & Share
@@ -348,6 +353,43 @@ class SettingsActivity : AppCompatActivity() {
         } else {
             getString(R.string.notifications_disabled)
         }
+    }
+
+    private fun updateLanguageStatus() {
+        findViewById<TextView>(R.id.tvLanguageStatus)?.text = languageName(PreferencesHelper.getLanguage(this))
+    }
+
+    private fun showLanguageDialog() {
+        val languageNames = arrayOf("English", "Türkçe", "Español", "简体中文", "العربية", "हिन्दी", "Português", "Français", "Deutsch", "日本語")
+        val languageCodes = arrayOf("en", "tr", "es", "zh", "ar", "hi", "pt", "fr", "de", "ja")
+        val currentIndex = languageCodes.indexOf(PreferencesHelper.getLanguage(this)).takeIf { it >= 0 } ?: 0
+        AlertDialog.Builder(this)
+            .setTitle(R.string.select_language)
+            .setSingleChoiceItems(languageNames, currentIndex) { dialog, which ->
+                val selectedCode = languageCodes[which]
+                if (selectedCode != PreferencesHelper.getLanguage(this)) {
+                    PreferencesHelper.setLanguage(this, selectedCode)
+                    dialog.dismiss()
+                    recreate()
+                } else {
+                    dialog.dismiss()
+                }
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
+    }
+
+    private fun languageName(code: String): String = when (code) {
+        "tr" -> "Türkçe"
+        "es" -> "Español"
+        "zh" -> "简体中文"
+        "ar" -> "العربية"
+        "hi" -> "हिन्दी"
+        "pt" -> "Português"
+        "fr" -> "Français"
+        "de" -> "Deutsch"
+        "ja" -> "日本語"
+        else -> "English"
     }
 
     private fun shareApp() {

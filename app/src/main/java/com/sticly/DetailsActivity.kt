@@ -721,29 +721,24 @@ class DetailsActivity : AppCompatActivity() {
             }
 
             // Publish to Store button
-            val btnPublish = findViewById<MaterialButton>(R.id.btnPublishPack)
-            if (btnPublish != null) {
-                btnPublish.visibility = View.VISIBLE
-                checkIfAlreadySubmitted(pack.id) { alreadySubmitted ->
-                    if (alreadySubmitted) {
-                        btnPublish.text = getString(R.string.publish_pack_already_submitted)
-                        btnPublish.isEnabled = false
-                        btnPublishTop?.isEnabled = false
-                        btnPublishTop?.alpha = 0.45f
-                    } else {
-                        val publishClick = View.OnClickListener {
-                            if (pack.stickers.size < 9) {
-                                Toast.makeText(this, getString(R.string.submit_min_stickers, 9), Toast.LENGTH_SHORT).show()
-                                return@OnClickListener
-                            }
-                            val intent = Intent(this, SubmitPackActivity::class.java)
-                            intent.putExtra("packId", pack.id)
-                            startActivity(intent)
-                            overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left)
+            checkIfAlreadySubmitted(pack.id) { alreadySubmitted ->
+                if (alreadySubmitted) {
+                    btnPublishTop?.isEnabled = false
+                    btnPublishTop?.alpha = 0.45f
+                } else {
+                    val publishClick = View.OnClickListener {
+                        if (pack.stickers.size !in 9..30) {
+                            Toast.makeText(this, getString(R.string.publish_pack_count_range), Toast.LENGTH_SHORT).show()
+                            return@OnClickListener
                         }
-                        btnPublish.setOnClickListener(publishClick)
-                        btnPublishTop?.setOnClickListener(publishClick)
+                        val intent = Intent(this, SubmitPackActivity::class.java)
+                        intent.putExtra("packId", pack.id)
+                        startActivity(intent)
+                        overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left)
                     }
+                    btnPublishTop?.isEnabled = true
+                    btnPublishTop?.alpha = 1f
+                    btnPublishTop?.setOnClickListener(publishClick)
                 }
             }
         } else {
@@ -955,8 +950,8 @@ class DetailsActivity : AppCompatActivity() {
             Toast.makeText(this, getString(R.string.publish_pack_login_required), Toast.LENGTH_SHORT).show()
             return
         }
-        if (pack.stickers.size < 9) {
-            Toast.makeText(this, getString(R.string.publish_pack_min_stickers), Toast.LENGTH_SHORT).show()
+        if (pack.stickers.size !in 9..30) {
+            Toast.makeText(this, getString(R.string.publish_pack_count_range), Toast.LENGTH_SHORT).show()
             return
         }
 
@@ -1027,9 +1022,6 @@ class DetailsActivity : AppCompatActivity() {
     ) {
         val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser ?: return
         val stickers = pack.stickers
-        val btnPublish = findViewById<MaterialButton>(R.id.btnPublishPack)
-        btnPublish?.isEnabled = false
-        btnPublish?.text = getString(R.string.publishing)
 
         lifecycleScope.launch {
             try {
@@ -1070,8 +1062,6 @@ class DetailsActivity : AppCompatActivity() {
 
                 if (stickerEntries.isEmpty()) {
                     Toast.makeText(this@DetailsActivity, getString(R.string.publish_pack_failed), Toast.LENGTH_SHORT).show()
-                    btnPublish?.isEnabled = true
-                    btnPublish?.text = getString(R.string.publish_pack)
                     onDone()
                     return@launch
                 }
@@ -1117,14 +1107,11 @@ class DetailsActivity : AppCompatActivity() {
                 }
 
                 Toast.makeText(this@DetailsActivity, getString(R.string.publish_pack_success), Toast.LENGTH_LONG).show()
-                btnPublish?.text = getString(R.string.publish_pack_already_submitted)
                 onDone()
 
             } catch (e: Exception) {
                 e.printStackTrace()
                 Toast.makeText(this@DetailsActivity, getString(R.string.publish_pack_failed), Toast.LENGTH_SHORT).show()
-                btnPublish?.isEnabled = true
-                btnPublish?.text = getString(R.string.publish_pack)
                 onDone()
             }
         }

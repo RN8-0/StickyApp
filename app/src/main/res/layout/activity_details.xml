@@ -366,25 +366,6 @@
 
         </LinearLayout>
 
-        <!-- Publish to Store button for custom packs -->
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnPublishPack"
-            android:layout_width="match_parent"
-            android:layout_height="44dp"
-            android:layout_marginTop="6dp"
-            android:text="@string/publish_pack"
-            android:textColor="@color/white"
-            android:textSize="13sp"
-            android:textAllCaps="false"
-            app:backgroundTint="@color/accent"
-            app:cornerRadius="12dp"
-            app:icon="@drawable/ic_share"
-            app:iconGravity="textStart"
-            app:iconTint="@color/white"
-            app:iconSize="18dp"
-            app:iconPadding="8dp"
-            android:visibility="gone" />
-
         <!-- Fixed Add to WhatsApp button for custom packs -->
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnFixedWhatsApp"

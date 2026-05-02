@@ -756,6 +756,7 @@
     <string name="publish_pack_login_required">Please sign in to publish your pack.</string>
     <string name="publish_pack_already_submitted">This pack is already under review.</string>
     <string name="publish_pack_min_stickers">You need at least 9 stickers to publish a pack.</string>
+    <string name="publish_pack_count_range">A sticker pack must contain 9–30 stickers to be published.</string>
     <string name="publishing">Publishing…</string>
 
     <!-- Publish Dialog -->
