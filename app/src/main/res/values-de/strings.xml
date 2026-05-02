@@ -107,7 +107,7 @@
     <string name="downloading">Herunterladen…</string>
     <string name="download_failed">Der Download ist fehlgeschlagen</string>
     <string name="error">Fehler: %s</string>
-    <string name="watch_ad_button">Watch &amp; Hinzufügen</string>
+    <string name="watch_ad_button">Ansehen &amp; Hinzufügen</string>
     <string name="premium_promo_title">Entschuldigung für die Werbung! 🧡</string>
     <string name="premium_promo_message">Es tut uns leid für die Werbung! Sie sind notwendig, damit wir weiterhin neue Sticker hinzufügen und die App für Sie verbessern können.\n\nVielen Dank für Ihr Verständnis! 🙏</string>
     <string name="get_premium">Ich verstehe</string>

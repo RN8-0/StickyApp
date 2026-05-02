@@ -85,9 +85,9 @@
     <string name="exit">출구</string>
     <string name="add_to_whatsapp">WhatsApp에 추가</string>
     <string name="update_on_whatsapp">WhatsApp에 대한 업데이트</string>
-    <string name="add_short">추가하다</string>
+    <string name="add_short">추가</string>
     <string name="remove_from_whatsapp">WhatsApp에서 제거</string>
-    <string name="confirm_remove">제거하다</string>
+    <string name="confirm_remove">제거</string>
     <string name="pack_added">팩이 추가되었습니다!</string>
     <string name="pack_removed">팩이 제거됨</string>
     <string name="pack_removed_from_whatsapp">WhatsApp에서 스티커가 제거되었습니다.</string>
@@ -107,7 +107,7 @@
     <string name="downloading">다운로드 중…</string>
     <string name="download_failed">다운로드 실패</string>
     <string name="error">오류: %s</string>
-    <string name="watch_ad_button">시계 &amp; 추가하다</string>
+    <string name="watch_ad_button">보고 추가</string>
     <string name="premium_promo_title">광고해서 미안해요! ✌</string>
     <string name="premium_promo_message">광고를 해서 죄송합니다! 새로운 스티커를 계속 추가하고 앱을 개선하는 데 필요합니다.\n\n이해해 주셔서 감사합니다! 🙏</string>
     <string name="get_premium">이해합니다</string>
@@ -242,8 +242,8 @@
     <string name="whatsapp_not_available_message">WhatsApp을 열 수 없습니다. 확인하세요:\n\n• WhatsApp이 설치되어 있습니다\n• WhatsApp에 로그인되어 있습니다\n• WhatsApp이 최신 상태입니다.</string>
     <string name="whatsapp_error_detailed">WhatsApp 오류: %s\n\nWhatsApp이 올바르게 작동하는지 확인하세요.</string>
     <string name="sticker_count">%d 스티커</string>
-    <string name="btn_add_short">추가하다</string>
-    <string name="btn_share_short">공유하다</string>
+    <string name="btn_add_short">추가</string>
+    <string name="btn_share_short">공유</string>
     <string name="download_label">다운로드</string>
     <string name="filter_downloads">다운로드</string>
     <string name="no_custom_packs">아직 스티커 팩이 없습니다.</string>

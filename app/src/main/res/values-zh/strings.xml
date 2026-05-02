@@ -87,7 +87,7 @@
     <string name="update_on_whatsapp">WhatsApp 更新</string>
     <string name="add_short">添加</string>
     <string name="remove_from_whatsapp">从 WhatsApp 中删除</string>
-    <string name="confirm_remove">消除</string>
+    <string name="confirm_remove">删除</string>
     <string name="pack_added">包已添加！</string>
     <string name="pack_removed">包装已移除</string>
     <string name="pack_removed_from_whatsapp">贴纸已从 WhatsApp 中移除</string>
@@ -107,7 +107,7 @@
     <string name="downloading">正在下载...</string>
     <string name="download_failed">下载失败</string>
     <string name="error">错误：%s</string>
-    <string name="watch_ad_button">手表与添加</string>
+    <string name="watch_ad_button">看广告添加</string>
     <string name="premium_promo_title">抱歉广告！ 🧡</string>
     <string name="premium_promo_message">对于广告，我们深表歉意！它们对于我们不断添加新贴纸并为您改进应用程序是必要的。\n\n感谢您的理解！ 🙏</string>
     <string name="get_premium">我明白</string>

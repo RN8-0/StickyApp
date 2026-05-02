@@ -12,13 +12,17 @@
 
     <FrameLayout
         android:layout_width="match_parent"
-        android:layout_height="match_parent">
+        android:layout_height="match_parent"
+        android:clipChildren="false"
+        android:clipToPadding="false">
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:orientation="vertical"
-            android:background="@color/background">
+            android:background="@color/background"
+            android:clipChildren="false"
+            android:clipToPadding="false">
 
             <!-- Toolbar -->
             <LinearLayout
@@ -511,14 +515,17 @@
                     android:layout_weight="1"
                     android:orientation="vertical"
                     android:gravity="center"
-                    android:layout_marginBottom="10dp"
+                    android:layout_marginTop="-18dp"
+                    android:layout_marginBottom="4dp"
+                    android:clipChildren="false"
+                    android:clipToPadding="false"
                     android:background="?selectableItemBackgroundBorderless">
                     <!-- Circular elevated home button -->
                     <FrameLayout
-                        android:layout_width="58dp"
-                        android:layout_height="58dp"
+                        android:layout_width="62dp"
+                        android:layout_height="62dp"
                         android:background="@drawable/bg_home_fab"
-                        android:elevation="10dp">
+                        android:elevation="14dp">
                         <ImageView
                             android:id="@+id/iconExplore"
                             android:layout_width="28dp"

@@ -143,9 +143,8 @@ class RegionalAdapter(
         h.rankNumber.visibility = View.VISIBLE
 
         // İndirme sayısı
-        val displayDownloadCount = pack.fakeDownloadBase + pack.downloadCount
-        h.downloadCount.text = if (displayDownloadCount > 0) {
-            "↓ ${formatDownloadValue(displayDownloadCount)}"
+        h.downloadCount.text = if (pack.downloadCount > 0) {
+            "↓ ${formatDownloadValue(pack.downloadCount)}"
         } else {
             "${pack.stickers.size} stickers"
         }

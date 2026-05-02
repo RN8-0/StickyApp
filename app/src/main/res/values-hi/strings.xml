@@ -85,9 +85,9 @@
     <string name="exit">बाहर निकलना</string>
     <string name="add_to_whatsapp">व्हाट्सएप में जोड़ें</string>
     <string name="update_on_whatsapp">व्हाट्सएप पर अपडेट करें</string>
-    <string name="add_short">जोड़ना</string>
+    <string name="add_short">जोड़ें</string>
     <string name="remove_from_whatsapp">व्हाट्सएप से हटाएं</string>
-    <string name="confirm_remove">निकालना</string>
+    <string name="confirm_remove">हटाएं</string>
     <string name="pack_added">पैक जोड़ा गया!</string>
     <string name="pack_removed">पैक हटा दिया गया</string>
     <string name="pack_removed_from_whatsapp">व्हाट्सएप से हटाया गया स्टिकर</string>
@@ -107,7 +107,7 @@
     <string name="downloading">डाउनलोड हो रहा है...</string>
     <string name="download_failed">डाउनलोड विफल रहा</string>
     <string name="error">त्रुटि: %s</string>
-    <string name="watch_ad_button">देखें &amp; जोड़ना</string>
+    <string name="watch_ad_button">देखें और जोड़ें</string>
     <string name="premium_promo_title">विज्ञापनों के लिए क्षमा करें! 🧡</string>
     <string name="premium_promo_message">हमें विज्ञापनों के लिए खेद है! नए स्टिकर जोड़ते रहने और आपके लिए ऐप को बेहतर बनाने के लिए ये हमारे लिए आवश्यक हैं।\n\nआपकी समझ के लिए धन्यवाद! 🙏</string>
     <string name="get_premium">मैं समझता हूँ</string>
@@ -242,8 +242,8 @@
     <string name="whatsapp_not_available_message">व्हाट्सएप नहीं खुल सका. कृपया जांचें:\n\n• व्हाट्सएप इंस्टॉल है\n• आप व्हाट्सएप में लॉग इन हैं\n• व्हाट्सएप अपडेट है।</string>
     <string name="whatsapp_error_detailed">व्हाट्सएप त्रुटि: %s\n\nकृपया सुनिश्चित करें कि व्हाट्सएप सही ढंग से काम कर रहा है।</string>
     <string name="sticker_count">%d स्टिकर</string>
-    <string name="btn_add_short">जोड़ना</string>
-    <string name="btn_share_short">शेयर करना</string>
+    <string name="btn_add_short">जोड़ें</string>
+    <string name="btn_share_short">शेयर</string>
     <string name="download_label">डाउनलोड</string>
     <string name="filter_downloads">डाउनलोड</string>
     <string name="no_custom_packs">अभी तक कोई स्टिकर पैक नहीं है</string>

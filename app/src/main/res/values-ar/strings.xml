@@ -85,9 +85,9 @@
     <string name="exit">مخرج</string>
     <string name="add_to_whatsapp">أضف إلى الواتساب</string>
     <string name="update_on_whatsapp">التحديث على الواتساب</string>
-    <string name="add_short">يضيف</string>
+    <string name="add_short">أضف</string>
     <string name="remove_from_whatsapp">إزالة من الواتس اب</string>
-    <string name="confirm_remove">يزيل</string>
+    <string name="confirm_remove">إزالة</string>
     <string name="pack_added">تمت إضافة الحزمة!</string>
     <string name="pack_removed">تمت إزالة الحزمة</string>
     <string name="pack_removed_from_whatsapp">تمت إزالة الملصق من WhatsApp</string>
@@ -107,7 +107,7 @@
     <string name="downloading">جارٍ التنزيل…</string>
     <string name="download_failed">فشل التنزيل</string>
     <string name="error">خطأ: %s</string>
-    <string name="watch_ad_button">مشاهدة &amp; يضيف</string>
+    <string name="watch_ad_button">شاهد وأضف</string>
     <string name="premium_promo_title">آسف للإعلانات! 🧡</string>
     <string name="premium_promo_message">نحن نأسف على الإعلانات! إنها ضرورية بالنسبة لنا لمواصلة إضافة ملصقات جديدة وتحسين التطبيق لك.\n\nشكرًا لتفهمك! 🙏</string>
     <string name="get_premium">أفهم</string>
@@ -242,7 +242,7 @@
     <string name="whatsapp_not_available_message">لا يمكن فتح الواتساب. يرجى التحقق مما يلي:\n\n• تم تثبيت WhatsApp\n• لقد قمت بتسجيل الدخول إلى WhatsApp\n• تحديث WhatsApp.</string>
     <string name="whatsapp_error_detailed">خطأ في واتساب: %s\n\nيرجى التأكد من أن واتساب يعمل بشكل صحيح.</string>
     <string name="sticker_count">%d ملصقات</string>
-    <string name="btn_add_short">يضيف</string>
+    <string name="btn_add_short">أضف</string>
     <string name="btn_share_short">يشارك</string>
     <string name="download_label">التنزيلات</string>
     <string name="filter_downloads">التنزيلات</string>

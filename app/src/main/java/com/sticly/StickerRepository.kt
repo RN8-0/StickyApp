@@ -6,7 +6,6 @@ import android.graphics.BitmapFactory
 import android.os.Build
 import android.util.Log
 import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.storage.FirebaseStorage
 import com.google.gson.Gson
 import kotlinx.coroutines.*
 import kotlinx.coroutines.tasks.await
@@ -16,7 +15,7 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 
 /**
- * Firebase Storage'dan sticker paketlerini yükleyen repository
+ * PocketBase'den sticker paketlerini yükleyen repository
  */
 object StickerRepository {
 
@@ -26,7 +25,6 @@ object StickerRepository {
     private const val CACHE_DIR = "sticker_cache"
     private const val STICKY_IMAGES_BASE = "https://sticky-images.46.225.95.201.sslip.io/stickers"
 
-    private val storage = FirebaseStorage.getInstance()
     private val firestore = FirebaseFirestore.getInstance()
     
     // Repository scope for long-running observers and background tasks
@@ -175,11 +173,12 @@ object StickerRepository {
     private fun parsePocketBasePack(json: org.json.JSONObject, isPremium: Boolean): Pack? {
         return try {
             val id = json.optString("id").takeIf { it.isNotBlank() } ?: return null
+            val collection = if (isPremium) "premium_stickers" else "stickers"
             val stickersJson = json.optJSONArray("stickers") ?: return null
             val stickers = (0 until stickersJson.length()).mapNotNull { i ->
                 val s = stickersJson.optJSONObject(i) ?: return@mapNotNull null
                 val file = s.optString("image_file").takeIf { it.isNotBlank() } ?: return@mapNotNull null
-                val url = normalizeStickerUrl(s.optString("url"), id, file)
+                val url = normalizeStickerUrl(s.optString("url"), id, file, collection)
                 val emojisArr = s.optJSONArray("emojis")
                 val emojis = emojisArr?.let { arr -> (0 until arr.length()).map { arr.optString(it) } }
                 Sticker(file = file, emojis = emojis, url = url)
@@ -213,13 +212,14 @@ object StickerRepository {
                 version = json.optString("image_data_version").ifBlank { "1" },
                 avoidCache = json.optBoolean("avoid_cache", false),
                 tray = json.optString("tray_image_file").ifBlank { "tray.webp" },
-                trayUrl = normalizeStickerUrl(json.optString("tray_url"), id, json.optString("tray_image_file").ifBlank { "tray.webp" }),
+                trayUrl = normalizeStickerUrl(json.optString("tray_url"), id, json.optString("tray_image_file").ifBlank { "tray.webp" }, collection),
                 stickers = stickers,
                 isPremium = isPremium,
                 productId = json.optString("product_id"),
-                storagePath = "stickers",
+                storagePath = if (isPremium) "premium_stickers" else "stickers",
                 createdAt = json.optString("created"),
                 category = json.optString("category"),
+                publisherPhotoUrl = json.optString("publisher_photo_url"),
                 downloadCount = json.optInt("download_count", 0),
                 fakeDownloadBase = json.optInt("fake_download_base", 0),
                 viewCount = json.optInt("view_count", 0),
@@ -433,69 +433,30 @@ object StickerRepository {
         }
     }
 
-    private fun normalizeStickerUrl(url: String, packId: String, fileName: String): String {
+    private fun normalizeStickerUrl(url: String, packId: String, fileName: String, collection: String = "stickers"): String {
         val trimmed = url.trim()
+        // Already a CDN or PocketBase URL → use as-is
         if (trimmed.contains("sticky-images.46.225.95.201.sslip.io")) return trimmed
+        if (trimmed.contains("sslip.io") || trimmed.contains("api/files")) return trimmed
 
         if (trimmed.contains("firebasestorage.googleapis.com")) {
-            val marker = "/o/stickers%2F"
-            val start = trimmed.indexOf(marker)
-            if (start >= 0) {
-                val encodedPath = trimmed.substring(start + marker.length).substringBefore("?")
-                val parts = encodedPath.split("%2F", limit = 2)
-                if (parts.size == 2) {
-                    val migratedPackId = java.net.URLDecoder.decode(parts[0], "UTF-8")
-                    val migratedFile = java.net.URLDecoder.decode(parts[1], "UTF-8")
-                    return "$STICKY_IMAGES_BASE/$migratedPackId/$migratedFile"
-                }
-            }
+            // Migrate Firebase URLs to PocketBase file API
+            return "${PocketBaseHelper.PB_URL}/api/files/$collection/$packId/$fileName"
         }
 
         if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) return trimmed
-        return "$STICKY_IMAGES_BASE/$packId/$fileName"
+        // Build PocketBase file API URL as default
+        return "${PocketBaseHelper.PB_URL}/api/files/$collection/$packId/$fileName"
     }
 
     /**
-     * Firebase Storage'dan contents.json yükler
+     * Legacy: Previously loaded from Firebase Storage. Now returns empty (PocketBase is primary).
      */
-    private suspend fun loadPacksFromStorage(context: Context): List<Pack> {
-        return try {
-            val storageRef = storage.reference.child("$STORAGE_PATH/$CONTENTS_FILE")
-            val localFile = File(context.cacheDir, CONTENTS_FILE)
+    @Suppress("UnusedPrivateMember")
+    private suspend fun loadPacksFromStorage(context: Context): List<Pack> = emptyList()
 
-            storageRef.getFile(localFile).await()
-
-            val json = localFile.readText()
-            val response = Gson().fromJson(json, Response::class.java)
-
-            // URL'leri ekle
-            response.packs.map { pack ->
-                val storagePath = pack.storagePath
-                pack.copy(
-                    trayUrl = getDownloadUrl("$storagePath/${pack.id}/${pack.tray}"),
-                    stickers = pack.stickers.map { sticker ->
-                        sticker.copy(
-                            url = getDownloadUrl("$storagePath/${pack.id}/${sticker.file}")
-                        )
-                    }
-                )
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error loading from Storage: ${e.message}")
-            emptyList()
-        }
-    }
-
-    /**
-     * Firebase Storage URL'ini alır (yavaş - API çağrısı yapar)
-     */
     suspend fun getDownloadUrl(path: String): String {
-        return try {
-            storage.reference.child(path).downloadUrl.await().toString()
-        } catch (e: Exception) {
-            Log.e(TAG, "Error getting download URL for $path: ${e.message}")
-            ""
-        }
+        return "${PocketBaseHelper.PB_URL}/api/files/$path"
     }
 
     /**
@@ -569,36 +530,35 @@ object StickerRepository {
                 return@withContext localFile
             }
 
-            // PocketBase/sticky-images URL varsa oradan indir (birincil)
-            val normalizedDirectUrl = normalizeStickerUrl(directUrl, packId, fileName)
-            if (normalizedDirectUrl.isNotEmpty()) {
+            // Build candidate URLs: try primary URL first, then PocketBase file API fallback
+            val primaryUrl = normalizeStickerUrl(directUrl, packId, fileName, storagePath)
+            val pbFallback1 = "${PocketBaseHelper.PB_URL}/api/files/$storagePath/$packId/$fileName"
+            val pbFallback2 = "${PocketBaseHelper.PB_URL}/api/files/stickers/$packId/$fileName"
+            val candidateUrls = linkedSetOf(primaryUrl, pbFallback1, pbFallback2).filter { it.isNotBlank() }
+
+            for (downloadUrl in candidateUrls) {
                 try {
-                    val conn = java.net.URL(normalizedDirectUrl).openConnection() as java.net.HttpURLConnection
+                    val conn = java.net.URL(downloadUrl).openConnection() as java.net.HttpURLConnection
                     conn.connectTimeout = 15_000
                     conn.readTimeout = 30_000
+                    conn.instanceFollowRedirects = true
                     conn.connect()
                     if (conn.responseCode == 200) {
                         conn.inputStream.use { input -> localFile.outputStream().use { input.copyTo(it) } }
+                        conn.disconnect()
                         if (localFile.exists() && localFile.length() > 0) {
-                            Log.d(TAG, "Downloaded via URL: $normalizedDirectUrl")
-                            conn.disconnect()
+                            Log.d(TAG, "Downloaded via URL: $downloadUrl")
                             if (!fileName.startsWith("tray")) compressForWhatsApp(localFile)
                             return@withContext localFile
                         }
+                    } else {
+                        Log.w(TAG, "HTTP ${conn.responseCode} for $downloadUrl")
+                        conn.disconnect()
                     }
-                    conn.disconnect()
                 } catch (urlEx: Exception) {
-                    Log.w(TAG, "URL download failed: $normalizedDirectUrl - ${urlEx.message}")
+                    Log.w(TAG, "URL download failed: $downloadUrl - ${urlEx.message}")
                 }
-                return@withContext null
             }
-
-            // Firebase Storage fallback (eski paketler için)
-            val fullPath = "$storagePath/$packId/$fileName"
-            Log.d(TAG, "Downloading from Firebase Storage: $fullPath")
-            val storageRef = storage.reference.child(fullPath)
-            storageRef.getFile(localFile).await()
-            if (!fileName.startsWith("tray")) compressForWhatsApp(localFile)
 
             localFile
         } catch (e: Exception) {

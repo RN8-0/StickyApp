@@ -85,9 +85,9 @@
     <string name="exit">Çıkış</string>
     <string name="add_to_whatsapp">WhatsApp\'a ekle</string>
     <string name="update_on_whatsapp">WhatsApp\'ta güncelleme</string>
-    <string name="add_short">Eklemek</string>
+    <string name="add_short">Ekle</string>
     <string name="remove_from_whatsapp">WhatsApp\'tan kaldır</string>
-    <string name="confirm_remove">Kaldırmak</string>
+    <string name="confirm_remove">Kaldır</string>
     <string name="pack_added">Paket eklendi!</string>
     <string name="pack_removed">Paket kaldırıldı</string>
     <string name="pack_removed_from_whatsapp">WhatsApp\'tan çıkartma kaldırıldı</string>
@@ -107,7 +107,7 @@
     <string name="downloading">İndiriliyor…</string>
     <string name="download_failed">İndirme başarısız oldu</string>
     <string name="error">Hata: %s</string>
-    <string name="watch_ad_button">İzle ve izle Eklemek</string>
+    <string name="watch_ad_button">İzle ve Ekle</string>
     <string name="premium_promo_title">Reklamlar için özür dileriz! 🧡</string>
     <string name="premium_promo_message">Reklamlar için özür dileriz! Yeni çıkartmalar eklemeye ve uygulamayı sizin için geliştirmeye devam edebilmemiz için bunlar gereklidir.\n\nAnlayışınız için teşekkür ederiz! 🙏</string>
     <string name="get_premium">Anladım</string>
@@ -242,8 +242,8 @@
     <string name="whatsapp_not_available_message">WhatsApp açılamadı. Lütfen kontrol edin:\n\n• WhatsApp yüklü\n• WhatsApp\'ta oturum açtınız\n• WhatsApp güncel.</string>
     <string name="whatsapp_error_detailed">WhatsApp hatası: %s\n\nLütfen WhatsApp\'ın doğru çalıştığından emin olun.</string>
     <string name="sticker_count">%d çıkartmalar</string>
-    <string name="btn_add_short">Eklemek</string>
-    <string name="btn_share_short">Paylaşmak</string>
+    <string name="btn_add_short">Ekle</string>
+    <string name="btn_share_short">Paylaş</string>
     <string name="download_label">indirmeler</string>
     <string name="filter_downloads">İndirilenler</string>
     <string name="no_custom_packs">Henüz Çıkartma Paketi Yok</string>

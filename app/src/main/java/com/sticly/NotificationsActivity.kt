@@ -6,6 +6,8 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.ProgressBar
 import android.widget.TextView
+import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
@@ -15,6 +17,9 @@ import com.google.android.material.appbar.MaterialToolbar
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.net.HttpURLConnection
+import java.net.URL
+import java.net.URLEncoder
 
 class NotificationsActivity : AppCompatActivity() {
 
@@ -35,6 +40,9 @@ class NotificationsActivity : AppCompatActivity() {
     private lateinit var rv: RecyclerView
     private lateinit var progress: ProgressBar
     private lateinit var emptyView: View
+    private var deviceId = ""
+    private var userId = ""
+    private var userEmail = ""
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -44,6 +52,13 @@ class NotificationsActivity : AppCompatActivity() {
 
         val toolbar = findViewById<MaterialToolbar>(R.id.toolbar)
         toolbar.setNavigationOnClickListener { finish() }
+        toolbar.inflateMenu(R.menu.menu_notifications)
+        toolbar.setOnMenuItemClickListener { item ->
+            if (item.itemId == R.id.action_clear_all) {
+                confirmClearAll()
+                true
+            } else false
+        }
 
         rv = findViewById(R.id.rvNotifications)
         progress = findViewById(R.id.notificationsProgress)
@@ -60,14 +75,14 @@ class NotificationsActivity : AppCompatActivity() {
         emptyView.visibility = View.GONE
         rv.visibility = View.GONE
 
-        val deviceId = PreferencesHelper.getDeviceId(this)
+        deviceId = PreferencesHelper.getDeviceId(this)
         val firebaseUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
         val prefs = getSharedPreferences("sticky_prefs", MODE_PRIVATE)
-        val email = prefs.getString("user_email", "") ?: firebaseUser?.email.orEmpty()
-        val userId = firebaseUser?.uid.orEmpty()
+        userEmail = prefs.getString("user_email", "") ?: firebaseUser?.email.orEmpty()
+        userId = firebaseUser?.uid.orEmpty()
 
         lifecycleScope.launch {
-            val list = withContext(Dispatchers.IO) { fetch(deviceId, userId, email) }
+            val list = withContext(Dispatchers.IO) { fetchFromWorker(deviceId, userId, userEmail) }
             progress.visibility = View.GONE
             items.clear()
             items.addAll(list)
@@ -79,14 +94,12 @@ class NotificationsActivity : AppCompatActivity() {
                 rv.visibility = View.VISIBLE
                 rv.adapter?.notifyDataSetChanged()
             }
-            // Mark unread as read on the server
             withContext(Dispatchers.IO) {
                 list.filter { !it.read }.forEach { msg ->
                     runCatching {
-                        PocketBaseHelper.updateRecord(
-                            "notifications",
-                            msg.id,
-                            org.json.JSONObject().put("read", true)
+                        workerPatch(
+                            "${PocketBaseHelper.WORKER_URL}/api/notifications/${msg.id}",
+                            "{\"read\":true}"
                         )
                     }
                 }
@@ -94,34 +107,96 @@ class NotificationsActivity : AppCompatActivity() {
         }
     }
 
-    private suspend fun fetch(deviceId: String, userId: String, email: String): List<Notif> {
-        fun escape(value: String) = value.replace("'", "\\'")
-        val filters = listOf(userId, email, deviceId)
-            .filter { it.isNotBlank() }
-            .distinct()
-            .joinToString(" || ") { "user_id='${escape(it)}'" }
-        if (filters.isBlank()) return emptyList()
-        return runCatching {
-            PocketBaseHelper.listRecords("notifications", filter = filters, perPage = 100)
-                .map { record ->
-                    val timestamp = record.optString("timestamp", record.optString("created", ""))
-                    val date = parseTimestamp(timestamp)
-                    Notif(
-                        id = record.optString("id"),
-                        title = record.optString("title", getString(R.string.profile_notifications_title)),
-                        body = record.optString("body", record.optString("message", "")),
-                        read = record.optBoolean("read", false),
-                        dateLabel = date?.let {
-                            java.text.SimpleDateFormat(
-                                "MMM d, yyyy · HH:mm",
-                                java.util.Locale.getDefault()
-                            ).format(it)
-                        }.orEmpty(),
-                        timestamp = date?.time ?: 0L
-                    )
+    private fun confirmClearAll() {
+        if (items.isEmpty()) return
+        AlertDialog.Builder(this)
+            .setMessage(getString(R.string.clear_all_confirm))
+            .setPositiveButton(getString(R.string.clear_all)) { _, _ -> doClearAll() }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    private fun doClearAll() {
+        lifecycleScope.launch {
+            withContext(Dispatchers.IO) {
+                runCatching {
+                    val params = buildQueryParams(deviceId, userId, userEmail)
+                    if (params.isNotEmpty()) {
+                        val conn = URL("${PocketBaseHelper.WORKER_URL}/api/notifications?$params")
+                            .openConnection() as HttpURLConnection
+                        conn.requestMethod = "DELETE"
+                        conn.connectTimeout = 10_000
+                        conn.readTimeout = 10_000
+                        conn.connect()
+                        conn.disconnect()
+                    }
                 }
-                .sortedByDescending { it.timestamp }
+            }
+            items.clear()
+            rv.adapter?.notifyDataSetChanged()
+            emptyView.visibility = View.VISIBLE
+            rv.visibility = View.GONE
+            Toast.makeText(this@NotificationsActivity, getString(R.string.notifications_cleared), Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private suspend fun fetchFromWorker(deviceId: String, userId: String, email: String): List<Notif> {
+        return runCatching {
+            val params = buildQueryParams(deviceId, userId, email)
+            if (params.isEmpty()) return@runCatching emptyList()
+            val conn = URL("${PocketBaseHelper.WORKER_URL}/api/notifications?$params")
+                .openConnection() as HttpURLConnection
+            conn.requestMethod = "GET"
+            conn.connectTimeout = 10_000
+            conn.readTimeout = 15_000
+            conn.connect()
+            if (conn.responseCode != 200) {
+                conn.disconnect()
+                return@runCatching emptyList()
+            }
+            val json = conn.inputStream.bufferedReader().readText()
+            conn.disconnect()
+            val arr = org.json.JSONArray(json)
+            (0 until arr.length()).map { i ->
+                val record = arr.getJSONObject(i)
+                val timestamp = record.optString("timestamp", record.optString("created", ""))
+                val date = parseTimestamp(timestamp)
+                Notif(
+                    id = record.optString("id"),
+                    title = record.optString("title", getString(R.string.profile_notifications_title)),
+                    body = record.optString("body", record.optString("message", "")),
+                    read = record.optBoolean("read", false),
+                    dateLabel = date?.let {
+                        java.text.SimpleDateFormat(
+                            "MMM d, yyyy · HH:mm",
+                            java.util.Locale.getDefault()
+                        ).format(it)
+                    }.orEmpty(),
+                    timestamp = date?.time ?: 0L
+                )
+            }.sortedByDescending { it.timestamp }
         }.getOrElse { emptyList() }
+    }
+
+    private fun buildQueryParams(deviceId: String, userId: String, email: String): String {
+        val parts = mutableListOf<String>()
+        if (deviceId.isNotBlank()) parts.add("deviceId=${URLEncoder.encode(deviceId, "UTF-8")}")
+        if (userId.isNotBlank()) parts.add("userId=${URLEncoder.encode(userId, "UTF-8")}")
+        if (email.isNotBlank()) parts.add("email=${URLEncoder.encode(email, "UTF-8")}")
+        return parts.joinToString("&")
+    }
+
+    private fun workerPatch(url: String, body: String) {
+        runCatching {
+            val conn = URL(url).openConnection() as HttpURLConnection
+            conn.requestMethod = "PATCH"
+            conn.setRequestProperty("Content-Type", "application/json")
+            conn.doOutput = true
+            conn.connectTimeout = 8_000
+            conn.outputStream.write(body.toByteArray())
+            conn.connect()
+            conn.disconnect()
+        }
     }
 
     private fun parseTimestamp(value: String): java.util.Date? {
@@ -130,8 +205,7 @@ class NotificationsActivity : AppCompatActivity() {
             java.util.Date.from(java.time.Instant.parse(value))
         } catch (_: Exception) {
             try {
-                val sdf = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSSXXX", java.util.Locale.US)
-                sdf.parse(value)
+                java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSSXXX", java.util.Locale.US).parse(value)
             } catch (_: Exception) {
                 null
             }

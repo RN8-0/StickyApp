@@ -392,6 +392,11 @@ class MainActivity : AppCompatActivity() {
             }
 
             FirebaseMessaging.getInstance().subscribeToTopic("stickers")
+            val deviceIdForFcm = PreferencesHelper.getDeviceId(this)
+            if (deviceIdForFcm.isNotBlank()) {
+                val safeTopic = "user_${deviceIdForFcm.replace(Regex("[^a-zA-Z0-9_-]"), "_")}"
+                FirebaseMessaging.getInstance().subscribeToTopic(safeTopic)
+            }
             PushTokenManager.refreshAndSync(this)
 
             // Kullanıcı giriş yapmışsa Firebase ile senkronize et (e-posta dahil)
@@ -514,18 +519,26 @@ class MainActivity : AppCompatActivity() {
         viewPool.setMaxRecycledViews(0, 20) // TYPE_PACK
         viewPool.setMaxRecycledViews(1, 5)  // TYPE_AD
         rv.setRecycledViewPool(viewPool)
-        adapter = PackAdapter(allPacks, { pack ->
-            sessionPackOpenCount++
-            if (sessionPackOpenCount == 3) {
-                StickyApp.appOpenAdInstance?.tryShowAd()
+        adapter = PackAdapter(
+            items = allPacks,
+            click = { pack ->
+                sessionPackOpenCount++
+                if (sessionPackOpenCount == 3) {
+                    StickyApp.appOpenAdInstance?.tryShowAd()
+                }
+                startActivity(Intent(this, DetailsActivity::class.java).putExtra("id", pack.id))
+                overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left)
+            },
+            onFavoriteChanged = {
+                if (currentFilter == FilterType.FAVORITES) applyFilters()
+            },
+            onDeleteClick = { pack ->
+                deleteCustomPack(pack)
+            },
+            onPublisherClick = { pack ->
+                showPacksByPublisher(pack.pub)
             }
-            startActivity(Intent(this, DetailsActivity::class.java).putExtra("id", pack.id))
-            overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left)
-        }, {
-            if (currentFilter == FilterType.FAVORITES) applyFilters()
-        }, { pack ->
-            deleteCustomPack(pack)
-        })
+        )
         rv.adapter = adapter
 
         menuBtn.setOnClickListener {
@@ -896,23 +909,12 @@ class MainActivity : AppCompatActivity() {
                     }
                     val optimizedPrompt = aiOptimizePrompt(queuedPrompt, queuedStyle)
 
-                    // Start a timer to show elapsed seconds
-                    val startTime = System.currentTimeMillis()
-                    val timerJob = lifecycleScope.launch(Dispatchers.Main) {
-                        while (true) {
-                            val elapsed = (System.currentTimeMillis() - startTime) / 1000
-                            val queueCount = aiActiveGenerations.get()
-                            val base = "🎨 Generating"
-                            val timer = "${elapsed}s"
-                            aiTvLoadingStatus?.text = if (queueCount > 1) "$base... $timer ($queueCount active)" else "$base... $timer"
-                            kotlinx.coroutines.delay(1000)
-                        }
+                    withContext(Dispatchers.Main) {
+                        val queueCount = aiActiveGenerations.get()
+                        aiTvLoadingStatus?.text = if (queueCount > 1) "✨ Generating... ($queueCount active)" else "✨ Generating..."
                     }
 
-                    val bitmap = aiGenerateImage(optimizedPrompt) {
-                        // no-op, timer handles progress display
-                    }
-                    timerJob.cancel()
+                    val bitmap = aiGenerateImage(optimizedPrompt) {}
 
                     if (bitmap != null) {
                         withContext(Dispatchers.Main) {
@@ -2324,17 +2326,21 @@ Rules:
                 holder.stickerPreviewRow.visibility = View.GONE
             }
 
-            // Analytics (downloads / favorites) for approved packs
+            // Analytics (downloads / favorites / views) for approved packs — from PocketBase
             if (item.status == "approved" && item.storePackId != null) {
                 holder.tvAnalytics.visibility = View.VISIBLE
-                FirebaseFirestore.getInstance().collection("stickers").document(item.storePackId)
-                    .get()
-                    .addOnSuccessListener { doc ->
-                        val dl  = doc.getLong("download_count") ?: 0L
-                        val fav = doc.getLong("favorite_count") ?: 0L
-                        holder.tvAnalytics.text = "📥 ${dl}  ❤️ ${fav}"
-                    }
-                    .addOnFailureListener { holder.tvAnalytics.visibility = View.GONE }
+                holder.tvAnalytics.text = "📥 —  ❤️ —"
+                lifecycleScope.launch {
+                    runCatching {
+                        val record = withContext(Dispatchers.IO) {
+                            PocketBaseHelper.getRecord("stickers", item.storePackId)
+                        }
+                        val dl  = record.optInt("download_count", 0)
+                        val fav = record.optInt("favorite_count", 0)
+                        val vw  = record.optInt("view_count", 0)
+                        holder.tvAnalytics.text = "📥 $dl  ❤️ $fav  👁 $vw"
+                    }.onFailure { holder.tvAnalytics.visibility = View.GONE }
+                }
             } else {
                 holder.tvAnalytics.visibility = View.GONE
             }
@@ -3153,6 +3159,29 @@ Rules:
 
     enum class FilterType { ALL, INSTALLED, PREMIUM, FAVORITES, PURCHASED, CUSTOM, AI, PROFILE }
 
+    private fun showPacksByPublisher(publisherName: String) {
+        if (publisherName.isBlank()) return
+        val filtered = allPacks.filter { it.pub.equals(publisherName, ignoreCase = true) }
+        if (filtered.isEmpty()) return
+        val dialog = androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle(publisherName)
+            .create()
+        val rv = androidx.recyclerview.widget.RecyclerView(this).apply {
+            layoutManager = androidx.recyclerview.widget.LinearLayoutManager(this@MainActivity)
+            setPadding(0, 16, 0, 16)
+            adapter = PackAdapter(
+                items = filtered,
+                click = { pack ->
+                    dialog.dismiss()
+                    startActivity(android.content.Intent(this@MainActivity, DetailsActivity::class.java).putExtra("id", pack.id))
+                    overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left)
+                }
+            )
+        }
+        dialog.setView(rv)
+        dialog.show()
+    }
+
     private fun applyFilters() {
         filterJob?.cancel()
         // Capture adapter snapshot on Main before switching to background
@@ -3421,23 +3450,50 @@ Rules:
     }
 
     private fun showLanguageDialog() {
-        val languages = arrayOf("English", "Türkçe", "Español", "简体中文", "\u200Eالعربية", "हिन्दी", "Português", "Français", "Deutsch", "日本語")
+        val languages = arrayOf("🇺🇸 English", "🇹🇷 Türkçe", "🇪🇸 Español", "🇨🇳 简体中文",
+            "🇸🇦 العربية", "🇮🇳 हिन्दी", "🇧🇷 Português", "🇫🇷 Français", "🇩🇪 Deutsch", "🇯🇵 日本語")
         val codes = arrayOf("en", "tr", "es", "zh", "ar", "hi", "pt", "fr", "de", "ja")
         val currentLang = PreferencesHelper.getLanguage(this)
-        val selectedIndex = codes.indexOf(currentLang).takeIf { it >= 0 } ?: 0
 
-        AlertDialog.Builder(this)
-            .setTitle(R.string.select_language)
-            .setSingleChoiceItems(languages, selectedIndex) { dialog, which ->
-                val selectedCode = codes[which]
-                if (selectedCode != currentLang) {
-                    PreferencesHelper.setLanguage(this, selectedCode)
-                    recreate()
-                }
-                dialog.dismiss()
+        val view = layoutInflater.inflate(R.layout.dialog_language_selector, null)
+        val container = view.findViewById<android.widget.LinearLayout>(R.id.llLanguageItems)
+        val cancelBtn = view.findViewById<android.widget.TextView>(R.id.tvLangCancel)
+
+        val dialog = AlertDialog.Builder(this)
+            .setView(view)
+            .create()
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+
+        languages.forEachIndexed { i, label ->
+            val itemView = layoutInflater.inflate(android.R.layout.simple_list_item_1, container, false)
+            val tv = itemView.findViewById<android.widget.TextView>(android.R.id.text1)
+            tv.text = label
+            tv.textSize = 15.5f
+            tv.setPadding(72, 36, 72, 36)
+            val isSelected = codes[i] == currentLang
+            tv.setTextColor(resources.getColor(if (isSelected) R.color.accent else R.color.text_primary, theme))
+            if (isSelected) {
+                tv.setTypeface(null, android.graphics.Typeface.BOLD)
+                tv.setCompoundDrawablesWithIntrinsicBounds(0, 0, R.drawable.ic_check, 0)
+                tv.compoundDrawablePadding = 16
             }
-            .setNegativeButton(R.string.cancel, null)
-            .show()
+            val ripple = android.util.TypedValue()
+            theme.resolveAttribute(android.R.attr.selectableItemBackground, ripple, true)
+            itemView.setBackgroundResource(ripple.resourceId)
+            itemView.setOnClickListener {
+                if (codes[i] != currentLang) {
+                    PreferencesHelper.setLanguage(this, codes[i])
+                    dialog.dismiss()
+                    recreate()
+                } else {
+                    dialog.dismiss()
+                }
+            }
+            container.addView(itemView)
+        }
+
+        cancelBtn.setOnClickListener { dialog.dismiss() }
+        dialog.show()
     }
 
     override fun attachBaseContext(newBase: android.content.Context) {

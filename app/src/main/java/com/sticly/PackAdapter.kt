@@ -44,7 +44,8 @@ class PackAdapter(
     private val click: (Pack) -> Unit,
     private val onFavoriteChanged: (() -> Unit)? = null,
     private val onDeleteClick: ((Pack) -> Unit)? = null,
-    private val onAddClick: ((Pack) -> Unit)? = null
+    private val onAddClick: ((Pack) -> Unit)? = null,
+    private val onPublisherClick: ((Pack) -> Unit)? = null
 ) : RecyclerView.Adapter<PackAdapter.VH>() {
 
     init {
@@ -127,6 +128,7 @@ class PackAdapter(
         val tray: ImageView? = v.findViewById(R.id.tray)
         val name: TextView? = v.findViewById(R.id.name)
         val pub: TextView? = v.findViewById(R.id.pub)
+        val publisherPhoto: ImageView? = v.findViewById(R.id.publisherPhoto)
         val count: TextView? = v.findViewById(R.id.count)
         val checkIcon: ImageView? = v.findViewById(R.id.checkIcon)
         val crownIcon: ImageView? = v.findViewById(R.id.crownIcon)
@@ -297,14 +299,32 @@ class PackAdapter(
 
         // Yayıncı + çıkartma sayısı + indirme sayısı tek satırda
         val stickerCount = pack.stickers.size
-        val displayDownloadCount = pack.fakeDownloadBase + pack.downloadCount
         val pubText = StringBuilder(pack.pub.length + 40)
         pubText.append(pack.pub)
         pubText.append(" • ").append(stickerCount).append(" stickers")
-        if (displayDownloadCount > 0) {
-            pubText.append(" • ").append(formatDownloadCount(displayDownloadCount)).append(" downloads")
+        if (pack.downloadCount > 0) {
+            pubText.append(" • ").append(formatDownloadCount(pack.downloadCount)).append(" downloads")
         }
         h.pub?.text = pubText
+
+        // Publisher photo
+        if (pack.publisherPhotoUrl.isNotBlank()) {
+            h.publisherPhoto?.visibility = View.VISIBLE
+            getGlide(context).load(pack.publisherPhotoUrl)
+                .circleCrop()
+                .placeholder(R.drawable.ic_person)
+                .into(h.publisherPhoto!!)
+        } else {
+            h.publisherPhoto?.visibility = View.GONE
+            h.publisherPhoto?.let { getGlide(context).clear(it) }
+        }
+
+        // Publisher name click → show other packs by same publisher
+        if (onPublisherClick != null && pack.pub.isNotBlank()) {
+            h.pub?.setOnClickListener { onPublisherClick.invoke(pack) }
+        } else {
+            h.pub?.setOnClickListener(null)
+        }
 
         h.itemView.setOnClickListener { click(pack) }
 

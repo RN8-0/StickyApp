@@ -87,7 +87,7 @@
     <string name="update_on_whatsapp">WhatsApp でアップデートする</string>
     <string name="add_short">追加</string>
     <string name="remove_from_whatsapp">WhatsAppから削除</string>
-    <string name="confirm_remove">取り除く</string>
+    <string name="confirm_remove">削除</string>
     <string name="pack_added">パック追加しました！</string>
     <string name="pack_removed">パックを取り外した</string>
     <string name="pack_removed_from_whatsapp">WhatsAppからステッカーが削除されました</string>
@@ -107,7 +107,7 @@
     <string name="downloading">ダウンロード中…</string>
     <string name="download_failed">ダウンロードに失敗しました</string>
     <string name="error">エラー: %s</string>
-    <string name="watch_ad_button">視聴＆視聴追加</string>
+    <string name="watch_ad_button">見て追加</string>
     <string name="premium_promo_title">広告ごめんなさい！ 🧡</string>
     <string name="premium_promo_message">広告が多くてごめんなさい!これらは、新しいステッカーを追加し、アプリを改善し続けるために必要です。\n\nご理解いただき、ありがとうございます。 🙏</string>
     <string name="get_premium">わかりました</string>

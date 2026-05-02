@@ -6,6 +6,7 @@ const telegramRouter = require('./routes/telegram');
 const translateRouter = require('./routes/translate');
 const nsfwRouter = require('./routes/nsfw');
 const notifyRouter = require('./routes/notify');
+const notificationsRouter = require('./routes/notifications');
 const usersRouter = require('./routes/users');
 const statsRouter = require('./routes/stats');
 
@@ -15,7 +16,7 @@ app.use(express.json());
 // CORS
 app.use((req, res, next) => {
   res.set('Access-Control-Allow-Origin', '*');
-  res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.set('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
   res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   if (req.method === 'OPTIONS') return res.status(204).end();
   next();
@@ -61,6 +62,7 @@ app.use('/api/telegram', telegramRateLimit, telegramRouter);
 app.use('/api/translate', rateLimit, translateRouter);
 app.use('/api/nsfw', rateLimit, nsfwRouter);
 app.use('/api/notify', notifyRouter);
+app.use('/api/notifications', notificationsRouter);
 app.use('/api/users', usersRouter);
 app.use('/api/stats', rateLimit, statsRouter);
 

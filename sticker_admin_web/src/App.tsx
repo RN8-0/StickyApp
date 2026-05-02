@@ -276,7 +276,7 @@ function App() {
   const [panelDragOverIdx, setPanelDragOverIdx] = useState<number | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState<'dashboard' | 'packs' | 'stats' | 'messages' | 'notifications' | 'users' | 'batch' | 'submissions'>('dashboard');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'passive' | 'animated' | 'static' | 'premium' | 'new'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'passive' | 'animated' | 'static' | 'premium' | 'new' | 'user_submission'>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [statsFilter, setStatsFilter] = useState<'all' | 'active' | 'passive' | 'premium' | 'normal' | 'popular'>('all');
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
@@ -503,17 +503,35 @@ function App() {
         setUserSubmissions((submissions as any[]).map(r => {
           const createdValue = r.created_at || r.created;
           const createdMs = createdValue ? new Date(createdValue).getTime() : 0;
+          const collId = r.collectionId || 'user_submissions';
+          const parseField = (raw: any): any[] => {
+            if (Array.isArray(raw) && raw.length > 0) return raw;
+            if (typeof raw === 'string' && raw.length > 2) {
+              try { const p = JSON.parse(raw); return Array.isArray(p) ? p : []; } catch { return []; }
+            }
+            return [];
+          };
           const images = Array.isArray(r.images) ? r.images : [];
           const derivedStickers = images.map((filename: string, index: number) => ({
             name: `sticker_${index + 1}`,
             image_file: filename,
-            image_url: getFileUrl(r.collectionId || 'user_submissions', r.id, filename),
-            url: getFileUrl(r.collectionId || 'user_submissions', r.id, filename),
+            image_url: getFileUrl(collId, r.id, filename),
+            url: getFileUrl(collId, r.id, filename),
             emojis: ['⭐'],
           }));
-          const stickers = (Array.isArray(r.stickers) && r.stickers.length > 0)
-            ? r.stickers
-            : ((Array.isArray(r.sticker_data) && r.sticker_data.length > 0) ? r.sticker_data : derivedStickers);
+          const parsedStickers = parseField(r.stickers);
+          const parsedStickerData = parseField(r.sticker_data);
+          // Ensure each sticker has image_url populated via PocketBase file API
+          const enrichStickers = (arr: any[]) => arr.map((s: any) => ({
+            ...s,
+            image_url: s.image_url || s.url || getFileUrl(collId, r.id, s.image_file || s.name || ''),
+            url: s.url || s.image_url || getFileUrl(collId, r.id, s.image_file || s.name || ''),
+          }));
+          const stickers = parsedStickers.length > 0
+            ? enrichStickers(parsedStickers)
+            : parsedStickerData.length > 0
+              ? enrichStickers(parsedStickerData)
+              : derivedStickers;
           return { id: r.id, user_id: r.user_id || '', device_id: r.device_id || '', user_email: r.user_email || '', display_name: r.display_name || '', publisher_name: r.publisher_name, pack_name: r.pack_name || r.name || '', description: r.description, category: r.category || '', stickers, status: r.status || 'pending', flag_reasons: r.flag_reasons, rejection_reason: r.rejection_reason, sticker_count: r.sticker_count || stickers.length || 0, sticker_pack_id: r.sticker_pack_id, created_at: { seconds: createdMs / 1000 }, note: r.note } as UserSubmission;
         }).sort((a, b) => (b.created_at?.seconds || 0) - (a.created_at?.seconds || 0)));
       } catch (e) {
@@ -604,6 +622,14 @@ function App() {
   const notifySubmissionUser = async (submission: UserSubmission, title: string, body: string, data: Record<string, unknown> = {}) => {
     await createSubmissionNotification(submission, title, body, data)
       .catch((e) => console.warn('Submission notification skipped:', e));
+    const deviceId = submission.device_id;
+    if (deviceId) {
+      fetch(`${WORKER_URL}/api/notify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, body, deviceId, data }),
+      }).catch((e) => console.warn('Push notification skipped:', e));
+    }
   };
 
   const handleEditSubmission = (submission: UserSubmission) => {
@@ -669,10 +695,11 @@ function App() {
       const packData = {
         name: submission.pack_name,
         name_en: submission.pack_name,
-        publisher: submission.display_name,
-        publisher_name: submission.display_name,
+        publisher: submission.publisher_name || submission.display_name,
+        publisher_name: submission.publisher_name || submission.display_name,
         publisher_email: submission.user_email,
         publisher_user_id: submission.user_id || submission.user_email,
+        publisher_photo_url: '',
         category: submission.category || 'other',
         is_premium: false,
         is_animated: false,
@@ -2222,6 +2249,10 @@ function App() {
     if (statusFilter === 'static') return p.is_animated !== true;
     if (statusFilter === 'premium') return p.is_premium === true;
     if (statusFilter === 'new') return isNew(p);
+    if (statusFilter === 'user_submission') {
+      const approvedPackIds = new Set(userSubmissions.filter(s => s.status === 'approved' && s.sticker_pack_id).map(s => s.sticker_pack_id));
+      return approvedPackIds.has(p.id);
+    }
     return true;
   });
 
@@ -2478,7 +2509,8 @@ function App() {
                               { id: 'animated', label: 'Animated Packs', icon: RefreshCcw },
                               { id: 'static', label: 'Static Packs', icon: ImageIcon },
                               { id: 'premium', label: 'Premium Packs', icon: Crown },
-                              { id: 'new', label: 'Recently Added', icon: Clock }
+                              { id: 'new', label: 'Recently Added', icon: Clock },
+                              { id: 'user_submission', label: 'Users Packs', icon: UserPlus }
                             ].map(f => (
                               <button
                                 key={f.id}
@@ -2986,46 +3018,6 @@ function App() {
                       title="Refresh Data"
                     >
                       <RefreshCcw size={14} className={loading ? 'animate-spin text-primary' : ''} />
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Fake Base Controls */}
-              <div className="glass rounded-2xl p-4 border border-white/5">
-                <div className="flex flex-wrap items-center gap-3">
-                  <span className="text-[10px] font-black text-textSec uppercase tracking-widest shrink-0">Fake Download Range:</span>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="number"
-                      value={fakeBaseMin}
-                      onChange={(e) => setFakeBaseMin(Number(e.target.value))}
-                      className="w-24 px-3 py-2 bg-white/[0.03] border border-white/5 rounded-xl text-white text-sm outline-none focus:border-primary/50 transition-all"
-                      placeholder="Min"
-                    />
-                    <span className="text-textSec/40">—</span>
-                    <input
-                      type="number"
-                      value={fakeBaseMax}
-                      onChange={(e) => setFakeBaseMax(Number(e.target.value))}
-                      className="w-24 px-3 py-2 bg-white/[0.03] border border-white/5 rounded-xl text-white text-sm outline-none focus:border-primary/50 transition-all"
-                      placeholder="Max"
-                    />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => updateAllPacksWithFakeBase(false)}
-                      disabled={isProcessing}
-                      className="px-4 py-2 bg-primary/10 hover:bg-primary/20 border border-primary/10 rounded-xl text-primary text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-50"
-                    >
-                      {isProcessing ? '..' : 'Missing Only'}
-                    </button>
-                    <button
-                      onClick={() => updateAllPacksWithFakeBase(true)}
-                      disabled={isProcessing}
-                      className="px-4 py-2 bg-yellow-500/10 hover:bg-yellow-500/20 border border-yellow-500/10 rounded-xl text-yellow-400 text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-50"
-                    >
-                      {isProcessing ? '..' : 'All Packs'}
                     </button>
                   </div>
                 </div>
@@ -4465,6 +4457,39 @@ function App() {
                             </div>
                           </div>
                         )}
+
+                        {/* Submitted Packs */}
+                        {(() => {
+                          const subs = userSubmissions.filter(s =>
+                            (selectedUser.id && (s.user_id === selectedUser.id || s.device_id === selectedUser.id)) ||
+                            (selectedUser.email && s.user_email === selectedUser.email)
+                          );
+                          if (subs.length === 0) return null;
+                          return (
+                            <div className="bg-white/[0.02] rounded-xl p-3 border border-white/5">
+                              <span className="text-[9px] font-bold text-textSec/60 uppercase tracking-widest flex items-center gap-1 mb-2">
+                                <UserPlus size={10} /> Submitted Packs ({subs.length})
+                              </span>
+                              <div className="space-y-2">
+                                {subs.map(s => (
+                                  <div key={s.id} className="flex items-center justify-between gap-2 p-2 rounded-lg bg-white/[0.03]">
+                                    <div className="min-w-0">
+                                      <p className="text-xs font-bold text-white truncate">{s.pack_name}</p>
+                                      <p className="text-[9px] text-textSec/50">{s.sticker_count || 0} stickers</p>
+                                    </div>
+                                    <span className={cn(
+                                      "text-[9px] font-black px-2 py-0.5 rounded-md shrink-0",
+                                      s.status === 'approved' ? "bg-primary/10 text-primary border border-primary/10" :
+                                        s.status === 'rejected' ? "bg-danger/10 text-danger border border-danger/10" :
+                                          s.status === 'pending' ? "bg-yellow-500/10 text-yellow-400 border border-yellow-500/10" :
+                                            "bg-white/5 text-textSec border border-white/5"
+                                    )}>{s.status.toUpperCase()}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })()}
 
                         {/* Favourite Packs */}
                         {selectedUser.favorite_packs && selectedUser.favorite_packs.length > 0 && (

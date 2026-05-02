@@ -360,23 +360,50 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun showLanguageDialog() {
-        val languageNames = arrayOf("English", "Türkçe", "Español", "简体中文", "العربية", "हिन्दी", "Português", "Français", "Deutsch", "日本語")
+        val languageNames = arrayOf("🇺🇸 English", "🇹🇷 Türkçe", "🇪🇸 Español", "🇨🇳 简体中文",
+            "🇸🇦 العربية", "🇮🇳 हिन्दी", "🇧🇷 Português", "🇫🇷 Français", "🇩🇪 Deutsch", "🇯🇵 日本語")
         val languageCodes = arrayOf("en", "tr", "es", "zh", "ar", "hi", "pt", "fr", "de", "ja")
-        val currentIndex = languageCodes.indexOf(PreferencesHelper.getLanguage(this)).takeIf { it >= 0 } ?: 0
-        AlertDialog.Builder(this)
-            .setTitle(R.string.select_language)
-            .setSingleChoiceItems(languageNames, currentIndex) { dialog, which ->
-                val selectedCode = languageCodes[which]
-                if (selectedCode != PreferencesHelper.getLanguage(this)) {
-                    PreferencesHelper.setLanguage(this, selectedCode)
+        val currentLang = PreferencesHelper.getLanguage(this)
+
+        val view = layoutInflater.inflate(R.layout.dialog_language_selector, null)
+        val container = view.findViewById<android.widget.LinearLayout>(R.id.llLanguageItems)
+        val cancelBtn = view.findViewById<android.widget.TextView>(R.id.tvLangCancel)
+
+        val dialog = androidx.appcompat.app.AlertDialog.Builder(this)
+            .setView(view)
+            .create()
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+
+        languageNames.forEachIndexed { i, label ->
+            val itemView = layoutInflater.inflate(android.R.layout.simple_list_item_1, container, false)
+            val tv = itemView.findViewById<android.widget.TextView>(android.R.id.text1)
+            tv.text = label
+            tv.textSize = 15.5f
+            tv.setPadding(72, 36, 72, 36)
+            val isSelected = languageCodes[i] == currentLang
+            tv.setTextColor(resources.getColor(if (isSelected) R.color.accent else R.color.text_primary, theme))
+            if (isSelected) {
+                tv.setTypeface(null, android.graphics.Typeface.BOLD)
+                tv.setCompoundDrawablesWithIntrinsicBounds(0, 0, R.drawable.ic_check, 0)
+                tv.compoundDrawablePadding = 16
+            }
+            val ripple = android.util.TypedValue()
+            theme.resolveAttribute(android.R.attr.selectableItemBackground, ripple, true)
+            itemView.setBackgroundResource(ripple.resourceId)
+            itemView.setOnClickListener {
+                if (languageCodes[i] != currentLang) {
+                    PreferencesHelper.setLanguage(this, languageCodes[i])
                     dialog.dismiss()
                     recreate()
                 } else {
                     dialog.dismiss()
                 }
             }
-            .setNegativeButton(R.string.cancel, null)
-            .show()
+            container.addView(itemView)
+        }
+
+        cancelBtn.setOnClickListener { dialog.dismiss() }
+        dialog.show()
     }
 
     private fun languageName(code: String): String = when (code) {

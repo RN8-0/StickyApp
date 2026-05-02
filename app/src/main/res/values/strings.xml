@@ -80,6 +80,9 @@
     <string name="notifications_title">Notification Settings</string>
     <string name="profile_notifications_title">Notifications</string>
     <string name="no_notifications">No notifications yet</string>
+    <string name="clear_all">Clear All</string>
+    <string name="clear_all_confirm">Clear all notifications?</string>
+    <string name="notifications_cleared">Notifications cleared</string>
     <string name="notification_new_packs">New sticker packs</string>
     <string name="notification_new_packs_desc">Get notified when a new pack is added</string>
     <string name="notifications_saved">Settings saved</string>

@@ -107,7 +107,7 @@
     <string name="downloading">Descargando…</string>
     <string name="download_failed">Descarga fallida</string>
     <string name="error">Error: %s</string>
-    <string name="watch_ad_button">Mira y amp; Agregar</string>
+    <string name="watch_ad_button">Ver y Agregar</string>
     <string name="premium_promo_title">¡Perdón por los anuncios! 🧡</string>
     <string name="premium_promo_message">¡Lamentamos los anuncios! Son necesarios para que podamos seguir agregando nuevos stickers y mejorando la aplicación para usted.\n\n¡Gracias por su comprensión! 🙏</string>
     <string name="get_premium">Entiendo</string>

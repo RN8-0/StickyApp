@@ -107,7 +107,7 @@
     <string name="downloading">Baixando…</string>
     <string name="download_failed">Falha no download</string>
     <string name="error">Erro: %s</string>
-    <string name="watch_ad_button">Assista e assista Adicionar</string>
+    <string name="watch_ad_button">Ver e Adicionar</string>
     <string name="premium_promo_title">Desculpe pelos anúncios! 🧡</string>
     <string name="premium_promo_message">Lamentamos pelos anúncios! Eles são necessários para continuarmos adicionando novos adesivos e melhorando o aplicativo para você.\n\nObrigado pela sua compreensão! 🙏</string>
     <string name="get_premium">Eu entendo</string>
