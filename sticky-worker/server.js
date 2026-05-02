@@ -6,6 +6,7 @@ const telegramRouter = require('./routes/telegram');
 const translateRouter = require('./routes/translate');
 const nsfwRouter = require('./routes/nsfw');
 const notifyRouter = require('./routes/notify');
+const usersRouter = require('./routes/users');
 
 const app = express();
 app.use(express.json());
@@ -52,6 +53,7 @@ app.use('/api/telegram', rateLimit, telegramRouter);
 app.use('/api/translate', rateLimit, translateRouter);
 app.use('/api/nsfw', rateLimit, nsfwRouter);
 app.use('/api/notify', notifyRouter);
+app.use('/api/users', usersRouter);
 
 app.get('/health', (_, res) => res.json({ status: 'ok', ts: Date.now() }));
 

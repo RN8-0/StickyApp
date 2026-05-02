@@ -35,6 +35,12 @@ jobs:
         with:
           gradle-version: wrapper
 
+      - name: Setup debug keystore
+        if: ${{ github.event.inputs.build_type != 'release' }}
+        run: |
+          mkdir -p ~/.android
+          echo "${{ secrets.DEBUG_KEYSTORE_B64 }}" | base64 -d > ~/.android/debug.keystore
+
       - name: Build Debug APK
         if: ${{ github.event.inputs.build_type != 'release' }}
         run: ./gradlew :app:assembleDebug

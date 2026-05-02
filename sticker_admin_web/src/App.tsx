@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { db, storage } from './firebase';
-import { pb } from './pocketbase';
+import { pb, signInWithGitHub, WORKER_URL } from './pocketbase';
 import {
   collection,
   getDocs,
@@ -751,14 +751,18 @@ function App() {
 
     setIsSendingNotif(true);
     try {
-      const notifRef = collection(db, 'notifications');
-      await setDoc(doc(notifRef), {
-        title: notifTitle || 'Sticky',
-        body: notifBody,
-        imageUrl: notifImageUrl || '',
-        timestamp: serverTimestamp()
+      const resp = await fetch(`${WORKER_URL}/api/notify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: notifTitle || 'Sticky',
+          body: notifBody,
+          imageUrl: notifImageUrl || undefined,
+        }),
       });
-      alert(" Notification queued! It will reach all devices within a few seconds.");
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || 'Failed to send notification');
+      alert("Notification sent! FCM: " + (data.results?.fcm?.success ? "✓" : "✗") + " ntfy: " + (data.results?.ntfy?.success ? "✓" : "✗"));
       setNotifBody('');
       setNotifImageUrl('');
     } catch (e: any) {
@@ -774,7 +778,7 @@ function App() {
   const handleGithubLogin = async () => {
     setLoading(true);
     try {
-      const authData = await pb.collection('users').authWithOAuth2({ provider: 'github' });
+      const authData = await signInWithGitHub();
       const email = authData.record.email || (authData.meta as any)?.rawUser?.email;
       if (!email) throw new Error('Could not get email from GitHub');
 
@@ -1184,36 +1188,28 @@ function App() {
   const fetchUsers = async () => {
     setUsersLoading(true);
     try {
-      const snapshot = await getDocs(collection(db, 'users'));
-      const usersList: UserData[] = snapshot.docs.map(d => {
-        const data = d.data();
-        return {
-          id: d.id,
-          email: data.email || '',
-          is_premium: data.is_premium || false,
-          premium_type: data.premium_type || 'none',
-          premium_expiry: data.premium_expiry || 0,
-          favorite_packs: data.favorite_packs || [],
-          last_sync: data.last_sync || null,
-          cancelled_at: data.cancelled_at || null,
-          cancelled_reason: data.cancelled_reason || '',
-          subscription_source: data.subscription_source || 'none',
-          subscription_history: data.subscription_history || [],
-          // New fields
-          created_at: data.created_at || null,
-          display_name: data.display_name || data.displayName || '',
-          photo_url: data.photo_url || data.photoURL || '',
-          device_info: data.device_info || null,
-          total_stickers_added: data.total_stickers_added || 0,
-          custom_packs_count: data.custom_packs_count || 0,
-        };
-      });
-      // Sort by created_at (newest first)
-      usersList.sort((a, b) => {
-        const aTime = a.created_at?.toMillis?.() || a.created_at || 0;
-        const bTime = b.created_at?.toMillis?.() || b.created_at || 0;
-        return bTime - aTime;
-      });
+      const resp = await fetch(`${WORKER_URL}/api/users`);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const { users } = await resp.json();
+      const usersList: UserData[] = (users || []).map((data: any) => ({
+        id: data.id,
+        email: data.email || '',
+        is_premium: data.is_premium || false,
+        premium_type: data.premium_type || 'none',
+        premium_expiry: data.premium_expiry || 0,
+        favorite_packs: data.favorite_packs || [],
+        last_sync: data.last_sync || null,
+        cancelled_at: data.cancelled_at || null,
+        cancelled_reason: data.cancelled_reason || '',
+        subscription_source: data.subscription_source || 'none',
+        subscription_history: data.subscription_history || [],
+        created_at: data.created_at || null,
+        display_name: data.display_name || data.displayName || '',
+        photo_url: data.photo_url || data.photoURL || '',
+        device_info: data.device_info || null,
+        total_stickers_added: data.total_stickers_added || 0,
+        custom_packs_count: data.custom_packs_count || 0,
+      }));
       setUsersData(usersList);
     } catch (error) {
       console.error("Users fetch error:", error);
@@ -1286,16 +1282,18 @@ function App() {
         details: details
       };
 
-      const updateData: any = {
-        is_premium: isPremium,
-        premium_type: type,
-        premium_expiry: expiry,
-        last_sync: serverTimestamp(),
-        subscription_source: isPremium ? 'admin' : 'none',
-        subscription_history: arrayUnion(historyItem)
-      };
-
-      await updateDoc(doc(db, 'users', userId), updateData);
+      const resp = await fetch(`${WORKER_URL}/api/users/${userId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          is_premium: isPremium,
+          premium_type: type,
+          premium_expiry: expiry,
+          subscription_source: isPremium ? 'admin' : 'none',
+          historyItem,
+        }),
+      });
+      if (!resp.ok) throw new Error((await resp.json()).error || 'Update failed');
 
       // Optimistic Update
       const updatedUser: UserData = {
@@ -1338,14 +1336,18 @@ function App() {
         details: 'Cancelled by Admin'
       };
 
-      await updateDoc(doc(db, 'users', userId), {
-        is_premium: false,
-        premium_type: 'none',
-        premium_expiry: 0,
-        last_sync: serverTimestamp(),
-        subscription_source: 'none',
-        subscription_history: arrayUnion(historyItem)
+      const resp = await fetch(`${WORKER_URL}/api/users/${userId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          is_premium: false,
+          premium_type: 'none',
+          premium_expiry: 0,
+          subscription_source: 'none',
+          historyItem,
+        }),
       });
+      if (!resp.ok) throw new Error((await resp.json()).error || 'Update failed');
 
       const updatedUser: UserData = {
         ...user,
