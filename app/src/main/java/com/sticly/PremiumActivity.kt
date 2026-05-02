@@ -91,11 +91,11 @@ class PremiumActivity : AppCompatActivity() {
 
         // Footer links
         findViewById<View>(R.id.btnTerms).setOnClickListener {
-            startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://sticky-privacy-legal.web.app/#terms")))
+            startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(StickyConfig.legalUrl("#terms"))))
         }
 
         findViewById<View>(R.id.btnPrivacyPolicy).setOnClickListener {
-            startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://sticky-privacy-legal.web.app/#privacy")))
+            startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(StickyConfig.legalUrl("#privacy"))))
         }
 
         findViewById<View>(R.id.btnRestore).setOnClickListener {
@@ -193,10 +193,10 @@ class PremiumActivity : AppCompatActivity() {
 
         // Footer links
         view.findViewById<View>(R.id.btnDialogTerms).setOnClickListener {
-            startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://sticky-privacy-legal.web.app/#terms")))
+            startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(StickyConfig.legalUrl("#terms"))))
         }
         view.findViewById<View>(R.id.btnDialogPrivacy).setOnClickListener {
-            startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://sticky-privacy-legal.web.app/#privacy")))
+            startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(StickyConfig.legalUrl("#privacy"))))
         }
         view.findViewById<View>(R.id.btnDialogRestore).setOnClickListener {
             bottomSheet.dismiss()

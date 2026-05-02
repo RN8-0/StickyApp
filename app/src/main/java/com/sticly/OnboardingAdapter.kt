@@ -144,7 +144,7 @@ class OnboardingAdapter(
 
             // Privacy Policy link
             itemView.findViewById<View>(R.id.btnPrivacyPolicy)?.setOnClickListener {
-                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://sticky-privacy-legal.web.app/#privacy"))
+                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(StickyConfig.legalUrl("#privacy")))
                 itemView.context.startActivity(intent)
             }
         }

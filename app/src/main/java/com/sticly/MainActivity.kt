@@ -3141,11 +3141,11 @@ Rules:
 
 
     private fun showFaqDialog() {
-        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://sticky-privacy-legal.web.app/#faq")))
+        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(StickyConfig.legalUrl("#faq"))))
     }
 
     private fun showAboutDialog() {
-        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://sticky-privacy-legal.web.app/#about")))
+        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(StickyConfig.legalUrl("#about"))))
     }
 
     private fun openPlayStore() {
@@ -3212,7 +3212,7 @@ Rules:
     }
 
     private fun showPrivacyDialog() {
-        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://sticky-privacy-legal.web.app/#privacy")))
+        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(StickyConfig.legalUrl("#privacy"))))
     }
 
     private fun showLanguageDialog() {

@@ -472,8 +472,8 @@ function App() {
     const fetchMessagesAndSuggestions = async () => {
       try {
         const [msgRecords, suggRecords] = await Promise.all([
-          pb.collection('messages').getFullList({ sort: '-created' }).catch(() => []),
-          pb.collection('suggestions').getFullList({ sort: '-created' }).catch(() => []),
+          pb.collection('messages').getFullList({ sort: '-timestamp' }).catch(() => []),
+          pb.collection('suggestions').getFullList({ sort: '-timestamp' }).catch(() => []),
         ]);
         if (!mounted) return;
         setMessages((msgRecords as any[]).map(r => ({ id: r.id, name: r.name || r.title, email: r.email, subject: r.subject || '', message: r.message || r.body || '', timestamp: r.timestamp || new Date(r.created).getTime(), date: r.date || r.created?.split('T')[0] || '', time: r.time || '', status: r.status || 'unread' } as ContactMessage)));

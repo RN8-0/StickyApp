@@ -56,15 +56,28 @@ object PreferencesHelper {
 
         CoroutineScope(Dispatchers.IO).launch {
             try {
+                val pbUserId = PocketBaseHelper.getAuthRecordId().orEmpty()
+                val filter = buildList {
+                    add("email='${escapePb(email)}'")
+                    add("device_id='${escapePb(deviceId)}'")
+                    if (pbUserId.isNotBlank()) add("user_id='${escapePb(pbUserId)}'")
+                }.joinToString(" || ")
                 val existing = PocketBaseHelper.listRecords(
                     "user_profiles",
-                    filter = "device_id='$deviceId'"
+                    filter = filter,
+                    perPage = 1
                 )
                 val data = org.json.JSONObject().apply {
                     put("device_id", deviceId)
+                    if (pbUserId.isNotBlank()) {
+                        put("uid", pbUserId)
+                        put("user_id", pbUserId)
+                    }
                     put("email", email)
                     put("display_name", displayName)
+                    put("name", displayName)
                     put("photo_url", photoUrl)
+                    put("last_sync", java.time.Instant.now().toString())
                 }
                 if (existing.isEmpty()) {
                     data.put("packs_published", 0)
@@ -101,20 +114,28 @@ object PreferencesHelper {
         val uid = user?.uid ?: ""
         val email = user?.email ?: getPrefs(context).getString("user_email", "").orEmpty()
         val deviceId = getDeviceId(context)
+        val pbUserId = PocketBaseHelper.getAuthRecordId().orEmpty()
 
-        data.put("uid", uid)
-        data.put("user_id", uid.ifBlank { deviceId })
+        data.put("uid", uid.ifBlank { pbUserId })
+        data.put("user_id", uid.ifBlank { pbUserId.ifBlank { email.ifBlank { deviceId } } })
         data.put("device_id", deviceId)
         if (email.isNotBlank()) data.put("email", email)
         data.put("last_sync", java.time.Instant.now().toString())
 
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                val filter = if (uid.isNotBlank()) {
-                    "uid='${escapePb(uid)}' || user_id='${escapePb(uid)}'"
-                } else {
-                    "device_id='${escapePb(deviceId)}'"
-                }
+                val filter = buildList {
+                    if (uid.isNotBlank()) {
+                        add("uid='${escapePb(uid)}'")
+                        add("user_id='${escapePb(uid)}'")
+                    }
+                    if (pbUserId.isNotBlank()) {
+                        add("uid='${escapePb(pbUserId)}'")
+                        add("user_id='${escapePb(pbUserId)}'")
+                    }
+                    if (email.isNotBlank()) add("email='${escapePb(email)}'")
+                    add("device_id='${escapePb(deviceId)}'")
+                }.joinToString(" || ")
                 val existing = PocketBaseHelper.listRecords("user_profiles", filter = filter, perPage = 1)
                 if (existing.isEmpty()) {
                     data.put("created_at", java.time.Instant.now().toString())

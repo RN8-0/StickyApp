@@ -14,6 +14,7 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.GoogleAuthProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class LoginActivity : AppCompatActivity() {
 
@@ -136,10 +137,31 @@ class LoginActivity : AppCompatActivity() {
         auth.signInWithCredential(credential).addOnCompleteListener(this) { task ->
             if (task.isSuccessful) {
                 val user = auth.currentUser
-                if (user != null) {
-                    PreferencesHelper.syncUserDataWithFirebase(this, user.uid)
+                lifecycleScope.launch {
+                    val account = GoogleSignIn.getLastSignedInAccount(this@LoginActivity)
+                    PreferencesHelper.setUserProfile(
+                        this@LoginActivity,
+                        user?.email ?: account?.email,
+                        user?.displayName ?: account?.displayName,
+                        user?.photoUrl?.toString() ?: account?.photoUrl?.toString()
+                    )
+
+                    try {
+                        withContext(Dispatchers.IO) {
+                            PocketBaseHelper.authWithOAuth("google", idToken)
+                        }
+                    } catch (e: Exception) {
+                        android.util.Log.w("LoginActivity", "PocketBase Google auth skipped: ${e.message}")
+                    }
+
+                    if (user != null) {
+                        PreferencesHelper.syncUserDataWithFirebase(this@LoginActivity, user.uid)
+                    } else {
+                        val deviceId = PreferencesHelper.getDeviceId(this@LoginActivity)
+                        PreferencesHelper.syncUserDataWithPocketBase(this@LoginActivity, deviceId)
+                    }
+                    startMainActivity()
                 }
-                startMainActivity()
             } else {
                 setLoading(false)
                 Toast.makeText(this, "Firebase Auth failed: ${task.exception?.message}", Toast.LENGTH_LONG).show()

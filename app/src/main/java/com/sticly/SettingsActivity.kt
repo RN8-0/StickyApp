@@ -182,8 +182,7 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun openWebPage(anchor: String) {
-        val baseUrl = "https://sticky-privacy-legal.web.app/"
-        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(baseUrl + anchor))
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(StickyConfig.legalUrl(anchor)))
         startActivity(intent)
     }
 
