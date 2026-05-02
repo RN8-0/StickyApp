@@ -563,7 +563,7 @@
     <string name="preparing_pack">GÓI CHUẨN BỊ</string>
     <string name="downloading_assets">Đang tải nội dung xuống…</string>
     <string name="related_packs">Gói nhãn dán khác</string>
-    <string name="ai_sticker">Tạo AI</string>
+    <string name="ai_sticker">AI</string>
     <string name="ai_sticker_title">Trình tạo nhãn dán AI</string>
     <string name="ai_sticker_subtitle">Mô tả nhãn dán của bạn và để AI tạo ra nó</string>
     <string name="ai_prompt_hint">ví dụ. một chú mèo mũm mĩm đeo kính râm, nhấm nháp cà phê với vẻ mặt tự mãn…</string>

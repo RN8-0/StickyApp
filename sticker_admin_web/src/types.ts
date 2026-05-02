@@ -109,6 +109,7 @@ export interface PublisherUser {
 export interface UserSubmission {
     id: string;
     user_id: string;
+    device_id?: string;
     user_email: string;
     display_name: string;
     publisher_name?: string;

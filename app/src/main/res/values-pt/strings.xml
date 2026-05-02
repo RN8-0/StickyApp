@@ -563,7 +563,7 @@
     <string name="preparing_pack">PACOTE DE PREPARAÇÃO</string>
     <string name="downloading_assets">Fazendo download de recursos…</string>
     <string name="related_packs">Mais pacotes de adesivos</string>
-    <string name="ai_sticker">Criação de IA</string>
+    <string name="ai_sticker">IA</string>
     <string name="ai_sticker_title">Gerador de adesivos AI</string>
     <string name="ai_sticker_subtitle">Descreva seu adesivo e deixe a IA criá-lo</string>
     <string name="ai_prompt_hint">por exemplo um gato gordinho usando óculos escuros, tomando café com uma cara presunçosa…</string>
@@ -657,4 +657,34 @@
     <string name="report_submitted">Relatório enviado. Obrigado!</string>
     <string name="report_failed">Não foi possível enviar o relatório. Por favor, tente novamente.</string>
     <string name="report_select_reason">Selecione um motivo</string>
+
+    <!-- Missing translations appended -->
+    <string name="field_required">Este campo é obrigatório.</string>
+    <string name="my_published_packs">Meus Pacotes Enviados</string>
+    <string name="no_notifications">Nenhuma notificação ainda.</string>
+    <string name="no_submissions_yet">Você ainda não enviou nenhum pacote.</string>
+    <string name="profile_notifications_title">Notificações</string>
+    <string name="publish_dialog_subtitle">Preencha os detalhes abaixo. Seu pacote será revisado antes de ser publicado.</string>
+    <string name="publish_dialog_title">Publicar Pacote de Figurinhas</string>
+    <string name="publish_field_category">Categoria</string>
+    <string name="publish_field_description">Descrição (opcional)</string>
+    <string name="publish_field_pack_name">Nome do Pacote</string>
+    <string name="publish_field_publisher">Nome do Editor / Criador</string>
+    <string name="publish_pack">Publicar na Loja</string>
+    <string name="publish_pack_already_submitted">Este pacote já está em revisão.</string>
+    <string name="publish_pack_count_range">O pacote deve ter entre 9 e 30 figurinhas para ser publicado.</string>
+    <string name="publish_pack_failed">Não foi possível enviar o pacote. Por favor, tente novamente.</string>
+    <string name="publish_pack_login_required">Faça login para publicar seu pacote.</string>
+    <string name="publish_pack_min_stickers">Seu pacote precisa de pelo menos 9 figurinhas para ser enviado.</string>
+    <string name="publish_pack_success">Seu pacote foi enviado para revisão! 🎉\nVamos notificá-lo assim que for aprovado.</string>
+    <string name="publishing">Publicando…</string>
+    <string name="rejection_reason_label">Motivo da Rejeição</string>
+    <string name="saving_submission">Salvando envio…</string>
+    <string name="status_approved">Aprovado ✅</string>
+    <string name="status_flagged">Sinalizado ⚠️</string>
+    <string name="status_pending">Pendente ⏳</string>
+    <string name="status_rejected">Rejeitado ❌</string>
+    <string name="submit_my_stickers_hint">Selecione um pacote de figurinhas da sua coleção para enviar.</string>
+    <string name="submit_select_pack_required">Por favor, selecione um pacote de figurinhas para enviar</string>
+    <string name="uploading_stickers">Enviando figurinhas…</string>
 </resources>

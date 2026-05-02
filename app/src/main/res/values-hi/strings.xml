@@ -563,7 +563,7 @@
     <string name="preparing_pack">पैक तैयार करना</string>
     <string name="downloading_assets">संपत्ति डाउनलोड हो रही है…</string>
     <string name="related_packs">अधिक स्टीकर पैक</string>
-    <string name="ai_sticker">एआई बनाएं</string>
+    <string name="ai_sticker">AI</string>
     <string name="ai_sticker_title">एआई स्टिकर जेनरेटर</string>
     <string name="ai_sticker_subtitle">अपने स्टिकर का वर्णन करें और AI को इसे बनाने दें</string>
     <string name="ai_prompt_hint">जैसे धूप का चश्मा पहने एक गोल-मटोल बिल्ली, आत्मसंतुष्ट चेहरे के साथ कॉफी पी रही है...</string>
@@ -657,4 +657,34 @@
     <string name="report_submitted">रिपोर्ट सौंपी गई. धन्यवाद!</string>
     <string name="report_failed">रिपोर्ट प्रस्तुत नहीं हो सकी। कृपया पुन: प्रयास करें।</string>
     <string name="report_select_reason">कृपया कोई कारण चुनें</string>
+
+    <!-- Missing translations appended -->
+    <string name="field_required">यह फ़ील्ड आवश्यक है।</string>
+    <string name="my_published_packs">मेरे सबमिट किए गए पैक</string>
+    <string name="no_notifications">अभी तक कोई सूचना नहीं।</string>
+    <string name="no_submissions_yet">आपने अभी तक कोई पैक सबमिट नहीं किया है।</string>
+    <string name="profile_notifications_title">सूचनाएं</string>
+    <string name="publish_dialog_subtitle">नीचे दी गई जानकारी भरें। आपका पैक प्रकाशित होने से पहले समीक्षा किया जाएगा।</string>
+    <string name="publish_dialog_title">स्टिकर पैक प्रकाशित करें</string>
+    <string name="publish_field_category">श्रेणी</string>
+    <string name="publish_field_description">विवरण (वैकल्पिक)</string>
+    <string name="publish_field_pack_name">पैक का नाम</string>
+    <string name="publish_field_publisher">प्रकाशक / निर्माता का नाम</string>
+    <string name="publish_pack">स्टोर पर प्रकाशित करें</string>
+    <string name="publish_pack_already_submitted">यह पैक पहले से समीक्षाधीन है।</string>
+    <string name="publish_pack_count_range">प्रकाशित करने के लिए पैक में 9–30 स्टिकर होने चाहिए।</string>
+    <string name="publish_pack_failed">पैक सबमिट नहीं किया जा सका। कृपया पुनः प्रयास करें।</string>
+    <string name="publish_pack_login_required">अपना पैक प्रकाशित करने के लिए कृपया साइन इन करें।</string>
+    <string name="publish_pack_min_stickers">सबमिट करने के लिए आपके पैक में कम से कम 9 स्टिकर होने चाहिए।</string>
+    <string name="publish_pack_success">आपका पैक समीक्षा के लिए सबमिट किया गया! 🎉\nस्वीकृत होने पर हम आपको सूचित करेंगे।</string>
+    <string name="publishing">प्रकाशित किया जा रहा है…</string>
+    <string name="rejection_reason_label">अस्वीकृति का कारण</string>
+    <string name="saving_submission">सबमिशन सहेजा जा रहा है…</string>
+    <string name="status_approved">स्वीकृत ✅</string>
+    <string name="status_flagged">चिह्नित ⚠️</string>
+    <string name="status_pending">लंबित ⏳</string>
+    <string name="status_rejected">अस्वीकृत ❌</string>
+    <string name="submit_my_stickers_hint">सबमिट करने के लिए अपने संग्रह से एक स्टिकर पैक चुनें।</string>
+    <string name="submit_select_pack_required">सबमिट करने के लिए कृपया एक स्टिकर पैक चुनें</string>
+    <string name="uploading_stickers">स्टिकर अपलोड हो रहे हैं…</string>
 </resources>

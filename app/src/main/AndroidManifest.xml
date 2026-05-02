@@ -120,6 +120,12 @@
             android:parentActivityName=".MainActivity" />
 
         <activity
+            android:name=".NotificationsActivity"
+            android:exported="false"
+            android:screenOrientation="portrait"
+            android:parentActivityName=".MainActivity" />
+
+        <activity
             android:name="com.yalantis.ucrop.UCropActivity"
             android:exported="false"
             android:screenOrientation="portrait"

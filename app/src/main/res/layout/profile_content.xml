@@ -42,16 +42,16 @@
 
                 </FrameLayout>
 
+                <!-- Notification bell moved to toolbar (toolbarNotificationBtn). Keep IDs for legacy code paths but hide. -->
                 <FrameLayout
-                    android:layout_width="48dp"
-                    android:layout_height="48dp"
-                    android:layout_gravity="top|end"
-                    android:layout_marginEnd="16dp">
+                    android:layout_width="0dp"
+                    android:layout_height="0dp"
+                    android:visibility="gone">
 
                     <ImageButton
                         android:id="@+id/btnProfileNotifications"
-                        android:layout_width="48dp"
-                        android:layout_height="48dp"
+                        android:layout_width="0dp"
+                        android:layout_height="0dp"
                         android:background="?selectableItemBackgroundBorderless"
                         android:src="@drawable/ic_notification"
                         android:contentDescription="@string/notifications_title"
@@ -59,9 +59,8 @@
 
                     <TextView
                         android:id="@+id/profileNotificationBadge"
-                        android:layout_width="18dp"
-                        android:layout_height="18dp"
-                        android:layout_gravity="top|end"
+                        android:layout_width="0dp"
+                        android:layout_height="0dp"
                         android:background="@drawable/badge_bg"
                         android:gravity="center"
                         android:text="0"

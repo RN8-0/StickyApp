@@ -61,7 +61,22 @@ async function collectFcmTokens(record) {
   if (!fcmReady) return [];
   const tokens = new Set();
   const filters = [];
-  if (record.user_id) filters.push(`user_id='${record.user_id}'`, `device_id='${record.user_id}'`, `id='${record.user_id}'`);
+  const metadata = typeof record.data === 'string'
+    ? (() => { try { return JSON.parse(record.data); } catch (_) { return {}; } })()
+    : (record.data || {});
+  const identifiers = [
+    record.user_id,
+    record.device_id,
+    record.user_email,
+    record.recipient_email,
+    metadata.user_id,
+    metadata.device_id,
+    metadata.user_email,
+  ].filter(Boolean);
+  const escaped = [...new Set(identifiers)].map(value => String(value).replace(/'/g, "\\'"));
+  for (const value of escaped) {
+    filters.push(`user_id='${value}'`, `device_id='${value}'`, `uid='${value}'`, `id='${value}'`, `email='${value}'`);
+  }
 
   for (const collection of ['users', 'user_profiles']) {
     const query = filters.length ? `filter=(${encodeURIComponent(filters.join(' || '))})&perPage=200` : 'perPage=500';

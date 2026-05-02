@@ -563,7 +563,7 @@
     <string name="preparing_pack">PACK DE PRÉPARATION</string>
     <string name="downloading_assets">Téléchargement des ressources…</string>
     <string name="related_packs">Plus de packs d\'autocollants</string>
-    <string name="ai_sticker">Création d\'IA</string>
+    <string name="ai_sticker">IA</string>
     <string name="ai_sticker_title">Générateur d\'autocollants IA</string>
     <string name="ai_sticker_subtitle">Décrivez votre autocollant et laissez l\'IA le créer</string>
     <string name="ai_prompt_hint">par ex. un chat potelé portant des lunettes de soleil, sirotant un café avec un visage suffisant…</string>
@@ -657,4 +657,34 @@
     <string name="report_submitted">Rapport soumis. Merci!</string>
     <string name="report_failed">Impossible de soumettre le rapport. Veuillez réessayer.</string>
     <string name="report_select_reason">Veuillez sélectionner une raison</string>
+
+    <!-- Missing translations appended -->
+    <string name="field_required">Ce champ est obligatoire.</string>
+    <string name="my_published_packs">Mes Packs Soumis</string>
+    <string name="no_notifications">Aucune notification pour l\'instant.</string>
+    <string name="no_submissions_yet">Vous n\'avez encore soumis aucun pack.</string>
+    <string name="profile_notifications_title">Notifications</string>
+    <string name="publish_dialog_subtitle">Remplissez les détails ci-dessous. Votre pack sera examiné avant d\'être publié.</string>
+    <string name="publish_dialog_title">Publier un pack d\'autocollants</string>
+    <string name="publish_field_category">Catégorie</string>
+    <string name="publish_field_description">Description (facultatif)</string>
+    <string name="publish_field_pack_name">Nom du pack</string>
+    <string name="publish_field_publisher">Nom de l\'éditeur / créateur</string>
+    <string name="publish_pack">Publier dans la boutique</string>
+    <string name="publish_pack_already_submitted">Ce pack est déjà en cours d\'examen.</string>
+    <string name="publish_pack_count_range">Le pack doit contenir entre 9 et 30 autocollants pour être publié.</string>
+    <string name="publish_pack_failed">Impossible de soumettre le pack. Veuillez réessayer.</string>
+    <string name="publish_pack_login_required">Veuillez vous connecter pour publier votre pack.</string>
+    <string name="publish_pack_min_stickers">Votre pack nécessite au moins 9 autocollants pour être soumis.</string>
+    <string name="publish_pack_success">Votre pack a été soumis pour examen ! 🎉\nNous vous informerons une fois approuvé.</string>
+    <string name="publishing">Publication en cours…</string>
+    <string name="rejection_reason_label">Motif de rejet</string>
+    <string name="saving_submission">Enregistrement de la soumission…</string>
+    <string name="status_approved">Approuvé ✅</string>
+    <string name="status_flagged">Signalé ⚠️</string>
+    <string name="status_pending">En attente ⏳</string>
+    <string name="status_rejected">Rejeté ❌</string>
+    <string name="submit_my_stickers_hint">Sélectionnez un pack d\'autocollants de votre collection à soumettre.</string>
+    <string name="submit_select_pack_required">Veuillez sélectionner un pack d\'autocollants à soumettre</string>
+    <string name="uploading_stickers">Envoi des autocollants…</string>
 </resources>

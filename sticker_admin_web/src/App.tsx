@@ -362,6 +362,8 @@ function App() {
   const [submissionFilter, setSubmissionFilter] = useState<'all' | 'pending' | 'flagged' | 'approved' | 'rejected'>('all');
   const [selectedSubmission, setSelectedSubmission] = useState<UserSubmission | null>(null);
   const [submissionEditData, setSubmissionEditData] = useState<UserSubmission | null>(null);
+  const [rejectModalSubmission, setRejectModalSubmission] = useState<UserSubmission | null>(null);
+  const [rejectReason, setRejectReason] = useState('');
 
   const [showVideoBgModal, setShowVideoBgModal] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
@@ -501,7 +503,7 @@ function App() {
         setUserSubmissions((submissions as any[]).map(r => {
           const createdValue = r.created_at || r.created;
           const createdMs = createdValue ? new Date(createdValue).getTime() : 0;
-          return { id: r.id, user_id: r.user_id || '', user_email: r.user_email || '', display_name: r.display_name || '', publisher_name: r.publisher_name, pack_name: r.pack_name || r.name || '', description: r.description, category: r.category || '', stickers: r.stickers || r.sticker_data || [], status: r.status || 'pending', flag_reasons: r.flag_reasons, rejection_reason: r.rejection_reason, sticker_count: r.sticker_count || (r.stickers || r.sticker_data || []).length || 0, sticker_pack_id: r.sticker_pack_id, created_at: { seconds: createdMs / 1000 }, note: r.note } as UserSubmission;
+          return { id: r.id, user_id: r.user_id || '', device_id: r.device_id || '', user_email: r.user_email || '', display_name: r.display_name || '', publisher_name: r.publisher_name, pack_name: r.pack_name || r.name || '', description: r.description, category: r.category || '', stickers: r.stickers || r.sticker_data || [], status: r.status || 'pending', flag_reasons: r.flag_reasons, rejection_reason: r.rejection_reason, sticker_count: r.sticker_count || (r.stickers || r.sticker_data || []).length || 0, sticker_pack_id: r.sticker_pack_id, created_at: { seconds: createdMs / 1000 }, note: r.note } as UserSubmission;
         }).sort((a, b) => (b.created_at?.seconds || 0) - (a.created_at?.seconds || 0)));
       } catch (e) {
         console.error('PB publishers/submissions fetch error:', e);
@@ -548,19 +550,49 @@ function App() {
   };
 
   // Submission handlers
-  const notifySubmissionUser = async (submission: UserSubmission, title: string, body: string, data: Record<string, unknown> = {}) => {
-    await pb.collection('notifications').create({
+  const getSubmissionRecipientId = (submission: UserSubmission) =>
+    submission.device_id || submission.user_id || submission.user_email || '';
+
+  const createSubmissionNotification = async (submission: UserSubmission, title: string, body: string, data: Record<string, unknown> = {}) => {
+    const recipientId = getSubmissionRecipientId(submission);
+    if (!recipientId) throw new Error('Submission has no recipient identifier.');
+
+    const basePayload = {
       title,
       body,
       message: body,
-      user_id: submission.user_id || submission.user_email,
+      user_id: recipientId,
       pack_id: submission.id,
       from: 'admin',
       read: false,
       sent: false,
+    };
+
+    const payload = {
+      ...basePayload,
       timestamp: new Date().toISOString(),
-      data,
-    }).catch((e) => console.warn('Submission notification skipped:', e));
+      topic: 'user_submission',
+      data: {
+        ...data,
+        submission_id: submission.id,
+        pack_name: submission.pack_name,
+        user_id: submission.user_id || '',
+        user_email: submission.user_email || '',
+        device_id: submission.device_id || '',
+      },
+    };
+
+    try {
+      await pb.collection('notifications').create(payload);
+    } catch (e) {
+      console.warn('Submission notification metadata skipped:', e);
+      await pb.collection('notifications').create(basePayload);
+    }
+  };
+
+  const notifySubmissionUser = async (submission: UserSubmission, title: string, body: string, data: Record<string, unknown> = {}) => {
+    await createSubmissionNotification(submission, title, body, data)
+      .catch((e) => console.warn('Submission notification skipped:', e));
   };
 
   const handleEditSubmission = (submission: UserSubmission) => {
@@ -664,22 +696,25 @@ function App() {
     }
   };
 
-  const handleRejectSubmission = async (submission: UserSubmission) => {
-    const reason = window.prompt(
-      `Reject "${submission.pack_name}"?\n\nPlease enter a rejection reason (shown to the user):`,
-      ''
-    );
-    if (reason === null) return;
+  const handleRejectSubmission = (submission: UserSubmission) => {
+    setRejectReason('');
+    setRejectModalSubmission(submission);
+  };
+
+  const confirmRejectSubmission = async () => {
+    const submission = rejectModalSubmission;
+    if (!submission) return;
+    const finalReason = rejectReason.trim() || 'Your submission did not meet our content guidelines.';
     try {
       await pb.collection('user_submissions').update(submission.id, {
         status: 'rejected',
-        rejection_reason: reason.trim() || 'Your submission did not meet our content guidelines.',
+        rejection_reason: finalReason,
         processed_at: new Date().toISOString(),
       });
-      const rejectionReason = reason.trim() || 'Your submission did not meet our content guidelines.';
-      await notifySubmissionUser(submission, 'Sticker pack rejected', `Your pack "${submission.pack_name}" was rejected. Reason: ${rejectionReason}`, { type: 'submission_rejected', reason: rejectionReason });
-      setUserSubmissions(userSubmissions.map(s => s.id === submission.id ? { ...s, status: 'rejected' as any, rejection_reason: rejectionReason } : s));
-      alert(`"${submission.pack_name}" rejected. Reason saved and will be shown to the user.`);
+      await notifySubmissionUser(submission, 'Sticker pack rejected', `Your pack "${submission.pack_name}" was rejected. Reason: ${finalReason}`, { type: 'submission_rejected', reason: finalReason });
+      setUserSubmissions(userSubmissions.map(s => s.id === submission.id ? { ...s, status: 'rejected' as any, rejection_reason: finalReason } : s));
+      setRejectModalSubmission(null);
+      setRejectReason('');
     } catch (e) {
       console.error('Reject error:', e);
       alert('Failed to reject submission.');
@@ -710,14 +745,12 @@ function App() {
     );
     if (!message || !message.trim()) return;
     try {
-      await pb.collection('notifications').create({
-        title: `Regarding your pack: ${submission.pack_name}`,
-        body: message.trim(),
-        user_id: submission.user_id,
-        pack_id: submission.id,
-        from: 'admin',
-        read: false,
-      });
+      await createSubmissionNotification(
+        submission,
+        `Regarding your pack: ${submission.pack_name}`,
+        message.trim(),
+        { type: 'admin_feedback' }
+      );
       alert('Message sent to user.');
     } catch (e) {
       console.error("Send feedback error:", e);
@@ -6211,6 +6244,40 @@ function App() {
           v2.0 PRO • {new Date().toLocaleTimeString()}
         </div>
       </footer>
+
+      {/* Reject Submission Modal */}
+      {rejectModalSubmission && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setRejectModalSubmission(null)}>
+          <div className="bg-surface rounded-2xl shadow-2xl p-6 w-full max-w-md mx-4" onClick={e => e.stopPropagation()}>
+            <h2 className="text-lg font-bold text-textPrimary mb-1">Reject Submission</h2>
+            <p className="text-sm text-textSec mb-4">
+              Rejecting <span className="font-semibold text-textPrimary">"{rejectModalSubmission.pack_name}"</span>. Enter a reason to show the user:
+            </p>
+            <textarea
+              className="w-full bg-bg border border-gray-600 rounded-xl p-3 text-sm text-textPrimary resize-none focus:outline-none focus:border-primary"
+              rows={4}
+              placeholder="e.g. Content violates guidelines, inappropriate imagery, or pack quality too low..."
+              value={rejectReason}
+              onChange={e => setRejectReason(e.target.value)}
+              autoFocus
+            />
+            <div className="flex gap-3 mt-4">
+              <button
+                onClick={() => setRejectModalSubmission(null)}
+                className="flex-1 py-2 rounded-xl border border-gray-600 text-textSec text-sm hover:bg-gray-700 transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmRejectSubmission}
+                className="flex-1 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-semibold transition"
+              >
+                Reject
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* New Pack Modal */}
       <Modal show={showNewPackModal} onClose={() => setShowNewPackModal(false)} title="Create New Pack">

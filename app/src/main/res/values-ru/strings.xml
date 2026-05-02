@@ -563,7 +563,7 @@
     <string name="preparing_pack">ПОДГОТОВКА ПАКЕТА</string>
     <string name="downloading_assets">Загрузка ресурсов…</string>
     <string name="related_packs">Больше наборов наклеек</string>
-    <string name="ai_sticker">ИИ Создать</string>
+    <string name="ai_sticker">ИИ</string>
     <string name="ai_sticker_title">Генератор стикеров с искусственным интеллектом</string>
     <string name="ai_sticker_subtitle">Опишите свою наклейку и позвольте искусственному интеллекту создать ее</string>
     <string name="ai_prompt_hint">например пухлый кот в солнечных очках, с самодовольным лицом пьет кофе…</string>

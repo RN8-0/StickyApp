@@ -21,7 +21,7 @@ class StickyMessagingService : FirebaseMessagingService() {
 
     override fun onNewToken(token: String) {
         super.onNewToken(token)
-        // Token'ı Firebase'e kaydedebilirsiniz
+        PushTokenManager.syncToken(applicationContext, token)
     }
 
     override fun onMessageReceived(remoteMessage: RemoteMessage) {

@@ -88,6 +88,40 @@
 
                 </FrameLayout>
 
+                <FrameLayout
+                    android:id="@+id/toolbarNotificationContainer"
+                    android:layout_width="38dp"
+                    android:layout_height="38dp"
+                    android:visibility="gone">
+
+                    <ImageButton
+                        android:id="@+id/toolbarNotificationBtn"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:background="?selectableItemBackgroundBorderless"
+                        android:src="@drawable/ic_notification"
+                        app:tint="@color/white"
+                        android:scaleType="fitCenter"
+                        android:padding="8dp"
+                        android:contentDescription="@string/notifications_title" />
+
+                    <TextView
+                        android:id="@+id/toolbarNotificationBadge"
+                        android:layout_width="16dp"
+                        android:layout_height="16dp"
+                        android:layout_gravity="top|end"
+                        android:layout_marginTop="2dp"
+                        android:layout_marginEnd="2dp"
+                        android:background="@drawable/badge_bg"
+                        android:gravity="center"
+                        android:text="0"
+                        android:textColor="@color/white"
+                        android:textSize="9sp"
+                        android:textStyle="bold"
+                        android:visibility="gone" />
+
+                </FrameLayout>
+
                 <ImageButton
                     android:id="@+id/menuBtn"
                     android:layout_width="38dp"
@@ -429,12 +463,15 @@
                         app:tint="@color/bottom_nav_inactive" />
                     <TextView
                         android:id="@+id/textFavorites"
-                        android:layout_width="wrap_content"
+                        android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:text="@string/filter_favorites"
                         android:textSize="10sp"
                         android:textColor="@color/bottom_nav_inactive"
-                        android:layout_marginTop="3dp" />
+                        android:layout_marginTop="3dp"
+                        android:maxLines="1"
+                        android:ellipsize="end"
+                        android:gravity="center" />
                 </LinearLayout>
 
                 <!-- Tab: AI Create -->
@@ -455,12 +492,15 @@
                         app:tint="@color/bottom_nav_inactive" />
                     <TextView
                         android:id="@+id/textAICreate"
-                        android:layout_width="wrap_content"
+                        android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:text="@string/ai_sticker"
                         android:textSize="10sp"
                         android:textColor="@color/bottom_nav_inactive"
-                        android:layout_marginTop="3dp" />
+                        android:layout_marginTop="3dp"
+                        android:maxLines="1"
+                        android:ellipsize="end"
+                        android:gravity="center" />
                 </LinearLayout>
 
                 <!-- Tab: Home/Explore (CENTER - elevated FAB style) -->
@@ -489,13 +529,16 @@
                     </FrameLayout>
                     <TextView
                         android:id="@+id/textExplore"
-                        android:layout_width="wrap_content"
+                        android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:text="@string/explore"
                         android:textSize="9sp"
                         android:textStyle="bold"
                         android:textColor="@color/bottom_nav_active"
-                        android:layout_marginTop="3dp" />
+                        android:layout_marginTop="3dp"
+                        android:maxLines="1"
+                        android:ellipsize="end"
+                        android:gravity="center" />
                 </LinearLayout>
 
                 <!-- Tab: My Stickers -->
@@ -516,12 +559,15 @@
                         app:tint="@color/bottom_nav_inactive" />
                     <TextView
                         android:id="@+id/textMyStickers"
-                        android:layout_width="wrap_content"
+                        android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:text="@string/my_stickers_tab"
                         android:textSize="10sp"
                         android:textColor="@color/bottom_nav_inactive"
-                        android:layout_marginTop="3dp" />
+                        android:layout_marginTop="3dp"
+                        android:maxLines="1"
+                        android:ellipsize="end"
+                        android:gravity="center" />
                 </LinearLayout>
 
                 <!-- Tab: Profile -->
@@ -542,12 +588,15 @@
                         app:tint="@color/bottom_nav_inactive" />
                     <TextView
                         android:id="@+id/textProfile"
-                        android:layout_width="wrap_content"
+                        android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:text="@string/profile"
                         android:textSize="10sp"
                         android:textColor="@color/bottom_nav_inactive"
-                        android:layout_marginTop="3dp" />
+                        android:layout_marginTop="3dp"
+                        android:maxLines="1"
+                        android:ellipsize="end"
+                        android:gravity="center" />
                 </LinearLayout>
 
             </LinearLayout>

@@ -563,7 +563,7 @@
     <string name="preparing_pack">PAQUETE DE PREPARACIÓN</string>
     <string name="downloading_assets">Descargando recursos…</string>
     <string name="related_packs">Más paquetes de pegatinas</string>
-    <string name="ai_sticker">Crear IA</string>
+    <string name="ai_sticker">IA</string>
     <string name="ai_sticker_title">Generador de pegatinas AI</string>
     <string name="ai_sticker_subtitle">Describe tu pegatina y deja que la IA la cree</string>
     <string name="ai_prompt_hint">p.ej. un gato gordito con gafas de sol, bebiendo café con cara de suficiencia...</string>
@@ -657,4 +657,34 @@
     <string name="report_submitted">Informe presentado. ¡Gracias!</string>
     <string name="report_failed">No se pudo enviar el informe. Por favor inténtalo de nuevo.</string>
     <string name="report_select_reason">Por favor seleccione un motivo</string>
+
+    <!-- Missing translations appended -->
+    <string name="field_required">Este campo es obligatorio.</string>
+    <string name="my_published_packs">Mis Paquetes Enviados</string>
+    <string name="no_notifications">Aún no hay notificaciones.</string>
+    <string name="no_submissions_yet">Todavía no has enviado ningún paquete.</string>
+    <string name="profile_notifications_title">Notificaciones</string>
+    <string name="publish_dialog_subtitle">Completa los detalles a continuación. Tu paquete será revisado antes de publicarse.</string>
+    <string name="publish_dialog_title">Publicar paquete de pegatinas</string>
+    <string name="publish_field_category">Categoría</string>
+    <string name="publish_field_description">Descripción (opcional)</string>
+    <string name="publish_field_pack_name">Nombre del paquete</string>
+    <string name="publish_field_publisher">Nombre del editor / creador</string>
+    <string name="publish_pack">Publicar en la tienda</string>
+    <string name="publish_pack_already_submitted">Este paquete ya está en revisión.</string>
+    <string name="publish_pack_count_range">El paquete debe tener entre 9 y 30 pegatinas para publicarse.</string>
+    <string name="publish_pack_failed">No se pudo enviar el paquete. Por favor, inténtalo de nuevo.</string>
+    <string name="publish_pack_login_required">Por favor, inicia sesión para publicar tu paquete.</string>
+    <string name="publish_pack_min_stickers">Tu paquete necesita al menos 9 pegatinas para enviarse.</string>
+    <string name="publish_pack_success">¡Tu paquete ha sido enviado para revisión! 🎉\nTe notificaremos una vez que sea aprobado.</string>
+    <string name="publishing">Publicando…</string>
+    <string name="rejection_reason_label">Motivo de rechazo</string>
+    <string name="saving_submission">Guardando envío…</string>
+    <string name="status_approved">Aprobado ✅</string>
+    <string name="status_flagged">Marcado ⚠️</string>
+    <string name="status_pending">Pendiente ⏳</string>
+    <string name="status_rejected">Rechazado ❌</string>
+    <string name="submit_my_stickers_hint">Selecciona un paquete de pegatinas de tu colección para enviarlo.</string>
+    <string name="submit_select_pack_required">Por favor selecciona un paquete de pegatinas para enviar</string>
+    <string name="uploading_stickers">Subiendo pegatinas…</string>
 </resources>

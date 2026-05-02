@@ -563,7 +563,7 @@
     <string name="preparing_pack">パックの準備中</string>
     <string name="downloading_assets">アセットをダウンロードしています…</string>
     <string name="related_packs">その他のステッカー パック</string>
-    <string name="ai_sticker">AIクリエイト</string>
+    <string name="ai_sticker">AI</string>
     <string name="ai_sticker_title">AIステッカージェネレーター</string>
     <string name="ai_sticker_subtitle">ステッカーを説明して AI に作成させます</string>
     <string name="ai_prompt_hint">例えばサングラスをかけてドヤ顔でコーヒーをすする、ぽっちゃりした猫…。</string>
@@ -657,4 +657,34 @@
     <string name="report_submitted">レポートが提出されました。ありがとう！</string>
     <string name="report_failed">レポートを提出できませんでした。もう一度試してください。</string>
     <string name="report_select_reason">理由を選択してください</string>
+
+    <!-- Missing translations appended -->
+    <string name="field_required">この項目は必須です。</string>
+    <string name="my_published_packs">提出したパック</string>
+    <string name="no_notifications">まだ通知はありません。</string>
+    <string name="no_submissions_yet">まだパックを提出していません。</string>
+    <string name="profile_notifications_title">通知</string>
+    <string name="publish_dialog_subtitle">以下の詳細を入力してください。パックは公開前に審査されます。</string>
+    <string name="publish_dialog_title">ステッカーパックを公開する</string>
+    <string name="publish_field_category">カテゴリ</string>
+    <string name="publish_field_description">説明（任意）</string>
+    <string name="publish_field_pack_name">パック名</string>
+    <string name="publish_field_publisher">発行者 / 作成者名</string>
+    <string name="publish_pack">ストアに公開する</string>
+    <string name="publish_pack_already_submitted">このパックはすでに審査中です。</string>
+    <string name="publish_pack_count_range">公開するにはパックに 9〜30 枚のステッカーが必要です。</string>
+    <string name="publish_pack_failed">パックを提出できませんでした。もう一度お試しください。</string>
+    <string name="publish_pack_login_required">パックを公開するにはサインインしてください。</string>
+    <string name="publish_pack_min_stickers">提出するにはパックに少なくとも 9 枚のステッカーが必要です。</string>
+    <string name="publish_pack_success">パックが審査のために提出されました！🎉\n承認されたらお知らせします。</string>
+    <string name="publishing">公開中…</string>
+    <string name="rejection_reason_label">却下理由</string>
+    <string name="saving_submission">提出内容を保存中…</string>
+    <string name="status_approved">承認済み ✅</string>
+    <string name="status_flagged">フラグ付き ⚠️</string>
+    <string name="status_pending">審査中 ⏳</string>
+    <string name="status_rejected">却下 ❌</string>
+    <string name="submit_my_stickers_hint">コレクションからステッカーパックを選択して提出してください。</string>
+    <string name="submit_select_pack_required">提出するステッカーパックを選択してください</string>
+    <string name="uploading_stickers">ステッカーをアップロード中…</string>
 </resources>

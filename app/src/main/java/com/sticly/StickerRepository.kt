@@ -193,16 +193,19 @@ object StickerRepository {
                     if (value.isNotBlank()) translations[key.substringAfter("name_")] = value
                 }
             }
+            val primaryName = json.optString("name").ifBlank {
+                json.optString("pack_name").ifBlank { id }
+            }
             Pack(
                 id = id,
-                name = json.optString("name").ifBlank { id },
-                nameTr = json.optString("name_tr"),
-                nameZh = json.optString("name_zh"),
-                nameEs = json.optString("name_es"),
-                nameAr = json.optString("name_ar"),
-                nameHi = json.optString("name_hi"),
-                namePt = json.optString("name_pt"),
-                pub = json.optString("publisher").ifBlank { "Sticky" },
+                name = primaryName,
+                nameTr = json.optString("name_tr").ifBlank { json.optString("name_turkish") },
+                nameZh = json.optString("name_zh").ifBlank { json.optString("name_chinese") },
+                nameEs = json.optString("name_es").ifBlank { json.optString("name_spanish") },
+                nameAr = json.optString("name_ar").ifBlank { json.optString("name_arabic") },
+                nameHi = json.optString("name_hi").ifBlank { json.optString("name_hindi") },
+                namePt = json.optString("name_pt").ifBlank { json.optString("name_portuguese") },
+                pub = json.optString("publisher").ifBlank { json.optString("publisher_name").ifBlank { "Sticky" } },
                 email = json.optString("publisher_email").ifBlank { "contact@sticky.com" },
                 privacy = json.optString("privacy_policy_website"),
                 license = json.optString("license_agreement_website"),

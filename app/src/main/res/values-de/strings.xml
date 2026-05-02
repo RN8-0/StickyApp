@@ -563,7 +563,7 @@
     <string name="preparing_pack">PAKET VORBEREITEN</string>
     <string name="downloading_assets">Assets werden heruntergeladen…</string>
     <string name="related_packs">Weitere Sticker-Pakete</string>
-    <string name="ai_sticker">KI erstellen</string>
+    <string name="ai_sticker">KI</string>
     <string name="ai_sticker_title">AI-Sticker-Generator</string>
     <string name="ai_sticker_subtitle">Beschreiben Sie Ihren Aufkleber und lassen Sie ihn von der KI erstellen</string>
     <string name="ai_prompt_hint">z.B. eine pummelige Katze mit Sonnenbrille, die mit selbstgefälligem Gesicht Kaffee nippt …</string>
@@ -657,4 +657,34 @@
     <string name="report_submitted">Bericht eingereicht. Danke schön!</string>
     <string name="report_failed">Bericht konnte nicht übermittelt werden. Bitte versuchen Sie es erneut.</string>
     <string name="report_select_reason">Bitte wählen Sie einen Grund aus</string>
+
+    <!-- Missing translations appended -->
+    <string name="field_required">Dieses Feld ist erforderlich.</string>
+    <string name="my_published_packs">Meine eingereichten Pakete</string>
+    <string name="no_notifications">Noch keine Benachrichtigungen.</string>
+    <string name="no_submissions_yet">Sie haben noch keine Pakete eingereicht.</string>
+    <string name="profile_notifications_title">Benachrichtigungen</string>
+    <string name="publish_dialog_subtitle">Füllen Sie die folgenden Details aus. Ihr Paket wird vor der Veröffentlichung überprüft.</string>
+    <string name="publish_dialog_title">Aufkleberpaket veröffentlichen</string>
+    <string name="publish_field_category">Kategorie</string>
+    <string name="publish_field_description">Beschreibung (optional)</string>
+    <string name="publish_field_pack_name">Paketname</string>
+    <string name="publish_field_publisher">Name des Herausgebers / Erstellers</string>
+    <string name="publish_pack">Im Store veröffentlichen</string>
+    <string name="publish_pack_already_submitted">Dieses Paket wird bereits überprüft.</string>
+    <string name="publish_pack_count_range">Das Paket muss 9–30 Aufkleber enthalten, um veröffentlicht zu werden.</string>
+    <string name="publish_pack_failed">Das Paket konnte nicht eingereicht werden. Bitte versuchen Sie es erneut.</string>
+    <string name="publish_pack_login_required">Bitte melden Sie sich an, um Ihr Paket zu veröffentlichen.</string>
+    <string name="publish_pack_min_stickers">Ihr Paket benötigt mindestens 9 Aufkleber, um eingereicht zu werden.</string>
+    <string name="publish_pack_success">Ihr Paket wurde zur Überprüfung eingereicht! 🎉\nWir benachrichtigen Sie, sobald es genehmigt wurde.</string>
+    <string name="publishing">Wird veröffentlicht…</string>
+    <string name="rejection_reason_label">Ablehnungsgrund</string>
+    <string name="saving_submission">Einreichung wird gespeichert…</string>
+    <string name="status_approved">Genehmigt ✅</string>
+    <string name="status_flagged">Markiert ⚠️</string>
+    <string name="status_pending">Ausstehend ⏳</string>
+    <string name="status_rejected">Abgelehnt ❌</string>
+    <string name="submit_my_stickers_hint">Wählen Sie ein Aufkleberpaket aus Ihrer Sammlung zum Einreichen aus.</string>
+    <string name="submit_select_pack_required">Bitte wählen Sie ein Aufkleberpaket zum Einreichen aus</string>
+    <string name="uploading_stickers">Aufkleber werden hochgeladen…</string>
 </resources>

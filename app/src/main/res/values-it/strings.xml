@@ -563,7 +563,7 @@
     <string name="preparing_pack">PREPARAZIONE DELL\'IMBALLO</string>
     <string name="downloading_assets">Download delle risorse…</string>
     <string name="related_packs">Altri pacchetti di adesivi</string>
-    <string name="ai_sticker">L\'intelligenza artificiale crea</string>
+    <string name="ai_sticker">IA</string>
     <string name="ai_sticker_title">Generatore di adesivi AI</string>
     <string name="ai_sticker_subtitle">Descrivi il tuo adesivo e lascia che sia l\'IA a crearlo</string>
     <string name="ai_prompt_hint">per esempio. un gatto paffuto che indossa occhiali da sole, sorseggia un caffè con una faccia compiaciuta...</string>

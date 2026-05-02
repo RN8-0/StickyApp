@@ -563,7 +563,7 @@
     <string name="preparing_pack">กำลังเตรียมแพ็ค</string>
     <string name="downloading_assets">กำลังดาวน์โหลดเนื้อหา...</string>
     <string name="related_packs">ชุดสติ๊กเกอร์เพิ่มเติม</string>
-    <string name="ai_sticker">เอไอ สร้าง</string>
+    <string name="ai_sticker">AI</string>
     <string name="ai_sticker_title">เครื่องกำเนิดสติ๊กเกอร์ AI</string>
     <string name="ai_sticker_subtitle">อธิบายสติกเกอร์ของคุณและให้ AI สร้างมันขึ้นมา</string>
     <string name="ai_prompt_hint">เช่น แมวอ้วนสวมแว่นกันแดด จิบกาแฟด้วยสีหน้าบูดบึ้ง...</string>

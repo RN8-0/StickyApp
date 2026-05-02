@@ -392,6 +392,7 @@ class MainActivity : AppCompatActivity() {
             }
 
             FirebaseMessaging.getInstance().subscribeToTopic("stickers")
+            PushTokenManager.refreshAndSync(this)
 
             // Kullanıcı giriş yapmışsa Firebase ile senkronize et (e-posta dahil)
             val currentUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
@@ -443,6 +444,8 @@ class MainActivity : AppCompatActivity() {
         // Ensure status bar matches toolbar color
         window.statusBarColor = androidx.core.content.ContextCompat.getColor(this, R.color.toolbar_bg)
         drawer.setStatusBarBackgroundColor(androidx.core.content.ContextCompat.getColor(this, R.color.toolbar_bg))
+        // Prevent swipe-to-open drawer from intercepting bottom nav tab clicks
+        drawer.setDrawerLockMode(androidx.drawerlayout.widget.DrawerLayout.LOCK_MODE_LOCKED_CLOSED)
         rv = findViewById(R.id.rv)
         loadingOverlay = findViewById(R.id.loadingOverlay)
 
@@ -529,6 +532,12 @@ class MainActivity : AppCompatActivity() {
         menuBtn.setOnClickListener {
             startActivity(Intent(this, SettingsActivity::class.java))
             overridePendingTransition(R.anim.fade_in, R.anim.fade_out)
+        }
+
+        // Toolbar notification bell — shown only on profile tab; opens NotificationsActivity
+        findViewById<View>(R.id.toolbarNotificationBtn)?.setOnClickListener {
+            startActivity(Intent(this, NotificationsActivity::class.java))
+            overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left)
         }
 
 
@@ -672,8 +681,10 @@ class MainActivity : AppCompatActivity() {
             btnAddStickerHeader.visibility = View.GONE
             btnPremiumHeaderCached?.visibility = if (PreferencesHelper.isPremium(this)) View.GONE else View.VISIBLE
             menuBtn.visibility = View.VISIBLE
+            findViewById<View>(R.id.toolbarNotificationContainer)?.visibility = View.GONE
             toolbarTitle.text = "✨ Sticky AI"
             toolbarSubtitle.visibility = View.GONE
+            profileContentContainer?.visibility = View.GONE
             aiContentContainer?.visibility = View.VISIBLE
 
             iconAICreate.setColorFilter(activeColor)
@@ -691,6 +702,7 @@ class MainActivity : AppCompatActivity() {
             btnAddStickerHeader.visibility = View.GONE
             btnPremiumHeaderCached?.visibility = View.GONE
             menuBtn.visibility = View.VISIBLE
+            findViewById<View>(R.id.toolbarNotificationContainer)?.visibility = View.VISIBLE
             toolbarTitle.text = getString(R.string.profile)
             toolbarSubtitle.visibility = View.GONE
             aiContentContainer?.visibility = View.GONE
@@ -707,6 +719,7 @@ class MainActivity : AppCompatActivity() {
         mainContent.visibility = View.VISIBLE
         btnPremiumHeaderCached?.visibility = View.VISIBLE
         menuBtn.visibility = View.VISIBLE
+        findViewById<View>(R.id.toolbarNotificationContainer)?.visibility = View.GONE
         toolbarTitle.text = getString(R.string.app_name)
         // FAB only on My Stickers
         btnCreateFab?.visibility = View.GONE
@@ -1219,111 +1232,113 @@ Rules:
 
     private suspend fun aiGenerateImage(prompt: String, onPoll: () -> Unit): Bitmap? =
         withContext(Dispatchers.IO) {
-            // Try Pollinations first (free, fast, no rate limit)
-            try {
-                val result = aiPollinationsRequest(prompt)
-                if (result != null) return@withContext result
-            } catch (_: Exception) {}
+            // Race all providers in parallel — first successful result wins
+            val resultChannel = kotlinx.coroutines.channels.Channel<Bitmap?>(kotlinx.coroutines.channels.Channel.UNLIMITED)
+            val jobs = mutableListOf<kotlinx.coroutines.Job>()
 
-            // Fallback to api.airforce models
-            val models = listOf("grok-imagine", "flux-2-dev", "z-image", "flux-2-klein-4b")
-            for (model in models) {
-                val result = aiApiAirforceRequest(prompt, model)
-                if (result != null) return@withContext result
+            val providers: List<suspend () -> Bitmap?> = listOf(
+                { aiPollinationsRequest(prompt, "turbo") },
+                { aiPollinationsRequest(prompt, "flux") },
+                { aiApiAirforceRequest(prompt, "grok-imagine") },
+                { aiApiAirforceRequest(prompt, "flux-2-dev") },
+                { aiApiAirforceRequest(prompt, "z-image") }
+            )
+
+            kotlinx.coroutines.coroutineScope {
+                for (provider in providers) {
+                    val job = launch(Dispatchers.IO) {
+                        val bitmap = runCatching { provider() }.getOrNull()
+                        resultChannel.trySend(bitmap)
+                    }
+                    jobs.add(job)
+                }
+
+                var found: Bitmap? = null
+                repeat(providers.size) {
+                    val result = resultChannel.receive()
+                    if (result != null && found == null) {
+                        found = result
+                        jobs.forEach { it.cancel() }
+                    }
+                }
+                resultChannel.close()
+                found
             }
-            null
         }
 
-    private suspend fun aiPollinationsRequest(prompt: String): Bitmap? =
+    private suspend fun aiPollinationsRequest(prompt: String, model: String = "turbo"): Bitmap? =
         withContext(Dispatchers.IO) {
             val encodedPrompt = java.net.URLEncoder.encode(prompt, "UTF-8")
-            for (model in listOf("turbo", "flux")) {
-                try {
-                    val urlStr = "https://image.pollinations.ai/prompt/$encodedPrompt?width=512&height=512&nologo=true&model=$model&seed=${System.currentTimeMillis()}"
-                    android.util.Log.d("AiGenerate", "Pollinations ($model) request")
-                    val conn = URL("https://image.pollinations.ai/prompt/$encodedPrompt?width=512&height=512&nologo=true&model=$model&seed=${System.currentTimeMillis()}").openConnection() as HttpURLConnection
-                    conn.requestMethod = "GET"
-                    conn.connectTimeout = 20000
-                    conn.readTimeout = 35000
-                    conn.instanceFollowRedirects = true
-                    conn.setRequestProperty("User-Agent", "StickyApp/1.0")
-                    val code = conn.responseCode
-                    android.util.Log.d("AiGenerate", "Pollinations ($model) response: $code")
-                    if (code == 200) {
-                        val bitmap = BitmapFactory.decodeStream(conn.inputStream)
-                        conn.disconnect()
-                        if (bitmap != null) return@withContext bitmap
-                    }
+            try {
+                android.util.Log.d("AiGenerate", "Pollinations ($model) request")
+                val conn = URL("https://image.pollinations.ai/prompt/$encodedPrompt?width=512&height=512&nologo=true&model=$model&seed=${System.currentTimeMillis()}").openConnection() as HttpURLConnection
+                conn.requestMethod = "GET"
+                conn.connectTimeout = 15000
+                conn.readTimeout = 25000
+                conn.instanceFollowRedirects = true
+                conn.setRequestProperty("User-Agent", "StickyApp/1.0")
+                val code = conn.responseCode
+                android.util.Log.d("AiGenerate", "Pollinations ($model) response: $code")
+                if (code == 200) {
+                    val bitmap = BitmapFactory.decodeStream(conn.inputStream)
                     conn.disconnect()
-                } catch (e: Exception) {
-                    android.util.Log.e("AiGenerate", "Pollinations $model failed: ${e.message}")
+                    if (bitmap != null) return@withContext bitmap
                 }
+                conn.disconnect()
+                null
+            } catch (e: Exception) {
+                android.util.Log.e("AiGenerate", "Pollinations $model failed: ${e.message}")
+                null
             }
-            null
         }
 
     private suspend fun aiApiAirforceRequest(prompt: String, model: String): Bitmap? =
         withContext(Dispatchers.IO) {
-            for (attempt in 1..2) {
-                try {
-                    android.util.Log.d("AiGenerate", "api.airforce ($model) attempt=$attempt")
-                    val body = JSONObject().apply {
-                        put("model", model)
-                        put("prompt", prompt)
-                        put("size", "512x512")
-                        put("n", 1)
-                    }
-
-                    val conn = URL("https://api.airforce/v1/images/generations").openConnection() as HttpURLConnection
-                    conn.requestMethod = "POST"
-                    conn.setRequestProperty("Content-Type", "application/json")
-                    conn.connectTimeout = 15000
-                    conn.readTimeout = 45000
-                    conn.doOutput = true
-                    OutputStreamWriter(conn.outputStream).use { it.write(body.toString()) }
-
-                    val code = conn.responseCode
-                    android.util.Log.d("AiGenerate", "api.airforce ($model) response: $code")
-
-                    if (code == 429) {
-                        val errBody = try { BufferedReader(InputStreamReader(conn.errorStream)).use { it.readText() } } catch (_: Exception) { "" }
-                        conn.disconnect()
-                        android.util.Log.d("AiGenerate", "Rate limited for $model, trying next model. Body: $errBody")
-                        return@withContext null
-                    }
-                    if (code != 200) { conn.disconnect(); return@withContext null }
-
-                    val response = BufferedReader(InputStreamReader(conn.inputStream)).use { it.readText() }
-                    conn.disconnect()
-
-                    val data = JSONObject(response).optJSONArray("data")
-                    if (data == null || data.length() == 0) {
-                        android.util.Log.d("AiGenerate", "api.airforce ($model) empty data, retrying...")
-                        delay(3000)
-                        continue
-                    }
-
-                    val imageUrl = data.getJSONObject(0).optString("url", "")
-                    if (imageUrl.isEmpty()) continue
-
-                    android.util.Log.d("AiGenerate", "api.airforce ($model) downloading image")
-                    val imgConn = URL(imageUrl).openConnection() as HttpURLConnection
-                    imgConn.connectTimeout = 10000
-                    imgConn.readTimeout = 15000
-                    imgConn.instanceFollowRedirects = true
-
-                    val bitmap = if (imgConn.responseCode == 200) BitmapFactory.decodeStream(imgConn.inputStream) else null
-                    imgConn.disconnect()
-                    if (bitmap != null) {
-                        android.util.Log.d("AiGenerate", "api.airforce ($model) success!")
-                        return@withContext bitmap
-                    }
-                } catch (e: Exception) {
-                    android.util.Log.e("AiGenerate", "api.airforce $model attempt=$attempt: ${e.message}")
-                    if (attempt < 2) delay(2000)
+            try {
+                android.util.Log.d("AiGenerate", "api.airforce ($model) request")
+                val body = JSONObject().apply {
+                    put("model", model)
+                    put("prompt", prompt)
+                    put("size", "512x512")
+                    put("n", 1)
                 }
+
+                val conn = URL("https://api.airforce/v1/images/generations").openConnection() as HttpURLConnection
+                conn.requestMethod = "POST"
+                conn.setRequestProperty("Content-Type", "application/json")
+                conn.connectTimeout = 12000
+                conn.readTimeout = 30000
+                conn.doOutput = true
+                OutputStreamWriter(conn.outputStream).use { it.write(body.toString()) }
+
+                val code = conn.responseCode
+                android.util.Log.d("AiGenerate", "api.airforce ($model) response: $code")
+
+                if (code == 429 || code != 200) { conn.disconnect(); return@withContext null }
+
+                val response = BufferedReader(InputStreamReader(conn.inputStream)).use { it.readText() }
+                conn.disconnect()
+
+                val data = JSONObject(response).optJSONArray("data")
+                if (data == null || data.length() == 0) return@withContext null
+
+                val imageUrl = data.getJSONObject(0).optString("url", "")
+                if (imageUrl.isEmpty()) return@withContext null
+
+                android.util.Log.d("AiGenerate", "api.airforce ($model) downloading image")
+                val imgConn = URL(imageUrl).openConnection() as HttpURLConnection
+                imgConn.connectTimeout = 10000
+                imgConn.readTimeout = 15000
+                imgConn.instanceFollowRedirects = true
+
+                val bitmap = if (imgConn.responseCode == 200) BitmapFactory.decodeStream(imgConn.inputStream) else null
+                imgConn.disconnect()
+                if (bitmap != null) android.util.Log.d("AiGenerate", "api.airforce ($model) success!")
+                bitmap
+            } catch (e: Exception) {
+                android.util.Log.e("AiGenerate", "api.airforce $model: ${e.message}")
+                null
             }
-            null
         }
 
     private suspend fun aiProcessSticker(source: Bitmap): Bitmap =
@@ -1841,7 +1856,8 @@ Rules:
         }
 
         btnNotifications?.setOnClickListener {
-            showProfileNotificationsDialog()
+            startActivity(Intent(this, NotificationsActivity::class.java))
+            overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left)
         }
     }
 
@@ -2106,6 +2122,7 @@ Rules:
         val container = profileContentContainer?.rootView?.findViewById<android.widget.LinearLayout>(R.id.adminMessagesContainer)
         val rv = profileContentContainer?.rootView?.findViewById<RecyclerView>(R.id.rvAdminMessages)
         val badge = profileContentContainer?.rootView?.findViewById<TextView>(R.id.profileNotificationBadge)
+        val toolbarBadge = findViewById<TextView>(R.id.toolbarNotificationBadge)
         if (container == null || rv == null) return
 
         lifecycleScope.launch {
@@ -2115,6 +2132,8 @@ Rules:
                 withContext(Dispatchers.Main) {
                     badge?.visibility = if (unreadCount > 0) View.VISIBLE else View.GONE
                     badge?.text = unreadCount.coerceAtMost(99).toString()
+                    toolbarBadge?.visibility = if (unreadCount > 0) View.VISIBLE else View.GONE
+                    toolbarBadge?.text = unreadCount.coerceAtMost(99).toString()
                     if (messages.isEmpty()) {
                         container.visibility = View.GONE
                         return@withContext
@@ -2140,6 +2159,7 @@ Rules:
                 withContext(Dispatchers.Main) {
                     container.visibility = View.GONE
                     badge?.visibility = View.GONE
+                    toolbarBadge?.visibility = View.GONE
                 }
             }
         }

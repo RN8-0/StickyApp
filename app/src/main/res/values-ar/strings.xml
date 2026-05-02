@@ -563,7 +563,7 @@
     <string name="preparing_pack">حزمة التحضير</string>
     <string name="downloading_assets">جارٍ تنزيل الأصول…</string>
     <string name="related_packs">المزيد من حزم الملصقات</string>
-    <string name="ai_sticker">إنشاء الذكاء الاصطناعي</string>
+    <string name="ai_sticker">AI</string>
     <string name="ai_sticker_title">مولد ملصقات الذكاء الاصطناعي</string>
     <string name="ai_sticker_subtitle">قم بوصف الملصق الخاص بك ودع الذكاء الاصطناعي ينشئه</string>
     <string name="ai_prompt_hint">على سبيل المثال قطة سمينة ترتدي نظارة شمسية، وتحتسي القهوة بوجه متعجرف...</string>
@@ -657,4 +657,34 @@
     <string name="report_submitted">تم تقديم التقرير. شكرًا لك!</string>
     <string name="report_failed">لا يمكن تقديم التقرير. يرجى المحاولة مرة أخرى.</string>
     <string name="report_select_reason">الرجاء تحديد السبب</string>
+
+    <!-- Missing translations appended -->
+    <string name="field_required">هذا الحقل مطلوب.</string>
+    <string name="my_published_packs">الحزم التي أرسلتها</string>
+    <string name="no_notifications">لا توجد إشعارات حتى الآن.</string>
+    <string name="no_submissions_yet">لم ترسل أي حزم بعد.</string>
+    <string name="profile_notifications_title">الإشعارات</string>
+    <string name="publish_dialog_subtitle">أدخل التفاصيل أدناه. ستتم مراجعة حزمتك قبل نشرها.</string>
+    <string name="publish_dialog_title">نشر حزمة ملصقات</string>
+    <string name="publish_field_category">الفئة</string>
+    <string name="publish_field_description">الوصف (اختياري)</string>
+    <string name="publish_field_pack_name">اسم الحزمة</string>
+    <string name="publish_field_publisher">اسم الناشر / المنشئ</string>
+    <string name="publish_pack">النشر في المتجر</string>
+    <string name="publish_pack_already_submitted">هذه الحزمة قيد المراجعة بالفعل.</string>
+    <string name="publish_pack_count_range">يجب أن تحتوي الحزمة على 9–30 ملصقاً للنشر.</string>
+    <string name="publish_pack_failed">تعذر إرسال الحزمة. يرجى المحاولة مرة أخرى.</string>
+    <string name="publish_pack_login_required">يرجى تسجيل الدخول لنشر حزمتك.</string>
+    <string name="publish_pack_min_stickers">تحتاج حزمتك إلى 9 ملصقات على الأقل للإرسال.</string>
+    <string name="publish_pack_success">تم إرسال حزمتك للمراجعة! 🎉\nسنخطرك بمجرد الموافقة عليها.</string>
+    <string name="publishing">جارٍ النشر…</string>
+    <string name="rejection_reason_label">سبب الرفض</string>
+    <string name="saving_submission">جارٍ حفظ الإرسال…</string>
+    <string name="status_approved">موافق عليه ✅</string>
+    <string name="status_flagged">مُبلَّغ عنه ⚠️</string>
+    <string name="status_pending">قيد الانتظار ⏳</string>
+    <string name="status_rejected">مرفوض ❌</string>
+    <string name="submit_my_stickers_hint">اختر حزمة ملصقات من مجموعتك لإرسالها.</string>
+    <string name="submit_select_pack_required">يرجى اختيار حزمة ملصقات للإرسال</string>
+    <string name="uploading_stickers">جارٍ رفع الملصقات…</string>
 </resources>

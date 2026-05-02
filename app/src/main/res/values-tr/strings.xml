@@ -563,7 +563,7 @@
     <string name="preparing_pack">PAKET HAZIRLANIYOR</string>
     <string name="downloading_assets">Varlıklar indiriliyor…</string>
     <string name="related_packs">Daha Fazla Çıkartma Paketi</string>
-    <string name="ai_sticker">Yapay Zeka Oluştur</string>
+    <string name="ai_sticker">AI</string>
     <string name="ai_sticker_title">AI Etiket Oluşturucu</string>
     <string name="ai_sticker_subtitle">Çıkartmanızı açıklayın ve yapay zekanın yaratmasına izin verin</string>
     <string name="ai_prompt_hint">örneğin Güneş gözlüğü takan, kendini beğenmiş bir yüzle kahvesini yudumlayan tombul bir kedi…</string>
@@ -665,4 +665,27 @@
     <string name="report_submitted">Rapor gönderildi. Teşekkür ederim!</string>
     <string name="report_failed">Rapor gönderilemedi. Lütfen tekrar deneyin.</string>
     <string name="report_select_reason">Lütfen bir neden seçin</string>
+
+    <!-- Missing translations appended -->
+    <string name="field_required">Bu alan zorunludur.</string>
+    <string name="my_published_packs">Gönderilen Paketlerim</string>
+    <string name="no_submissions_yet">Henüz paket göndermediniz.</string>
+    <string name="publish_dialog_subtitle">Aşağıdaki ayrıntıları doldurun. Paketiniz yayınlanmadan önce incelenecektir.</string>
+    <string name="publish_dialog_title">Sticker Paketi Yayınla</string>
+    <string name="publish_field_category">Kategori</string>
+    <string name="publish_field_description">Açıklama (isteğe bağlı)</string>
+    <string name="publish_field_pack_name">Paket Adı</string>
+    <string name="publish_field_publisher">Yayıncı / Yaratıcı Adı</string>
+    <string name="publish_pack">Mağazada Yayınla</string>
+    <string name="publish_pack_already_submitted">Bu paket zaten inceleme altında.</string>
+    <string name="publish_pack_failed">Paket gönderilemedi. Lütfen tekrar deneyin.</string>
+    <string name="publish_pack_login_required">Paketinizi yayınlamak için giriş yapın.</string>
+    <string name="publish_pack_success">Paketiniz inceleme için gönderildi! 🎉\nOnaylandığında sizi bilgilendireceğiz.</string>
+    <string name="publishing">Yayınlanıyor…</string>
+    <string name="rejection_reason_label">Red Nedeni</string>
+    <string name="saving_submission">Gönderi kaydediliyor…</string>
+    <string name="status_flagged">İşaretlendi ⚠️</string>
+    <string name="submit_my_stickers_hint">Göndermek için koleksiyonunuzdan bir sticker paketi seçin.</string>
+    <string name="submit_select_pack_required">Göndermek için bir sticker paketi seçin</string>
+    <string name="uploading_stickers">Sticker\'lar yükleniyor…</string>
 </resources>

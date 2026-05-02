@@ -563,7 +563,7 @@
     <string name="preparing_pack">MENYIAPKAN PAKET</string>
     <string name="downloading_assets">Mengunduh aset…</string>
     <string name="related_packs">Paket Stiker Lainnya</string>
-    <string name="ai_sticker">AI Buat</string>
+    <string name="ai_sticker">AI</string>
     <string name="ai_sticker_title">Pembuat Stiker AI</string>
     <string name="ai_sticker_subtitle">Jelaskan stiker Anda dan biarkan AI yang membuatnya</string>
     <string name="ai_prompt_hint">misalnya seekor kucing gemuk berkacamata hitam, menyeruput kopi dengan wajah sombong…</string>

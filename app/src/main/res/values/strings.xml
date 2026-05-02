@@ -652,7 +652,7 @@
     <string name="related_packs">More Sticker Packs</string>
 
     <!-- AI Sticker Generator -->
-    <string name="ai_sticker">AI Create</string>
+    <string name="ai_sticker">AI</string>
     <string name="ai_sticker_title">AI Sticker Generator</string>
     <string name="ai_sticker_subtitle">Describe your sticker and let AI create it</string>
     <string name="ai_prompt_hint">e.g. a chubby cat wearing sunglasses, sipping coffee with a smug face…</string>

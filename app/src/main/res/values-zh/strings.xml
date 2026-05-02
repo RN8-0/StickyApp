@@ -563,7 +563,7 @@
     <string name="preparing_pack">准备包</string>
     <string name="downloading_assets">正在下载资源...</string>
     <string name="related_packs">更多贴纸包</string>
-    <string name="ai_sticker">人工智能创造</string>
+    <string name="ai_sticker">AI</string>
     <string name="ai_sticker_title">AI贴纸生成器</string>
     <string name="ai_sticker_subtitle">描述您的贴纸并让 AI 创建它</string>
     <string name="ai_prompt_hint">例如一只戴着墨镜的胖猫，一脸得意地喝着咖啡……</string>
@@ -657,4 +657,34 @@
     <string name="report_submitted">报告已提交。谢谢你！</string>
     <string name="report_failed">无法提交报告。请再试一次。</string>
     <string name="report_select_reason">请选择一个原因</string>
+
+    <!-- Missing translations appended -->
+    <string name="field_required">此字段为必填项。</string>
+    <string name="my_published_packs">我提交的贴纸包</string>
+    <string name="no_notifications">暂无通知。</string>
+    <string name="no_submissions_yet">您还没有提交任何贴纸包。</string>
+    <string name="profile_notifications_title">通知</string>
+    <string name="publish_dialog_subtitle">请填写以下详细信息。您的贴纸包在发布前将经过审核。</string>
+    <string name="publish_dialog_title">发布贴纸包</string>
+    <string name="publish_field_category">类别</string>
+    <string name="publish_field_description">描述（可选）</string>
+    <string name="publish_field_pack_name">包名称</string>
+    <string name="publish_field_publisher">发布者 / 创作者名称</string>
+    <string name="publish_pack">发布到商店</string>
+    <string name="publish_pack_already_submitted">此贴纸包已在审核中。</string>
+    <string name="publish_pack_count_range">贴纸包必须包含 9–30 个贴纸才能发布。</string>
+    <string name="publish_pack_failed">无法提交贴纸包，请重试。</string>
+    <string name="publish_pack_login_required">请登录后发布您的贴纸包。</string>
+    <string name="publish_pack_min_stickers">您的贴纸包至少需要 9 个贴纸才能提交。</string>
+    <string name="publish_pack_success">您的贴纸包已提交审核！🎉\n审核通过后我们将通知您。</string>
+    <string name="publishing">发布中…</string>
+    <string name="rejection_reason_label">拒绝原因</string>
+    <string name="saving_submission">正在保存提交…</string>
+    <string name="status_approved">已批准 ✅</string>
+    <string name="status_flagged">已标记 ⚠️</string>
+    <string name="status_pending">待审核 ⏳</string>
+    <string name="status_rejected">已拒绝 ❌</string>
+    <string name="submit_my_stickers_hint">从您的收藏中选择一个贴纸包进行提交。</string>
+    <string name="submit_select_pack_required">请选择一个贴纸包进行提交</string>
+    <string name="uploading_stickers">正在上传贴纸…</string>
 </resources>
