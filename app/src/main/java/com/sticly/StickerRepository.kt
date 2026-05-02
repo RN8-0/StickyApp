@@ -468,10 +468,7 @@ object StickerRepository {
     fun getDirectStorageUrl(storagePath: String, packId: String, fileName: String): String {
         val key = "$packId/$fileName"
         urlCache[key]?.let { return it }
-        val bucket = storage.reference.bucket
-        val fullPath = "$storagePath/$packId/$fileName"
-        val encodedPath = java.net.URLEncoder.encode(fullPath, "UTF-8")
-        val url = "https://firebasestorage.googleapis.com/v0/b/$bucket/o/$encodedPath?alt=media"
+        val url = "${PocketBaseHelper.PB_URL}/api/files/$storagePath/$packId/$fileName"
         urlCache[key] = url
         return url
     }
