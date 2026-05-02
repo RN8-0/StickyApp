@@ -24,13 +24,31 @@ jobs:
 
       - name: Deploy via SSH (fallback)
         if: ${{ secrets.SSH_HOST != '' && secrets.COOLIFY_WORKER_WEBHOOK_URL == '' }}
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: |
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+
+          # Copy updated source files
+          scp -i ~/.ssh/deploy_key -r sticky-worker/routes sticky-worker/server.js sticky-worker/hooks.js sticky-worker/package*.json \
+            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/opt/sticky-worker/
+
+          ssh -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
             cd /opt/sticky-worker
-            git pull origin main
-            npm ci --omit=dev
-            pm2 restart sticky-worker || pm2 start server.js --name sticky-worker
+            docker build -t sticky-worker:latest .
+            docker stop sticky-worker 2>/dev/null || true
+            docker rm sticky-worker 2>/dev/null || true
+            docker run -d \
+              --name sticky-worker \
+              --restart unless-stopped \
+              --network coolify \
+              -e GOOGLE_APPLICATION_CREDENTIALS=/app/firebase-service-account.json \
+              -e PB_URL=http://sh3xlf9j7symlj3otlw6s8rx-193542936752:8090 \
+              -e PB_ADMIN_EMAIL=arainunger@gmail.com \
+              -e PB_ADMIN_PASS=StickyAdmin2026! \
+              -e NTFY_URL=http://sticky-ntfy:80 \
+              -v /opt/sticky-worker/firebase-service-account.json:/app/firebase-service-account.json:ro \
+              sticky-worker:latest
+            echo "Worker redeployed"
+          '
