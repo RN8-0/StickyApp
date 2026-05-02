@@ -706,7 +706,6 @@ function App() {
         download_count: 0,
         view_count: 0,
         favorite_count: 0,
-        fake_download_base: Math.floor(Math.random() * 3000) + 1000,
         sticker_count: stickers.length,
         image_data_version: '1',
         is_active: true,
@@ -783,7 +782,7 @@ function App() {
     );
     if (!message || !message.trim()) return;
     try {
-      await createSubmissionNotification(
+      await notifySubmissionUser(
         submission,
         `Regarding your pack: ${submission.pack_name}`,
         message.trim(),
