@@ -1,6 +1,9 @@
 package com.sticly
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.os.Build
 import android.util.Log
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.storage.FirebaseStorage
@@ -9,6 +12,7 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import java.io.ByteArrayOutputStream
 import java.io.File
 
 /**
@@ -222,34 +226,11 @@ object StickerRepository {
     }
 
     /**
-     * Firestore koleksiyonlarını gerçek zamanlı takip eder
+     * Firestore gerçek zamanlı takip - devre dışı (Firestore kaldırıldı, PocketBase kullanılıyor)
      */
     fun startObservingPacks(context: Context) {
-        if (stickersListener != null && premiumStickersListener != null) return
-
-        Log.d(TAG, "Starting real-time observers for Firestore...")
-
-        // Stickers koleksiyonunu dinle
-        stickersListener = firestore.collection("stickers")
-            .addSnapshotListener { snapshot, e ->
-                if (e != null) {
-                    Log.e(TAG, "Stickers listener failed: ${e.message}")
-                    return@addSnapshotListener
-                }
-                Log.d(TAG, "Stickers collection updated: ${snapshot?.documents?.size} docs")
-                triggerRefresh(context)
-            }
-
-        // Premium_stickers koleksiyonunu dinle
-        premiumStickersListener = firestore.collection("premium_stickers")
-            .addSnapshotListener { snapshot, e ->
-                if (e != null) {
-                    Log.e(TAG, "Premium stickers listener failed: ${e.message}")
-                    return@addSnapshotListener
-                }
-                Log.d(TAG, "Premium stickers collection updated: ${snapshot?.documents?.size} docs")
-                triggerRefresh(context)
-            }
+        // Firestore kaldırıldı - gereksiz listener başlatma
+        Log.d(TAG, "startObservingPacks: Firestore kaldırıldığından listener başlatılmıyor")
     }
 
     fun stopObservingPacks() {
@@ -548,6 +529,8 @@ object StickerRepository {
             val localFile = File(cacheDir, fileName)
 
             if (localFile.exists() && localFile.length() > 0) {
+                // Daha önce indirilmiş ama çok büyükse sıkıştır
+                if (!fileName.startsWith("tray")) compressForWhatsApp(localFile)
                 return@withContext localFile
             }
 
@@ -563,6 +546,7 @@ object StickerRepository {
                         if (localFile.exists() && localFile.length() > 0) {
                             Log.d(TAG, "Downloaded via URL: $directUrl")
                             conn.disconnect()
+                            if (!fileName.startsWith("tray")) compressForWhatsApp(localFile)
                             return@withContext localFile
                         }
                     }
@@ -577,12 +561,43 @@ object StickerRepository {
             Log.d(TAG, "Downloading from Firebase Storage: $fullPath")
             val storageRef = storage.reference.child(fullPath)
             storageRef.getFile(localFile).await()
+            if (!fileName.startsWith("tray")) compressForWhatsApp(localFile)
 
             localFile
         } catch (e: Exception) {
             Log.e(TAG, "Download FAILED: $storagePath/$packId/$fileName - ${e.message}")
             null
         }
+    }
+
+    private fun compressForWhatsApp(file: File) {
+        val maxSize = 100 * 1024L // WhatsApp statik sticker limiti 100KB
+        if (file.length() <= maxSize) return
+
+        val original = BitmapFactory.decodeFile(file.absolutePath) ?: return // animated WebP → null → atla
+
+        val targetSize = if (original.width > 512 || original.height > 512) {
+            val scale = 512f / maxOf(original.width, original.height)
+            Bitmap.createScaledBitmap(original, (original.width * scale).toInt(), (original.height * scale).toInt(), true)
+        } else original
+
+        var quality = 85
+        while (quality >= 30) {
+            val baos = ByteArrayOutputStream()
+            @Suppress("DEPRECATION")
+            val format = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R)
+                Bitmap.CompressFormat.WEBP_LOSSY else Bitmap.CompressFormat.WEBP
+            targetSize.compress(format, quality, baos)
+            if (baos.size() <= maxSize) {
+                file.writeBytes(baos.toByteArray())
+                Log.d(TAG, "Compressed ${file.name}: ${file.length()/1024}KB at quality=$quality")
+                break
+            }
+            quality -= 10
+        }
+
+        if (targetSize !== original) targetSize.recycle()
+        original.recycle()
     }
 
     /**

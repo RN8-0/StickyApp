@@ -1049,29 +1049,42 @@ class MainActivity : AppCompatActivity() {
         lifecycleScope.launch(Dispatchers.IO) {
             try {
                 val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser ?: return@launch
-                com.google.firebase.firestore.FirebaseFirestore.getInstance()
-                    .collection("users").document(user.uid)
-                    .set(mapOf("ai_count" to count, "ai_date" to aiTodayString()), com.google.firebase.firestore.SetOptions.merge())
+                val filter = "uid='${user.uid.replace("'", "\\'")}' || user_id='${user.uid.replace("'", "\\'")}'"
+                val data = JSONObject().apply {
+                    put("uid", user.uid)
+                    put("user_id", user.uid)
+                    put("email", user.email ?: "")
+                    put("ai_count", count)
+                    put("ai_date", aiTodayString())
+                    put("last_sync", java.time.Instant.now().toString())
+                }
+                val existing = PocketBaseHelper.listRecords("user_profiles", filter = filter, perPage = 1)
+                if (existing.isEmpty()) PocketBaseHelper.createRecord("user_profiles", data)
+                else PocketBaseHelper.updateRecord("user_profiles", existing.first().getString("id"), data)
             } catch (_: Exception) { }
         }
     }
 
     private fun aiRestoreCountFromFirebase() {
-        try {
-            val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser ?: return
-            com.google.firebase.firestore.FirebaseFirestore.getInstance()
-                .collection("users").document(user.uid).get()
-                .addOnSuccessListener { doc ->
-                    val fbDate = doc.getString("ai_date") ?: return@addOnSuccessListener
-                    val fbCount = doc.getLong("ai_count")?.toInt() ?: return@addOnSuccessListener
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser ?: return@launch
+                val filter = "uid='${user.uid.replace("'", "\\'")}' || user_id='${user.uid.replace("'", "\\'")}'"
+                val existing = PocketBaseHelper.listRecords("user_profiles", filter = filter, perPage = 1)
+                if (existing.isNotEmpty()) {
+                    val profile = existing.first()
+                    val pbDate = profile.optString("ai_date")
+                    val pbCount = profile.optInt("ai_count", -1)
+                    if (pbDate.isBlank() || pbCount < 0) return@launch
                     val prefs = getSharedPreferences("sticky_prefs", MODE_PRIVATE)
                     val localDate = prefs.getString(AI_PREFS_DATE, "") ?: ""
                     val localCount = prefs.getInt(AI_PREFS_COUNT, 0)
-                    if (fbDate == aiTodayString() && fbCount > localCount) {
-                        prefs.edit().putInt(AI_PREFS_COUNT, fbCount).putString(AI_PREFS_DATE, fbDate).apply()
+                    if (pbDate == aiTodayString() && pbCount > localCount) {
+                        prefs.edit().putInt(AI_PREFS_COUNT, pbCount).putString(AI_PREFS_DATE, pbDate).apply()
                     }
                 }
-        } catch (_: Exception) { }
+            } catch (_: Exception) { }
+        }
     }
 
     private fun aiTodayString(): String = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
@@ -2826,25 +2839,26 @@ Rules:
             return
         }
 
-        val firestore = com.google.firebase.firestore.FirebaseFirestore.getInstance()
-        firestore.collection("users").document(docId).get()
-            .addOnSuccessListener { doc ->
-                if (doc.exists()) {
-                    val isPremium = doc.getBoolean("is_premium") ?: false
-                    val premiumType = doc.getString("premium_type") ?: "none"
-                    val premiumExpiry = doc.getLong("premium_expiry") ?: 0L
-
-                    if (isPremium) {
-                        PreferencesHelper.updateLocalPremiumStatus(this, true, premiumType, premiumExpiry)
-                    } else {
-                        PreferencesHelper.updateLocalPremiumStatus(this, false, "none", 0L)
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val escaped = docId.replace("'", "\\'")
+                val filter = "uid='$escaped' || user_id='$escaped' || device_id='$escaped'"
+                val existing = PocketBaseHelper.listRecords("user_profiles", filter = filter, perPage = 1)
+                if (existing.isNotEmpty()) {
+                    val profile = existing.first()
+                    val isPremium = profile.optBoolean("is_premium", false)
+                    val premiumType = profile.optString("premium_type", "none")
+                    val premiumExpiry = profile.optLong("premium_expiry", 0L)
+                    withContext(Dispatchers.Main) {
+                        if (isPremium) PreferencesHelper.updateLocalPremiumStatus(this@MainActivity, true, premiumType, premiumExpiry)
+                        else PreferencesHelper.updateLocalPremiumStatus(this@MainActivity, false, "none", 0L)
                     }
                 }
-                onComplete()
+            } catch (_: Exception) {
+            } finally {
+                withContext(Dispatchers.Main) { onComplete() }
             }
-            .addOnFailureListener {
-                onComplete()
-            }
+        }
     }
 
     private var hasPreloadedOnce = false

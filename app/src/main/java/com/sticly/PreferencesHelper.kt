@@ -10,6 +10,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
+import org.json.JSONObject
 import java.util.UUID
 
 object PreferencesHelper {
@@ -92,6 +94,40 @@ object PreferencesHelper {
         return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     }
 
+    private fun escapePb(value: String): String = value.replace("'", "\\'")
+
+    private fun syncCurrentUserProfile(context: Context, data: JSONObject) {
+        val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+        val uid = user?.uid ?: ""
+        val email = user?.email ?: getPrefs(context).getString("user_email", "").orEmpty()
+        val deviceId = getDeviceId(context)
+
+        data.put("uid", uid)
+        data.put("user_id", uid.ifBlank { deviceId })
+        data.put("device_id", deviceId)
+        if (email.isNotBlank()) data.put("email", email)
+        data.put("last_sync", java.time.Instant.now().toString())
+
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val filter = if (uid.isNotBlank()) {
+                    "uid='${escapePb(uid)}' || user_id='${escapePb(uid)}'"
+                } else {
+                    "device_id='${escapePb(deviceId)}'"
+                }
+                val existing = PocketBaseHelper.listRecords("user_profiles", filter = filter, perPage = 1)
+                if (existing.isEmpty()) {
+                    data.put("created_at", java.time.Instant.now().toString())
+                    PocketBaseHelper.createRecord("user_profiles", data)
+                } else {
+                    PocketBaseHelper.updateRecord("user_profiles", existing.first().getString("id"), data)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "PocketBase user profile sync failed: ${e.message}")
+            }
+        }
+    }
+
     // Premium
     fun isPremium(context: Context): Boolean {
         return getPrefs(context).getBoolean(KEY_PREMIUM, false)
@@ -104,19 +140,12 @@ object PreferencesHelper {
             setPremiumExpiry(context, 0L)
         }
         
-        // Sync to Firebase
-        val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
-        if (user != null) {
-            val data = hashMapOf(
-                "is_premium" to isPremium,
-                "premium_type" to if (isPremium) getPremiumType(context) else "none",
-                "premium_expiry" to if (isPremium) getPremiumExpiry(context) else 0L,
-                "email" to (user.email ?: ""),
-                "last_sync" to com.google.firebase.firestore.FieldValue.serverTimestamp()
-            )
-            FirebaseFirestore.getInstance().collection("users").document(user.uid)
-                .set(data, SetOptions.merge())
-        }
+        syncCurrentUserProfile(context, JSONObject().apply {
+            put("is_premium", isPremium)
+            put("premium_type", if (isPremium) getPremiumType(context) else "none")
+            put("premium_expiry", if (isPremium) getPremiumExpiry(context) else 0L)
+            put("subscription_source", if (isPremium) "local" else "none")
+        })
     }
 
     fun setPremiumWithType(context: Context, type: String, expiryTimestamp: Long = 0L, source: String = "google_play") {
@@ -126,20 +155,12 @@ object PreferencesHelper {
             .putLong(KEY_PREMIUM_EXPIRY, expiryTimestamp)
             .apply()
 
-        // Sync to Firebase
-        val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
-        if (user != null) {
-            val data = hashMapOf(
-                "is_premium" to true,
-                "premium_type" to type,
-                "premium_expiry" to expiryTimestamp,
-                "subscription_source" to source,
-                "email" to (user.email ?: ""),
-                "last_sync" to com.google.firebase.firestore.FieldValue.serverTimestamp()
-            )
-            FirebaseFirestore.getInstance().collection("users").document(user.uid)
-                .set(data, SetOptions.merge())
-        }
+        syncCurrentUserProfile(context, JSONObject().apply {
+            put("is_premium", true)
+            put("premium_type", type)
+            put("premium_expiry", expiryTimestamp)
+            put("subscription_source", source)
+        })
     }
 
     fun getPremiumType(context: Context): String {
@@ -380,12 +401,9 @@ object PreferencesHelper {
         // İlk favori ekleme - senkronizasyonu aktifleştir
         markFavoritesSynced(context)
 
-        // Sync to Firebase
-        val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
-        if (user != null) {
-            FirebaseFirestore.getInstance().collection("users").document(user.uid)
-                .update("favorite_packs", com.google.firebase.firestore.FieldValue.arrayUnion(packId))
-        }
+        syncCurrentUserProfile(context, JSONObject().apply {
+            put("favorite_packs", JSONArray(current.toList()))
+        })
     }
 
     @Synchronized
@@ -395,12 +413,9 @@ object PreferencesHelper {
         getPrefs(context).edit().putStringSet(KEY_FAVORITE_PACKS, current).commit()
         favoritePacksCache = current
 
-        // Sync to Firebase
-        val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
-        if (user != null) {
-            FirebaseFirestore.getInstance().collection("users").document(user.uid)
-                .update("favorite_packs", com.google.firebase.firestore.FieldValue.arrayRemove(packId))
-        }
+        syncCurrentUserProfile(context, JSONObject().apply {
+            put("favorite_packs", JSONArray(current.toList()))
+        })
     }
 
     fun isPackFavorite(context: Context, packId: String): Boolean {
@@ -635,12 +650,7 @@ object PreferencesHelper {
         val newCount = getTotalStickersAdded(context) + 1
         getPrefs(context).edit().putInt(KEY_TOTAL_STICKERS_ADDED, newCount).apply()
 
-        // Firebase'e senkronize et
-        val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
-        if (user != null) {
-            FirebaseFirestore.getInstance().collection("users").document(user.uid)
-                .update("total_stickers_added", newCount)
-        }
+        syncCurrentUserProfile(context, JSONObject().apply { put("total_stickers_added", newCount) })
         return newCount
     }
 
@@ -657,12 +667,7 @@ object PreferencesHelper {
     fun setCustomPacksCount(context: Context, count: Int) {
         getPrefs(context).edit().putInt(KEY_CUSTOM_PACKS_COUNT, count).apply()
 
-        // Firebase'e senkronize et
-        val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
-        if (user != null) {
-            FirebaseFirestore.getInstance().collection("users").document(user.uid)
-                .update("custom_packs_count", count)
-        }
+        syncCurrentUserProfile(context, JSONObject().apply { put("custom_packs_count", count) })
     }
 
     /**
@@ -684,81 +689,27 @@ object PreferencesHelper {
     }
 
     /**
-     * Kullanıcı verilerini Firebase ile senkronize eder.
-     * Kayıt tarihi, profil bilgileri, cihaz bilgisi ve istatistikler dahil.
+     * Eski çağrı noktaları için adı korunur; veri artık PocketBase user_profiles'a yazılır.
      */
     fun syncUserDataWithFirebase(context: Context, uid: String) {
-        val firestore = FirebaseFirestore.getInstance()
-        val userDoc = firestore.collection("users").document(uid)
         val currentUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
-
-        // Kullanıcı bilgilerini al
         val userEmail = currentUser?.email ?: ""
         val displayName = currentUser?.displayName ?: ""
         val photoUrl = currentUser?.photoUrl?.toString() ?: ""
-
-        // Yerel verileri al
         val localFavorites = getFavoritePacks(context).toList()
-        val totalStickersAdded = getTotalStickersAdded(context)
-        val customPacksCount = getCustomPacksCount(context)
 
-        // Önce mevcut dokümanı kontrol et (created_at için)
-        userDoc.get().addOnSuccessListener { document ->
-            val syncData = hashMapOf<String, Any>(
-                "email" to userEmail,
-                "display_name" to displayName,
-                "photo_url" to photoUrl,
-                "device_info" to getDeviceInfo(context),
-                "total_stickers_added" to totalStickersAdded,
-                "custom_packs_count" to customPacksCount,
-                "last_sync" to com.google.firebase.firestore.FieldValue.serverTimestamp()
-            )
-
-            // Favorileri ekle (arrayUnion ile)
-            if (localFavorites.isNotEmpty()) {
-                syncData["favorite_packs"] = com.google.firebase.firestore.FieldValue.arrayUnion(*localFavorites.toTypedArray())
-            }
-
-            // Eğer doküman yoksa veya created_at yoksa, kayıt tarihini ekle
-            if (!document.exists() || document.get("created_at") == null) {
-                syncData["created_at"] = com.google.firebase.firestore.FieldValue.serverTimestamp()
-                Log.d(TAG, "New user - setting created_at timestamp")
-            }
-
-            userDoc.set(syncData, SetOptions.merge())
-                .addOnSuccessListener {
-                    Log.d(TAG, "User data synced to Firebase for user: $uid")
-                }
-                .addOnFailureListener { e ->
-                    Log.e(TAG, "Sync failed: ${e.message}")
-                }
-        }.addOnFailureListener { e ->
-            // Doküman kontrolü başarısız olursa yine de kaydetmeyi dene
-            Log.e(TAG, "Document check failed, trying to sync anyway: ${e.message}")
-
-            val syncData = hashMapOf<String, Any>(
-                "email" to userEmail,
-                "display_name" to displayName,
-                "photo_url" to photoUrl,
-                "device_info" to getDeviceInfo(context),
-                "total_stickers_added" to totalStickersAdded,
-                "custom_packs_count" to customPacksCount,
-                "created_at" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
-                "last_sync" to com.google.firebase.firestore.FieldValue.serverTimestamp()
-            )
-
-            if (localFavorites.isNotEmpty()) {
-                syncData["favorite_packs"] = com.google.firebase.firestore.FieldValue.arrayUnion(*localFavorites.toTypedArray())
-            }
-
-            userDoc.set(syncData, SetOptions.merge())
-                .addOnSuccessListener {
-                    Log.d(TAG, "User data synced to Firebase (fallback) for user: $uid")
-                }
-                .addOnFailureListener { err ->
-                    Log.e(TAG, "Sync failed (fallback): ${err.message}")
-                }
-        }
+        syncCurrentUserProfile(context, JSONObject().apply {
+            put("uid", uid)
+            put("user_id", uid)
+            put("email", userEmail)
+            put("display_name", displayName)
+            put("name", displayName)
+            put("photo_url", photoUrl)
+            put("device_info", JSONObject(getDeviceInfo(context) as Map<*, *>))
+            put("total_stickers_added", getTotalStickersAdded(context))
+            put("custom_packs_count", getCustomPacksCount(context))
+            put("favorite_packs", JSONArray(localFavorites))
+        })
     }
 }
 

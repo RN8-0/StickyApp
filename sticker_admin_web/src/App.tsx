@@ -1,30 +1,12 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { db, storage } from './firebase';
+import { storage } from './firebase';
 import { pb, signInWithGitHub, WORKER_URL } from './pocketbase';
-import {
-  collection,
-  getDocs,
-  deleteDoc,
-  doc,
-  updateDoc,
-  arrayRemove,
-  setDoc,
-  serverTimestamp,
-  onSnapshot,
-  getDoc,
-  arrayUnion,
-  increment,
-  where,
-  query,
-  addDoc
-} from 'firebase/firestore';
 import {
   ref,
   deleteObject,
   uploadBytes,
   getDownloadURL,
-  listAll,
 } from 'firebase/storage';
 
 interface AdminUser { email: string; }
@@ -486,87 +468,77 @@ function App() {
 
   useEffect(() => {
     if (activeTab !== 'messages') return;
-
-    // Realtime listener for messages
-    const unsubMessages = onSnapshot(collection(db, 'messages'), (snapshot) => {
-      const msgs: ContactMessage[] = snapshot.docs.map(d => ({
-        id: d.id,
-        ...d.data()
-      } as ContactMessage));
-      setMessages(msgs.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)));
-    }, (e) => console.error("Mesajlar yüklenirken hata:", e));
-
-    // Realtime listener for suggestions
-    const unsubSuggestions = onSnapshot(collection(db, 'suggestions'), (snapshot) => {
-      const suggs: StickerSuggestion[] = snapshot.docs.map(d => ({
-        id: d.id,
-        ...d.data()
-      } as StickerSuggestion));
-      setSuggestions(suggs.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)));
-    }, (e) => console.error("Öneriler yüklenirken hata:", e));
-
-    return () => {
-      unsubMessages();
-      unsubSuggestions();
+    let mounted = true;
+    const fetchMessagesAndSuggestions = async () => {
+      try {
+        const [msgRecords, suggRecords] = await Promise.all([
+          pb.collection('messages').getFullList({ sort: '-created' }).catch(() => []),
+          pb.collection('suggestions').getFullList({ sort: '-created' }).catch(() => []),
+        ]);
+        if (!mounted) return;
+        setMessages((msgRecords as any[]).map(r => ({ id: r.id, name: r.name || r.title, email: r.email, subject: r.subject || '', message: r.message || r.body || '', timestamp: r.timestamp || new Date(r.created).getTime(), date: r.date || r.created?.split('T')[0] || '', time: r.time || '', status: r.status || 'unread' } as ContactMessage)));
+        setSuggestions((suggRecords as any[]).map(r => ({ id: r.id, suggestion: r.suggestion || r.text || '', timestamp: r.timestamp || new Date(r.created).getTime(), date: r.date || r.created?.split('T')[0] || '', time: r.time || '' } as StickerSuggestion)));
+      } catch (e) {
+        console.error('PB messages/suggestions fetch error:', e);
+      }
     };
+    fetchMessagesAndSuggestions();
+    return () => { mounted = false; };
   }, [activeTab]);
 
-  // Realtime listener for publisher_users (always active)
+  // Fetch publisher_users and user_submissions from PocketBase
   useEffect(() => {
-    const unsubPublishers = onSnapshot(collection(db, 'publisher_users'), (snapshot) => {
-      const pubs: PublisherUser[] = snapshot.docs.map(d => ({
-        id: d.id,
-        ...d.data()
-      } as PublisherUser));
-      setPublisherUsers(pubs.sort((a, b) => (a.display_name || '').localeCompare(b.display_name || '')));
-    }, (e) => console.error("Publisher users load error:", e));
-
-    const unsubSubmissions = onSnapshot(collection(db, 'user_submissions'), (snapshot) => {
-      const subs: UserSubmission[] = snapshot.docs.map(d => ({
-        id: d.id,
-        ...d.data()
-      } as UserSubmission));
-      setUserSubmissions(subs.sort((a, b) => {
-        const aTime = a.created_at?.seconds || 0;
-        const bTime = b.created_at?.seconds || 0;
-        return bTime - aTime;
-      }));
-    }, (e) => console.error("User submissions load error:", e));
-
-    return () => {
-      unsubPublishers();
-      unsubSubmissions();
+    let mounted = true;
+    const fetchData = async () => {
+      try {
+        const [publishers, submissions] = await Promise.all([
+          pb.collection('publisher_users').getFullList({ sort: 'name' }).catch(() => []),
+          pb.collection('user_submissions').getFullList({ sort: '-created' }).catch(() => []),
+        ]);
+        if (!mounted) return;
+        setPublisherUsers((publishers as any[]).map(r => ({ id: r.id, display_name: r.display_name || r.name, avatar_url: r.avatar_url || '', bio: r.bio || '', category: r.category || '', packs_published: r.packs_published || 0, total_downloads: r.total_downloads || 0, created_at: r.created, is_active: r.is_active !== false } as PublisherUser)).sort((a, b) => (a.display_name || '').localeCompare(b.display_name || '')));
+        setUserSubmissions((submissions as any[]).map(r => ({ id: r.id, user_id: r.user_id || '', user_email: r.user_email || '', display_name: r.display_name || '', publisher_name: r.publisher_name, pack_name: r.pack_name || r.name || '', description: r.description, category: r.category || '', stickers: r.stickers || r.sticker_data || [], status: r.status || 'pending', flag_reasons: r.flag_reasons, rejection_reason: r.rejection_reason, sticker_count: r.sticker_count || 0, sticker_pack_id: r.sticker_pack_id, created_at: { seconds: new Date(r.created).getTime() / 1000 }, note: r.note } as UserSubmission)).sort((a, b) => (b.created_at?.seconds || 0) - (a.created_at?.seconds || 0)));
+      } catch (e) {
+        console.error('PB publishers/submissions fetch error:', e);
+      }
     };
+    fetchData();
+    return () => { mounted = false; };
   }, []);
 
   // Publisher User CRUD handlers
   const handleSavePublisher = async () => {
     try {
-      const id = editingPublisher?.id || publisherFormData.display_name.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') + '_' + Date.now();
-      await setDoc(doc(db, 'publisher_users', id), {
+      const pubData = {
         display_name: publisherFormData.display_name,
+        name: publisherFormData.display_name,
         avatar_url: publisherFormData.avatar_url,
         bio: publisherFormData.bio,
         category: publisherFormData.category,
         is_active: publisherFormData.is_active,
-        ...(editingPublisher ? {} : { packs_published: 0, total_downloads: 0, created_at: serverTimestamp() }),
-      }, { merge: true });
+      };
+      if (editingPublisher?.id) {
+        await pb.collection('publisher_users').update(editingPublisher.id, pubData);
+      } else {
+        await pb.collection('publisher_users').create({ ...pubData, packs_published: 0, total_downloads: 0 });
+      }
       setShowPublisherModal(false);
       setEditingPublisher(null);
       setPublisherFormData({ display_name: '', avatar_url: '', bio: '', category: 'community', is_active: true });
     } catch (e) {
-      console.error("Publisher save error:", e);
-      alert("Failed to save publisher user.");
+      console.error('Publisher save error:', e);
+      alert('Failed to save publisher user.');
     }
   };
 
   const handleDeletePublisher = async (id: string) => {
-    if (!window.confirm("Are you sure you want to delete this publisher user?")) return;
+    if (!window.confirm('Are you sure you want to delete this publisher user?')) return;
     try {
-      await deleteDoc(doc(db, 'publisher_users', id));
+      await pb.collection('publisher_users').delete(id);
+      setPublisherUsers(publisherUsers.filter(p => p.id !== id));
     } catch (e) {
-      console.error("Publisher delete error:", e);
-      alert("Failed to delete publisher user.");
+      console.error('Publisher delete error:', e);
+      alert('Failed to delete publisher user.');
     }
   };
 
@@ -574,17 +546,16 @@ function App() {
   const handleApproveSubmission = async (submission: UserSubmission) => {
     if (!window.confirm(`Approve "${submission.pack_name}" and move to stickers collection?`)) return;
     try {
-      const packId = submission.pack_name.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') + '_' + Date.now();
-      const stickers: Sticker[] = submission.stickers.map(s => ({
-        image_file: s.name,
-        url: s.image_url,
-        emojis: ['⭐']
+      const stickers: Sticker[] = (submission.stickers || []).map((s: any) => ({
+        image_file: s.name || s.image_file,
+        url: s.image_url || s.url || '',
+        emojis: s.emojis || ['⭐']
       }));
-      await setDoc(doc(db, 'stickers', packId), {
+      const packData = {
         name: submission.pack_name,
         publisher: submission.display_name,
         publisher_email: submission.user_email,
-        category: submission.category || 'community',
+        category: submission.category || 'other',
         is_premium: false,
         is_animated: false,
         download_count: 0,
@@ -592,7 +563,7 @@ function App() {
         favorite_count: 0,
         fake_download_base: Math.floor(Math.random() * 3000) + 1000,
         sticker_count: stickers.length,
-        image_data_version: "1",
+        image_data_version: '1',
         is_active: true,
         is_popular: false,
         stickers,
@@ -600,27 +571,17 @@ function App() {
         tray_url: stickers[0]?.url || '',
         privacy_policy_website: '',
         license_agreement_website: '',
-        created_at: serverTimestamp(),
-      });
-      await updateDoc(doc(db, 'user_submissions', submission.id), {
+      };
+      const created = await pb.collection('stickers').create(packData);
+      await pb.collection('user_submissions').update(submission.id, {
         status: 'approved',
-        processed_at: serverTimestamp(),
-        rejection_reason: null,
-        sticker_pack_id: packId,
+        sticker_pack_id: created.id,
       });
-      // Update user's published pack counter
-      try {
-        const userQuery = await getDocs(query(collection(db, 'users'), where('uid', '==', submission.user_id)));
-        if (!userQuery.empty) {
-          await updateDoc(userQuery.docs[0].ref, {
-            packs_published: increment(1)
-          });
-        }
-      } catch (_) {}
+      setUserSubmissions(userSubmissions.map(s => s.id === submission.id ? { ...s, status: 'approved' as any, sticker_pack_id: created.id } : s));
       alert(`"${submission.pack_name}" approved and published!`);
     } catch (e) {
-      console.error("Approve error:", e);
-      alert("Failed to approve submission.");
+      console.error('Approve error:', e);
+      alert('Failed to approve submission.');
     }
   };
 
@@ -629,17 +590,17 @@ function App() {
       `Reject "${submission.pack_name}"?\n\nPlease enter a rejection reason (shown to the user):`,
       ''
     );
-    if (reason === null) return; // cancelled
+    if (reason === null) return;
     try {
-      await updateDoc(doc(db, 'user_submissions', submission.id), {
+      await pb.collection('user_submissions').update(submission.id, {
         status: 'rejected',
         rejection_reason: reason.trim() || 'Your submission did not meet our content guidelines.',
-        processed_at: serverTimestamp(),
       });
+      setUserSubmissions(userSubmissions.map(s => s.id === submission.id ? { ...s, status: 'rejected' as any } : s));
       alert(`"${submission.pack_name}" rejected. Reason saved and will be shown to the user.`);
     } catch (e) {
-      console.error("Reject error:", e);
-      alert("Failed to reject submission.");
+      console.error('Reject error:', e);
+      alert('Failed to reject submission.');
     }
   };
 
@@ -649,14 +610,14 @@ function App() {
       : `Permanently delete "${submission.pack_name}"? This cannot be undone.`;
     if (!window.confirm(msg)) return;
     try {
-      await deleteDoc(doc(db, 'user_submissions', submission.id));
-      // Cascade: remove from public stickers collection if approved
+      await pb.collection('user_submissions').delete(submission.id);
       if (submission.status === 'approved' && submission.sticker_pack_id) {
-        await deleteDoc(doc(db, 'stickers', submission.sticker_pack_id)).catch(() => {});
+        await pb.collection('stickers').delete(submission.sticker_pack_id).catch(() => {});
       }
+      setUserSubmissions(userSubmissions.filter(s => s.id !== submission.id));
     } catch (e) {
-      console.error("Delete submission error:", e);
-      alert("Failed to delete submission.");
+      console.error('Delete submission error:', e);
+      alert('Failed to delete submission.');
     }
   };
 
@@ -667,16 +628,15 @@ function App() {
     );
     if (!message || !message.trim()) return;
     try {
-      const notifRef = collection(db, 'user_notifications', submission.user_id, 'notifications');
-      await addDoc(notifRef, {
+      await pb.collection('notifications').create({
         title: `Regarding your pack: ${submission.pack_name}`,
-        message: message.trim(),
+        body: message.trim(),
+        user_id: submission.user_id,
         pack_id: submission.id,
         from: 'admin',
         read: false,
-        created_at: serverTimestamp(),
       });
-      alert("Message sent to user.");
+      alert('Message sent to user.');
     } catch (e) {
       console.error("Send feedback error:", e);
       alert("Failed to send message.");
@@ -685,62 +645,62 @@ function App() {
 
   const markMessageAsRead = async (messageId: string) => {
     try {
-      await updateDoc(doc(db, 'messages', messageId), { status: 'read' });
+      await pb.collection('messages').update(messageId, { status: 'read' });
       setMessages(messages.map(m => m.id === messageId ? { ...m, status: 'read' } : m));
     } catch (e) {
-      console.error("Mesaj okundu işaretlenemedi:", e);
+      console.error('Mesaj okundu işaretlenemedi:', e);
     }
   };
 
   const deleteMessage = async (messageId: string) => {
-    if (!window.confirm("Are you sure you want to delete this message?")) return;
+    if (!window.confirm('Are you sure you want to delete this message?')) return;
     try {
-      await deleteDoc(doc(db, 'messages', messageId));
+      await pb.collection('messages').delete(messageId);
       setMessages(messages.filter(m => m.id !== messageId));
     } catch (e) {
-      console.error("Mesaj silinemedi:", e);
+      console.error('Mesaj silinemedi:', e);
     }
   };
 
   const deleteSuggestion = async (suggestionId: string) => {
-    if (!window.confirm("Are you sure you want to delete this suggestion?")) return;
+    if (!window.confirm('Are you sure you want to delete this suggestion?')) return;
     try {
-      await deleteDoc(doc(db, 'suggestions', suggestionId));
+      await pb.collection('suggestions').delete(suggestionId);
       setSuggestions(suggestions.filter(s => s.id !== suggestionId));
     } catch (e) {
-      console.error("Öneri silinemedi:", e);
+      console.error('Öneri silinemedi:', e);
     }
   };
 
   const clearAllMessages = async () => {
-    if (!window.confirm("Are you sure you want to delete ALL messages?")) return;
+    if (!window.confirm('Are you sure you want to delete ALL messages?')) return;
     try {
       setDeleteProgress({ deleting: true, message: 'Deleting messages...', current: 0, total: messages.length });
-      const snapshot = await getDocs(collection(db, 'messages'));
-      for (let i = 0; i < snapshot.docs.length; i++) {
-        await deleteDoc(snapshot.docs[i].ref);
-        setDeleteProgress({ deleting: true, message: 'Deleting messages...', current: i + 1, total: snapshot.docs.length });
+      for (let i = 0; i < messages.length; i++) {
+        await pb.collection('messages').delete(messages[i].id).catch(() => {});
+        setDeleteProgress({ deleting: true, message: 'Deleting messages...', current: i + 1, total: messages.length });
       }
+      setMessages([]);
       setDeleteProgress(null);
     } catch (e) {
       setDeleteProgress(null);
-      console.error("Mesajlar silinemedi:", e);
+      console.error('Mesajlar silinemedi:', e);
     }
   };
 
   const clearAllSuggestions = async () => {
-    if (!window.confirm("Are you sure you want to delete ALL suggestions?")) return;
+    if (!window.confirm('Are you sure you want to delete ALL suggestions?')) return;
     try {
       setDeleteProgress({ deleting: true, message: 'Deleting suggestions...', current: 0, total: suggestions.length });
-      const snapshot = await getDocs(collection(db, 'suggestions'));
-      for (let i = 0; i < snapshot.docs.length; i++) {
-        await deleteDoc(snapshot.docs[i].ref);
-        setDeleteProgress({ deleting: true, message: 'Deleting suggestions...', current: i + 1, total: snapshot.docs.length });
+      for (let i = 0; i < suggestions.length; i++) {
+        await pb.collection('suggestions').delete(suggestions[i].id).catch(() => {});
+        setDeleteProgress({ deleting: true, message: 'Deleting suggestions...', current: i + 1, total: suggestions.length });
       }
+      setSuggestions([]);
       setDeleteProgress(null);
     } catch (e) {
       setDeleteProgress(null);
-      console.error("Öneriler silinemedi:", e);
+      console.error('Öneriler silinemedi:', e);
     }
   };
 
@@ -790,15 +750,7 @@ function App() {
         if (admins.length > 0) isAdminUser = true;
       } catch (_) {}
       if (!isAdminUser) {
-        try {
-          const adminDoc = await getDoc(doc(db, 'admins', email));
-          if (adminDoc.exists()) isAdminUser = true;
-        } catch (_) {}
-      }
 
-      if (!isAdminUser) {
-        pb.authStore.clear();
-        alert('Unauthorized: ' + email + ' is not in the admin list.');
         return;
       }
 
@@ -840,48 +792,7 @@ function App() {
         ];
         console.log(`PocketBase: ${allPacks.length} paket yüklendi`);
       } catch (pbError) {
-        console.warn("PocketBase fetch başarısız, Firestore deneniyor:", pbError);
-      }
-
-      // 2. PocketBase boşsa Firestore'a düş
-      if (allPacks.length === 0) {
-        try {
-          const [normalPacks, premiumPacks] = await Promise.all([
-            getDocs(collection(db, 'stickers')),
-            getDocs(collection(db, 'premium_stickers')),
-          ]);
-          allPacks = [
-            ...normalPacks.docs.map(d => {
-              const data = d.data();
-              return {
-                id: d.id, ...data,
-                is_premium: false,
-                is_animated: data.is_animated ?? data.animated ?? false,
-                download_count: Number(data.download_count || 0),
-                fake_download_base: Number(data.fake_download_base || 0),
-                view_count: Number(data.view_count || 0),
-                favorite_count: Number(data.favorite_count || 0),
-                sticker_count: Number(data.sticker_count || data.stickers?.length || 0),
-              } as StickerPack;
-            }),
-            ...premiumPacks.docs.map(d => {
-              const data = d.data();
-              return {
-                id: d.id, ...data,
-                is_premium: true,
-                is_animated: data.is_animated ?? data.animated ?? false,
-                download_count: Number(data.download_count || 0),
-                fake_download_base: Number(data.fake_download_base || 0),
-                view_count: Number(data.view_count || 0),
-                favorite_count: Number(data.favorite_count || 0),
-                sticker_count: Number(data.sticker_count || data.stickers?.length || 0),
-              } as StickerPack;
-            }),
-          ];
-          console.log(`Firestore: ${allPacks.length} paket yüklendi`);
-        } catch (fsError) {
-          console.warn("Firestore fetch başarısız:", fsError);
-        }
+        console.warn('PocketBase fetch başarısız:', pbError);
       }
 
       console.table(allPacks.slice(0, 10).map(p => ({ name: p.name, dl: p.download_count })));
@@ -898,24 +809,21 @@ function App() {
   const fetchDrafts = async () => {
     setDraftLoading(true);
     try {
-      const draftDocs = await getDocs(collection(db, 'draft_stickers'));
-      const drafts: StickerPack[] = draftDocs.docs.map(d => {
-        const data = d.data();
-        return {
-          id: d.id,
-          ...data,
-          is_premium: data.is_premium ?? false,
-          is_animated: data.is_animated ?? true,
-          download_count: 0,
-          fake_download_base: Number(data.fake_download_base || 0),
-          view_count: 0,
-          favorite_count: 0,
-          sticker_count: Number(data.sticker_count || data.stickers?.length || 0),
-        } as StickerPack;
-      });
+      const records = await pb.collection('draft_stickers').getFullList({ sort: '-created' });
+      const drafts: StickerPack[] = (records as any[]).map(r => ({
+        id: r.id,
+        ...r,
+        is_premium: r.is_premium ?? false,
+        is_animated: r.is_animated ?? true,
+        download_count: 0,
+        fake_download_base: Number(r.fake_download_base || 0),
+        view_count: 0,
+        favorite_count: 0,
+        sticker_count: Number(r.sticker_count || r.stickers?.length || 0),
+      } as StickerPack));
       setDraftPacks(drafts.sort((a, b) => (a.name || '').localeCompare(b.name || '')));
     } catch (error: any) {
-      console.error("Draft fetch error:", error);
+      console.error('Draft fetch error:', error);
     } finally {
       setDraftLoading(false);
     }
@@ -926,32 +834,36 @@ function App() {
     setDraftPublishing(draft.id);
     setSinglePublishProgress({ step: 'Preparing...', percent: 5 });
     try {
-      // Use the current draft name (which may have been edited) for translation
       const currentName = draft.name;
       const stickerCount = draft.sticker_count || draft.stickers?.length || 0;
 
       setSinglePublishProgress({ step: `Translating "${currentName}" to 33 languages...`, percent: 15 });
       let translations: Record<string, string> = {};
       if (deepseekService.isConfigured()) {
-        try {
-          translations = await deepseekService.translatePackName(currentName);
-        } catch { translations = {}; }
+        try { translations = await deepseekService.translatePackName(currentName); } catch { translations = {}; }
       }
 
       setSinglePublishProgress({ step: `Publishing ${stickerCount} stickers to database...`, percent: 55 });
       const targetCollection = draft.is_premium ? 'premium_stickers' : 'stickers';
-      const { id, ...packDataWithoutId } = draft as any;
-      await setDoc(doc(db, targetCollection, draft.id), {
-        ...packDataWithoutId,
+      const { id, collectionId, collectionName, expand, ...packDataWithoutMeta } = draft as any;
+      const packData = {
+        ...packDataWithoutMeta,
         ...translations,
         name: currentName,
         name_en: currentName,
         is_active: true,
-        published_at: serverTimestamp(),
-      });
+      };
+      try {
+        await pb.collection(targetCollection).create({ id: draft.id, ...packData });
+      } catch (pbErr: any) {
+        // If ID conflict, try without specifying id
+        if (pbErr?.message?.includes('id') || pbErr?.status === 400) {
+          await pb.collection(targetCollection).create(packData);
+        } else throw pbErr;
+      }
 
       setSinglePublishProgress({ step: 'Cleaning up draft...', percent: 75 });
-      await deleteDoc(doc(db, 'draft_stickers', draft.id));
+      await pb.collection('draft_stickers').delete(draft.id);
       setDraftPacks(prev => prev.filter(p => p.id !== draft.id));
       if (selectedDraft?.id === draft.id) setSelectedDraft(null);
 
@@ -959,7 +871,7 @@ function App() {
       await fetchPacks();
       alert(`✅ "${currentName}" published successfully! (${stickerCount} stickers)`);
     } catch (error: any) {
-      console.error("Publish error:", error);
+      console.error('Publish error:', error);
       alert(`Publish error: ${error.message}`);
     } finally {
       setDraftPublishing(null);
@@ -981,22 +893,17 @@ function App() {
         let translations: Record<string, string> = {};
         const currentName = draft.name;
         if (deepseekService.isConfigured()) {
-          try {
-            translations = await deepseekService.translatePackName(currentName);
-          } catch { translations = {}; }
+          try { translations = await deepseekService.translatePackName(currentName); } catch { translations = {}; }
         }
-
         const targetCollection = draft.is_premium ? 'premium_stickers' : 'stickers';
-        const { id, ...packDataWithoutId } = draft as any;
-        await setDoc(doc(db, targetCollection, draft.id), {
-          ...packDataWithoutId,
-          ...translations,
-          name: currentName,
-          name_en: currentName,
-          is_active: true,
-          published_at: serverTimestamp(),
-        });
-        await deleteDoc(doc(db, 'draft_stickers', draft.id));
+        const { id, collectionId, collectionName, expand, ...packDataWithoutMeta } = draft as any;
+        const packData = { ...packDataWithoutMeta, ...translations, name: currentName, name_en: currentName, is_active: true };
+        try {
+          await pb.collection(targetCollection).create({ id: draft.id, ...packData });
+        } catch {
+          await pb.collection(targetCollection).create(packData);
+        }
+        await pb.collection('draft_stickers').delete(draft.id).catch(() => {});
         published++;
       } catch (error: any) {
         console.error(`Publish error (${draft.name}):`, error);
@@ -1016,24 +923,17 @@ function App() {
     const total = draftPacks.length;
     let deleted = 0;
     setDeleteAllProgress({ current: 0, total });
-
     for (let i = 0; i < draftPacks.length; i++) {
       const draft = draftPacks[i];
       setDeleteAllProgress({ current: i, total });
       setDraftDeleting(draft.id);
       try {
-        try {
-          const folderRef = ref(storage, `stickers/${draft.id}`);
-          const fileList = await listAll(folderRef);
-          await Promise.all(fileList.items.map(item => deleteObject(item)));
-        } catch (e) { console.log('Storage delete:', e); }
-        await deleteDoc(doc(db, 'draft_stickers', draft.id));
+        await pb.collection('draft_stickers').delete(draft.id).catch(() => {});
         deleted++;
       } catch (error: any) {
         console.error(`Delete error (${draft.name}):`, error);
       }
     }
-
     setDeleteAllProgress(null);
     setDraftDeleting(null);
     setDraftPacks([]);
@@ -1044,24 +944,13 @@ function App() {
   const deleteDraftPack = async (draft: StickerPack) => {
     if (!window.confirm(`Are you sure you want to delete the draft "${draft.name}"? This action cannot be undone!`)) return;
     setDraftDeleting(draft.id);
-    setSingleDeleteProgress({ step: 'Deleting storage files...' });
+    setSingleDeleteProgress({ step: 'Removing from database...' });
     try {
-      // Storage'dan sticker dosyalarını sil
-      try {
-        const folderRef = ref(storage, `stickers/${draft.id}`);
-        const fileList = await listAll(folderRef);
-        const totalFiles = fileList.items.length;
-        for (let fi = 0; fi < totalFiles; fi++) {
-          setSingleDeleteProgress({ step: `Deleting file ${fi + 1}/${totalFiles}...`, fileProgress: { current: fi, total: totalFiles } });
-          await deleteObject(fileList.items[fi]);
-        }
-      } catch (e) { console.log('Storage silme (draft):', e); }
-      setSingleDeleteProgress({ step: 'Removing from database...' });
-      await deleteDoc(doc(db, 'draft_stickers', draft.id));
+      await pb.collection('draft_stickers').delete(draft.id);
       setDraftPacks(prev => prev.filter(p => p.id !== draft.id));
       if (selectedDraft?.id === draft.id) setSelectedDraft(null);
     } catch (error: any) {
-      console.error("Draft delete error:", error);
+      console.error('Draft delete error:', error);
       alert(`Delete error: ${error.message}`);
     } finally {
       setDraftDeleting(null);
@@ -1074,14 +963,14 @@ function App() {
     try {
       const updatedData: any = { ...draftEditData };
       updatedData.image_data_version = Date.now().toString();
-      await updateDoc(doc(db, 'draft_stickers', selectedDraft.id), updatedData);
+      await pb.collection('draft_stickers').update(selectedDraft.id, updatedData);
       const updated = { ...selectedDraft, ...updatedData } as StickerPack;
       setDraftPacks(prev => prev.map(p => p.id === selectedDraft.id ? updated : p));
       setSelectedDraft(updated);
       setShowDraftEditModal(false);
-      alert("Draft updated successfully.");
+      alert('Draft updated successfully.');
     } catch (error: any) {
-      console.error("Draft update error:", error);
+      console.error('Draft update error:', error);
       alert(`Update error: ${error.message}`);
     }
   };
@@ -1092,11 +981,11 @@ function App() {
       const stickers = [...draft.stickers];
       const [moved] = stickers.splice(fromIdx, 1);
       stickers.splice(toIdx, 0, moved);
-      await updateDoc(doc(db, 'draft_stickers', draft.id), { stickers });
+      await pb.collection('draft_stickers').update(draft.id, { stickers });
       const updated = { ...draft, stickers } as StickerPack;
       setDraftPacks(prev => prev.map(p => p.id === draft.id ? updated : p));
     } catch (error: any) {
-      console.error("Reorder error:", error);
+      console.error('Reorder error:', error);
       alert(`Reorder error: ${error.message}`);
     }
   };
@@ -1105,7 +994,7 @@ function App() {
     if (!window.confirm('Are you sure you want to remove this sticker from the draft?')) return;
     try {
       const updatedStickers = draft.stickers.filter((_, idx) => idx !== stickerIndex);
-      await updateDoc(doc(db, 'draft_stickers', draft.id), {
+      await pb.collection('draft_stickers').update(draft.id, {
         stickers: updatedStickers,
         sticker_count: updatedStickers.length,
       });
@@ -1113,7 +1002,7 @@ function App() {
       setDraftPacks(prev => prev.map(p => p.id === draft.id ? updated : p));
       if (selectedDraft?.id === draft.id) setSelectedDraft(updated);
     } catch (error: any) {
-      console.error("Remove sticker error:", error);
+      console.error('Remove sticker error:', error);
       alert(`Remove sticker error: ${error.message}`);
     }
   };
@@ -1400,7 +1289,7 @@ function App() {
         price_try: "", price_usd: "", price_eur: "",
         stickers: [],
         tray_url: "",
-        created_at: serverTimestamp()
+        created_at: new Date().toISOString()
       };
 
       // Tüm name_ ile başlayan alanları kopyala (Çeviriler)
@@ -1429,14 +1318,15 @@ function App() {
         }
       }
 
-      // PocketBase'e kaydet (birincil), başarısız olursa Firestore'a düş
+      // PocketBase'e kaydet (birincil)
       let createdId = packId;
       try {
         const created = await pb.collection(collectionName).create({ id: packId, ...packData });
         createdId = created.id;
       } catch (pbErr) {
-        console.warn("PocketBase create failed, falling back to Firestore:", pbErr);
-        await setDoc(doc(db, collectionName, packId), packData);
+        // Try without specifying id if it conflicts
+        const created = await pb.collection(collectionName).create(packData);
+        createdId = created.id;
       }
 
       const createdPack = { id: createdId, ...packData } as StickerPack;
@@ -1526,11 +1416,10 @@ function App() {
           try { await pb.collection(oldCollection).delete(selectedPack.id); } catch (_) {}
           pbSuccess = true;
         } catch (pbErr) {
-          console.warn("PocketBase collection move failed, using Firestore:", pbErr);
+          console.warn('PocketBase collection move failed:', pbErr);
         }
         if (!pbSuccess) {
-          await setDoc(doc(db, newCollection, selectedPack.id), fullData);
-          await deleteDoc(doc(db, oldCollection, selectedPack.id));
+          throw new Error('Failed to move pack between collections');
         }
 
         const updated = fullData as StickerPack;
@@ -1540,15 +1429,11 @@ function App() {
         alert(`Pack updated successfully.`);
       } else {
         // Sadece bilgi güncelleme
-        let pbSuccess = false;
         try {
           await pb.collection(oldCollection).update(selectedPack.id, updatedData);
-          pbSuccess = true;
         } catch (pbErr) {
-          console.warn("PocketBase update failed, using Firestore:", pbErr);
-        }
-        if (!pbSuccess) {
-          await updateDoc(doc(db, oldCollection, selectedPack.id), updatedData);
+          console.warn('PocketBase update failed:', pbErr);
+          throw pbErr;
         }
         const updated = { ...selectedPack, ...updatedData } as StickerPack;
         setPacks(packs.map(p => p.id === selectedPack.id ? updated : p));
@@ -1574,7 +1459,6 @@ function App() {
 
     try {
       const collectionName = selectedPack.is_premium ? 'premium_stickers' : 'stickers';
-      const packRef = doc(db, collectionName, selectedPack.id);
       const newStickers: Sticker[] = [];
       const processedBlobs: Blob[] = [];
 
@@ -1723,13 +1607,7 @@ function App() {
         tray_image_file: newTrayFile
       };
 
-      // PocketBase'e güncelle, başarısız olursa Firestore'a düş
-      try {
-        await pb.collection(collectionName).update(selectedPack.id, updatedData);
-      } catch (pbErr) {
-        console.warn("PocketBase sticker update failed, using Firestore:", pbErr);
-        await updateDoc(packRef, updatedData);
-      }
+      await pb.collection(collectionName).update(selectedPack.id, updatedData);
 
       const updated = { ...selectedPack, ...updatedData };
       setPacks(packs.map(p => p.id === selectedPack.id ? updated : p));
@@ -1799,7 +1677,6 @@ function App() {
       }
 
       const collectionName = selectedPack.is_premium ? 'premium_stickers' : 'stickers';
-      const packRef = doc(db, collectionName, selectedPack.id);
 
       const newVersion = Date.now().toString();
       const updatedData = {
@@ -1808,7 +1685,7 @@ function App() {
         image_data_version: newVersion
       };
 
-      await updateDoc(packRef, updatedData);
+      await pb.collection(collectionName).update(selectedPack.id, updatedData);
 
       const updated = {
         ...selectedPack,
@@ -1876,96 +1753,51 @@ function App() {
     if (!window.confirm(`Are you sure you want to PERMANENTLY delete "${pack.name}"?\n\nThis action cannot be undone and all files will be deleted!`)) return;
 
     try {
-      setDeleteProgress({ deleting: true, message: 'Listing files...', current: 0, total: 0 });
-
-      const folderRef = ref(storage, `stickers/${pack.id}`);
-
-      // 1. Storage klasöründeki TÜM dosyaları listele ve sil
-      try {
-        const fileList = await listAll(folderRef);
-        const total = fileList.items.length;
-        setDeleteProgress({ deleting: true, message: `Deleting from storage...`, current: 0, total });
-
-        for (let i = 0; i < fileList.items.length; i++) {
-          await deleteObject(fileList.items[i]);
-          setDeleteProgress({ deleting: true, message: `Deleting from storage...`, current: i + 1, total });
-        }
-      } catch (e) { console.log('Storage silme hatası:', e); }
-
-      // 2. Veritabanından sil (PocketBase önce, Firestore fallback)
       setDeleteProgress({ deleting: true, message: 'Deleting from database...', current: 0, total: 1 });
       const collectionName = pack.is_premium ? 'premium_stickers' : 'stickers';
-      try {
-        await pb.collection(collectionName).delete(pack.id);
-      } catch (pbErr) {
-        console.warn("PocketBase delete failed, using Firestore:", pbErr);
-        await deleteDoc(doc(db, collectionName, pack.id));
-      }
+      await pb.collection(collectionName).delete(pack.id);
 
       setPacks(packs.filter(p => p.id !== pack.id));
       if (selectedPack?.id === pack.id) setSelectedPack(null);
       setDeleteProgress(null);
     } catch (error) {
       setDeleteProgress(null);
-      alert("Delete error: " + error);
+      alert('Delete error: ' + error);
     }
   };
 
   const deleteSticker = async (pack: StickerPack, sticker: Sticker) => {
-    if (!window.confirm("Are you sure you want to delete this sticker?")) return;
+    if (!window.confirm('Are you sure you want to delete this sticker?')) return;
 
     try {
       const collectionName = pack.is_premium ? 'premium_stickers' : 'stickers';
-      const packRef = doc(db, collectionName, pack.id);
-
       const newVersion = Date.now().toString();
       const newStickerCount = Math.max(0, (pack.stickers?.length || pack.sticker_count) - 1);
       const newStickers = pack.stickers.filter(s => s.image_file !== sticker.image_file);
 
-      // PocketBase güncelle, başarısız olursa Firestore
-      try {
-        await pb.collection(collectionName).update(pack.id, {
-          stickers: newStickers,
-          sticker_count: newStickerCount,
-          image_data_version: newVersion,
-        });
-      } catch (pbErr) {
-        console.warn("PocketBase sticker delete failed, using Firestore:", pbErr);
-        await updateDoc(packRef, {
-          stickers: arrayRemove(sticker),
-          sticker_count: newStickerCount,
-          image_data_version: newVersion,
-        });
-      }
-
-      // Storage'dan sil (tek klasör: stickers)
-      const storagePath = `stickers/${pack.id}/${sticker.image_file}`;
-      console.log('[DELETE] Storage path:', storagePath);
-      try {
-        await deleteObject(ref(storage, storagePath));
-        console.log('[DELETE] ✅ Storage dosyası silindi:', storagePath);
-      } catch (storageErr: any) {
-        console.error('[DELETE] ❌ Storage silme hatası:', storageErr.code, storageErr.message);
-      }
+      await pb.collection(collectionName).update(pack.id, {
+        stickers: newStickers,
+        sticker_count: newStickerCount,
+        image_data_version: newVersion,
+      });
 
       const updatedPack = {
         ...pack,
-        stickers: pack.stickers.filter(s => s.image_file !== sticker.image_file),
-        sticker_count: Math.max(0, pack.sticker_count - 1),
+        stickers: newStickers,
+        sticker_count: newStickerCount,
         image_data_version: newVersion
       };
 
       setPacks(packs.map(p => p.id === pack.id ? updatedPack : p));
       setSelectedPack(updatedPack);
 
-      // Silinen sticker'ı boyut listesinden kaldır
       setStickerSizes(prev => {
         const newSizes = { ...prev };
         delete newSizes[sticker.image_file];
         return newSizes;
       });
     } catch (error) {
-      alert("Sticker delete error: " + error);
+      alert('Sticker delete error: ' + error);
     }
   };
 
@@ -2009,7 +1841,6 @@ function App() {
 
       // Firestore güncelle
       const collectionName = pack.is_premium ? 'premium_stickers' : 'stickers';
-      const packRef = doc(db, collectionName, pack.id);
 
       const newVersion = Date.now().toString();
       const updateData = {
@@ -2018,7 +1849,7 @@ function App() {
         image_data_version: newVersion
       };
 
-      await updateDoc(packRef, updateData);
+      await pb.collection(collectionName).update(pack.id, updateData);
 
       // Local state güncelle
       const updatedPack = { ...pack, ...updateData };
@@ -2042,7 +1873,6 @@ function App() {
     try {
       setIsProcessing(true);
       const collectionName = selectedPack.is_premium ? 'premium_stickers' : 'stickers';
-      const packRef = doc(db, collectionName, selectedPack.id);
 
       const stickersToDelete = (selectedPack.stickers || []).filter(s => selectedStickerIds.includes(s.url));
       const remainingStickers = (selectedPack.stickers || []).filter(s => !selectedStickerIds.includes(s.url));
@@ -2058,14 +1888,13 @@ function App() {
         }
       }));
 
-      // 2. Firestore güncelle
+      // 2. PocketBase güncelle
       const newVersion = Date.now().toString();
       const newStickerCount = remainingStickers.length;
-      await updateDoc(packRef, {
+      await pb.collection(collectionName).update(selectedPack.id, {
         stickers: remainingStickers,
         sticker_count: newStickerCount,
         image_data_version: newVersion,
-        updated_at: serverTimestamp()
       });
 
       // 3. State güncelle
@@ -2124,10 +1953,9 @@ function App() {
 
     try {
       const collectionName = pack.is_premium ? 'premium_stickers' : 'stickers';
-      const packRef = doc(db, collectionName, pack.id);
       const newVersion = Date.now().toString();
 
-      await updateDoc(packRef, {
+      await pb.collection(collectionName).update(pack.id, {
         stickers: newStickers,
         image_data_version: newVersion
       });
@@ -2149,7 +1977,7 @@ function App() {
     if (!window.confirm("Do you want to reset the statistics?")) return;
     try {
       const collectionName = pack.is_premium ? 'premium_stickers' : 'stickers';
-      await updateDoc(doc(db, collectionName, pack.id), {
+      await pb.collection(collectionName).update(pack.id, {
         download_count: 0,
         view_count: 0
       });
@@ -2174,17 +2002,14 @@ function App() {
       let updated = 0;
 
       for (const collectionName of collections) {
-        const snapshot = await getDocs(collection(db, collectionName));
-        for (const docSnap of snapshot.docs) {
-          const data = docSnap.data();
+        const records = await pb.collection(collectionName).getFullList({ perPage: 500 });
+        for (const record of records) {
           const updates: any = {};
 
-          // fake_download_base yoksa, 0 ise veya forceUpdate ise ekle
-          if (forceUpdate || !data.fake_download_base || data.fake_download_base === 0) {
+          if (forceUpdate || !record.fake_download_base || record.fake_download_base === 0) {
             updates.fake_download_base = Math.floor(Math.random() * (range + 1)) + fakeBaseMin;
           }
 
-          // Premium paketlere doğru fiyatları yaz
           if (collectionName === 'premium_stickers') {
             updates.price_try = '4,99 TL';
             updates.price_usd = '$0.99';
@@ -2192,7 +2017,7 @@ function App() {
           }
 
           if (Object.keys(updates).length > 0) {
-            await updateDoc(doc(db, collectionName, docSnap.id), updates);
+            await pb.collection(collectionName).update(record.id, updates);
             updated++;
           }
         }
@@ -5367,12 +5192,14 @@ function App() {
                       />
                       <button
                         onClick={async () => {
-                          if (!telegramBotToken.trim()) return;
-                          const result = await validateBotToken(telegramBotToken.trim());
+                          const cleanToken = telegramBotToken.trim().replace(/^bot/i, '').replace(/[\u200B-\u200D\uFEFF\s]/g, '');
+                          if (!cleanToken) return;
+                          setTelegramBotToken(cleanToken);
+                          const result = await validateBotToken(cleanToken);
                           if (result.valid) {
                             setTelegramTokenValid(true);
                             setTelegramBotName(result.botName || '');
-                            localStorage.setItem('telegram_bot_token', telegramBotToken.trim());
+                            localStorage.setItem('telegram_bot_token', cleanToken);
                           } else {
                             alert('Invalid bot token! Please check and try again.');
                             setTelegramTokenValid(false);

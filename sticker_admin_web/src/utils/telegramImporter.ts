@@ -1,16 +1,16 @@
 // Telegram Sticker Pack Importer
-// Downloads curated sticker packs from Telegram via Bot API and imports to Firebase
+// Downloads curated sticker packs from Telegram via Bot API and imports to PocketBase
 
-import { storage, db } from '../firebase';
+import { storage } from '../firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { doc, setDoc, serverTimestamp, collection, query, where, getDocs } from 'firebase/firestore';
+import { pb, WORKER_URL } from '../pocketbase';
 import { stickerProcessor } from './stickerProcessor';
 import { deepseekService, autoDetectCategory } from './deepseekService';
 import pako from 'pako';
 import lottie from 'lottie-web';
 import type { Sticker } from '../types';
 
-const TELEGRAM_PROXY = 'https://us-central1-sticky-dcd20.cloudfunctions.net/telegramProxy';
+const TELEGRAM_PROXY = `${WORKER_URL.replace(/\/$/, '')}/api/telegram`;
 
 // ========== TYPES ==========
 
@@ -54,8 +54,16 @@ export interface TelegramCompletedPack {
 
 // ========== API FUNCTIONS ==========
 
+function normalizeBotToken(token: string): string {
+    return token
+        .trim()
+        .replace(/^bot/i, '')
+        .replace(/[\u200B-\u200D\uFEFF\s]/g, '');
+}
+
 async function getStickerSet(botToken: string, setName: string): Promise<TelegramStickerSet> {
-    const url = `${TELEGRAM_PROXY}?token=${encodeURIComponent(botToken)}&method=getStickerSet&name=${encodeURIComponent(setName)}`;
+    const cleanToken = normalizeBotToken(botToken);
+    const url = `${TELEGRAM_PROXY}?token=${encodeURIComponent(cleanToken)}&method=getStickerSet&name=${encodeURIComponent(setName)}`;
     const response = await fetch(url);
     if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -67,7 +75,8 @@ async function getStickerSet(botToken: string, setName: string): Promise<Telegra
 }
 
 async function getFile(botToken: string, fileId: string): Promise<string> {
-    const url = `${TELEGRAM_PROXY}?token=${encodeURIComponent(botToken)}&method=getFile&file_id=${encodeURIComponent(fileId)}`;
+    const cleanToken = normalizeBotToken(botToken);
+    const url = `${TELEGRAM_PROXY}?token=${encodeURIComponent(cleanToken)}&method=getFile&file_id=${encodeURIComponent(fileId)}`;
     const response = await fetch(url);
     if (!response.ok) throw new Error(`getFile error: ${response.status}`);
     const data = await response.json();
@@ -76,7 +85,8 @@ async function getFile(botToken: string, fileId: string): Promise<string> {
 }
 
 async function downloadTelegramFile(botToken: string, filePath: string): Promise<Blob> {
-    const url = `${TELEGRAM_PROXY}?token=${encodeURIComponent(botToken)}&file_path=${encodeURIComponent(filePath)}`;
+    const cleanToken = normalizeBotToken(botToken);
+    const url = `${TELEGRAM_PROXY}?token=${encodeURIComponent(cleanToken)}&file_path=${encodeURIComponent(filePath)}`;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 30000);
     try {
@@ -241,13 +251,14 @@ async function renderTgsFrames(
 
 async function checkDuplicatePack(setName: string): Promise<{ exists: boolean; location?: string }> {
     try {
-        const stickersQuery = query(collection(db, 'stickers'), where('telegram_set_name', '==', setName));
-        const premiumQuery = query(collection(db, 'premium_stickers'), where('telegram_set_name', '==', setName));
-        const draftsQuery = query(collection(db, 'draft_stickers'), where('telegram_set_name', '==', setName));
-        const [stickersSnap, premiumSnap, draftsSnap] = await Promise.all([getDocs(stickersQuery), getDocs(premiumQuery), getDocs(draftsQuery)]);
-        if (!stickersSnap.empty) return { exists: true, location: 'published (free)' };
-        if (!premiumSnap.empty) return { exists: true, location: 'published (premium)' };
-        if (!draftsSnap.empty) return { exists: true, location: 'drafts' };
+        const [stickersRes, premiumRes, draftsRes] = await Promise.all([
+            pb.collection('stickers').getList(1, 1, { filter: `telegram_set_name = "${setName}"` }).catch(() => ({ totalItems: 0 })),
+            pb.collection('premium_stickers').getList(1, 1, { filter: `telegram_set_name = "${setName}"` }).catch(() => ({ totalItems: 0 })),
+            pb.collection('draft_stickers').getList(1, 1, { filter: `telegram_set_name = "${setName}"` }).catch(() => ({ totalItems: 0 })),
+        ]);
+        if (stickersRes.totalItems > 0) return { exists: true, location: 'published (free)' };
+        if (premiumRes.totalItems > 0) return { exists: true, location: 'published (premium)' };
+        if (draftsRes.totalItems > 0) return { exists: true, location: 'drafts' };
         return { exists: false };
     } catch {
         return { exists: false };
@@ -469,6 +480,7 @@ export async function importTelegramPacks(
     } = options;
     const completedPacks: TelegramCompletedPack[] = [];
     const errors: string[] = [];
+    const cleanBotToken = normalizeBotToken(botToken);
     const batchProcessedNames = new Set<string>(); // In-memory dedup within this batch
 
     for (let i = 0; i < packInputs.length; i++) {
@@ -512,7 +524,7 @@ export async function importTelegramPacks(
                 completedPacks
             });
 
-            const stickerSet = await getStickerSet(botToken, setName);
+            const stickerSet = await getStickerSet(cleanBotToken, setName);
             console.log('[TELEGRAM] Got set:', stickerSet.title, 'with', stickerSet.stickers.length, 'stickers');
 
             // Check for duplicates
@@ -660,7 +672,7 @@ export async function importTelegramPacks(
                     const results = await Promise.all(
                         batchSlice.map((s, bIdx) => {
                             const globalIdx = partIdx * stickerLimit + j + bIdx;
-                            return processTelegramSticker(botToken, s, packId, globalIdx, (msg) => {
+                            return processTelegramSticker(cleanBotToken, s, packId, globalIdx, (msg) => {
                                 onProgress?.({
                                     currentPack: i + 1,
                                     totalPacks: packInputs.length,
@@ -778,7 +790,7 @@ export async function importTelegramPacks(
                         stickers: subPack.stickers,
                         tray_url: trayUrl,
                         tray_image_file: trayFile,
-                        created_at: serverTimestamp(),
+                        created_at: new Date().toISOString(),
                         batch_generated: true,
                         batch_source: 'telegram',
                         batch_search_term: setName,
@@ -787,7 +799,7 @@ export async function importTelegramPacks(
                         ...(totalParts > 1 ? { telegram_part: partNum, telegram_total_parts: totalParts } : {})
                     };
 
-                    await setDoc(doc(db, 'draft_stickers', subPackId), packData);
+                    await pb.collection('draft_stickers').create({ ...packData });
 
                     completedPacks.push({
                         id: subPackId,
@@ -845,7 +857,9 @@ export async function importTelegramPacks(
 
 export async function validateBotToken(token: string): Promise<{ valid: boolean; botName?: string }> {
     try {
-        const url = `${TELEGRAM_PROXY}?token=${encodeURIComponent(token)}&method=getMe`;
+        const cleanToken = normalizeBotToken(token);
+        if (!/^\d{6,}:[A-Za-z0-9_-]{20,}$/.test(cleanToken)) return { valid: false };
+        const url = `${TELEGRAM_PROXY}?token=${encodeURIComponent(cleanToken)}&method=getMe`;
         const response = await fetch(url);
         if (!response.ok) return { valid: false };
         const data = await response.json();

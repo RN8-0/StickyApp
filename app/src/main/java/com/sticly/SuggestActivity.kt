@@ -10,7 +10,11 @@ import com.google.android.material.button.MaterialButton
 import com.google.android.material.chip.Chip
 import com.google.android.material.chip.ChipGroup
 import com.google.android.material.textfield.TextInputEditText
-import com.google.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -104,30 +108,33 @@ class SuggestActivity : AppCompatActivity() {
         btnSend.isEnabled = false
         btnSend.text = getString(R.string.sending)
 
-        val db = FirebaseFirestore.getInstance()
         val now = Date()
         val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
         val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
 
-        val data = hashMapOf(
-            "suggestion" to suggestion,
-            "category" to selectedCategory,
-            "timestamp" to System.currentTimeMillis(),
-            "date" to dateFormat.format(now),
-            "time" to timeFormat.format(now)
-        )
+        val data = JSONObject().apply {
+            put("suggestion", suggestion)
+            put("category", selectedCategory.ifBlank { "other" })
+            put("timestamp", System.currentTimeMillis())
+            put("date", dateFormat.format(now))
+            put("time", timeFormat.format(now))
+            put("source", "android")
+        }
 
-        db.collection("suggestions")
-            .add(data)
-            .addOnSuccessListener {
-                Toast.makeText(this, R.string.suggestion_sent, Toast.LENGTH_SHORT).show()
+        CoroutineScope(Dispatchers.Main).launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    PocketBaseHelper.createRecord("suggestions", data)
+                }
+                Toast.makeText(this@SuggestActivity, R.string.suggestion_sent, Toast.LENGTH_SHORT).show()
                 finish()
-            }
-            .addOnFailureListener {
+            } catch (e: Exception) {
+                android.util.Log.e("SuggestActivity", "Öneri gönderilemedi: ${e.message}", e)
                 btnSend.isEnabled = true
                 btnSend.text = getString(R.string.send)
-                Toast.makeText(this, R.string.message_error, Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@SuggestActivity, R.string.message_error, Toast.LENGTH_SHORT).show()
             }
+        }
     }
 
     private fun applyTheme() {

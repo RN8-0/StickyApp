@@ -33,6 +33,8 @@ import com.bumptech.glide.Glide
 import com.google.android.material.button.MaterialButton
 import kotlinx.coroutines.*
 import kotlinx.coroutines.tasks.await
+import org.json.JSONArray
+import org.json.JSONObject
 import java.io.File
 import java.util.concurrent.atomic.AtomicInteger
 import android.animation.ValueAnimator
@@ -794,18 +796,18 @@ class DetailsActivity : AppCompatActivity() {
     private fun checkIfAlreadySubmitted(packId: String, callback: (Boolean) -> Unit) {
         val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
         if (user == null) { callback(false); return }
-        val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
         lifecycleScope.launch {
             try {
                 val existing = withContext(Dispatchers.IO) {
-                    db.collection("user_submissions")
-                        .whereEqualTo("user_id", user.uid)
-                        .whereEqualTo("source_pack_id", packId)
-                        .whereNotEqualTo("status", "rejected")
-                        .get()
-                        .await()
+                    val escapedUid = user.uid.replace("'", "\\'")
+                    val escapedPackId = packId.replace("'", "\\'")
+                    PocketBaseHelper.listRecords(
+                        "user_submissions",
+                        filter = "user_id='$escapedUid' && source_pack_id='$escapedPackId' && status!='rejected'",
+                        perPage = 1
+                    )
                 }
-                callback(!existing.isEmpty)
+                callback(existing.isNotEmpty())
             } catch (_: Exception) {
                 callback(false)
             }
@@ -890,17 +892,14 @@ class DetailsActivity : AppCompatActivity() {
     ) {
         val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser ?: return
         val stickers = pack.stickers
-        val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
-        val storage = com.google.firebase.storage.FirebaseStorage.getInstance()
-        val submissionId = java.util.UUID.randomUUID().toString()
         val btnPublish = findViewById<MaterialButton>(R.id.btnPublishPack)
         btnPublish?.isEnabled = false
         btnPublish?.text = getString(R.string.publishing)
 
         lifecycleScope.launch {
             try {
-                val stickersList = mutableListOf<Map<String, String>>()
-                val basePath = "user_uploads/${user.uid}/$submissionId"
+                val stickerEntries = mutableListOf<JSONObject>()
+                val uploadFiles = mutableListOf<PocketBaseHelper.UploadFile>()
                 val total = stickers.size
 
                 withContext(Dispatchers.IO) {
@@ -912,12 +911,19 @@ class DetailsActivity : AppCompatActivity() {
                         val localFile = CustomStickerManager.getCustomStickerPath(this@DetailsActivity, pack.id, sticker.file)
                         if (localFile.exists()) {
                             val fileName = "sticker_${index + 1}.webp"
-                            val ref = storage.reference.child("$basePath/$fileName")
-                            ref.putFile(android.net.Uri.fromFile(localFile)).await()
-                            val url = ref.downloadUrl.await().toString()
-                            stickersList.add(mapOf("name" to sticker.file, "image_url" to url))
+                            uploadFiles.add(PocketBaseHelper.UploadFile("images", fileName, "image/webp", localFile.readBytes()))
+                            stickerEntries.add(JSONObject().apply {
+                                put("name", sticker.file)
+                                put("image_file", fileName)
+                                put("pending_upload_index", uploadFiles.lastIndex)
+                            })
                         } else if (sticker.url.isNotEmpty()) {
-                            stickersList.add(mapOf("name" to sticker.file, "image_url" to sticker.url))
+                            stickerEntries.add(JSONObject().apply {
+                                put("name", sticker.file)
+                                put("image_file", sticker.file)
+                                put("image_url", sticker.url)
+                                put("url", sticker.url)
+                            })
                         }
                     }
                 }
@@ -927,7 +933,7 @@ class DetailsActivity : AppCompatActivity() {
                     tvProgress.text = getString(R.string.saving_submission)
                 }
 
-                if (stickersList.isEmpty()) {
+                if (stickerEntries.isEmpty()) {
                     Toast.makeText(this@DetailsActivity, getString(R.string.publish_pack_failed), Toast.LENGTH_SHORT).show()
                     btnPublish?.isEnabled = true
                     btnPublish?.text = getString(R.string.publish_pack)
@@ -935,24 +941,44 @@ class DetailsActivity : AppCompatActivity() {
                     return@launch
                 }
 
-                val submission = hashMapOf(
-                    "user_id"        to user.uid,
-                    "user_email"     to (user.email ?: ""),
-                    "display_name"   to publisherName,
+                val fields = mapOf(
+                    "user_id" to user.uid,
+                    "user_email" to (user.email ?: ""),
+                    "display_name" to publisherName,
                     "publisher_name" to publisherName,
-                    "pack_name"      to packName,
-                    "description"    to description,
-                    "category"       to category.ifEmpty { "general" },
-                    "stickers"       to stickersList,
-                    "sticker_count"  to stickersList.size,
+                    "pack_name" to packName,
+                    "name" to packName,
+                    "description" to description,
+                    "category" to category.ifEmpty { "general" },
+                    "stickers" to "[]",
+                    "sticker_count" to stickerEntries.size.toString(),
                     "source_pack_id" to pack.id,
-                    "is_animated"    to pack.isAnimated,
-                    "status"         to "pending",
-                    "created_at"     to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                    "is_animated" to pack.isAnimated.toString(),
+                    "status" to "pending",
+                    "created_at" to java.time.Instant.now().toString()
                 )
 
                 withContext(Dispatchers.IO) {
-                    db.collection("user_submissions").document(submissionId).set(submission).await()
+                    val created = PocketBaseHelper.createMultipartRecord("user_submissions", fields, uploadFiles)
+                    val recordId = created.getString("id")
+                    val uploadedImages = created.optJSONArray("images") ?: JSONArray()
+                    val stickersJson = JSONArray()
+                    stickerEntries.forEach { entry ->
+                        if (entry.has("pending_upload_index")) {
+                            val uploadIndex = entry.optInt("pending_upload_index", -1)
+                            val uploadedFile = if (uploadIndex >= 0 && uploadIndex < uploadedImages.length()) uploadedImages.optString(uploadIndex) else entry.optString("image_file")
+                            val url = PocketBaseHelper.getFileUrl("user_submissions", recordId, uploadedFile)
+                            entry.remove("pending_upload_index")
+                            entry.put("image_file", uploadedFile)
+                            entry.put("image_url", url)
+                            entry.put("url", url)
+                        }
+                        stickersJson.put(entry)
+                    }
+                    PocketBaseHelper.updateRecord("user_submissions", recordId, JSONObject().apply {
+                        put("stickers", stickersJson)
+                        put("sticker_count", stickersJson.length())
+                    })
                 }
 
                 Toast.makeText(this@DetailsActivity, getString(R.string.publish_pack_success), Toast.LENGTH_LONG).show()
@@ -1425,10 +1451,12 @@ class DetailsActivity : AppCompatActivity() {
 
         // PERFORMANS: Önce cache'de olup olmadığını kontrol et
         if (StickerRepository.isPackCached(this, pack)) {
-            // Dosya boyutu kontrolü - WhatsApp limitleri
+            // Boyut sorunu varsa cache'i temizle ve yeniden indir
             val sizeCheckResult = checkStickerFileSizes(pack)
             if (sizeCheckResult != null) {
-                Toast.makeText(this, sizeCheckResult, Toast.LENGTH_LONG).show()
+                android.util.Log.d("DetailsActivity", "Cache too large, clearing and re-downloading")
+                StickerRepository.clearPackCache(this, pack.id)
+                downloadAndAddToWhatsAppWithProgress(pack)
                 return
             }
             // Cache'de var, direkt WhatsApp'a gönder
@@ -1449,36 +1477,33 @@ class DetailsActivity : AppCompatActivity() {
     private fun checkStickerFileSizes(pack: Pack): String? {
         val maxStaticSize = 100 * 1024L // 100KB
         val maxAnimatedSize = 500 * 1024L // 500KB
-        val maxTraySize = 50 * 1024L // 50KB
-        val maxSize = if (pack.isAnimated) maxAnimatedSize else maxStaticSize
 
         val cacheDir = java.io.File(cacheDir, "sticker_cache/${pack.id}")
         if (!cacheDir.exists()) return null // Cache yoksa kontrol etme
 
         var oversizedCount = 0
-        var largestFile = ""
         var largestSize = 0L
 
         // Sticker dosyalarını kontrol et
         for (sticker in pack.stickers) {
             val file = java.io.File(cacheDir, sticker.file)
-            if (file.exists() && file.length() > maxSize) {
+            if (!file.exists()) continue
+            val fileSize = file.length()
+            // Dosya animated mı? pack.isAnimated flag'i yanlış olabilir (taşıma sırasında);
+            // BitmapFactory null döndürüyorsa dosya animated WebP'dir → 500KB limiti uygula
+            val isAnimatedFile = pack.isAnimated ||
+                (fileSize > maxStaticSize && android.graphics.BitmapFactory.decodeFile(file.absolutePath) == null)
+            val limit = if (isAnimatedFile) maxAnimatedSize else maxStaticSize
+            if (fileSize > limit) {
                 oversizedCount++
-                if (file.length() > largestSize) {
-                    largestSize = file.length()
-                    largestFile = sticker.file
+                if (fileSize > largestSize) {
+                    largestSize = fileSize
                 }
             }
         }
 
-        // Tray dosyasını kontrol et
-        val trayFile = cacheDir.listFiles()?.find { it.name.startsWith("tray") && it.name.endsWith(".png") }
-        if (trayFile != null && trayFile.length() > maxTraySize) {
-            // Tray çok büyük ama bu genellikle sorun değil çünkü StickerProvider 96x96'ya dönüştürüyor
-        }
-
         if (oversizedCount > 0) {
-            val limitKB = maxSize / 1024
+            val limitKB = if (pack.isAnimated) maxAnimatedSize / 1024 else maxStaticSize / 1024
             val largestKB = largestSize / 1024
             return getString(R.string.sticker_size_error, oversizedCount, limitKB, largestKB)
         }

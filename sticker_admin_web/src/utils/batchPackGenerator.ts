@@ -1,9 +1,9 @@
 // Batch Pack Generator V3 - Robust batch sticker pack generation
 // Guarantees exact pack count & sticker count, quality filtering, category balancing
 
-import { storage, db } from '../firebase';
+import { storage } from '../firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { doc, setDoc, serverTimestamp, collection, getDocs } from 'firebase/firestore';
+import { pb } from '../pocketbase';
 import { stickerProcessor } from './stickerProcessor';
 import { deepseekService, autoDetectCategory } from './deepseekService';
 import type { Sticker } from '../types';
@@ -450,15 +450,12 @@ async function translatePack(name: string, useAi: boolean): Promise<Record<strin
 export async function getCategoryStats(): Promise<Record<string, number>> {
     const stats: Record<string, number> = {};
     try {
-        const snapshot = await getDocs(collection(db, 'sticker_packs'));
-        snapshot.forEach(doc => {
-            const cat = doc.data().category || 'other';
-            stats[cat] = (stats[cat] || 0) + 1;
-        });
-        // Also check drafts
-        const draftSnapshot = await getDocs(collection(db, 'draft_stickers'));
-        draftSnapshot.forEach(doc => {
-            const cat = doc.data().category || 'other';
+        const [stickers, drafts] = await Promise.all([
+            pb.collection('stickers').getFullList({ fields: 'category' }).catch(() => []),
+            pb.collection('draft_stickers').getFullList({ fields: 'category' }).catch(() => []),
+        ]);
+        [...stickers, ...drafts].forEach((r: any) => {
+            const cat = r.category || 'other';
             stats[cat] = (stats[cat] || 0) + 1;
         });
     } catch (error) {
@@ -642,13 +639,13 @@ export async function generateBatchPacks(config: BatchPackConfig): Promise<Compl
                     stickers: processedStickers,
                     tray_url: trayUrl,
                     tray_image_file: trayFile,
-                    created_at: serverTimestamp(),
+                    created_at: new Date().toISOString(),
                     batch_generated: true,
                     batch_search_term: searchTerm,
                     batch_source: source
                 };
 
-                await setDoc(doc(db, 'draft_stickers', packId), packData);
+                await pb.collection('draft_stickers').create({ ...packData });
 
                 const completed: CompletedPack = {
                     id: packId,

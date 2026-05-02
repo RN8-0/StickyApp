@@ -11,7 +11,11 @@ import androidx.core.view.WindowInsetsCompat
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.textfield.TextInputEditText
-import com.google.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -84,7 +88,6 @@ class ContactActivity : AppCompatActivity() {
             return
         }
 
-        // Send to Firebase
         sendMessage(name, email, subject, message)
     }
 
@@ -94,27 +97,29 @@ class ContactActivity : AppCompatActivity() {
         btnSend.text = getString(R.string.sending)
         progressBar.visibility = View.VISIBLE
 
-        val db = FirebaseFirestore.getInstance()
         val now = Date()
         val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
         val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
 
-        val data = hashMapOf(
-            "name" to name,
-            "email" to email,
-            "subject" to subject,
-            "message" to message,
-            "timestamp" to System.currentTimeMillis(),
-            "date" to dateFormat.format(now),
-            "time" to timeFormat.format(now),
-            "status" to "unread"
-        )
+        val data = JSONObject().apply {
+            put("name", name)
+            put("email", email)
+            put("subject", subject)
+            put("message", message)
+            put("timestamp", System.currentTimeMillis())
+            put("date", dateFormat.format(now))
+            put("time", timeFormat.format(now))
+            put("status", "unread")
+            put("source", "android")
+        }
 
-        db.collection("messages")
-            .add(data)
-            .addOnSuccessListener {
+        CoroutineScope(Dispatchers.Main).launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    PocketBaseHelper.createRecord("messages", data)
+                }
                 progressBar.visibility = View.GONE
-                Toast.makeText(this, R.string.message_sent, Toast.LENGTH_LONG).show()
+                Toast.makeText(this@ContactActivity, R.string.message_sent, Toast.LENGTH_LONG).show()
 
                 // Clear fields
                 inputName.text?.clear()
@@ -124,14 +129,14 @@ class ContactActivity : AppCompatActivity() {
 
                 // Go back
                 finish()
-            }
-            .addOnFailureListener { e ->
+            } catch (e: Exception) {
                 progressBar.visibility = View.GONE
                 btnSend.isEnabled = true
                 btnSend.text = getString(R.string.send)
                 // Hatayı logla ve göster
                 android.util.Log.e("ContactActivity", "Mesaj gönderilemedi: ${e.message}", e)
-                Toast.makeText(this, getString(R.string.error_generic, e.message), Toast.LENGTH_LONG).show()
+                Toast.makeText(this@ContactActivity, getString(R.string.error_generic, e.message), Toast.LENGTH_LONG).show()
             }
+        }
     }
 }

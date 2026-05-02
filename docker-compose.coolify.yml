@@ -1,0 +1,49 @@
+services:
+  sticky-admin:
+    build:
+      context: ./sticker_admin_web
+      dockerfile: Dockerfile
+      args:
+        VITE_PB_URL: https://sh3xlf9j7symlj3otlw6s8rx.46.225.95.201.sslip.io
+        VITE_PB_PUBLIC_URL: https://sh3xlf9j7symlj3otlw6s8rx.46.225.95.201.sslip.io
+        VITE_APP_URL: https://sticky-admin.46.225.95.201.sslip.io
+        VITE_OAUTH_REDIRECT_URL: https://sh3xlf9j7symlj3otlw6s8rx.46.225.95.201.sslip.io/api/oauth2-redirect
+        VITE_WORKER_URL: https://sticky-worker.46.225.95.201.sslip.io
+        VITE_IMAGE_PROXY_URL: https://sticky-images.46.225.95.201.sslip.io
+    restart: unless-stopped
+    environment:
+      VITE_PB_URL: https://sh3xlf9j7symlj3otlw6s8rx.46.225.95.201.sslip.io
+      VITE_PB_PUBLIC_URL: https://sh3xlf9j7symlj3otlw6s8rx.46.225.95.201.sslip.io
+      VITE_APP_URL: https://sticky-admin.46.225.95.201.sslip.io
+      VITE_OAUTH_REDIRECT_URL: https://sh3xlf9j7symlj3otlw6s8rx.46.225.95.201.sslip.io/api/oauth2-redirect
+      VITE_WORKER_URL: https://sticky-worker.46.225.95.201.sslip.io
+      VITE_IMAGE_PROXY_URL: https://sticky-images.46.225.95.201.sslip.io
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.sticky-admin.rule=Host(`sticky-admin.46.225.95.201.sslip.io`)
+      - traefik.http.routers.sticky-admin.entrypoints=https
+      - traefik.http.routers.sticky-admin.tls=true
+      - traefik.http.routers.sticky-admin.tls.certresolver=letsencrypt
+      - traefik.http.services.sticky-admin.loadbalancer.server.port=80
+
+  sticky-worker:
+    build:
+      context: ./sticky-worker
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      PB_URL: https://sh3xlf9j7symlj3otlw6s8rx.46.225.95.201.sslip.io
+      PB_ADMIN_EMAIL: arainunger@gmail.com
+      PB_ADMIN_PASS: ${PB_ADMIN_PASS}
+      NTFY_URL: https://sticky-ntfy.46.225.95.201.sslip.io
+      NTFY_TOPIC: sticky-stickers
+      FIREBASE_SERVICE_ACCOUNT_JSON: ${FIREBASE_SERVICE_ACCOUNT_JSON:-}
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.sticky-worker.rule=Host(`sticky-worker.46.225.95.201.sslip.io`)
+      - traefik.http.routers.sticky-worker.entrypoints=https
+      - traefik.http.routers.sticky-worker.tls=true
+      - traefik.http.routers.sticky-worker.tls.certresolver=letsencrypt
+      - traefik.http.services.sticky-worker.loadbalancer.server.port=3000
