@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { storage } from './firebase';
-import { pb, signInWithGitHub, WORKER_URL } from './pocketbase';
+import { pb, signInWithGitHub, WORKER_URL, getFileUrl } from './pocketbase';
 import {
   ref,
   deleteObject,
@@ -503,7 +503,18 @@ function App() {
         setUserSubmissions((submissions as any[]).map(r => {
           const createdValue = r.created_at || r.created;
           const createdMs = createdValue ? new Date(createdValue).getTime() : 0;
-          return { id: r.id, user_id: r.user_id || '', device_id: r.device_id || '', user_email: r.user_email || '', display_name: r.display_name || '', publisher_name: r.publisher_name, pack_name: r.pack_name || r.name || '', description: r.description, category: r.category || '', stickers: r.stickers || r.sticker_data || [], status: r.status || 'pending', flag_reasons: r.flag_reasons, rejection_reason: r.rejection_reason, sticker_count: r.sticker_count || (r.stickers || r.sticker_data || []).length || 0, sticker_pack_id: r.sticker_pack_id, created_at: { seconds: createdMs / 1000 }, note: r.note } as UserSubmission;
+          const images = Array.isArray(r.images) ? r.images : [];
+          const derivedStickers = images.map((filename: string, index: number) => ({
+            name: `sticker_${index + 1}`,
+            image_file: filename,
+            image_url: getFileUrl(r.collectionId || 'user_submissions', r.id, filename),
+            url: getFileUrl(r.collectionId || 'user_submissions', r.id, filename),
+            emojis: ['⭐'],
+          }));
+          const stickers = (Array.isArray(r.stickers) && r.stickers.length > 0)
+            ? r.stickers
+            : ((Array.isArray(r.sticker_data) && r.sticker_data.length > 0) ? r.sticker_data : derivedStickers);
+          return { id: r.id, user_id: r.user_id || '', device_id: r.device_id || '', user_email: r.user_email || '', display_name: r.display_name || '', publisher_name: r.publisher_name, pack_name: r.pack_name || r.name || '', description: r.description, category: r.category || '', stickers, status: r.status || 'pending', flag_reasons: r.flag_reasons, rejection_reason: r.rejection_reason, sticker_count: r.sticker_count || stickers.length || 0, sticker_pack_id: r.sticker_pack_id, created_at: { seconds: createdMs / 1000 }, note: r.note } as UserSubmission;
         }).sort((a, b) => (b.created_at?.seconds || 0) - (a.created_at?.seconds || 0)));
       } catch (e) {
         console.error('PB publishers/submissions fetch error:', e);

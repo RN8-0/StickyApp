@@ -24,6 +24,7 @@ object StickerRepository {
     private const val STORAGE_PATH = "stickers"
     private const val CONTENTS_FILE = "contents.json"
     private const val CACHE_DIR = "sticker_cache"
+    private const val STICKY_IMAGES_BASE = "https://sticky-images.46.225.95.201.sslip.io/stickers"
 
     private val storage = FirebaseStorage.getInstance()
     private val firestore = FirebaseFirestore.getInstance()
@@ -173,17 +174,17 @@ object StickerRepository {
 
     private fun parsePocketBasePack(json: org.json.JSONObject, isPremium: Boolean): Pack? {
         return try {
+            val id = json.optString("id").takeIf { it.isNotBlank() } ?: return null
             val stickersJson = json.optJSONArray("stickers") ?: return null
             val stickers = (0 until stickersJson.length()).mapNotNull { i ->
                 val s = stickersJson.optJSONObject(i) ?: return@mapNotNull null
                 val file = s.optString("image_file").takeIf { it.isNotBlank() } ?: return@mapNotNull null
-                val url = s.optString("url")
+                val url = normalizeStickerUrl(s.optString("url"), id, file)
                 val emojisArr = s.optJSONArray("emojis")
                 val emojis = emojisArr?.let { arr -> (0 until arr.length()).map { arr.optString(it) } }
                 Sticker(file = file, emojis = emojis, url = url)
             }
             if (stickers.isEmpty()) return null
-            val id = json.optString("id").takeIf { it.isNotBlank() } ?: return null
             val translations = mutableMapOf<String, String>()
             val keys = json.keys()
             while (keys.hasNext()) {
@@ -212,7 +213,7 @@ object StickerRepository {
                 version = json.optString("image_data_version").ifBlank { "1" },
                 avoidCache = json.optBoolean("avoid_cache", false),
                 tray = json.optString("tray_image_file").ifBlank { "tray.webp" },
-                trayUrl = json.optString("tray_url"),
+                trayUrl = normalizeStickerUrl(json.optString("tray_url"), id, json.optString("tray_image_file").ifBlank { "tray.webp" }),
                 stickers = stickers,
                 isPremium = isPremium,
                 productId = json.optString("product_id"),
@@ -432,6 +433,28 @@ object StickerRepository {
         }
     }
 
+    private fun normalizeStickerUrl(url: String, packId: String, fileName: String): String {
+        val trimmed = url.trim()
+        if (trimmed.contains("sticky-images.46.225.95.201.sslip.io")) return trimmed
+
+        if (trimmed.contains("firebasestorage.googleapis.com")) {
+            val marker = "/o/stickers%2F"
+            val start = trimmed.indexOf(marker)
+            if (start >= 0) {
+                val encodedPath = trimmed.substring(start + marker.length).substringBefore("?")
+                val parts = encodedPath.split("%2F", limit = 2)
+                if (parts.size == 2) {
+                    val migratedPackId = java.net.URLDecoder.decode(parts[0], "UTF-8")
+                    val migratedFile = java.net.URLDecoder.decode(parts[1], "UTF-8")
+                    return "$STICKY_IMAGES_BASE/$migratedPackId/$migratedFile"
+                }
+            }
+        }
+
+        if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) return trimmed
+        return "$STICKY_IMAGES_BASE/$packId/$fileName"
+    }
+
     /**
      * Firebase Storage'dan contents.json yükler
      */
@@ -547,16 +570,17 @@ object StickerRepository {
             }
 
             // PocketBase/sticky-images URL varsa oradan indir (birincil)
-            if (directUrl.isNotEmpty()) {
+            val normalizedDirectUrl = normalizeStickerUrl(directUrl, packId, fileName)
+            if (normalizedDirectUrl.isNotEmpty()) {
                 try {
-                    val conn = java.net.URL(directUrl).openConnection() as java.net.HttpURLConnection
+                    val conn = java.net.URL(normalizedDirectUrl).openConnection() as java.net.HttpURLConnection
                     conn.connectTimeout = 15_000
                     conn.readTimeout = 30_000
                     conn.connect()
                     if (conn.responseCode == 200) {
                         conn.inputStream.use { input -> localFile.outputStream().use { input.copyTo(it) } }
                         if (localFile.exists() && localFile.length() > 0) {
-                            Log.d(TAG, "Downloaded via URL: $directUrl")
+                            Log.d(TAG, "Downloaded via URL: $normalizedDirectUrl")
                             conn.disconnect()
                             if (!fileName.startsWith("tray")) compressForWhatsApp(localFile)
                             return@withContext localFile
@@ -564,8 +588,9 @@ object StickerRepository {
                     }
                     conn.disconnect()
                 } catch (urlEx: Exception) {
-                    Log.w(TAG, "URL download failed: $directUrl — ${urlEx.message}")
+                    Log.w(TAG, "URL download failed: $normalizedDirectUrl - ${urlEx.message}")
                 }
+                return@withContext null
             }
 
             // Firebase Storage fallback (eski paketler için)
@@ -812,22 +837,7 @@ object StickerRepository {
 
         try {
             val collection = if (isPremium) "premium_stickers" else "stickers"
-            incrementPocketBaseCounter(collection, packId, "view_count", 1)
-            val docRef = firestore.collection(collection).document(packId)
-
-            // FieldValue.increment() kullan - alan yoksa otomatik oluşturur
-            docRef.update("view_count", com.google.firebase.firestore.FieldValue.increment(1))
-                .addOnSuccessListener {
-                    Log.d(TAG, "View count incremented for $packId")
-                }
-                .addOnFailureListener { e ->
-                    Log.e(TAG, "Error incrementing view count: ${e.message}")
-                    // Alan yoksa set ile oluştur
-                    docRef.set(
-                        mapOf("view_count" to 1),
-                        com.google.firebase.firestore.SetOptions.merge()
-                    )
-                }
+            incrementWorkerCounter(collection, packId, "view_count", 1)
         } catch (e: Exception) {
             Log.e(TAG, "Error incrementing view count: ${e.message}")
         }
@@ -846,20 +856,7 @@ object StickerRepository {
 
         try {
             val collection = if (isPremium) "premium_stickers" else "stickers"
-            incrementPocketBaseCounter(collection, packId, "download_count", 1)
-            val docRef = firestore.collection(collection).document(packId)
-
-            docRef.update("download_count", com.google.firebase.firestore.FieldValue.increment(1))
-                .addOnSuccessListener {
-                    Log.d(TAG, "Download count incremented for $packId")
-                }
-                .addOnFailureListener { e ->
-                    Log.e(TAG, "Error incrementing download count: ${e.message}")
-                    docRef.set(
-                        mapOf("download_count" to 1),
-                        com.google.firebase.firestore.SetOptions.merge()
-                    )
-                }
+            incrementWorkerCounter(collection, packId, "download_count", 1)
         } catch (e: Exception) {
             Log.e(TAG, "Error incrementing download count: ${e.message}")
         }
@@ -878,20 +875,7 @@ object StickerRepository {
 
         try {
             val collection = if (isPremium) "premium_stickers" else "stickers"
-            incrementPocketBaseCounter(collection, packId, "favorite_count", 1)
-            val docRef = firestore.collection(collection).document(packId)
-
-            docRef.update("favorite_count", com.google.firebase.firestore.FieldValue.increment(1))
-                .addOnSuccessListener {
-                    Log.d(TAG, "Favorite count incremented for $packId")
-                }
-                .addOnFailureListener { e ->
-                    Log.e(TAG, "Error incrementing favorite count: ${e.message}")
-                    docRef.set(
-                        mapOf("favorite_count" to 1),
-                        com.google.firebase.firestore.SetOptions.merge()
-                    )
-                }
+            incrementWorkerCounter(collection, packId, "favorite_count", 1)
         } catch (e: Exception) {
             Log.e(TAG, "Error incrementing favorite count: ${e.message}")
         }
@@ -910,30 +894,39 @@ object StickerRepository {
 
         try {
             val collection = if (isPremium) "premium_stickers" else "stickers"
-            incrementPocketBaseCounter(collection, packId, "favorite_count", -1)
-            val docRef = firestore.collection(collection).document(packId)
-
-            docRef.update("favorite_count", com.google.firebase.firestore.FieldValue.increment(-1))
-                .addOnSuccessListener {
-                    Log.d(TAG, "Favorite count decremented for $packId")
-                }
-                .addOnFailureListener { e ->
-                    Log.e(TAG, "Error decrementing favorite count: ${e.message}")
-                }
+            incrementWorkerCounter(collection, packId, "favorite_count", -1)
         } catch (e: Exception) {
             Log.e(TAG, "Error decrementing favorite count: ${e.message}")
         }
     }
 
-    private fun incrementPocketBaseCounter(collection: String, packId: String, field: String, delta: Int) {
+    private fun incrementWorkerCounter(collection: String, packId: String, field: String, delta: Int) {
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                val record = PocketBaseHelper.getRecord(collection, packId)
-                val current = record.optInt(field, 0)
-                val next = (current + delta).coerceAtLeast(0)
-                PocketBaseHelper.updateRecord(collection, packId, org.json.JSONObject().put(field, next))
+                val body = org.json.JSONObject().apply {
+                    put("collection", collection)
+                    put("packId", packId)
+                    put("field", field)
+                    put("delta", delta)
+                }
+                val conn = (java.net.URL("${PocketBaseHelper.WORKER_URL}/api/stats/increment").openConnection() as java.net.HttpURLConnection).apply {
+                    requestMethod = "POST"
+                    doOutput = true
+                    setRequestProperty("Content-Type", "application/json")
+                    connectTimeout = 10_000
+                    readTimeout = 10_000
+                }
+                try {
+                    java.io.OutputStreamWriter(conn.outputStream).use { it.write(body.toString()) }
+                    if (conn.responseCode !in 200..299) {
+                        val errorBody = try { conn.errorStream?.bufferedReader()?.readText() } catch (_: Exception) { null }
+                        Log.w(TAG, "Counter update skipped for $collection/$packId $field: ${conn.responseCode} $errorBody")
+                    }
+                } finally {
+                    conn.disconnect()
+                }
             } catch (e: Exception) {
-                Log.e(TAG, "PB counter update failed for $collection/$packId $field: ${e.message}")
+                Log.w(TAG, "Counter update skipped for $collection/$packId $field: ${e.message}")
             }
         }
     }

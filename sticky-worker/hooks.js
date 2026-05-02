@@ -208,97 +208,12 @@ async function onContentReport(record) {
 // Handle user submission → NSFW check + auto-approve
 async function onUserSubmission(record) {
   const submissionId = record.id;
-  console.log(`[Hook] Processing submission ${submissionId}`);
-
-  await pbFetch(`/api/collections/user_submissions/records/${submissionId}`, {
-    method: 'PATCH',
-    body: JSON.stringify({ status: 'processing' })
-  });
-
-  try {
-    let allSafe = true;
-    let flagReasons = [];
-    const stickers = record.stickers ? JSON.parse(record.stickers) : [];
-
-    // NudeNet check (if available)
-    const NUDENET_URL = process.env.NUDENET_URL || 'http://nudenet:8080';
-    for (const sticker of stickers) {
-      if (!sticker.image_url) continue;
-      try {
-        const resp = await fetch(`http://localhost:${process.env.PORT || 3000}/api/nsfw`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ image_url: sticker.image_url })
-        });
-        const result = await resp.json();
-        if (result.safe === false) {
-          allSafe = false;
-          flagReasons.push(`${sticker.name || 'sticker'}: ${result.reason}`);
-        }
-      } catch (e) {
-        console.error(`[Hook] NSFW check failed:`, e.message);
-      }
-    }
-
-    if (allSafe) {
-      // Auto-approve
-      const mappedStickers = stickers.map(s => ({
-        image_file: s.name, url: s.image_url, emojis: ['⭐']
-      }));
-      const packData = {
-        name: record.pack_name,
-        name_en: record.pack_name,
-        publisher: record.publisher_name || record.display_name || 'Community',
-        publisher_email: record.user_email || '',
-        publisher_user_id: record.user_id,
-        category: record.category || 'community',
-        stickers: JSON.stringify(mappedStickers),
-        tray_image_file: mappedStickers[0]?.image_file || '',
-        tray_url: mappedStickers[0]?.url || '',
-        sticker_count: mappedStickers.length,
-        is_active: true, is_premium: false, is_animated: false,
-        download_count: 0, favorite_count: 0, view_count: 0, whatsapp_add_count: 0,
-        source: 'user_submission'
-      };
-
-      await pbFetch('/api/collections/stickers/records', {
-        method: 'POST',
-        body: JSON.stringify(packData)
-      });
-
-      await pbFetch(`/api/collections/user_submissions/records/${submissionId}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ status: 'approved', auto_approved: true })
-      });
-
-      // Update user profile stats
-      if (record.user_id) {
-        try {
-          const profResp = await pbFetch(`/api/collections/user_profiles/records?filter=(user='${record.user_id}')`);
-          const profData = await profResp.json();
-          if (profData.items?.[0]) {
-            const prof = profData.items[0];
-            await pbFetch(`/api/collections/user_profiles/records/${prof.id}`, {
-              method: 'PATCH',
-              body: JSON.stringify({ packs_published: (prof.packs_published || 0) + 1 })
-            });
-          }
-        } catch (e) { /* skip */ }
-      }
-      console.log(`[Hook] ✓ Auto-approved ${submissionId}`);
-    } else {
-      await pbFetch(`/api/collections/user_submissions/records/${submissionId}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ status: 'flagged', flag_reasons: JSON.stringify(flagReasons) })
-      });
-      console.log(`[Hook] ⚠ Flagged ${submissionId}: ${flagReasons.join('; ')}`);
-    }
-  } catch (err) {
-    console.error(`[Hook] Error processing ${submissionId}:`, err.message);
+  console.log(`[Hook] User submission ${submissionId} left pending for admin review`);
+  if (!record.status || record.status === 'processing') {
     await pbFetch(`/api/collections/user_submissions/records/${submissionId}`, {
       method: 'PATCH',
-      body: JSON.stringify({ status: 'error', error_message: err.message })
-    });
+      body: JSON.stringify({ status: 'pending' })
+    }).catch(err => console.error(`[Hook] Pending status update failed for ${submissionId}:`, err.message));
   }
 }
 

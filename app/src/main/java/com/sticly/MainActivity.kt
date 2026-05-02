@@ -401,7 +401,6 @@ class MainActivity : AppCompatActivity() {
                 PreferencesHelper.startRealtimeSync(this, currentUser.uid)
             }
 
-            AdManager.loadRewardedAd(this)
             checkAndRequestNotificationPermission()
             checkInstallationUpdates()
 
@@ -2481,7 +2480,9 @@ Rules:
 
         if (!hasPreloadedPopular) {
             hasPreloadedPopular = true
-            StickyGlideModule.preloadPopularPacks(this, regionalTopPacks)
+            rvRegional.postDelayed({
+                StickyGlideModule.preloadPopularPacks(this, regionalTopPacks)
+            }, 1200)
         }
 
         if (currentFilter == FilterType.ALL || currentFilter == FilterType.PREMIUM) {
@@ -3307,9 +3308,12 @@ Rules:
                     hideHomeSections()
                 }
 
-                // İlk 20 paketi arka planda ön yükle — scroll sırasında anında gözüksün
-                if (newList.isNotEmpty()) {
-                    StickyGlideModule.preloadFeedPacks(this@MainActivity, newList, 20)
+                // İlk ekran çizildikten sonra küçük bir ön yükleme yap; açılışta main thread'i boğmasın.
+                if (!hasPreloadedOnce && newList.isNotEmpty()) {
+                    hasPreloadedOnce = true
+                    rv.postDelayed({
+                        StickyGlideModule.preloadFeedPacks(this@MainActivity, newList, 12)
+                    }, 1500)
                 }
 
                 // Scroll handling after adapter update

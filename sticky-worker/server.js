@@ -7,6 +7,7 @@ const translateRouter = require('./routes/translate');
 const nsfwRouter = require('./routes/nsfw');
 const notifyRouter = require('./routes/notify');
 const usersRouter = require('./routes/users');
+const statsRouter = require('./routes/stats');
 
 const app = express();
 app.use(express.json());
@@ -61,6 +62,7 @@ app.use('/api/translate', rateLimit, translateRouter);
 app.use('/api/nsfw', rateLimit, nsfwRouter);
 app.use('/api/notify', notifyRouter);
 app.use('/api/users', usersRouter);
+app.use('/api/stats', rateLimit, statsRouter);
 
 app.get('/health', (_, res) => res.json({ status: 'ok', ts: Date.now() }));
 

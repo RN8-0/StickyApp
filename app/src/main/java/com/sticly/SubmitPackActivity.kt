@@ -206,11 +206,15 @@ class SubmitPackActivity : AppCompatActivity() {
                             put("emojis", JSONArray().put("⭐"))
                         })
                     }
-                    PocketBaseHelper.updateRecord("user_submissions", recordId, JSONObject().apply {
-                        put("stickers", stickersJson)
-                        put("sticker_data", stickersJson)
-                        put("sticker_count", stickersJson.length())
-                    })
+                    runCatching {
+                        PocketBaseHelper.updateRecord("user_submissions", recordId, JSONObject().apply {
+                            put("stickers", stickersJson)
+                            put("sticker_data", stickersJson)
+                            put("sticker_count", stickersJson.length())
+                        })
+                    }.onFailure {
+                        android.util.Log.w("SubmitPack", "Submission created, sticker metadata update skipped: ${it.message}")
+                    }
                 }
                 Toast.makeText(this@SubmitPackActivity, getString(R.string.submit_success), Toast.LENGTH_LONG).show()
                 setResult(android.app.Activity.RESULT_OK)

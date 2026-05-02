@@ -743,159 +743,135 @@ class AnimatedStickerActivity : AppCompatActivity() {
     // ── Text Dialog ──
 
     private fun showTextPanel() {
-        val dialog = BottomSheetDialog(this, R.style.RoundedBottomSheetDialog)
-        val view = layoutInflater.inflate(R.layout.dialog_add_text, null)
-        dialog.setContentView(view)
+        val rootView = findViewById<FrameLayout>(android.R.id.content)
+        val overlay = layoutInflater.inflate(R.layout.dialog_text_editor_fullscreen, rootView, false)
+        rootView.addView(overlay)
+        window.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
 
-        val inputText = view.findViewById<TextInputEditText>(R.id.etStickerText)
-        val btnAdd = view.findViewById<MaterialButton>(R.id.btnAddText)
-        val tvPreview = view.findViewById<TextView>(R.id.tvTextPreviewInDialog)
-        val fontGrid = view.findViewById<GridLayout>(R.id.fontSelectionLayout)
+        val inputText = overlay.findViewById<EditText>(R.id.etTextOverlay)
+        val btnClose = overlay.findViewById<View>(R.id.btnTextClose)
+        val btnDone = overlay.findViewById<View>(R.id.btnTextDone)
+        val colorDots = overlay.findViewById<LinearLayout>(R.id.textColorDots)
+        val fontRow = overlay.findViewById<LinearLayout>(R.id.textFontRow)
 
         var selectedColor = Color.WHITE
-        val fixedTextSize = 28f // Fixed size, no slider
-        var selectedColorView: View? = null
-        var selectedFontView: View? = null
         var selectedTypeface: Typeface? = null
+        var selectedColorDotView: View? = null
+        var selectedFontView: TextView? = null
 
-        // Font list with display names
-        val fonts = listOf(
-            "Default" to Typeface.DEFAULT,
-            "Bold" to Typeface.DEFAULT_BOLD,
-            "Serif" to Typeface.SERIF,
-            "Sans Serif" to Typeface.SANS_SERIF,
-            "Monospace" to Typeface.MONOSPACE,
-            "Serif Bold" to Typeface.create(Typeface.SERIF, Typeface.BOLD),
-            "Sans Bold" to Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD),
-            "Mono Bold" to Typeface.create(Typeface.MONOSPACE, Typeface.BOLD),
-            "Serif Italic" to Typeface.create(Typeface.SERIF, Typeface.ITALIC),
-            "Sans Italic" to Typeface.create(Typeface.SANS_SERIF, Typeface.ITALIC),
-            "Bold Italic" to Typeface.create(Typeface.DEFAULT, Typeface.BOLD_ITALIC),
-            "Serif B.Italic" to Typeface.create(Typeface.SERIF, Typeface.BOLD_ITALIC),
-            "Condensed" to Typeface.create("sans-serif-condensed", Typeface.NORMAL),
-            "Condensed Bold" to Typeface.create("sans-serif-condensed", Typeface.BOLD),
-            "Light" to Typeface.create("sans-serif-light", Typeface.NORMAL),
-            "Thin" to Typeface.create("sans-serif-thin", Typeface.NORMAL),
-            "Medium" to Typeface.create("sans-serif-medium", Typeface.NORMAL),
-            "Black" to Typeface.create("sans-serif-black", Typeface.NORMAL),
-            "Casual" to Typeface.create("casual", Typeface.NORMAL),
-            "Cursive" to Typeface.create("cursive", Typeface.NORMAL),
-            "Serif Medium" to Typeface.create("serif", Typeface.NORMAL),
-            "Small Caps" to Typeface.create("sans-serif-smallcaps", Typeface.NORMAL)
+        fun assetFont(file: String): Typeface = try {
+            Typeface.createFromAsset(assets, "fonts/$file")
+        } catch (_: Exception) { Typeface.DEFAULT }
+
+        val fontList = listOf(
+            "Roboto" to assetFont("Roboto.ttf"),
+            "Bold" to assetFont("DroidSansBold.ttf"),
+            "Serif" to assetFont("DroidSerif.ttf"),
+            "Serif Bold" to assetFont("DroidSerifBold.ttf"),
+            "Serif It." to assetFont("DroidSerifItalic.ttf"),
+            "Mono" to assetFont("DroidSansMono.ttf"),
+            "DroidSans" to assetFont("DroidSans.ttf"),
+            "Light" to assetFont("RobotoLight.ttf"),
+            "Thin" to assetFont("RobotoThin.ttf"),
+            "Medium" to assetFont("RobotoMedium.ttf"),
+            "Condensed" to Typeface.create("sans-serif-condensed", Typeface.BOLD),
+            "Black" to Typeface.create("sans-serif-black", Typeface.NORMAL)
         )
+        selectedTypeface = fontList[0].second
 
-        // Setup font grid
-        fontGrid.columnCount = 2
-        fonts.forEachIndexed { index, (name, typeface) ->
-            val fontCard = com.google.android.material.card.MaterialCardView(this).apply {
-                layoutParams = GridLayout.LayoutParams().apply {
-                    width = 0
-                    height = GridLayout.LayoutParams.WRAP_CONTENT
-                    columnSpec = GridLayout.spec(GridLayout.UNDEFINED, 1f)
-                    setMargins(dpToPx(4), dpToPx(4), dpToPx(4), dpToPx(4))
-                }
-                radius = dpToPx(12).toFloat()
-                cardElevation = dpToPx(2).toFloat()
-                setCardBackgroundColor(ContextCompat.getColor(this@AnimatedStickerActivity, R.color.card_bg))
-                strokeWidth = if (index == 0) dpToPx(2) else 0
-                strokeColor = ContextCompat.getColor(this@AnimatedStickerActivity, R.color.accent)
-
-                val fontTextView = TextView(this@AnimatedStickerActivity).apply {
-                    text = name
-                    typeface?.let { setTypeface(it) }
-                    textSize = 12f
-                    setTextColor(ContextCompat.getColor(this@AnimatedStickerActivity, R.color.text_primary))
-                    setPadding(dpToPx(10), dpToPx(6), dpToPx(10), dpToPx(6))
-                    gravity = Gravity.CENTER
-                }
-                addView(fontTextView)
-
-                setOnClickListener {
-                    selectedFontView?.let { prev ->
-                        (prev as com.google.android.material.card.MaterialCardView).strokeWidth = 0
-                    }
-                    strokeWidth = dpToPx(2)
-                    selectedFontView = this
-                    selectedTypeface = typeface
-                    tvPreview.typeface = typeface
-                }
-
-                if (index == 0) {
-                    selectedFontView = this
-                    selectedTypeface = typeface
-                }
+        fun selectFont(chip: TextView, typeface: Typeface) {
+            selectedFontView?.let { previous ->
+                previous.setTextColor(Color.parseColor("#AAAAAA"))
+                previous.setBackgroundResource(R.drawable.bg_style_chip_inactive)
             }
-            fontGrid.addView(fontCard)
+            chip.setTextColor(Color.BLACK)
+            chip.setBackgroundResource(R.drawable.bg_style_chip_active)
+            selectedFontView = chip
+            selectedTypeface = typeface
+            inputText.typeface = typeface
         }
 
-        // Color picker
-        val colors = listOf(Color.WHITE, Color.BLACK, Color.RED, Color.BLUE, Color.GREEN, Color.YELLOW,
-            Color.MAGENTA, Color.CYAN, 0xFFFF5722.toInt(), 0xFF9C27B0.toInt())
-        val colorContainer = view.findViewById<LinearLayout>(R.id.colorSelectionLayout)
-
-        fun updateColorSelection(newSelected: View, color: Int) {
-            selectedColorView?.let { prev ->
-                val prevBg = prev.background as? GradientDrawable
-                prevBg?.setStroke(dpToPx(2), Color.DKGRAY)
-            }
-            val newBg = newSelected.background as? GradientDrawable
-            newBg?.setStroke(dpToPx(4), ContextCompat.getColor(this, R.color.accent))
-            selectedColorView = newSelected
-            selectedColor = color
-            tvPreview.setTextColor(color)
-        }
-
-        colors.forEachIndexed { index, color ->
-            val colorView = View(this).apply {
-                layoutParams = LinearLayout.LayoutParams(dpToPx(32), dpToPx(32)).apply {
-                    marginEnd = dpToPx(6)
-                }
-                val bg = GradientDrawable()
-                bg.shape = GradientDrawable.OVAL
-                bg.setColor(color)
-                if (index == 0) {
-                    bg.setStroke(dpToPx(3), ContextCompat.getColor(this@AnimatedStickerActivity, R.color.accent))
-                } else {
-                    bg.setStroke(dpToPx(2), Color.DKGRAY)
-                }
-                background = bg
-                elevation = 4f
-                setOnClickListener {
-                    updateColorSelection(this, color)
-                }
+        fontList.forEachIndexed { index, (name, typeface) ->
+            val chip = TextView(this).apply {
+                text = "Abc"
+                textSize = 15f
+                setTypeface(typeface)
+                gravity = Gravity.CENTER
+                setPadding(dpToPx(12), dpToPx(6), dpToPx(12), dpToPx(6))
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    dpToPx(36)
+                ).apply { marginEnd = dpToPx(6) }
+                contentDescription = name
+                setOnClickListener { selectFont(this, typeface) }
             }
             if (index == 0) {
-                selectedColorView = colorView
+                chip.setTextColor(Color.BLACK)
+                chip.setBackgroundResource(R.drawable.bg_style_chip_active)
+                selectedFontView = chip
+            } else {
+                chip.setTextColor(Color.parseColor("#CCCCCC"))
+                chip.setBackgroundResource(R.drawable.bg_style_chip_inactive)
             }
-            colorContainer.addView(colorView)
+            fontRow.addView(chip)
         }
 
-        // Set preview text size to fixed value
-        tvPreview.textSize = fixedTextSize
-
-        // Live preview
-        inputText.addTextChangedListener(object : android.text.TextWatcher {
-            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
-                tvPreview.text = s?.toString() ?: "Preview"
+        val colors = listOf(
+            0xFFFFFFFF.toInt(), 0xFF000000.toInt(), 0xFFFF0000.toInt(),
+            0xFF00C853.toInt(), 0xFF2196F3.toInt(), 0xFFFF9800.toInt(),
+            0xFFE91E63.toInt(), 0xFF9C27B0.toInt(), 0xFFFFEB3B.toInt(),
+            0xFF00BCD4.toInt(), 0xFFFF5722.toInt(), 0xFF607D8B.toInt()
+        )
+        colors.forEachIndexed { index, color ->
+            val dot = View(this).apply {
+                val dotSize = dpToPx(34)
+                layoutParams = LinearLayout.LayoutParams(dotSize, dotSize).apply { marginEnd = dpToPx(8) }
+                val backgroundDrawable = GradientDrawable().apply {
+                    shape = GradientDrawable.OVAL
+                    setColor(color)
+                    if (index == 0) setStroke(dpToPx(3), Color.parseColor("#6C5CE7"))
+                }
+                background = backgroundDrawable
+                setOnClickListener {
+                    selectedColorDotView?.let { previous ->
+                        (previous.background as? GradientDrawable)?.setStroke(0, 0)
+                    }
+                    backgroundDrawable.setStroke(dpToPx(3), Color.parseColor("#6C5CE7"))
+                    selectedColor = color
+                    selectedColorDotView = this
+                    inputText.setTextColor(color)
+                }
             }
-            override fun afterTextChanged(s: android.text.Editable?) {}
-        })
+            if (index == 0) selectedColorDotView = dot
+            colorDots.addView(dot)
+        }
 
-        btnAdd.setOnClickListener {
-            val text = inputText.text?.toString() ?: ""
+        fun dismissOverlay() {
+            val inputMethodManager = getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager
+            inputMethodManager.hideSoftInputFromWindow(inputText.windowToken, 0)
+            rootView.removeView(overlay)
+            window.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_PAN)
+        }
+
+        btnClose.setOnClickListener { dismissOverlay() }
+        btnDone.setOnClickListener {
+            val text = inputText.text?.toString()?.trim().orEmpty()
             if (text.isNotEmpty()) {
                 val colorHex = String.format("#%06X", 0xFFFFFF and selectedColor)
-                val item = OverlayItem("text", text, colorHex, fixedTextSize.toInt())
+                val item = OverlayItem("text", text, colorHex, 28)
                 item.typeface = selectedTypeface
                 overlayItems.add(item)
                 addOverlayView(item)
-                dialog.dismiss()
                 Toast.makeText(this, getString(R.string.text_added), Toast.LENGTH_SHORT).show()
             }
+            dismissOverlay()
         }
 
-        dialog.show()
+        inputText.requestFocus()
+        inputText.postDelayed({
+            val inputMethodManager = getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager
+            inputMethodManager.showSoftInput(inputText, InputMethodManager.SHOW_IMPLICIT)
+        }, 150)
     }
     
     private fun showEditTextOverlay(item: OverlayItem) {

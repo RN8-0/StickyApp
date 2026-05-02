@@ -45,6 +45,14 @@ object PushTokenManager {
     }
 
     private suspend fun syncCollection(collection: String, filter: String, payload: JSONObject) {
+        if (collection == "users") {
+            val authRecordId = PocketBaseHelper.getAuthRecordId()
+            if (!authRecordId.isNullOrBlank()) {
+                PocketBaseHelper.updateRecord(collection, authRecordId, payload)
+            }
+            return
+        }
+
         val records = PocketBaseHelper.listRecords(collection, filter = filter, perPage = 1)
         if (records.isNotEmpty()) {
             PocketBaseHelper.updateRecord(collection, records[0].getString("id"), payload)
@@ -52,9 +60,27 @@ object PushTokenManager {
         }
 
         val deviceId = filter.substringAfter("'").substringBefore("'")
+        val email = "$deviceId@device.sticly.local"
+        val escapedEmail = email.replace("'", "\\'")
+        val existingByEmail = PocketBaseHelper.listRecords(collection, filter = "email='$escapedEmail'", perPage = 1)
+        if (existingByEmail.isNotEmpty()) {
+            val updatePayload = JSONObject(payload.toString()).apply {
+                put("device_id", deviceId)
+                put("email", email)
+                put("display_name", "Guest")
+                if (collection != "users") {
+                    put("user_id", deviceId)
+                    put("provider", "device")
+                    put("platform", "android")
+                }
+            }
+            PocketBaseHelper.updateRecord(collection, existingByEmail[0].getString("id"), updatePayload)
+            return
+        }
+
         val createPayload = JSONObject(payload.toString()).apply {
             put("device_id", deviceId)
-            put("email", "$deviceId@device.sticly.local")
+            put("email", email)
             put("display_name", "Guest")
             if (collection == "users") {
                 val password = java.util.UUID.randomUUID().toString()
@@ -66,6 +92,11 @@ object PushTokenManager {
                 put("platform", "android")
             }
         }
-        PocketBaseHelper.createRecord(collection, createPayload)
+
+        try {
+            PocketBaseHelper.createRecord(collection, createPayload)
+        } catch (error: Exception) {
+            throw error
+        }
     }
 }

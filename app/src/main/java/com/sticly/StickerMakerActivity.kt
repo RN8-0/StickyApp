@@ -1574,6 +1574,11 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
     }
 
     private fun showPackSelectionDialog(bitmap: Bitmap) {
+        targetPackId?.let { packId ->
+            saveStickerToPack(bitmap, packId)
+            return
+        }
+
         val view = layoutInflater.inflate(R.layout.dialog_select_pack, null)
         val rvPacks = view.findViewById<RecyclerView>(R.id.rvPacks)
         val inputPackName = view.findViewById<TextInputEditText>(R.id.inputPackName)

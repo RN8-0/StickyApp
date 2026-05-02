@@ -1100,10 +1100,14 @@ class DetailsActivity : AppCompatActivity() {
                         }
                         stickersJson.put(entry)
                     }
-                    PocketBaseHelper.updateRecord("user_submissions", recordId, JSONObject().apply {
-                        put("stickers", stickersJson)
-                        put("sticker_count", stickersJson.length())
-                    })
+                    runCatching {
+                        PocketBaseHelper.updateRecord("user_submissions", recordId, JSONObject().apply {
+                            put("stickers", stickersJson)
+                            put("sticker_count", stickersJson.length())
+                        })
+                    }.onFailure {
+                        android.util.Log.w("DetailsActivity", "Submission created, sticker metadata update skipped: ${it.message}")
+                    }
                 }
 
                 Toast.makeText(this@DetailsActivity, getString(R.string.publish_pack_success), Toast.LENGTH_LONG).show()

@@ -52,7 +52,7 @@ class StickyApp : Application() {
             } catch (e: Exception) {
                 Log.e("StickyApp", "AdMob initialization failed: ${e.message}", e)
             }
-        }, 800)
+        }, 2500)
 
         // Firebase'den güncel veriyi arka planda çek
         CoroutineScope(Dispatchers.IO).launch {
