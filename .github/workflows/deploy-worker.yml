@@ -11,11 +11,16 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    env:
+      COOLIFY_WORKER_WEBHOOK_URL: ${{ secrets.COOLIFY_WORKER_WEBHOOK_URL }}
+      SSH_HOST: ${{ secrets.SSH_HOST }}
+      SSH_USER: ${{ secrets.SSH_USER }}
+      SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Deploy via Coolify webhook
-        if: ${{ secrets.COOLIFY_WORKER_WEBHOOK_URL != '' }}
+        if: ${{ env.COOLIFY_WORKER_WEBHOOK_URL != '' }}
         run: |
           curl -X POST "${{ secrets.COOLIFY_WORKER_WEBHOOK_URL }}" \
             -H "Authorization: Bearer ${{ secrets.COOLIFY_TOKEN }}" \
@@ -23,7 +28,7 @@ jobs:
             --fail
 
       - name: Deploy via SSH (fallback)
-        if: ${{ secrets.SSH_HOST != '' && secrets.COOLIFY_WORKER_WEBHOOK_URL == '' }}
+        if: ${{ env.SSH_HOST != '' && env.COOLIFY_WORKER_WEBHOOK_URL == '' }}
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
