@@ -53,6 +53,9 @@ class NotificationsActivity : AppCompatActivity() {
         val toolbar = findViewById<MaterialToolbar>(R.id.toolbar)
         toolbar.setNavigationOnClickListener { finish() }
         toolbar.inflateMenu(R.menu.menu_notifications)
+        toolbar.menu.findItem(R.id.action_clear_all)?.icon?.setTint(
+            ContextCompat.getColor(this, R.color.toolbar_icon)
+        )
         toolbar.setOnMenuItemClickListener { item ->
             if (item.itemId == R.id.action_clear_all) {
                 confirmClearAll()

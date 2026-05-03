@@ -11,6 +11,9 @@ import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 class StickyMessagingService : FirebaseMessagingService() {
 
@@ -27,16 +30,55 @@ class StickyMessagingService : FirebaseMessagingService() {
     override fun onMessageReceived(remoteMessage: RemoteMessage) {
         super.onMessageReceived(remoteMessage)
 
-        // Bildirimler kapalıysa gösterme
+        val title = remoteMessage.notification?.title ?: remoteMessage.data["title"] ?: "Sticky"
+        val body = remoteMessage.notification?.body ?: remoteMessage.data["body"] ?: ""
+        val imageUrl = remoteMessage.data["imageUrl"]
+        val msgType = remoteMessage.data["type"] ?: ""
+
+        // Save submission-related and admin messages to in-app notifications list
+        if (msgType.isNotEmpty() && body.isNotEmpty()) {
+            saveToInAppNotifications(title, body, msgType)
+        }
+
+        // Bildirimler kapalıysa OS bildirimi gösterme
         if (!PreferencesHelper.isNotificationsEnabled(this)) {
             return
         }
 
-        val title = remoteMessage.notification?.title ?: remoteMessage.data["title"] ?: "Sticky"
-        val body = remoteMessage.notification?.body ?: remoteMessage.data["body"] ?: ""
-        val imageUrl = remoteMessage.data["imageUrl"]
-
         showNotification(title, body, imageUrl)
+    }
+
+    private fun saveToInAppNotifications(title: String, body: String, type: String) {
+        val deviceId = PreferencesHelper.getDeviceId(this)
+        val prefs = getSharedPreferences("sticky_prefs", MODE_PRIVATE)
+        val email = prefs.getString("user_email", "") ?: ""
+        val firebaseUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid.orEmpty()
+        val recipientId = deviceId.ifBlank { firebaseUid.ifBlank { email } }
+        if (recipientId.isBlank()) return
+
+        CoroutineScope(Dispatchers.IO).launch {
+            runCatching {
+                val payload = org.json.JSONObject().apply {
+                    put("title", title)
+                    put("body", body)
+                    put("message", body)
+                    put("user_id", recipientId)
+                    put("type", type)
+                    put("read", false)
+                    put("from", "admin")
+                    put("timestamp", java.time.Instant.now().toString())
+                }
+                val url = java.net.URL("${PocketBaseHelper.WORKER_URL}/api/notifications")
+                val conn = url.openConnection() as java.net.HttpURLConnection
+                conn.requestMethod = "POST"
+                conn.setRequestProperty("Content-Type", "application/json")
+                conn.doOutput = true
+                conn.connectTimeout = 8_000
+                conn.outputStream.write(payload.toString().toByteArray())
+                conn.connect()
+                conn.disconnect()
+            }
+        }
     }
 
     private fun showNotification(title: String, body: String, imageUrl: String? = null) {

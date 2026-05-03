@@ -364,6 +364,9 @@ function App() {
   const [submissionEditData, setSubmissionEditData] = useState<UserSubmission | null>(null);
   const [rejectModalSubmission, setRejectModalSubmission] = useState<UserSubmission | null>(null);
   const [rejectReason, setRejectReason] = useState('');
+  const [feedbackModalSubmission, setFeedbackModalSubmission] = useState<UserSubmission | null>(null);
+  const [feedbackMessage, setFeedbackMessage] = useState('');
+  const [feedbackSending, setFeedbackSending] = useState(false);
 
   const [showVideoBgModal, setShowVideoBgModal] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
@@ -527,11 +530,12 @@ function App() {
             image_url: s.image_url || s.url || getFileUrl(collId, r.id, s.image_file || s.name || ''),
             url: s.url || s.image_url || getFileUrl(collId, r.id, s.image_file || s.name || ''),
           }));
-          const stickers = parsedStickers.length > 0
-            ? enrichStickers(parsedStickers)
-            : parsedStickerData.length > 0
-              ? enrichStickers(parsedStickerData)
-              : derivedStickers;
+          // Use the source with the most stickers: prefer images count when stickers JSON is partial
+          const jsonStickers = parsedStickers.length > 0 ? enrichStickers(parsedStickers)
+            : parsedStickerData.length > 0 ? enrichStickers(parsedStickerData)
+            : [];
+          // If images field has more entries than the stickers JSON, use derivedStickers (all uploaded files)
+          const stickers = derivedStickers.length > jsonStickers.length ? derivedStickers : (jsonStickers.length > 0 ? jsonStickers : derivedStickers);
           return { id: r.id, user_id: r.user_id || '', device_id: r.device_id || '', user_email: r.user_email || '', display_name: r.display_name || '', publisher_name: r.publisher_name, pack_name: r.pack_name || r.name || '', description: r.description, category: r.category || '', stickers, status: r.status || 'pending', flag_reasons: r.flag_reasons, rejection_reason: r.rejection_reason, sticker_count: r.sticker_count || stickers.length || 0, sticker_pack_id: r.sticker_pack_id, created_at: { seconds: createdMs / 1000 }, note: r.note } as UserSubmission;
         }).sort((a, b) => (b.created_at?.seconds || 0) - (a.created_at?.seconds || 0)));
       } catch (e) {
@@ -775,23 +779,29 @@ function App() {
     }
   };
 
-  const handleSendFeedback = async (submission: UserSubmission) => {
-    const message = window.prompt(
-      `Send a message to ${submission.display_name || submission.user_email} about "${submission.pack_name}":`,
-      ''
-    );
-    if (!message || !message.trim()) return;
+  const handleSendFeedback = (submission: UserSubmission) => {
+    setFeedbackMessage('');
+    setFeedbackModalSubmission(submission);
+  };
+
+  const confirmSendFeedback = async () => {
+    const submission = feedbackModalSubmission;
+    if (!submission || !feedbackMessage.trim()) return;
+    setFeedbackSending(true);
     try {
       await notifySubmissionUser(
         submission,
         `Regarding your pack: ${submission.pack_name}`,
-        message.trim(),
+        feedbackMessage.trim(),
         { type: 'admin_feedback' }
       );
-      alert('Message sent to user.');
+      setFeedbackModalSubmission(null);
+      setFeedbackMessage('');
     } catch (e) {
-      console.error("Send feedback error:", e);
-      alert("Failed to send message.");
+      console.error('Send feedback error:', e);
+      alert('Failed to send message.');
+    } finally {
+      setFeedbackSending(false);
     }
   };
 
@@ -1225,6 +1235,19 @@ function App() {
   }, [stickerSizes]);
 
   // ========== KULLANICI YÖNETİM FONKSİYONLARI ==========
+
+  const cleanDuplicateUsers = async () => {
+    if (!window.confirm('Delete all duplicate user records from PocketBase? The newest record per email will be kept. This cannot be undone.')) return;
+    try {
+      const resp = await fetch(`${WORKER_URL}/api/users/duplicates`, { method: 'DELETE' });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const data = await resp.json();
+      alert(`Done — ${data.deleted} duplicate records deleted out of ${data.total} total.`);
+      await fetchUsers();
+    } catch (err) {
+      alert('Error cleaning duplicates: ' + err);
+    }
+  };
 
   const fetchUsers = async () => {
     setUsersLoading(true);
@@ -2141,17 +2164,32 @@ function App() {
   };
 
   const resetAllStats = async () => {
-    if (!window.confirm(`Reset download_count, view_count, and favorite_count to 0 for ALL ${packs.length} packs? This cannot be undone.`)) return;
+    if (!window.confirm(`Reset all stats (download, view, favorite counts) to 0 for ALL ${packs.length} packs? This cannot be undone.`)) return;
+    setIsProcessing(true);
+    let done = 0;
+    let errors = 0;
     try {
-      let done = 0;
       for (const p of packs) {
-        const col = p.is_premium ? 'premium_stickers' : 'stickers';
-        await pb.collection(col).update(p.id, { download_count: 0, view_count: 0, favorite_count: 0 });
-        done++;
+        try {
+          const col = p.is_premium ? 'premium_stickers' : 'stickers';
+          await pb.collection(col).update(p.id, {
+            download_count: 0,
+            view_count: 0,
+            favorite_count: 0,
+            fake_download_base: 0,
+          });
+          done++;
+        } catch {
+          errors++;
+        }
       }
-      setPacks(prev => prev.map(p => ({ ...p, download_count: 0, view_count: 0, favorite_count: 0 })));
-      alert(`Reset complete — ${done} packs updated.`);
-    } catch (e) { alert('Error: ' + e); }
+      setPacks(prev => prev.map(p => ({ ...p, download_count: 0, view_count: 0, favorite_count: 0, fake_download_base: 0 })));
+      alert(`Reset complete — ${done} packs updated.${errors > 0 ? ` (${errors} errors)` : ''}`);
+    } catch (e) {
+      alert('Error: ' + e);
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   // Tüm paketleri fake_download_base ve premium fiyatlarıyla güncelle
@@ -4056,14 +4094,25 @@ function App() {
                       <p className="text-xs text-textSec mt-0.5">Firebase user management and subscription control</p>
                     </div>
                   </div>
-                  <button
-                    onClick={fetchUsers}
-                    disabled={usersLoading}
-                    className="flex items-center gap-2.5 px-5 py-2.5 bg-white/5 hover:bg-white/10 text-textSec hover:text-white border border-white/5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
-                  >
-                    <RefreshCcw size={14} className={usersLoading ? "animate-spin" : ""} />
-                    Refresh
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={cleanDuplicateUsers}
+                      disabled={usersLoading}
+                      className="flex items-center gap-2.5 px-5 py-2.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+                      title="Delete duplicate user records from PocketBase"
+                    >
+                      <Trash2 size={14} />
+                      Clean Duplicates
+                    </button>
+                    <button
+                      onClick={fetchUsers}
+                      disabled={usersLoading}
+                      className="flex items-center gap-2.5 px-5 py-2.5 bg-white/5 hover:bg-white/10 text-textSec hover:text-white border border-white/5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+                    >
+                      <RefreshCcw size={14} className={usersLoading ? "animate-spin" : ""} />
+                      Refresh
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -6331,6 +6380,83 @@ function App() {
               >
                 Reject
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Feedback / Message Modal */}
+      {feedbackModalSubmission && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm" onClick={() => setFeedbackModalSubmission(null)}>
+          <div className="bg-card rounded-2xl shadow-2xl border border-white/10 w-full max-w-lg mx-4 overflow-hidden" onClick={e => e.stopPropagation()}>
+            {/* Header */}
+            <div className="flex items-center justify-between p-5 border-b border-white/5">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-blue-500/15 rounded-xl flex items-center justify-center">
+                  <MessageSquare size={18} className="text-blue-400" />
+                </div>
+                <div>
+                  <h2 className="text-sm font-black text-white">Message User</h2>
+                  <p className="text-[10px] text-textSec mt-0.5">
+                    To: <span className="text-white font-semibold">{feedbackModalSubmission.display_name || feedbackModalSubmission.user_email}</span>
+                    {' '}&mdash; Pack: <span className="text-primary font-semibold">{feedbackModalSubmission.pack_name}</span>
+                  </p>
+                </div>
+              </div>
+              <button onClick={() => setFeedbackModalSubmission(null)} className="p-2 bg-white/5 rounded-lg hover:bg-white/10 transition-all">
+                <X size={14} className="text-textSec" />
+              </button>
+            </div>
+
+            {/* Quick Templates */}
+            <div className="p-4 border-b border-white/5">
+              <p className="text-[9px] font-black text-textSec uppercase tracking-widest mb-2">Quick Templates</p>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { label: '✅ Approved', text: `Great news! Your sticker pack "${feedbackModalSubmission.pack_name}" has been approved and is now live in Sticky!` },
+                  { label: '⚠️ Need More', text: `Your pack "${feedbackModalSubmission.pack_name}" needs at least 9 stickers to be published. Please add more stickers and resubmit.` },
+                  { label: '🎨 Quality', text: `We reviewed "${feedbackModalSubmission.pack_name}" and the image quality needs improvement. Please use higher resolution images and resubmit.` },
+                  { label: '📋 Guidelines', text: `Your pack "${feedbackModalSubmission.pack_name}" was reviewed but doesn't meet our content guidelines. Please review our guidelines and resubmit.` },
+                  { label: '🔄 Resubmit', text: `We made some edits to your pack "${feedbackModalSubmission.pack_name}". Please review and resubmit if you'd like any changes.` },
+                ].map((t) => (
+                  <button
+                    key={t.label}
+                    onClick={() => setFeedbackMessage(t.text)}
+                    className="px-2.5 py-1 bg-white/5 hover:bg-primary/15 hover:text-primary text-textSec border border-white/5 hover:border-primary/30 rounded-lg text-[10px] font-bold transition-all"
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Message Input */}
+            <div className="p-4 space-y-3">
+              <textarea
+                className="w-full bg-hover rounded-xl px-4 py-3 text-sm text-white resize-none outline-none border border-white/5 focus:border-primary/40 transition-all placeholder:text-textSec/40 min-h-[100px]"
+                rows={4}
+                placeholder="Write your message to the user..."
+                value={feedbackMessage}
+                onChange={e => setFeedbackMessage(e.target.value)}
+                autoFocus
+              />
+              <p className="text-[9px] text-textSec">The user will receive a push notification AND see this message in their in-app notifications.</p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setFeedbackModalSubmission(null)}
+                  className="flex-1 py-2.5 rounded-xl border border-white/10 text-textSec text-xs font-bold hover:bg-white/5 transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmSendFeedback}
+                  disabled={!feedbackMessage.trim() || feedbackSending}
+                  className="flex-1 py-2.5 rounded-xl bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/30 text-blue-300 text-xs font-black transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {feedbackSending ? <RefreshCcw size={12} className="animate-spin" /> : <MessageSquare size={12} />}
+                  {feedbackSending ? 'Sending...' : 'Send Message'}
+                </button>
+              </div>
             </div>
           </div>
         </div>

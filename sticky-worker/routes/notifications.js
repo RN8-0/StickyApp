@@ -13,11 +13,20 @@ async function getPbAdminToken() {
   if (pbAdminToken && Date.now() < pbTokenExpiry) return pbAdminToken;
   if (!PB_ADMIN_EMAIL || !PB_ADMIN_PASSWORD) return null;
   try {
-    const res = await fetch(`${PB_URL}/api/admins/auth-with-password`, {
+    // Try new PocketBase superusers endpoint first (PB >= 0.20)
+    let res = await fetch(`${PB_URL}/api/collections/_superusers/auth-with-password`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ identity: PB_ADMIN_EMAIL, password: PB_ADMIN_PASSWORD }),
     });
+    if (!res.ok) {
+      // Fall back to legacy endpoint
+      res = await fetch(`${PB_URL}/api/admins/auth-with-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ identity: PB_ADMIN_EMAIL, password: PB_ADMIN_PASSWORD }),
+      });
+    }
     if (!res.ok) return null;
     const data = await res.json();
     pbAdminToken = data.token;
@@ -56,6 +65,30 @@ router.get('/', async (req, res) => {
   } catch (e) {
     console.error('[Notifications] GET error:', e.message);
     res.json([]);
+  }
+});
+
+// POST /api/notifications — create in-app notification record
+router.post('/', async (req, res) => {
+  try {
+    const { title, body, message, user_id, type, from, timestamp } = req.body;
+    if (!user_id || (!body && !message)) return res.status(400).json({ error: 'user_id and body required' });
+
+    const token = await getPbAdminToken();
+    const headers = { 'Content-Type': 'application/json' };
+    if (token) headers['Authorization'] = token;
+
+    const payload = { title: title || 'Sticky', body: body || message, message: body || message, user_id, type: type || 'push', from: from || 'system', read: false, timestamp: timestamp || new Date().toISOString() };
+    const pbRes = await fetch(`${PB_URL}/api/collections/notifications/records`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload),
+    });
+    const data = await pbRes.json();
+    res.json({ success: pbRes.ok, id: data.id });
+  } catch (e) {
+    console.error('[Notifications] POST error:', e.message);
+    res.status(500).json({ success: false });
   }
 });
 

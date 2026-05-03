@@ -41,7 +41,7 @@ function sortTimestamp(value) {
   return 0;
 }
 
-// GET /api/users - fetch migrated users from PocketBase user_profiles
+// GET /api/users - fetch migrated users from PocketBase user_profiles (deduplicated)
 router.get('/', async (req, res) => {
   try {
     const users = [];
@@ -55,9 +55,60 @@ router.get('/', async (req, res) => {
       page++;
     }
     users.sort((a, b) => sortTimestamp(b.created_at || b.joined_at || b.created) - sortTimestamp(a.created_at || a.joined_at || a.created));
-    res.json({ users });
+
+    // Deduplicate: keep newest record per unique email/device_id key
+    const seen = new Map();
+    const deduped = [];
+    for (const u of users) {
+      const key = (u.email || '').toLowerCase().trim() || u.device_id || u.id;
+      if (!seen.has(key)) {
+        seen.set(key, true);
+        deduped.push(u);
+      }
+    }
+
+    res.json({ users: deduped });
   } catch (err) {
     console.error('[Users GET]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/users/duplicates - remove duplicate user_profile records, keep newest per email
+router.delete('/duplicates', async (req, res) => {
+  try {
+    const users = [];
+    let page = 1;
+    while (true) {
+      const resp = await pbFetch(`/api/collections/user_profiles/records?perPage=200&page=${page}`);
+      if (!resp.ok) throw new Error(await resp.text());
+      const data = await resp.json();
+      users.push(...(data.items || []));
+      if (page >= data.totalPages) break;
+      page++;
+    }
+    users.sort((a, b) => sortTimestamp(b.created_at || b.joined_at || b.created) - sortTimestamp(a.created_at || a.joined_at || a.created));
+
+    const seen = new Map();
+    const toDelete = [];
+    for (const u of users) {
+      const key = (u.email || '').toLowerCase().trim() || u.device_id || u.id;
+      if (!seen.has(key)) {
+        seen.set(key, true);
+      } else {
+        toDelete.push(u.id);
+      }
+    }
+
+    let deleted = 0;
+    for (const id of toDelete) {
+      const r = await pbFetch(`/api/collections/user_profiles/records/${id}`, { method: 'DELETE' });
+      if (r.ok || r.status === 204) deleted++;
+    }
+
+    res.json({ success: true, deleted, total: users.length });
+  } catch (err) {
+    console.error('[Users DELETE duplicates]', err.message);
     res.status(500).json({ error: err.message });
   }
 });
