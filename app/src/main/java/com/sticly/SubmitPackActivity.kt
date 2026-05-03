@@ -165,6 +165,25 @@ class SubmitPackActivity : AppCompatActivity() {
         val userId = firebaseUid.ifBlank { PocketBaseHelper.getAuthRecordId().orEmpty().ifBlank { email } }
 
         lifecycleScope.launch {
+            // Check for existing pending submission
+            val hasPending = withContext(Dispatchers.IO) {
+                try {
+                    val escapedEmail = email.replace("'", "\\'")
+                    val filter = "status='pending' && (user_email='$escapedEmail')"
+                    val result = PocketBaseHelper.listRecords("user_submissions", filter, 1)
+                    result.isNotEmpty()
+                } catch (e: Exception) {
+                    android.util.Log.w("SubmitPack", "Pending check failed: ${e.message}")
+                    false
+                }
+            }
+            if (hasPending) {
+                Toast.makeText(this@SubmitPackActivity, getString(R.string.submit_pending_exists), Toast.LENGTH_LONG).show()
+                isSubmitting = false
+                btnSubmitPack.isEnabled = true
+                btnSubmitPack.text = getString(R.string.submit_pack_button)
+                return@launch
+            }
             try {
                 withContext(Dispatchers.IO) {
                     val stickerFiles = CustomStickerManager.getStickerFiles(this@SubmitPackActivity, packId)

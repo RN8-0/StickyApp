@@ -4,7 +4,7 @@ const router = Router();
 
 const PB_URL = process.env.PB_URL || 'https://sh3xlf9j7symlj3otlw6s8rx.46.225.95.201.sslip.io';
 const PB_ADMIN_EMAIL = process.env.PB_ADMIN_EMAIL;
-const PB_ADMIN_PASSWORD = process.env.PB_ADMIN_PASSWORD;
+const PB_ADMIN_PASSWORD = process.env.PB_ADMIN_PASSWORD || process.env.PB_ADMIN_PASS;
 
 let pbAdminToken = null;
 let pbTokenExpiry = 0;

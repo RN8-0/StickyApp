@@ -511,7 +511,7 @@ function App() {
             }
             return [];
           };
-          const images = Array.isArray(r.images) ? r.images : [];
+          const images = Array.isArray(r.images) ? r.images : (typeof r.images === 'string' && r.images ? [r.images] : []);
           const derivedStickers = images.map((filename: string, index: number) => ({
             name: `sticker_${index + 1}`,
             image_file: filename,
@@ -1431,7 +1431,7 @@ function App() {
         category: newPackData.category,
         is_premium: newPackData.is_premium,
         is_animated: newPackData.is_animated ?? true,
-        download_count: Math.floor(Math.random() * 7001) + 3000,
+        download_count: 0,
         view_count: 0,
         favorite_count: 0,
         sticker_count: 0,
@@ -2138,6 +2138,20 @@ function App() {
       setSelectedPack(updated);
       alert("Statistics reset.");
     } catch (e) { alert("Error: " + e); }
+  };
+
+  const resetAllStats = async () => {
+    if (!window.confirm(`Reset download_count, view_count, and favorite_count to 0 for ALL ${packs.length} packs? This cannot be undone.`)) return;
+    try {
+      let done = 0;
+      for (const p of packs) {
+        const col = p.is_premium ? 'premium_stickers' : 'stickers';
+        await pb.collection(col).update(p.id, { download_count: 0, view_count: 0, favorite_count: 0 });
+        done++;
+      }
+      setPacks(prev => prev.map(p => ({ ...p, download_count: 0, view_count: 0, favorite_count: 0 })));
+      alert(`Reset complete — ${done} packs updated.`);
+    } catch (e) { alert('Error: ' + e); }
   };
 
   // Tüm paketleri fake_download_base ve premium fiyatlarıyla güncelle
@@ -3010,6 +3024,14 @@ function App() {
                         document.body
                       )}
                     </div>
+
+                    <button
+                      onClick={resetAllStats}
+                      className="px-3 py-2 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 rounded-xl text-red-400 text-[10px] font-black uppercase tracking-widest transition-all"
+                      title="Reset all download/view/favorite counts to 0"
+                    >
+                      Reset All Stats
+                    </button>
 
                     <button
                       onClick={fetchPacks}
