@@ -2178,8 +2178,6 @@ Rules:
                 android.util.Log.e("Profile", "Error loading PB notifications", e)
                 withContext(Dispatchers.Main) {
                     container.visibility = View.GONE
-                    badge?.visibility = View.GONE
-                    toolbarBadge?.visibility = View.GONE
                 }
             }
         }
