@@ -22,29 +22,33 @@ object PushTokenManager {
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val deviceId = PreferencesHelper.getDeviceId(context)
+                val firebaseUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+                val isAuthenticated = firebaseUser != null && !firebaseUser.email.isNullOrBlank()
                 val payload = JSONObject().apply {
                     put("fcm_token", token)
                     put("notifications_enabled", PreferencesHelper.isNotificationsEnabled(context))
                     put("push_provider", "fcm")
                 }
 
-                syncCollectionSafely("users", "device_id='$deviceId'", payload)
-                syncCollectionSafely("user_profiles", "device_id='$deviceId'", payload)
+                // Only sync (and possibly create) when authenticated. For unauthenticated users
+                // we just update existing records if present — never create new guest profiles.
+                syncCollectionSafely("users", "device_id='$deviceId'", payload, isAuthenticated)
+                syncCollectionSafely("user_profiles", "device_id='$deviceId'", payload, isAuthenticated)
             } catch (error: Exception) {
                 Log.w(TAG, "FCM token sync failed: ${error.message}")
             }
         }
     }
 
-    private suspend fun syncCollectionSafely(collection: String, filter: String, payload: JSONObject) {
+    private suspend fun syncCollectionSafely(collection: String, filter: String, payload: JSONObject, allowCreate: Boolean) {
         try {
-            syncCollection(collection, filter, payload)
+            syncCollection(collection, filter, payload, allowCreate)
         } catch (error: Exception) {
             Log.w(TAG, "FCM token sync failed for $collection: ${error.message}")
         }
     }
 
-    private suspend fun syncCollection(collection: String, filter: String, payload: JSONObject) {
+    private suspend fun syncCollection(collection: String, filter: String, payload: JSONObject, allowCreate: Boolean) {
         if (collection == "users") {
             val authRecordId = PocketBaseHelper.getAuthRecordId()
             if (!authRecordId.isNullOrBlank()) {
@@ -78,6 +82,12 @@ object PushTokenManager {
                     PocketBaseHelper.deleteRecord(collection, records[i].getString("id"))
                 }.onFailure { Log.w(TAG, "Failed to delete duplicate record: ${it.message}") }
             }
+            return
+        }
+
+        // No existing record. Only create if explicitly allowed (i.e., user is authenticated).
+        if (!allowCreate) {
+            Log.d(TAG, "Skipping guest record creation for $collection (not authenticated)")
             return
         }
 

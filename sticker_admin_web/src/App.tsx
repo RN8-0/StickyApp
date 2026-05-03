@@ -4996,13 +4996,18 @@ function App() {
                             <span className="text-[10px] text-blue-300">{sub.note}</span>
                           </div>
                         )}
-                        {/* Sticker Preview — always visible */}
+                        {/* Sticker Preview — click to enlarge */}
                         {sub.stickers && sub.stickers.length > 0 && (
                           <div className="mt-3 grid grid-cols-6 md:grid-cols-10 gap-2">
                             {sub.stickers.slice(0, 20).map((s, i) => (
-                              <div key={i} className="aspect-square rounded-lg overflow-hidden bg-white/5 border border-white/5">
+                              <button
+                                key={i}
+                                type="button"
+                                onClick={() => setPreviewSticker({ url: s.image_url || s.url, title: s.name || s.image_file })}
+                                className="aspect-square rounded-lg overflow-hidden bg-white/5 border border-white/5 hover:border-primary/40 hover:scale-105 transition-all cursor-zoom-in"
+                              >
                                 <img src={s.image_url} alt={s.name} className="w-full h-full object-contain" />
-                              </div>
+                              </button>
                             ))}
                             {sub.stickers.length > 20 && (
                               <div className="aspect-square rounded-lg bg-white/5 border border-white/5 flex items-center justify-center text-[10px] text-textSec font-bold">
@@ -5105,9 +5110,14 @@ function App() {
                       <div className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-8 gap-3">
                         {(submissionEditData.stickers || []).map((sticker: any, index: number) => (
                           <div key={`${sticker.image_url || sticker.url || sticker.name}-${index}`} className="relative aspect-square bg-white/5 rounded-xl border border-white/5 overflow-hidden group">
-                            <img src={sticker.image_url || sticker.url} alt={sticker.name || `Sticker ${index + 1}`} className="w-full h-full object-contain p-1" />
+                            <img
+                              src={sticker.image_url || sticker.url}
+                              alt={sticker.name || `Sticker ${index + 1}`}
+                              className="w-full h-full object-contain p-1 cursor-zoom-in"
+                              onClick={() => setPreviewSticker({ url: sticker.image_url || sticker.url, title: sticker.name || sticker.image_file })}
+                            />
                             <button
-                              onClick={() => handleRemoveSubmissionSticker(index)}
+                              onClick={(e) => { e.stopPropagation(); handleRemoveSubmissionSticker(index); }}
                               className="absolute top-1 right-1 w-7 h-7 rounded-lg bg-red-500/90 text-white opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity flex items-center justify-center"
                               title="Remove sticker"
                             >

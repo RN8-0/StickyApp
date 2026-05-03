@@ -719,6 +719,8 @@ class MainActivity : AppCompatActivity() {
             toolbarSubtitle.visibility = View.GONE
             aiContentContainer?.visibility = View.GONE
             profileContentContainer?.visibility = View.VISIBLE
+            // FAB (+) only here on Profile tab
+            btnCreateFab?.visibility = View.VISIBLE
 
             iconProfile.setColorFilter(activeColor)
             textProfile.setTextColor(activeColor)
@@ -771,17 +773,16 @@ class MainActivity : AppCompatActivity() {
                 hideHomeSections()
             }
             FilterType.CUSTOM -> {
-                // My Stickers: hide search bar, show FAB
+                // My Stickers: hide search bar (FAB now lives on Profile tab only)
                 searchBarLayoutCached?.visibility = View.GONE
                 iconMyStickers.setColorFilter(activeColor)
                 textMyStickers.setTextColor(activeColor)
-                
+
                 menuBtn.setImageResource(R.drawable.ic_menu)
                 toolbarSubtitle.visibility = View.VISIBLE
                 toolbarSubtitle.text = getString(R.string.your_stickers)
                 categoryChipGroup.visibility = View.GONE
                 hideHomeSections()
-                btnCreateFab?.visibility = View.VISIBLE
             }
             else -> {
                 searchBarLayoutCached?.visibility = View.VISIBLE
@@ -2121,10 +2122,11 @@ Rules:
 
     private fun loadAdminNotificationsFromPB(deviceId: String, userId: String, email: String) {
         val container = profileContentContainer?.rootView?.findViewById<android.widget.LinearLayout>(R.id.adminMessagesContainer)
-        val rv = profileContentContainer?.rootView?.findViewById<RecyclerView>(R.id.rvAdminMessages)
         val badge = profileContentContainer?.rootView?.findViewById<TextView>(R.id.profileNotificationBadge)
         val toolbarBadge = findViewById<TextView>(R.id.toolbarNotificationBadge)
-        if (container == null || rv == null) return
+
+        // Always hide the inline admin messages list on profile — messages live in NotificationsActivity.
+        container?.visibility = View.GONE
 
         lifecycleScope.launch {
             try {
@@ -2135,6 +2137,23 @@ Rules:
                     badge?.text = unreadCount.coerceAtMost(99).toString()
                     toolbarBadge?.visibility = if (unreadCount > 0) View.VISIBLE else View.GONE
                     toolbarBadge?.text = unreadCount.coerceAtMost(99).toString()
+                }
+            } catch (e: Exception) {
+                Log.w("MainActivity", "Failed to load admin notifications: ${e.message}")
+            }
+        }
+    }
+
+    @Suppress("UNUSED_PARAMETER")
+    private fun loadAdminNotificationsLegacy(deviceId: String, userId: String, email: String) {
+        // Legacy adapter setup kept for reference — no longer used since notifications moved to NotificationsActivity.
+        val container = profileContentContainer?.rootView?.findViewById<android.widget.LinearLayout>(R.id.adminMessagesContainer)
+        val rv = profileContentContainer?.rootView?.findViewById<RecyclerView>(R.id.rvAdminMessages)
+        if (container == null || rv == null) return
+        lifecycleScope.launch {
+            try {
+                val messages = withContext(Dispatchers.IO) { fetchProfileNotifications(deviceId, userId, email) }
+                withContext(Dispatchers.Main) {
                     if (messages.isEmpty()) {
                         container.visibility = View.GONE
                         return@withContext
