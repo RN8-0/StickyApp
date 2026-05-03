@@ -782,4 +782,10 @@
     <string name="rejection_reason_label">Rejection Reason</string>
     <string name="my_published_packs">My Submitted Packs</string>
     <string name="no_submissions_yet">You haven\'t submitted any packs yet.</string>
+    <string name="publisher_title">Publisher Profile</string>
+    <string name="publisher_default">Publisher</string>
+    <string name="publisher_subtitle_loading">Loading packs…</string>
+    <string name="publisher_subtitle_count">%1$d sticker pack(s) published</string>
+    <string name="publisher_pack_downloads">%1$d downloads</string>
+    <string name="publisher_empty">This user has not published any packs yet.</string>
 </resources>

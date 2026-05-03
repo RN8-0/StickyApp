@@ -230,7 +230,9 @@ object StickerRepository {
                 priceTRY = json.optString("price_try"),
                 priceUSD = json.optString("price_usd"),
                 priceEUR = json.optString("price_eur"),
-                translations = translations
+                translations = translations,
+                source = json.optString("source"),
+                publisherUserId = json.optString("publisher_user_id").ifBlank { json.optString("publisher_email") }
             )
         } catch (e: Exception) {
             Log.e(TAG, "PocketBase pack parse error: ${e.message}")

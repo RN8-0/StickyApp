@@ -53,28 +53,31 @@ object PushTokenManager {
             return
         }
 
-        val records = PocketBaseHelper.listRecords(collection, filter = filter, perPage = 1)
-        if (records.isNotEmpty()) {
-            PocketBaseHelper.updateRecord(collection, records[0].getString("id"), payload)
-            return
-        }
-
         val deviceId = filter.substringAfter("'").substringBefore("'")
         val email = "$deviceId@device.sticly.local"
         val escapedEmail = email.replace("'", "\\'")
-        val existingByEmail = PocketBaseHelper.listRecords(collection, filter = "email='$escapedEmail'", perPage = 1)
-        if (existingByEmail.isNotEmpty()) {
+
+        // Search by BOTH device_id and email in one query — covers all duplicate scenarios
+        val combinedFilter = "device_id='$deviceId' || email='$escapedEmail'"
+        val records = PocketBaseHelper.listRecords(collection, filter = combinedFilter, perPage = 50)
+
+        if (records.isNotEmpty()) {
+            // Update the first one, delete extras to prevent duplicates
             val updatePayload = JSONObject(payload.toString()).apply {
                 put("device_id", deviceId)
-                put("email", email)
-                put("display_name", "Guest")
                 if (collection != "users") {
                     put("user_id", deviceId)
                     put("provider", "device")
                     put("platform", "android")
                 }
             }
-            PocketBaseHelper.updateRecord(collection, existingByEmail[0].getString("id"), updatePayload)
+            PocketBaseHelper.updateRecord(collection, records[0].getString("id"), updatePayload)
+            // Cleanup: delete all duplicates beyond the first
+            for (i in 1 until records.size) {
+                runCatching {
+                    PocketBaseHelper.deleteRecord(collection, records[i].getString("id"))
+                }.onFailure { Log.w(TAG, "Failed to delete duplicate record: ${it.message}") }
+            }
             return
         }
 
@@ -96,7 +99,13 @@ object PushTokenManager {
         try {
             PocketBaseHelper.createRecord(collection, createPayload)
         } catch (error: Exception) {
-            throw error
+            // Race condition: another call created it. Re-fetch and update.
+            val retry = PocketBaseHelper.listRecords(collection, filter = combinedFilter, perPage = 1)
+            if (retry.isNotEmpty()) {
+                PocketBaseHelper.updateRecord(collection, retry[0].getString("id"), payload)
+            } else {
+                throw error
+            }
         }
     }
 }

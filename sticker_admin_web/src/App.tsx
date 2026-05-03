@@ -1249,6 +1249,20 @@ function App() {
     }
   };
 
+  const deleteAllUsers = async () => {
+    if (!window.confirm('⚠️ DELETE ALL USERS from PocketBase? This will erase EVERY user profile record. Cannot be undone.')) return;
+    if (!window.confirm('Are you ABSOLUTELY sure? Type-confirmation skipped, click OK only if certain.')) return;
+    try {
+      const resp = await fetch(`${WORKER_URL}/api/users/all`, { method: 'DELETE' });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const data = await resp.json();
+      alert(`Done — ${data.deleted} user profile records deleted.`);
+      await fetchUsers();
+    } catch (err) {
+      alert('Error deleting all users: ' + err);
+    }
+  };
+
   const fetchUsers = async () => {
     setUsersLoading(true);
     try {
@@ -4095,6 +4109,15 @@ function App() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
+                    <button
+                      onClick={deleteAllUsers}
+                      disabled={usersLoading}
+                      className="flex items-center gap-2.5 px-5 py-2.5 bg-red-600/15 hover:bg-red-600/25 text-red-300 border border-red-600/30 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+                      title="DELETE ALL user_profile records from PocketBase"
+                    >
+                      <Trash2 size={14} />
+                      Delete All
+                    </button>
                     <button
                       onClick={cleanDuplicateUsers}
                       disabled={usersLoading}

@@ -145,4 +145,29 @@ router.patch('/:id', async (req, res) => {
   }
 });
 
+// DELETE /api/users/all - delete ALL user_profile records (DANGEROUS — admin use only)
+router.delete('/all', async (req, res) => {
+  try {
+    const ids = [];
+    let page = 1;
+    while (true) {
+      const r = await pbFetch(`/api/collections/user_profiles/records?perPage=200&page=${page}&fields=id`);
+      if (!r.ok) break;
+      const d = await r.json();
+      ids.push(...((d.items || []).map(x => x.id)));
+      if (page >= d.totalPages) break;
+      page++;
+    }
+    let deleted = 0;
+    for (const id of ids) {
+      const r = await pbFetch(`/api/collections/user_profiles/records/${id}`, { method: 'DELETE' });
+      if (r.ok || r.status === 204) deleted++;
+    }
+    res.json({ success: true, deleted, total: ids.length });
+  } catch (err) {
+    console.error('[Users DELETE all]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

@@ -38,7 +38,9 @@ data class Pack(
     val priceUSD: String = "",
     val priceEUR: String = "",
     // Dinamik çeviriler (Gemini tarafından üretilen name_xx alanları burada toplanır)
-    val translations: Map<String, String> = emptyMap()
+    val translations: Map<String, String> = emptyMap(),
+    @SerializedName("source") val source: String = "",
+    @SerializedName("publisher_user_id") val publisherUserId: String = ""
 )
 
 data class BillingSettings(

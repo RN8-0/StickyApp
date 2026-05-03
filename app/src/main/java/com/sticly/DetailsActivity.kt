@@ -814,7 +814,7 @@ class DetailsActivity : AppCompatActivity() {
         strip.visibility = View.VISIBLE
         name?.text = pack.pub
         updateFollowButton(followButton, pack.email)
-        val clickListener = View.OnClickListener { showPublisherProfileDialog(pack) }
+        val clickListener = View.OnClickListener { openPublisherProfile(pack) }
         strip.setOnClickListener(clickListener)
         avatar?.setOnClickListener(clickListener)
         followButton?.setOnClickListener {
@@ -859,6 +859,18 @@ class DetailsActivity : AppCompatActivity() {
         val following = isFollowingPublisher(email)
         button.text = if (following) "Following" else "Follow"
         button.alpha = if (following) 0.75f else 1f
+    }
+
+    private fun openPublisherProfile(pack: Pack) {
+        // Sticky publisher (default content) — don't open profile page
+        if (pack.pub.isBlank() || pack.pub.equals("Sticky", ignoreCase = true)) return
+        val intent = Intent(this, PublisherProfileActivity::class.java).apply {
+            putExtra(PublisherProfileActivity.EXTRA_PUBLISHER_ID,
+                pack.publisherUserId.ifBlank { pack.email })
+            putExtra(PublisherProfileActivity.EXTRA_PUBLISHER_NAME, pack.pub)
+            putExtra(PublisherProfileActivity.EXTRA_PUBLISHER_PHOTO, pack.publisherPhotoUrl)
+        }
+        startActivity(intent)
     }
 
     private fun showPublisherProfileDialog(pack: Pack) {
