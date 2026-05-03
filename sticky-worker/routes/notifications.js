@@ -55,18 +55,31 @@ async function pbFetch(path, opts = {}) {
 // GET /api/notifications/_debug — diagnostic endpoint
 router.get('/_debug', async (req, res) => {
   try {
-    const url = `/api/collections/notifications/records?perPage=1`;
-    const pbRes = await pbFetch(url);
-    const text = await pbRes.text();
-    let body;
-    try { body = JSON.parse(text); } catch { body = text; }
+    const userId = req.query.userId || req.query.deviceId;
+    const noFilterUrl = `/api/collections/notifications/records?perPage=1`;
+    const filterUrl = userId
+      ? `/api/collections/notifications/records?filter=${encodeURIComponent(`user_id='${String(userId).replace(/'/g, "\\'")}'`)}&perPage=5`
+      : null;
+
+    const r1 = await pbFetch(noFilterUrl);
+    const t1 = await r1.text();
+    let b1; try { b1 = JSON.parse(t1); } catch { b1 = t1; }
+
+    let filterResult = null;
+    if (filterUrl) {
+      const r2 = await pbFetch(filterUrl);
+      const t2 = await r2.text();
+      let b2; try { b2 = JSON.parse(t2); } catch { b2 = t2; }
+      filterResult = { url: PB_URL + filterUrl, status: r2.status, body: b2 };
+    }
+
     res.json({
       pb_url: PB_URL,
       pb_admin_email: PB_ADMIN_EMAIL,
       has_password: !!PB_ADMIN_PASS,
       token_length: pbToken ? pbToken.length : 0,
-      pb_response_status: pbRes.status,
-      pb_response_body: body,
+      no_filter: { status: r1.status, total: b1.totalItems },
+      filter_result: filterResult,
     });
   } catch (e) {
     res.json({ error: e.message, pb_url: PB_URL, has_password: !!PB_ADMIN_PASS });
