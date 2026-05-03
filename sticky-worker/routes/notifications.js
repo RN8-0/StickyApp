@@ -94,7 +94,7 @@ router.get('/', async (req, res) => {
     if (ids.length === 0) return res.json([]);
 
     const filter = ids.map(v => `user_id='${String(v).replace(/'/g, "\\'")}'`).join(' || ');
-    const url = `/api/collections/notifications/records?filter=${encodeURIComponent(filter)}&sort=-created&perPage=100`;
+    const url = `/api/collections/notifications/records?filter=${encodeURIComponent(filter)}&sort=-timestamp&perPage=100`;
     const pbRes = await pbFetch(url);
     if (!pbRes.ok) {
       const errText = await pbRes.text();
