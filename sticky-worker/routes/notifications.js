@@ -52,6 +52,27 @@ async function pbFetch(path, opts = {}) {
   return resp;
 }
 
+// GET /api/notifications/_debug — diagnostic endpoint
+router.get('/_debug', async (req, res) => {
+  try {
+    const url = `/api/collections/notifications/records?perPage=1`;
+    const pbRes = await pbFetch(url);
+    const text = await pbRes.text();
+    let body;
+    try { body = JSON.parse(text); } catch { body = text; }
+    res.json({
+      pb_url: PB_URL,
+      pb_admin_email: PB_ADMIN_EMAIL,
+      has_password: !!PB_ADMIN_PASS,
+      token_length: pbToken ? pbToken.length : 0,
+      pb_response_status: pbRes.status,
+      pb_response_body: body,
+    });
+  } catch (e) {
+    res.json({ error: e.message, pb_url: PB_URL, has_password: !!PB_ADMIN_PASS });
+  }
+});
+
 // GET /api/notifications?userId=...&email=...&deviceId=...
 router.get('/', async (req, res) => {
   try {
@@ -68,10 +89,10 @@ router.get('/', async (req, res) => {
       return res.json([]);
     }
     const data = await pbRes.json();
-    console.log('[Notifications GET]', { ids, total: data.totalItems, returned: (data.items || []).length });
+    console.log('[Notifications GET]', { ids, filter, url: PB_URL + url, total: data.totalItems, returned: (data.items || []).length });
     res.json(data.items || []);
   } catch (e) {
-    console.error('[Notifications GET] error:', e.message);
+    console.error('[Notifications GET] error:', e.message, e.stack);
     res.json([]);
   }
 });
