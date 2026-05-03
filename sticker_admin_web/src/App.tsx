@@ -4999,7 +4999,7 @@ function App() {
                         {/* Sticker Preview — click to enlarge */}
                         {sub.stickers && sub.stickers.length > 0 && (
                           <div className="mt-3 grid grid-cols-6 md:grid-cols-10 gap-2">
-                            {sub.stickers.slice(0, 20).map((s, i) => (
+                            {sub.stickers.slice(0, 20).map((s: any, i) => (
                               <button
                                 key={i}
                                 type="button"
