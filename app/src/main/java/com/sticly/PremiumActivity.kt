@@ -409,13 +409,15 @@ class PremiumActivity : AppCompatActivity() {
 
         activityScope.launch(Dispatchers.IO) {
             try {
-                val firestore = com.google.firebase.firestore.FirebaseFirestore.getInstance()
-                val doc = firestore.collection("users").document(docId).get().await()
+                val escaped = docId.replace("'", "\\'")
+                val filter = "uid='$escaped' || user_id='$escaped'"
+                val records = PocketBaseHelper.listRecords("user_profiles", filter = filter, perPage = 1)
 
-                if (doc.exists()) {
-                    val isPremium = doc.getBoolean("is_premium") ?: false
-                    val premiumType = doc.getString("premium_type") ?: "none"
-                    val premiumExpiry = doc.getLong("premium_expiry") ?: 0L
+                if (records.isNotEmpty()) {
+                    val profile = records.first()
+                    val isPremium = profile.optBoolean("is_premium", false)
+                    val premiumType = profile.optString("premium_type", "none")
+                    val premiumExpiry = profile.optLong("premium_expiry", 0L)
 
                     if (isPremium) {
                         PreferencesHelper.updateLocalPremiumStatus(this@PremiumActivity, true, premiumType, premiumExpiry)

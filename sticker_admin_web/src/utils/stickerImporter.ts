@@ -1,5 +1,4 @@
-import { storage } from '../firebase';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { WORKER_URL, uploadFile } from '../pocketbase';
 import { stickerProcessor } from './stickerProcessor';
 import type { Sticker } from '../types';
 
@@ -20,6 +19,7 @@ export interface StickerImportOptions {
     query: string;
     count: number;
     packId: string;
+    collection?: string;
     onProgress?: (progress: StickerImportProgress) => void;
 }
 
@@ -31,14 +31,14 @@ interface GifData {
 }
 
 async function fetchFromGiphy(query: string, count: number, contentType: 'gifs' | 'stickers' = 'stickers'): Promise<GifData[]> {
-    // Cloud Function proxy kullan (CORS bypass)
+    // Worker proxy kullan (CORS bypass)
     const endpoint = query === 'trending' ? 'trending' : 'search';
-    const proxyUrl = `https://us-central1-sticky-dcd20.cloudfunctions.net/giphyProxy?endpoint=${endpoint}&type=${contentType}&limit=${count}${query !== 'trending' ? `&query=${encodeURIComponent(query)}` : ''}`;
+    const proxyUrl = `${WORKER_URL.replace(/\/$/, '')}/api/giphy?endpoint=${endpoint}&type=${contentType}&limit=${count}${query !== 'trending' ? `&query=${encodeURIComponent(query)}` : ''}`;
 
     const response = await fetch(proxyUrl);
     
     if (!response.ok) {
-        throw new Error(`Cloud Function error: ${response.status}`);
+        throw new Error(`Worker proxy error: ${response.status}`);
     }
 
     const giphyData = await response.json();
@@ -110,7 +110,7 @@ function extractEmojisFromTitle(title: string | undefined): string[] | null {
 }
 
 export async function importStickers(options: StickerImportOptions): Promise<Sticker[]> {
-    const { source, contentType = 'stickers', query, count, packId, onProgress } = options;
+    const { source, contentType = 'stickers', query, count, packId, collection = 'stickers', onProgress } = options;
     
     const sourceName = source === 'giphy' ? 'Giphy' : 'Klipy';
     
@@ -166,11 +166,7 @@ export async function importStickers(options: StickerImportOptions): Promise<Sti
                 }
 
                 const fileName = `${source}_${gif.id}_${Date.now()}.webp`;
-                const storagePath = `stickers/${packId}/${fileName}`;
-                const storageRef = ref(storage, storagePath);
-                
-                await uploadBytes(storageRef, webpBlob);
-                const downloadURL = await getDownloadURL(storageRef);
+                const downloadURL = await uploadFile(collection, packId, 'images', webpBlob, fileName);
 
                 importedStickers.push({
                     image_file: fileName,

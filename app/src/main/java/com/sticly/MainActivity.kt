@@ -38,7 +38,6 @@ import com.google.android.material.chip.Chip
 import com.google.android.material.chip.ChipGroup
 import com.google.android.material.switchmaterial.SwitchMaterial
 import com.google.android.material.textfield.TextInputEditText
-import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.messaging.FirebaseMessaging
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 import kotlinx.coroutines.Dispatchers
@@ -65,7 +64,6 @@ import android.view.inputmethod.InputMethodManager
 import com.google.android.material.button.MaterialButton
 import androidx.cardview.widget.CardView
 import android.app.Activity
-import kotlinx.coroutines.tasks.await
 
 class MainActivity : AppCompatActivity() {
 
@@ -285,7 +283,7 @@ class MainActivity : AppCompatActivity() {
                         Toast.makeText(this, "Signed in as ${account.email}. Restoring purchases...", Toast.LENGTH_SHORT).show()
                         billingManager?.restorePurchases { restoreResult ->
                             val msg = when (restoreResult) {
-                                BillingManager.RestoreResult.SUCCESS -> { loadPacksFromFirebase(forceRefresh = true); R.string.restore_success }
+                                BillingManager.RestoreResult.SUCCESS -> { loadPacks(forceRefresh = true); R.string.restore_success }
                                 BillingManager.RestoreResult.NOT_FOUND -> R.string.restore_not_found
                                 BillingManager.RestoreResult.ERROR -> R.string.restore_error
                             }
@@ -313,8 +311,8 @@ class MainActivity : AppCompatActivity() {
                     if (authTask.isSuccessful) {
                         Toast.makeText(this, "✅ Signed in as ${account.email}", Toast.LENGTH_SHORT).show()
                         // Sync premium status from Firebase first, then update UI
-                        syncPremiumFromFirebase {
-                            aiRestoreCountFromFirebase()
+                        syncPremiumStatus {
+                            aiRestoreCount()
                             aiUpdateGenerateButton?.invoke()
                         }
                     } else {
@@ -376,7 +374,7 @@ class MainActivity : AppCompatActivity() {
 
         // Defer heavier UI setup to after first frame
         window.decorView.post {
-            aiRestoreCountFromFirebase()
+            aiRestoreCount()
 
             try {
                 billingManager = BillingManager(
@@ -402,7 +400,7 @@ class MainActivity : AppCompatActivity() {
             // Kullanıcı giriş yapmışsa Firebase ile senkronize et (e-posta dahil)
             val currentUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
             if (currentUser != null) {
-                PreferencesHelper.syncUserDataWithFirebase(this, currentUser.uid)
+                PreferencesHelper.syncUserData(this, currentUser.uid)
                 PreferencesHelper.startRealtimeSync(this, currentUser.uid)
             }
 
@@ -416,9 +414,9 @@ class MainActivity : AppCompatActivity() {
             // Premium promo artık indirme sonrası gösteriliyor (2. paketten sonra)
         }
 
-        // Start Firebase data loading (will update UI when complete)
+        // Start data loading (will update UI when complete)
         if (NetworkUtils.isOnline(this)) {
-            loadPacksFromFirebase()
+            loadPacks()
             observePacksUpdateFlow()
         }
         
@@ -719,8 +717,8 @@ class MainActivity : AppCompatActivity() {
             toolbarSubtitle.visibility = View.GONE
             aiContentContainer?.visibility = View.GONE
             profileContentContainer?.visibility = View.VISIBLE
-            // FAB (+) only here on Profile tab
-            btnCreateFab?.visibility = View.VISIBLE
+            // FAB (+) yalnızca My Stickers sekmesinde gösterilir
+            btnCreateFab?.visibility = View.GONE
 
             iconProfile.setColorFilter(activeColor)
             textProfile.setTextColor(activeColor)
@@ -773,8 +771,9 @@ class MainActivity : AppCompatActivity() {
                 hideHomeSections()
             }
             FilterType.CUSTOM -> {
-                // My Stickers: hide search bar (FAB now lives on Profile tab only)
+                // My Stickers: hide search bar, show FAB (+)
                 searchBarLayoutCached?.visibility = View.GONE
+                btnCreateFab?.visibility = View.VISIBLE
                 iconMyStickers.setColorFilter(activeColor)
                 textMyStickers.setTextColor(activeColor)
 
@@ -1082,7 +1081,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun aiRestoreCountFromFirebase() {
+    private fun aiRestoreCount() {
         lifecycleScope.launch(Dispatchers.IO) {
             try {
                 val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser ?: return@launch
@@ -1478,13 +1477,12 @@ Rules:
         withContext(Dispatchers.IO) {
             try {
                 val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser ?: return@withContext
-                val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
-                db.collection("users").document(user.uid).collection("ai_history")
-                    .add(mapOf(
-                        "prompt" to prompt,
-                        "created_at" to com.google.firebase.Timestamp.now(),
-                        "file_name" to java.io.File(filePath).name
-                    ))
+                PocketBaseHelper.createRecord("ai_history", org.json.JSONObject().apply {
+                    put("uid", user.uid)
+                    put("prompt", prompt)
+                    put("file_name", java.io.File(filePath).name)
+                    put("created_at", java.time.Instant.now().toString())
+                })
             } catch (_: Exception) { }
         }
 
@@ -1993,11 +1991,11 @@ Rules:
                         status = record.optString("status", "pending"),
                         stickerCount = record.optInt("sticker_count", stickers?.length() ?: 0),
                         rejectionReason = record.optString("rejection_reason").takeIf { it.isNotBlank() },
-                        createdAt = parsePocketBaseTimestamp(record.optString("created_at", record.optString("created", ""))),
+                        createdAt = record.optString("created_at", record.optString("created", "")).takeIf { it.isNotBlank() },
                         stickerUrls = stickerUrls,
                         storePackId = record.optString("sticker_pack_id").takeIf { it.isNotBlank() }
                     )
-                }.sortedByDescending { it.createdAt?.toDate() }
+                }.sortedByDescending { it.createdAt ?: "" }
                 val approvedCount = items.count { it.status == "approved" }
                 withContext(Dispatchers.Main) {
                     if (items.isEmpty()) {
@@ -2040,85 +2038,51 @@ Rules:
     }
 
     private fun loadUserSubmissions(userId: String, rv: RecyclerView?, emptyState: View?) {
-        val db = FirebaseFirestore.getInstance()
-        // Real-time listener — no orderBy to avoid requiring Firestore composite index
-        db.collection("user_submissions")
-            .whereEqualTo("user_id", userId)
-            .addSnapshotListener { snapshot, error ->
-                if (error != null) {
-                    Log.e("Profile", "Error loading submissions", error)
-                    rv?.visibility = View.GONE
-                    emptyState?.visibility = View.VISIBLE
-                    return@addSnapshotListener
-                }
-                if (snapshot == null || snapshot.isEmpty) {
-                    rv?.visibility = View.GONE
-                    emptyState?.visibility = View.VISIBLE
-                } else {
-                    rv?.visibility = View.VISIBLE
-                    emptyState?.visibility = View.GONE
-                    if (rv?.layoutManager == null) rv?.layoutManager = LinearLayoutManager(this@MainActivity)
-                    val items = snapshot.documents.mapNotNull { doc ->
-                        val name = doc.getString("pack_name") ?: return@mapNotNull null
-                        val status = doc.getString("status") ?: "pending"
-                        val stickerCount = (doc.get("stickers") as? List<*>)?.size ?: 0
-                        val rejectionReason = doc.getString("rejection_reason")
-                        val createdAt = doc.getTimestamp("created_at")
-                        val storePackId = doc.getString("sticker_pack_id")
-                        @Suppress("UNCHECKED_CAST")
-                        val stickerUrls = (doc.get("stickers") as? List<Map<String, Any>>)
-                            ?.mapNotNull { it["image_url"] as? String }
-                            ?.take(6) ?: emptyList()
-                        SubmissionItem(doc.id, name, status, stickerCount, rejectionReason, createdAt, stickerUrls, storePackId)
-                    }.sortedByDescending { it.createdAt?.toDate() }
-                    rv?.adapter = SubmissionAdapter(items)
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val escaped = userId.replace("'", "\\'")
+                val records = PocketBaseHelper.listRecords("user_submissions", filter = "user_id='$escaped'")
+                withContext(Dispatchers.Main) {
+                    if (records.isEmpty()) {
+                        rv?.visibility = View.GONE
+                        emptyState?.visibility = View.VISIBLE
+                    } else {
+                        rv?.visibility = View.VISIBLE
+                        emptyState?.visibility = View.GONE
+                        if (rv?.layoutManager == null) rv?.layoutManager = LinearLayoutManager(this@MainActivity)
+                        val items = records.mapNotNull { doc ->
+                            val name = doc.optString("pack_name").takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                            val status = doc.optString("status", "pending")
+                            val stickersArr = doc.optJSONArray("stickers")
+                            val stickerCount = stickersArr?.length() ?: 0
+                            val rejectionReason = doc.optString("rejection_reason").takeIf { it.isNotBlank() }
+                            val createdAt = doc.optString("created_at").takeIf { it.isNotBlank() }
+                            val storePackId = doc.optString("sticker_pack_id").takeIf { it.isNotBlank() }
+                            @Suppress("UNCHECKED_CAST")
+                            val stickerUrls = if (stickersArr != null) {
+                                (0 until stickersArr.length()).mapNotNull { i ->
+                                    stickersArr.optJSONObject(i)?.optString("image_url")
+                                }.take(6)
+                            } else emptyList()
+                            SubmissionItem(doc.optString("id"), name, status, stickerCount, rejectionReason, createdAt, stickerUrls, storePackId)
+                        }.sortedByDescending { it.createdAt ?: "" }
+                        rv?.adapter = SubmissionAdapter(items)
 
-                    // Update published count from approved submissions (no Firestore counter needed)
-                    val approvedCount = items.count { it.status == "approved" }
-                    runOnUiThread {
+                        val approvedCount = items.count { it.status == "approved" }
                         findViewById<TextView>(R.id.statPublished)?.text = approvedCount.toString()
                     }
                 }
-            }
-    }
-
-    private fun loadAdminNotifications(userId: String) {
-        val db = FirebaseFirestore.getInstance()
-        val container = profileContentContainer?.rootView?.findViewById<android.widget.LinearLayout>(R.id.adminMessagesContainer)
-        val rv = profileContentContainer?.rootView?.findViewById<RecyclerView>(R.id.rvAdminMessages)
-        if (container == null || rv == null) return
-
-        db.collection("user_notifications").document(userId).collection("notifications")
-            .addSnapshotListener { snapshot, _ ->
-                if (snapshot == null || snapshot.isEmpty) {
-                    container?.visibility = View.GONE
-                    return@addSnapshotListener
-                }
-                val msgs = snapshot.documents.mapNotNull { doc ->
-                    val title = doc.getString("title") ?: return@mapNotNull null
-                    val body  = doc.getString("message") ?: ""
-                    val ts    = doc.getTimestamp("created_at")
-                    Triple(title, body, ts)
-                }.sortedByDescending { it.third?.toDate() }
-
-                if (msgs.isEmpty()) { container?.visibility = View.GONE; return@addSnapshotListener }
-                container?.visibility = View.VISIBLE
-                if (rv?.layoutManager == null) rv?.layoutManager = LinearLayoutManager(this@MainActivity)
-                rv?.adapter = object : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
-                    override fun getItemCount() = msgs.size
-                    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int) =
-                        object : RecyclerView.ViewHolder(LayoutInflater.from(parent.context)
-                            .inflate(R.layout.item_admin_message, parent, false)) {}
-                    override fun onBindViewHolder(holder: RecyclerView.ViewHolder, pos: Int) {
-                        val (title, body, ts) = msgs[pos]
-                        holder.itemView.findViewById<TextView>(R.id.tvMsgTitle).text = title
-                        holder.itemView.findViewById<TextView>(R.id.tvMsgBody).text = body
-                        val dateStr = ts?.let { java.text.SimpleDateFormat("MMM d, yyyy", java.util.Locale.getDefault()).format(it.toDate()) } ?: ""
-                        holder.itemView.findViewById<TextView>(R.id.tvMsgDate).text = dateStr
-                    }
+            } catch (e: Exception) {
+                Log.e("Profile", "Error loading submissions", e)
+                withContext(Dispatchers.Main) {
+                    rv?.visibility = View.GONE
+                    emptyState?.visibility = View.VISIBLE
                 }
             }
+        }
     }
+
+    // Admin notifications now loaded via loadAdminNotificationsFromPB (PocketBase)
 
     private fun loadAdminNotificationsFromPB(deviceId: String, userId: String, email: String) {
         val container = profileContentContainer?.rootView?.findViewById<android.widget.LinearLayout>(R.id.adminMessagesContainer)
@@ -2267,7 +2231,7 @@ Rules:
         val status: String,
         val stickerCount: Int,
         val rejectionReason: String?,
-        val createdAt: com.google.firebase.Timestamp?,
+        val createdAt: String?,
         val stickerUrls: List<String> = emptyList(),
         val storePackId: String? = null,
         val downloadCount: Int = 0,
@@ -2309,9 +2273,12 @@ Rules:
             holder.tvStatus.setBackgroundColor(statusBg)
             holder.tvStatus.setTextColor(statusTextColor)
 
-            val dateStr = item.createdAt?.let {
-                java.text.SimpleDateFormat("MMM d, yyyy", java.util.Locale.getDefault())
-                    .format(it.toDate())
+            val dateStr = item.createdAt?.let { ts ->
+                try {
+                    val instant = java.time.Instant.parse(ts)
+                    java.text.SimpleDateFormat("MMM d, yyyy", java.util.Locale.getDefault())
+                        .format(java.util.Date.from(instant))
+                } catch (_: Exception) { "" }
             } ?: ""
             holder.tvMeta.text = "${item.stickerCount} stickers" + if (dateStr.isNotEmpty()) "  ·  $dateStr" else ""
 
@@ -2869,7 +2836,7 @@ Rules:
                     // If search returns no results, silently refresh from server once
                     if (currentSearchQuery.isNotEmpty() && ::adapter.isInitialized && adapter.getItems().isEmpty()) {
                         delay(300)
-                        loadPacksFromFirebase(forceRefresh = true)
+                        loadPacks(forceRefresh = true)
                     }
                 }
             }
@@ -2961,7 +2928,7 @@ Rules:
             && currentFilter != FilterType.AI && currentFilter != FilterType.PROFILE) {
             applyFilters()
         } else if (allPacks.isEmpty() && currentFilter != FilterType.AI && currentFilter != FilterType.PROFILE) {
-            loadPacksFromFirebase()
+            loadPacks()
         }
 
         // Only reload custom packs if user is specifically on CUSTOM tab
@@ -3040,7 +3007,7 @@ Rules:
                 if (NetworkUtils.isOnline(this@MainActivity)) {
                     dismiss()
                     noInternetDialog = null
-                    loadPacksFromFirebase(forceRefresh = true)
+                    loadPacks(forceRefresh = true)
                 } else {
                     Toast.makeText(this@MainActivity, R.string.still_no_internet, Toast.LENGTH_SHORT).show()
                 }
@@ -3055,7 +3022,7 @@ Rules:
         noInternetDialog = null
     }
 
-    private fun syncPremiumFromFirebase(onComplete: () -> Unit) {
+    private fun syncPremiumStatus(onComplete: () -> Unit) {
         val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
         val docId = user?.uid ?: PreferencesHelper.getDeviceId(this)
 
@@ -3098,7 +3065,7 @@ Rules:
         showContent()
     }
 
-    private fun loadPacksFromFirebase(forceRefresh: Boolean = false) {
+    private fun loadPacks(forceRefresh: Boolean = false) {
         lifecycleScope.launch {
             try {
                 // 1. Memory cache ANINDA göster
@@ -3171,7 +3138,7 @@ Rules:
     }
 
     private fun refreshPacks() {
-        loadPacksFromFirebase(forceRefresh = true)
+        loadPacks(forceRefresh = true)
     }
 
     enum class FilterType { ALL, INSTALLED, PREMIUM, FAVORITES, PURCHASED, CUSTOM, AI, PROFILE }
@@ -3529,7 +3496,7 @@ Rules:
             billingManager?.restorePurchases { result ->
                 val messageRes = when (result) {
                     BillingManager.RestoreResult.SUCCESS -> {
-                        loadPacksFromFirebase(forceRefresh = true)
+                        loadPacks(forceRefresh = true)
                         R.string.restore_success
                     }
                     BillingManager.RestoreResult.NOT_FOUND -> {

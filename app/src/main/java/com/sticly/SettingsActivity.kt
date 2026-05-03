@@ -289,7 +289,7 @@ class SettingsActivity : AppCompatActivity() {
                             Toast.makeText(this, R.string.restore_success, Toast.LENGTH_SHORT).show()
                             val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
                             if (user != null) {
-                                PreferencesHelper.syncUserDataWithFirebase(this, user.uid)
+                                PreferencesHelper.syncUserData(this, user.uid)
                             }
                             updatePremiumStatus()
                         } else {

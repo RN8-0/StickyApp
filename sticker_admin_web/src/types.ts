@@ -59,7 +59,7 @@ export interface StickerSuggestion {
 }
 
 export interface UserData {
-    id: string;           // Firestore document ID (uid)
+    id: string;           // PB record ID
     email: string;
     is_premium: boolean;
     premium_type: string; // "monthly" | "yearly" | "lifetime" | "none"

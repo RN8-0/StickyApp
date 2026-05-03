@@ -93,7 +93,8 @@ router.get('/', async (req, res) => {
     const ids = [userId, email, deviceId].filter(v => v && String(v).trim());
     if (ids.length === 0) return res.json([]);
 
-    const filter = ids.map(v => `user_id='${String(v).replace(/'/g, "\\'")}'`).join(' || ');
+    // Include broadcast notifications (user_id='broadcast') so all users see admin announcements
+    const filter = '(' + ids.map(v => `user_id='${String(v).replace(/'/g, "\\'")}'`).join(' || ') + ' || user_id=\'broadcast\')';
     const url = `/api/collections/notifications/records?filter=${encodeURIComponent(filter)}&sort=-timestamp&perPage=100`;
     const pbRes = await pbFetch(url);
     if (!pbRes.ok) {

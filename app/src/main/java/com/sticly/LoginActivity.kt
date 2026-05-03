@@ -155,7 +155,7 @@ class LoginActivity : AppCompatActivity() {
                     }
 
                     if (user != null) {
-                        PreferencesHelper.syncUserDataWithFirebase(this@LoginActivity, user.uid)
+                        PreferencesHelper.syncUserData(this@LoginActivity, user.uid)
                     } else {
                         val deviceId = PreferencesHelper.getDeviceId(this@LoginActivity)
                         PreferencesHelper.syncUserDataWithPocketBase(this@LoginActivity, deviceId)

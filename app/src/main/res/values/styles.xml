@@ -31,12 +31,12 @@
         <item name="colorSurface">@color/surface</item>
         <item name="android:textColorPrimary">@color/text_primary</item>
         <item name="android:textColorSecondary">@color/text_secondary</item>
-        <item name="shapeAppearanceOverlay">@style/RoundedDialogShape</item>
+        <item name="shapeAppearanceMediumComponent">@style/RoundedDialogShape</item>
         <item name="materialAlertDialogTitleTextStyle">@style/DialogTitleText</item>
         <item name="materialAlertDialogBodyTextStyle">@style/DialogBodyText</item>
     </style>
 
-    <style name="RoundedDialogShape">
+    <style name="RoundedDialogShape" parent="ShapeAppearance.MaterialComponents.MediumComponent">
         <item name="cornerFamily">rounded</item>
         <item name="cornerSize">28dp</item>
     </style>

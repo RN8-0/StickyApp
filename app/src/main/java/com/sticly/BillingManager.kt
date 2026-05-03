@@ -140,30 +140,35 @@ class BillingManager(
     }
 
     /**
-     * Google Play'den alinan gercek fiyatlari Firebase settings/billing'e yazar
+     * Google Play'den alinan gercek fiyatlari PocketBase settings/billing'e yazar
      */
     private fun writePricesToFirebase() {
         billingScope.launch(Dispatchers.IO) {
             try {
-                val firestore = com.google.firebase.firestore.FirebaseFirestore.getInstance()
-                val priceData = mutableMapOf<String, Any>()
+                val priceData = org.json.JSONObject()
 
                 premiumProductDetails.forEach { (productId, details) ->
                     val price = details.subscriptionOfferDetails?.firstOrNull()
                         ?.pricingPhases?.pricingPhaseList?.firstOrNull()?.formattedPrice
                     if (price != null) {
-                        priceData["google_play_price_$productId"] = price
+                        priceData.put("google_play_price_$productId", price)
                     }
                 }
 
-                if (priceData.isNotEmpty()) {
-                    priceData["google_play_prices_updated_at"] = com.google.firebase.firestore.FieldValue.serverTimestamp()
-                    firestore.collection("settings").document("billing")
-                        .set(priceData, com.google.firebase.firestore.SetOptions.merge())
-                    Log.d(TAG, "Wrote ${priceData.size} prices to Firebase")
+                if (priceData.length() > 0) {
+                    priceData.put("google_play_prices_updated_at", java.time.Instant.now().toString())
+
+                    val existing = PocketBaseHelper.listRecords("settings", filter = "key='billing'", perPage = 1)
+                    if (existing.isNotEmpty()) {
+                        PocketBaseHelper.updateRecord("settings", existing.first().getString("id"), priceData)
+                    } else {
+                        priceData.put("key", "billing")
+                        PocketBaseHelper.createRecord("settings", priceData)
+                    }
+                    Log.d(TAG, "Wrote ${priceData.length()} prices to PocketBase settings/billing")
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "Error writing prices to Firebase: ${e.message}")
+                Log.e(TAG, "Error writing prices to PocketBase: ${e.message}")
             }
         }
     }

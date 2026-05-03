@@ -1,9 +1,7 @@
 // Batch Pack Generator V3 - Robust batch sticker pack generation
 // Guarantees exact pack count & sticker count, quality filtering, category balancing
 
-import { storage } from '../firebase';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { pb } from '../pocketbase';
+import { pb, WORKER_URL, uploadFile } from '../pocketbase';
 import { stickerProcessor } from './stickerProcessor';
 import { deepseekService, autoDetectCategory } from './deepseekService';
 import type { Sticker } from '../types';
@@ -59,8 +57,8 @@ interface RawGif {
     qualityScore?: number;
 }
 
-const GIPHY_PROXY = 'https://us-central1-sticky-dcd20.cloudfunctions.net/giphyProxy';
-const KLIPY_PROXY = 'https://us-central1-sticky-dcd20.cloudfunctions.net/klipyProxy';
+const GIPHY_PROXY = `${WORKER_URL.replace(/\/$/, '')}/api/giphy`;
+const KLIPY_PROXY = `${WORKER_URL.replace(/\/$/, '')}/api/klipy`;
 const PAGE_SIZE = 50;
 
 async function fetchGiphyPage(query: string, limit: number, offset: number, contentType: 'gifs' | 'stickers', queryMatch: 'exact' | 'variation' = 'exact'): Promise<RawGif[]> {
@@ -362,11 +360,7 @@ async function processAndUploadSticker(
         onProgress?.(`Uploading: ${gif.title}`);
 
         const fileName = `batch_${gif.id}_${Date.now()}_${index}.webp`;
-        const storagePath = `stickers/${packId}/${fileName}`;
-        const storageRef = ref(storage, storagePath);
-
-        await uploadBytes(storageRef, webpBlob);
-        const downloadURL = await getDownloadURL(storageRef);
+        const downloadURL = await uploadFile('draft_stickers', packId, 'images', webpBlob, fileName);
 
         return {
             image_file: fileName,
@@ -395,10 +389,7 @@ async function createTrayImage(stickers: Sticker[], packId: string): Promise<{ t
         const trayBlob = await stickerProcessor.processTray(tempFile, () => { });
 
         const trayFileName = `tray_${Date.now()}.png`;
-        const trayStorageRef = ref(storage, `stickers/${packId}/${trayFileName}`);
-
-        await uploadBytes(trayStorageRef, trayBlob);
-        const trayUrl = await getDownloadURL(trayStorageRef);
+        const trayUrl = await uploadFile('draft_stickers', packId, 'tray_image', trayBlob, trayFileName);
 
         return { trayUrl, trayFile: trayFileName };
     } catch (error) {
@@ -609,7 +600,7 @@ export async function generateBatchPacks(config: BatchPackConfig): Promise<Compl
                 // === STEP 7: Auto-detect category ===
                 const category = autoDetectCategory(searchTerm);
 
-                // === STEP 8: Save to Firestore ===
+                // === STEP 8: Save to PocketBase ===
                 onProgress?.({
                     currentPack: i + 1,
                     totalPacks: totalTarget,

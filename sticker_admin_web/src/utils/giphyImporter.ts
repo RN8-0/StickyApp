@@ -1,6 +1,5 @@
 import { GiphyFetch } from '@giphy/js-fetch-api';
-import { storage } from '../firebase';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { uploadFile } from '../pocketbase';
 import { stickerProcessor } from './stickerProcessor';
 import type { Sticker } from '../types';
 
@@ -19,6 +18,7 @@ export interface GiphyImportOptions {
     category: string;
     count: number;
     packId: string;
+    collection?: string;
     onProgress?: (progress: GiphyImportProgress) => void;
 }
 
@@ -39,7 +39,7 @@ async function downloadGiphyGif(url: string): Promise<Blob> {
 export async function importStickersFromGiphy(
     options: GiphyImportOptions
 ): Promise<Sticker[]> {
-    const { category, count, packId, onProgress } = options;
+    const { category, count, packId, collection = 'stickers', onProgress } = options;
     
     onProgress?.({
         current: 0,
@@ -109,13 +109,9 @@ export async function importStickersFromGiphy(
                     continue;
                 }
 
-                // 4. Firebase Storage'a yükle
+                // 4. PocketBase'e yükle
                 const fileName = `giphy_${gif.id}_${Date.now()}.webp`;
-                const storagePath = `stickers/${packId}/${fileName}`;
-                const storageRef = ref(storage, storagePath);
-                
-                await uploadBytes(storageRef, webpBlob);
-                const downloadURL = await getDownloadURL(storageRef);
+                const downloadURL = await uploadFile(collection, packId, 'images', webpBlob, fileName);
 
                 // 5. Sticker objesini oluştur
                 importedStickers.push({

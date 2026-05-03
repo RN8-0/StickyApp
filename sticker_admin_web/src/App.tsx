@@ -1,13 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { storage } from './firebase';
-import { pb, signInWithGitHub, WORKER_URL, getFileUrl } from './pocketbase';
-import {
-  ref,
-  deleteObject,
-  uploadBytes,
-  getDownloadURL,
-} from 'firebase/storage';
+import { pb, signInWithGitHub, WORKER_URL, getFileUrl, uploadFile } from './pocketbase';
 
 interface AdminUser { email: string; }
 import {
@@ -624,16 +617,29 @@ function App() {
   };
 
   const notifySubmissionUser = async (submission: UserSubmission, title: string, body: string, data: Record<string, unknown> = {}) => {
+    // 1. Create in-app notification in PocketBase (hooks will trigger FCM via individual tokens)
     await createSubmissionNotification(submission, title, body, data)
       .catch((e) => console.warn('Submission notification skipped:', e));
+
+    // 2. Send push via worker /api/notify (both device-specific AND broadcast for reliability)
     const deviceId = submission.device_id;
-    if (deviceId) {
-      fetch(`${WORKER_URL}/api/notify`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, body, deviceId, data }),
-      }).catch((e) => console.warn('Push notification skipped:', e));
-    }
+    const notifyPayload: any = { title, body, data };
+    if (deviceId) notifyPayload.deviceId = deviceId;
+
+    // Use the full worker URL from PocketBase config for direct access
+    const workerBaseUrl = 'https://sticky-worker.46.225.95.201.sslip.io';
+    fetch(`${workerBaseUrl}/api/notify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(notifyPayload),
+    }).catch((e) => console.warn('Push notification (device) skipped:', e));
+
+    // Also send via nginx-proxied worker URL as fallback
+    fetch(`${WORKER_URL}/api/notify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(notifyPayload),
+    }).catch((e) => console.warn('Push notification (proxied) skipped:', e));
   };
 
   const handleEditSubmission = (submission: UserSubmission) => {
@@ -686,54 +692,68 @@ function App() {
 
   const handleApproveSubmission = async (submission: UserSubmission) => {
     if (!window.confirm(`Approve "${submission.pack_name}" and move to stickers collection?`)) return;
+    setIsProcessing(true);
     try {
-      const stickers: Sticker[] = (submission.stickers || []).map((s: any) => ({
-        image_file: s.image_file || s.name,
-        url: s.image_url || s.url || '',
-        emojis: s.emojis || ['⭐']
-      })).filter(s => s.url);
-      if (stickers.length < 9) {
+      const submissionStickers: any[] = submission.stickers || [];
+      if (submissionStickers.length < 9) {
         alert('A public pack must contain at least 9 stickers. Edit the submission or reject it with a reason.');
+        setIsProcessing(false);
         return;
       }
-      const packData = {
+
+      // 1. Build sticker list from existing PocketBase URLs (no re-upload needed)
+      const finalStickers: Sticker[] = submissionStickers
+        .filter((s: any) => s.image_url || s.url)
+        .map((s: any, i: number) => ({
+          image_file: s.image_file || s.name || `sticker_${i + 1}.webp`,
+          url: s.image_url || s.url || '',
+          emojis: s.emojis || ['⭐'],
+        }));
+
+      if (finalStickers.length < 9) {
+        alert('A public pack must contain at least 9 stickers with valid image URLs.');
+        setIsProcessing(false);
+        return;
+      }
+
+      // 2. Create the pack with all sticker data at once
+      const packData: any = {
         name: submission.pack_name,
-        name_en: submission.pack_name,
-        publisher: submission.publisher_name || submission.display_name,
-        publisher_name: submission.publisher_name || submission.display_name,
-        publisher_email: submission.user_email,
-        publisher_user_id: submission.user_id || submission.user_email,
-        publisher_photo_url: '',
+        publisher: submission.publisher_name || submission.display_name || 'Community Artist',
+        publisher_email: submission.user_email || '',
+        publisher_user_id: submission.user_id || submission.user_email || '',
         category: submission.category || 'other',
         is_premium: false,
         is_animated: false,
         download_count: 0,
         view_count: 0,
         favorite_count: 0,
-        sticker_count: stickers.length,
+        sticker_count: finalStickers.length,
         image_data_version: '1',
         is_active: true,
-        is_popular: false,
-        stickers,
-        tray_image_file: stickers[0]?.image_file || '',
-        tray_url: stickers[0]?.url || '',
-        source: 'user_submission',
-        privacy_policy_website: '',
-        license_agreement_website: '',
+        stickers: finalStickers,
+        tray_url: finalStickers[0]?.url || '',
         created_at: new Date().toISOString(),
       };
       const created = await pb.collection('stickers').create(packData);
+
+      // 3. Update submission status
       await pb.collection('user_submissions').update(submission.id, {
         status: 'approved',
         sticker_pack_id: created.id,
         processed_at: new Date().toISOString(),
       });
-      await notifySubmissionUser(submission, 'Sticker pack approved', `Your pack "${submission.pack_name}" was approved and is now live in Sticky.`, { type: 'submission_approved', sticker_pack_id: created.id });
+
+      // 5. Send notification to user
+      await notifySubmissionUser(submission, 'Pack approved! 🎉', `Your pack "${submission.pack_name}" has been approved and is now live in Sticky!`, { type: 'submission_approved', sticker_pack_id: created.id });
+
       setUserSubmissions(userSubmissions.map(s => s.id === submission.id ? { ...s, status: 'approved' as any, sticker_pack_id: created.id } : s));
       alert(`"${submission.pack_name}" approved and published!`);
-    } catch (e) {
+    } catch (e: any) {
       console.error('Approve error:', e);
-      alert('Failed to approve submission.');
+      alert('Failed to approve submission: ' + (e.message || 'Unknown error'));
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -873,6 +893,25 @@ function App() {
 
     setIsSendingNotif(true);
     try {
+      // 1. Save to PocketBase as broadcast (visible to all users in-app)
+      try {
+        await pb.collection('notifications').create({
+          title: notifTitle || 'Sticky',
+          body: notifBody,
+          message: notifBody,
+          user_id: 'broadcast',
+          from: 'admin',
+          read: false,
+          sent: false,
+          timestamp: new Date().toISOString(),
+          topic: 'broadcast',
+          image_url: notifImageUrl || '',
+        });
+      } catch (pbErr) {
+        console.warn('Broadcast PocketBase save skipped:', pbErr);
+      }
+
+      // 2. Send FCM push via worker (broadcast to all)
       const resp = await fetch(`${WORKER_URL}/api/notify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1730,11 +1769,7 @@ function App() {
         processedBlobs.push(processedBlob);
 
         const fileName = `${Date.now()}_${i}.webp`;
-        const storagePath = `stickers/${selectedPack.id}/${fileName}`;
-        const storageRef = ref(storage, storagePath);
-
-        await uploadBytes(storageRef, processedBlob);
-        const url = await getDownloadURL(storageRef);
+        const url = await uploadFile(collectionName, selectedPack.id, 'images', processedBlob, fileName);
 
         newStickers.push({
           image_file: fileName,
@@ -1757,12 +1792,6 @@ function App() {
         setUploadProgress({ current: uploadCount, total: uploadCount, message: 'Auto-selecting cover image...' });
 
         try {
-          // Eski kapak resmini sil (varsa)
-          if (selectedPack.tray_image_file) {
-            const oldTrayPath = `stickers/${selectedPack.id}/${selectedPack.tray_image_file}`;
-            try { await deleteObject(ref(storage, oldTrayPath)); } catch (e) { console.warn("Old tray delete fail", e); }
-          }
-
           // Random seçim
           const randomIdx = Math.floor(Math.random() * processedBlobs.length);
           const chosenBlob = processedBlobs[randomIdx];
@@ -1775,10 +1804,7 @@ function App() {
           });
 
           const trayFileName = `tray_${Date.now()}.png`;
-          const trayStorageRef = ref(storage, `stickers/${selectedPack.id}/${trayFileName}`);
-
-          await uploadBytes(trayStorageRef, trayProcessedBlob);
-          newTrayUrl = await getDownloadURL(trayStorageRef);
+          newTrayUrl = await uploadFile(collectionName, selectedPack.id, 'tray_image', trayProcessedBlob, trayFileName);
           newTrayFile = trayFileName;
 
         } catch (err) {
@@ -1844,12 +1870,14 @@ function App() {
     setImportProgress({ current: 0, total: importCount, message: 'Starting...' });
 
     try {
+      const collectionName = selectedPack.is_premium ? 'premium_stickers' : 'stickers';
       const importedStickers = await importStickers({
         source: 'giphy',
         contentType: importContentType,
         query: query,
         count: importCount,
         packId: selectedPack.id,
+        collection: collectionName,
         onProgress: (progress: StickerImportProgress) => {
           setImportProgress({
             current: progress.current,
@@ -1864,8 +1892,6 @@ function App() {
         alert('No stickers could be added. Please try a different search.');
         return;
       }
-
-      const collectionName = selectedPack.is_premium ? 'premium_stickers' : 'stickers';
 
       const newVersion = Date.now().toString();
       const updatedData = {
@@ -2012,24 +2038,10 @@ function App() {
         setUploadProgress(prev => prev ? { ...prev, message: `Kapak: ${p.message}` } : null);
       });
 
-      // Storage'a yükle
-      const trayFileName = `tray_${Date.now()}.png`;
-      const trayStorageRef = ref(storage, `stickers/${pack.id}/${trayFileName}`);
-
-      await uploadBytes(trayStorageRef, trayProcessedBlob);
-      const trayUrl = await getDownloadURL(trayStorageRef);
-
-      // Varsa eski kapağı sil
-      if (pack.tray_image_file) {
-        const oldTrayPath = `stickers/${pack.id}/${pack.tray_image_file}`;
-        try { await deleteObject(ref(storage, oldTrayPath)); } catch (e) {
-          // tray.png ise ve silinemezse normal, bazı eski paketlerde tray.png statik olabilir
-          console.warn("Old tray delete fail", e);
-        }
-      }
-
-      // Firestore güncelle
+      // PocketBase'e yükle
       const collectionName = pack.is_premium ? 'premium_stickers' : 'stickers';
+      const trayFileName = `tray_${Date.now()}.png`;
+      const trayUrl = await uploadFile(collectionName, pack.id, 'tray_image', trayProcessedBlob, trayFileName);
 
       const newVersion = Date.now().toString();
       const updateData = {
@@ -2066,18 +2078,10 @@ function App() {
       const stickersToDelete = (selectedPack.stickers || []).filter(s => selectedStickerIds.includes(s.url));
       const remainingStickers = (selectedPack.stickers || []).filter(s => !selectedStickerIds.includes(s.url));
 
-      // 1. Storage'dan dosyaları sil (Parallel)
-      await Promise.all(stickersToDelete.map(async (sticker) => {
-        const storagePath = `stickers/${selectedPack.id}/${sticker.image_file}`;
-        try {
-          await deleteObject(ref(storage, storagePath));
-          console.log('[DELETE] ✅ Storage dosyası silindi:', storagePath);
-        } catch (storageErr: any) {
-          console.error(`[DELETE] ❌ Storage silme hatası (${sticker.image_file}):`, storageErr.message);
-        }
-      }));
+      // Not: Files remain in PocketBase 'images' field (no single-file delete API for multi-file fields).
+      // Sticker metadata removed from the JSON array below.
 
-      // 2. PocketBase güncelle
+      // PocketBase güncelle
       const newVersion = Date.now().toString();
       const newStickerCount = remainingStickers.length;
       await pb.collection(collectionName).update(selectedPack.id, {
@@ -4105,7 +4109,7 @@ function App() {
                     </div>
                     <div>
                       <h1 className="text-2xl font-black text-white tracking-tight">Users</h1>
-                      <p className="text-xs text-textSec mt-0.5">Firebase user management and subscription control</p>
+                      <p className="text-xs text-textSec mt-0.5">PocketBase user management and subscription control</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -6372,7 +6376,7 @@ function App() {
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-2">
             <div className="w-1.5 h-1.5 bg-primary rounded-full shadow-sm shadow-primary/50" />
-            Firebase Connected: {selectedPack ? selectedPack.id : 'Ready'}
+            PB Connected: {selectedPack ? selectedPack.id : 'Ready'}
           </div>
           <div className="flex items-center gap-2">
             <div className="w-1.5 h-1.5 bg-accent rounded-full" />

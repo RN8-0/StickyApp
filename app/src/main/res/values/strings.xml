@@ -83,6 +83,14 @@
     <string name="clear_all">Clear All</string>
     <string name="clear_all_confirm">Clear all notifications?</string>
     <string name="notifications_cleared">Notifications cleared</string>
+    <string name="notifications_clear_error">Failed to clear notifications. Please try again.</string>
+    <string name="category_update">Update</string>
+    <string name="category_approval">Approval</string>
+    <string name="category_new_content">New Content</string>
+    <string name="category_premium">Premium</string>
+    <string name="category_promo">Promo</string>
+    <string name="category_pack">Sticker Pack</string>
+    <string name="category_general">General</string>
     <string name="notification_new_packs">New sticker packs</string>
     <string name="notification_new_packs_desc">Get notified when a new pack is added</string>
     <string name="notifications_saved">Settings saved</string>

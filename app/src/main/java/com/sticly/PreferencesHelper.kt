@@ -4,8 +4,6 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.os.Build
 import android.util.Log
-import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -508,24 +506,9 @@ object PreferencesHelper {
         return deviceId
     }
 
-    // Firebase'e satın alınan paket kaydet (orderId bazlı - restore için)
+    // PocketBase'e satin alinan paket kaydet (orderId bazli - restore icin)
     fun savePurchasedPackToFirebase(context: Context, packId: String, orderId: String? = null) {
-        // Method kept for compatibility but body can be disabled if we strictly want no pushes
-        // Keeping it for legacy purchase tracking if ever needed, but user said "remove purchased packs section".
-        // Use with caution. Since we disabled addPurchasedPack sync, this is the only other entry point.
-        // Let's disable it effectively or just leave it but ensure syncUserDataWithFirebase doesn't use it.
-        
-        /* 
-         * DISABLED TO COMPLY WITH USER REQUEST
-         */
-         /*
-        val firestore = FirebaseFirestore.getInstance()
-        val data = hashMapOf(
-            "pack_id" to packId,
-            "purchased_at" to com.google.firebase.firestore.FieldValue.serverTimestamp()
-        )
-        // ... (Disabled)
-        */
+        // No-op: Firestore removed
     }
 
     /**
@@ -535,99 +518,48 @@ object PreferencesHelper {
         // Legacy support
     }
 
-    // Firebase'den satın alınan paketleri geri yükle (orderId listesi ile)
+    // PocketBase'den satin alinan paketleri geri yukle (orderId listesi ile)
     fun restorePurchasedPacksFromFirebase(context: Context, orderIds: List<String>, onComplete: (Boolean) -> Unit) {
-         // This reads from "purchased_packs" collection which might still exist.
-         // Allowed to read? User said "tekli çıkartma satın alma özelliği kaldırıldı".
-         // Restore logic might still be valid for old users.
-         // I'll leave the read logic intact as it doesn't POLLUTE the "users" collection which was the complaint.
-         // The complaint was about "users" collection having "purchased_packs".
-         
         if (orderIds.isEmpty()) {
             onComplete(false)
             return
         }
 
-        val firestore = FirebaseFirestore.getInstance()
-        var restoredCount = 0
-        var processedCount = 0
-
-        for (orderId in orderIds) {
-            firestore.collection("purchased_packs")
-                .document(orderId)
-                .get()
-                .addOnSuccessListener { doc ->
-                    processedCount++
-                    if (doc.exists()) {
-                        val packId = doc.getString("pack_id")
-                        if (packId != null && !isPackPurchased(context, packId)) {
+        CoroutineScope(Dispatchers.IO).launch {
+            var restoredCount = 0
+            for (orderId in orderIds) {
+                try {
+                    val records = PocketBaseHelper.listRecords("purchased_packs", filter = "order_id='${orderId.replace("'", "\\'")}'", perPage = 1)
+                    if (records.isNotEmpty()) {
+                        val packId = records.first().optString("pack_id")
+                        if (packId.isNotBlank() && !isPackPurchased(context, packId)) {
                             addPurchasedPack(context, packId)
                             restoredCount++
                         }
                     }
-                    if (processedCount == orderIds.size) {
-                        onComplete(restoredCount > 0)
-                    }
-                }
-                .addOnFailureListener { e ->
-                    processedCount++
-                    if (processedCount == orderIds.size) {
-                        onComplete(restoredCount > 0)
-                    }
-                }
+                } catch (_: Exception) { }
+            }
+            withContext(Dispatchers.Main) {
+                onComplete(restoredCount > 0)
+            }
         }
     }
 
-    // Realtime Sync
-    private var snapshotListener: com.google.firebase.firestore.ListenerRegistration? = null
-
+    // Realtime sync: PocketBase primary, Firestore listener kaldirildi
     fun startRealtimeSync(context: Context, uid: String) {
-        if (snapshotListener != null) return
-
-        val firestore = FirebaseFirestore.getInstance()
-        snapshotListener = firestore.collection("users").document(uid)
-            .addSnapshotListener { snapshot, e ->
-                if (e != null) {
-                    Log.e(TAG, "Listen failed.", e)
-                    return@addSnapshotListener
-                }
-
-                if (snapshot != null && snapshot.exists()) {
-                    Log.d(TAG, "Realtime user update received")
-                    val remoteIsPremium = snapshot.getBoolean("is_premium") ?: false
-                    val type = snapshot.getString("premium_type") ?: "none"
-                    val expiry = snapshot.getLong("premium_expiry") ?: 0L
-
-                    // Update local prefs only (do not sync back to avoid loop)
-                    updateLocalPremiumStatus(context, remoteIsPremium, type, expiry)
-
-                    // Favorileri senkronize et - SADECE kullanıcı daha önce senkronize edilmişse
-                    // İlk kurulumda eski favorileri çekmeyi engelle
-                    val wasSyncedBefore = getPrefs(context).getBoolean(KEY_FAVORITES_SYNCED, false)
-                    if (wasSyncedBefore) {
-                        val remoteFavorites = snapshot.get("favorite_packs") as? List<String> ?: emptyList()
-                        if (remoteFavorites.isNotEmpty()) {
-                            val current = HashSet(getFavoritePacks(context))
-                            if (!current.containsAll(remoteFavorites)) {
-                                 current.addAll(remoteFavorites)
-                                 getPrefs(context).edit().putStringSet(KEY_FAVORITE_PACKS, current).commit()
-                            }
-                        }
-                    }
-                }
-            }
+        // Premium/favorites sync artık PocketBase user_profiles uzerinden yapiliyor
+        Log.d(TAG, "startRealtimeSync: PocketBase used, no Firestore listener needed")
     }
 
     /**
-     * İlk favori ekleme işleminde çağrılır - senkronizasyonu aktifleştirir
+     * Ilk favori ekleme isleminde cagrilir - senkronizasyonu aktiflestirir
      */
     fun markFavoritesSynced(context: Context) {
         getPrefs(context).edit().putBoolean(KEY_FAVORITES_SYNCED, true).apply()
     }
     
     fun stopRealtimeSync() {
-        snapshotListener?.remove()
-        snapshotListener = null
+        // No-op: Firestore listener removed
     }
 
     fun updateLocalPremiumStatus(context: Context, isPremium: Boolean, type: String, expiry: Long) {
@@ -711,9 +643,9 @@ object PreferencesHelper {
     }
 
     /**
-     * Eski çağrı noktaları için adı korunur; veri artık PocketBase user_profiles'a yazılır.
+     * Kullanici verilerini PocketBase'e senkronize eder
      */
-    fun syncUserDataWithFirebase(context: Context, uid: String) {
+    fun syncUserData(context: Context, uid: String) {
         val currentUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
         val userEmail = currentUser?.email ?: ""
         val displayName = currentUser?.displayName ?: ""

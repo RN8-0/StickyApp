@@ -4,10 +4,10 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.ImageView
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
-import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
@@ -33,7 +33,8 @@ class NotificationsActivity : AppCompatActivity() {
         val body: String,
         val read: Boolean,
         val dateLabel: String,
-        val timestamp: Long
+        val timestamp: Long,
+        val category: String = "general"
     )
 
     private val items = mutableListOf<Notif>()
@@ -66,6 +67,13 @@ class NotificationsActivity : AppCompatActivity() {
         rv = findViewById(R.id.rvNotifications)
         progress = findViewById(R.id.notificationsProgress)
         emptyView = findViewById(R.id.notificationsEmpty)
+
+        val swipeRefresh = findViewById<androidx.swiperefreshlayout.widget.SwipeRefreshLayout>(R.id.swipeRefresh)
+        swipeRefresh.setColorSchemeColors(ContextCompat.getColor(this, R.color.primary))
+        swipeRefresh.setOnRefreshListener {
+            loadNotifications()
+            swipeRefresh.isRefreshing = false
+        }
 
         rv.layoutManager = LinearLayoutManager(this)
         rv.adapter = Adapter()
@@ -112,15 +120,31 @@ class NotificationsActivity : AppCompatActivity() {
 
     private fun confirmClearAll() {
         if (items.isEmpty()) return
-        AlertDialog.Builder(this)
+        val dialog = android.app.AlertDialog.Builder(this)
+            .setTitle(getString(R.string.clear_all))
             .setMessage(getString(R.string.clear_all_confirm))
             .setPositiveButton(getString(R.string.clear_all)) { _, _ -> doClearAll() }
             .setNegativeButton(android.R.string.cancel, null)
-            .show()
+            .create()
+
+        dialog.setOnShowListener {
+            // Oval corners on dialog window
+            dialog.window?.setBackgroundDrawableResource(R.drawable.bg_dialog_rounded)
+
+            // Button colors
+            dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE)?.setTextColor(
+                ContextCompat.getColor(this, R.color.primary)
+            )
+            dialog.getButton(android.app.AlertDialog.BUTTON_NEGATIVE)?.setTextColor(
+                ContextCompat.getColor(this, R.color.text_secondary)
+            )
+        }
+        dialog.show()
     }
 
     private fun doClearAll() {
         lifecycleScope.launch {
+            var success = false
             withContext(Dispatchers.IO) {
                 runCatching {
                     val params = buildQueryParams(deviceId, userId, userEmail)
@@ -130,16 +154,30 @@ class NotificationsActivity : AppCompatActivity() {
                         conn.requestMethod = "DELETE"
                         conn.connectTimeout = 10_000
                         conn.readTimeout = 10_000
-                        conn.connect()
+                        val code = conn.responseCode
+                        if (code in 200..299) {
+                            val body = conn.inputStream.bufferedReader().readText()
+                            val json = org.json.JSONObject(body)
+                            success = json.optBoolean("success", false)
+                            android.util.Log.d("Notifications", "Delete response: $code, success=$success, deleted=${json.optInt("deleted", 0)}")
+                        } else {
+                            android.util.Log.e("Notifications", "Delete failed: $code")
+                        }
                         conn.disconnect()
                     }
+                }.onFailure { e ->
+                    android.util.Log.e("Notifications", "Delete error", e)
                 }
             }
-            items.clear()
-            rv.adapter?.notifyDataSetChanged()
-            emptyView.visibility = View.VISIBLE
-            rv.visibility = View.GONE
-            Toast.makeText(this@NotificationsActivity, getString(R.string.notifications_cleared), Toast.LENGTH_SHORT).show()
+            if (success) {
+                items.clear()
+                rv.adapter?.notifyDataSetChanged()
+                emptyView.visibility = View.VISIBLE
+                rv.visibility = View.GONE
+                Toast.makeText(this@NotificationsActivity, getString(R.string.notifications_cleared), Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(this@NotificationsActivity, getString(R.string.notifications_clear_error), Toast.LENGTH_SHORT).show()
+            }
         }
     }
 
@@ -164,10 +202,12 @@ class NotificationsActivity : AppCompatActivity() {
                 val record = arr.getJSONObject(i)
                 val timestamp = record.optString("timestamp", record.optString("created", ""))
                 val date = parseTimestamp(timestamp)
+                val body = record.optString("body", record.optString("message", ""))
+                val title = record.optString("title", getString(R.string.profile_notifications_title))
                 Notif(
                     id = record.optString("id"),
-                    title = record.optString("title", getString(R.string.profile_notifications_title)),
-                    body = record.optString("body", record.optString("message", "")),
+                    title = title,
+                    body = body,
                     read = record.optBoolean("read", false),
                     dateLabel = date?.let {
                         java.text.SimpleDateFormat(
@@ -175,7 +215,8 @@ class NotificationsActivity : AppCompatActivity() {
                             java.util.Locale.getDefault()
                         ).format(it)
                     }.orEmpty(),
-                    timestamp = date?.time ?: 0L
+                    timestamp = date?.time ?: 0L,
+                    category = detectCategory(title, body)
                 )
             }.sortedByDescending { it.timestamp }
         }.getOrElse { emptyList() }
@@ -215,11 +256,27 @@ class NotificationsActivity : AppCompatActivity() {
         }
     }
 
+    private fun detectCategory(title: String, body: String): String {
+        val text = "$title $body".lowercase()
+        return when {
+            text.contains("update") || text.contains("new version") || text.contains("güncelleme") -> "update"
+            text.contains("approve") || text.contains("approved") || text.contains("onay") -> "approval"
+            text.contains("submission") || text.contains("gönderi") || text.contains("pack") -> "pack"
+            text.contains("new") || text.contains("yeni") || text.contains("fresh") || text.contains("alert") -> "new_content"
+            text.contains("premium") || text.contains("pro") -> "premium"
+            text.contains("offer") || text.contains("deal") || text.contains("sale") || text.contains("indirim") -> "promo"
+            else -> "general"
+        }
+    }
+
     private inner class Adapter : RecyclerView.Adapter<Adapter.VH>() {
         inner class VH(view: View) : RecyclerView.ViewHolder(view) {
             val title: TextView = view.findViewById(R.id.tvMsgTitle)
             val body: TextView = view.findViewById(R.id.tvMsgBody)
             val date: TextView = view.findViewById(R.id.tvMsgDate)
+            val icon: ImageView = view.findViewById(R.id.ivMsgIcon)
+            val unreadDot: View = view.findViewById(R.id.vUnreadDot)
+            val category: TextView = view.findViewById(R.id.tvMsgCategory)
         }
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
@@ -233,7 +290,58 @@ class NotificationsActivity : AppCompatActivity() {
             holder.title.text = msg.title
             holder.body.text = msg.body
             holder.date.text = msg.dateLabel
-            holder.itemView.alpha = if (msg.read) 0.75f else 1f
+
+            // Read state
+            holder.itemView.alpha = if (msg.read) 0.65f else 1f
+            holder.unreadDot.visibility = if (msg.read) View.GONE else View.VISIBLE
+
+            // Category icon & label
+            val ctx = holder.itemView.context
+            when (msg.category) {
+                "update" -> {
+                    holder.icon.setImageResource(R.drawable.ic_menu)
+                    holder.icon.backgroundTintList = android.content.res.ColorStateList.valueOf(ContextCompat.getColor(ctx, R.color.primary_light))
+                    holder.icon.setColorFilter(ContextCompat.getColor(ctx, R.color.primary))
+                    holder.category.text = "Update"
+                }
+                "approval" -> {
+                    holder.icon.setImageResource(R.drawable.ic_notification)
+                    holder.icon.backgroundTintList = android.content.res.ColorStateList.valueOf(ContextCompat.getColor(ctx, R.color.success) and 0xFFFFFF or 0x20000000.toInt())
+                    holder.icon.setColorFilter(ContextCompat.getColor(ctx, R.color.success))
+                    holder.category.text = "Approval"
+                }
+                "new_content" -> {
+                    holder.icon.setImageResource(R.drawable.ic_menu)
+                    holder.icon.backgroundTintList = android.content.res.ColorStateList.valueOf(ContextCompat.getColor(ctx, R.color.warning) and 0xFFFFFF or 0x20000000.toInt())
+                    holder.icon.setColorFilter(ContextCompat.getColor(ctx, R.color.warning))
+                    holder.category.text = "New Content"
+                }
+                "premium" -> {
+                    holder.icon.setImageResource(R.drawable.ic_menu)
+                    holder.icon.backgroundTintList = android.content.res.ColorStateList.valueOf(ContextCompat.getColor(ctx, android.graphics.Color.parseColor("#FFD700")) and 0xFFFFFF or 0x25000000.toInt())
+                    holder.icon.setColorFilter(android.graphics.Color.parseColor("#DAA520"))
+                    holder.category.text = "Premium"
+                }
+                "promo" -> {
+                    holder.icon.setImageResource(R.drawable.ic_menu)
+                    holder.icon.backgroundTintList = android.content.res.ColorStateList.valueOf(ContextCompat.getColor(ctx, R.color.danger) and 0xFFFFFF or 0x20000000.toInt())
+                    holder.icon.setColorFilter(ContextCompat.getColor(ctx, R.color.danger))
+                    holder.category.text = "Promo"
+                }
+                "pack" -> {
+                    holder.icon.setImageResource(R.drawable.ic_menu)
+                    holder.icon.backgroundTintList = android.content.res.ColorStateList.valueOf(ContextCompat.getColor(ctx, R.color.primary_light))
+                    holder.icon.setColorFilter(ContextCompat.getColor(ctx, R.color.primary))
+                    holder.category.text = "Sticker Pack"
+                }
+                else -> {
+                    holder.icon.setImageResource(R.drawable.ic_notification)
+                    holder.icon.backgroundTintList = android.content.res.ColorStateList.valueOf(ContextCompat.getColor(ctx, R.color.chip_bg))
+                    holder.icon.setColorFilter(ContextCompat.getColor(ctx, R.color.text_secondary))
+                    holder.category.text = "General"
+                }
+            }
+            holder.category.visibility = View.VISIBLE
         }
 
         override fun getItemCount(): Int = items.size

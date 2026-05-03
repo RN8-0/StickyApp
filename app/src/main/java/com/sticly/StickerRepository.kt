@@ -5,28 +5,22 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.os.Build
 import android.util.Log
-import com.google.firebase.firestore.FirebaseFirestore
 import com.google.gson.Gson
 import kotlinx.coroutines.*
-import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import java.io.ByteArrayOutputStream
 import java.io.File
 
 /**
- * PocketBase'den sticker paketlerini yükleyen repository
+ * PocketBase'den sticker paketlerini yukleyen repository
  */
 object StickerRepository {
 
     private const val TAG = "StickerRepository"
     private const val STORAGE_PATH = "stickers"
-    private const val CONTENTS_FILE = "contents.json"
     private const val CACHE_DIR = "sticker_cache"
-    private const val STICKY_IMAGES_BASE = "https://sticky-images.46.225.95.201.sslip.io/stickers"
 
-    private val firestore = FirebaseFirestore.getInstance()
-    
     // Repository scope for long-running observers and background tasks
     private val repositoryScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     
@@ -39,15 +33,8 @@ object StickerRepository {
     private val _packsUpdateFlow = MutableSharedFlow<List<Pack>>(replay = 1)
     val packsUpdateFlow = _packsUpdateFlow.asSharedFlow()
 
-    private var cachedFirestorePacks: List<Pack>? = null
-    private var lastCacheTime: Long = 0
-    private const val CACHE_EXPIRY = 1 * 60 * 1000 // 1 minute
-    
-    private var stickersListener: com.google.firebase.firestore.ListenerRegistration? = null
-    private var premiumStickersListener: com.google.firebase.firestore.ListenerRegistration? = null
-
     /**
-     * Tüm paketleri yükler (Firebase + Özel + Lokal Assets)
+     * Tum paketleri yukler (PocketBase + Ozel + Lokal Assets)
      */
     suspend fun loadPacks(context: Context, forceRefresh: Boolean = false): List<Pack> = withContext(Dispatchers.IO) {
         // Helper: Paketleri karışık sırala (ID hash'ine göre tutarlı sıralama)
@@ -67,27 +54,14 @@ object StickerRepository {
             allPacks.addAll(customPacks)
             Log.d(TAG, "Loaded ${customPacks.size} custom packs")
 
-            // 2. Paketleri yükle: Önce PocketBase, yoksa Firestore, yoksa Storage
+            // 2. Paketleri PocketBase'den yukle
             val packsFromPocketBase = loadPacksFromPocketBase()
             if (packsFromPocketBase.isNotEmpty()) {
                 Log.d(TAG, "Loaded ${packsFromPocketBase.size} packs from PocketBase")
                 allPacks.addAll(packsFromPocketBase)
-            } else {
-                val packsFromFirestore = loadPacksFromFirestore(forceRefresh)
-                if (packsFromFirestore.isNotEmpty()) {
-                    Log.d(TAG, "Loaded ${packsFromFirestore.size} packs from Firestore")
-                    allPacks.addAll(packsFromFirestore)
-                } else {
-                    // İkisi de boşsa Storage'dan contents.json'u çek
-                    val packsFromStorage = loadPacksFromStorage(context)
-                    if (packsFromStorage.isNotEmpty()) {
-                        Log.d(TAG, "Loaded ${packsFromStorage.size} packs from Storage")
-                        allPacks.addAll(packsFromStorage)
-                    }
-                }
             }
 
-            // 3. HER ZAMAN lokal asset paketlerini ekle (Firebase ile çakışmayanları)
+            // 3. HER ZAMAN lokal asset paketlerini ekle
             val existingIds = allPacks.map { it.id }.toSet()
             val localPacks = try {
                 Loader.load(context)?.filter { it.id !in existingIds } ?: emptyList()
@@ -241,18 +215,14 @@ object StickerRepository {
     }
 
     /**
-     * Firestore gerçek zamanlı takip - devre dışı (Firestore kaldırıldı, PocketBase kullanılıyor)
+     * Gercek zamanli takip - PocketBase kullaniyor, listener gerekmez
      */
     fun startObservingPacks(context: Context) {
-        // Firestore kaldırıldı - gereksiz listener başlatma
-        Log.d(TAG, "startObservingPacks: Firestore kaldırıldığından listener başlatılmıyor")
+        Log.d(TAG, "startObservingPacks: PocketBase primary, no Firestore listener needed")
     }
 
     fun stopObservingPacks() {
-        stickersListener?.remove()
-        premiumStickersListener?.remove()
-        stickersListener = null
-        premiumStickersListener = null
+        // No-op: Firestore listeners removed
     }
 
     // Debounce real-time refresh to avoid cascading reloads
@@ -279,162 +249,6 @@ object StickerRepository {
         }
     }
 
-    /**
-     * Firestore'dan paket listesini yükler
-     */
-    private suspend fun loadPacksFromFirestore(forceRefresh: Boolean = false): List<Pack> {
-        // Return cache if valid
-        if (!forceRefresh && cachedFirestorePacks != null && System.currentTimeMillis() - lastCacheTime < CACHE_EXPIRY) {
-            Log.d(TAG, "Returning cached Firestore packs (${cachedFirestorePacks?.size})")
-            return cachedFirestorePacks!!
-        }
-
-        val allPacks = mutableListOf<Pack>()
-        // İlk açılışta hızlı yüklenme için cache kullan, forceRefresh varsa sunucudan çek
-        val source = if (forceRefresh) com.google.firebase.firestore.Source.SERVER else com.google.firebase.firestore.Source.DEFAULT
-
-        try {
-            Log.d(TAG, "Loading packs from Firestore using source: ${source.name}...")
-
-            // Normal ve Premium paketleri PARALEL yükle (2x hızlı)
-            val stickersDeferred = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).async {
-                try {
-                    val snapshot = firestore.collection("stickers").get(source).await()
-                    Log.d(TAG, "Stickers collection: ${snapshot.documents.size} documents")
-                    snapshot.documents.mapNotNull { doc -> parsePackDocument(doc, isPremiumOverride = false) }
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error loading stickers collection: ${e.message}")
-                    emptyList()
-                }
-            }
-            val premiumDeferred = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).async {
-                try {
-                    val snapshot = firestore.collection("premium_stickers").get(source).await()
-                    Log.d(TAG, "Premium_stickers collection: ${snapshot.documents.size} documents")
-                    snapshot.documents.mapNotNull { doc -> parsePackDocument(doc, isPremiumOverride = true) }
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error loading premium_stickers collection: ${e.message}")
-                    emptyList()
-                }
-            }
-
-            allPacks.addAll(stickersDeferred.await())
-            allPacks.addAll(premiumDeferred.await())
-
-            // Eski koleksiyonu da kontrol et (geriye uyumluluk)
-            if (allPacks.isEmpty()) {
-                try {
-                    val oldSnapshot = firestore.collection("sticker_packs").get(source).await()
-                    Log.d(TAG, "Old sticker_packs collection: ${oldSnapshot.documents.size} documents")
-                    oldSnapshot.documents.mapNotNull { doc ->
-                        parsePackDocument(doc, isPremiumOverride = null)
-                    }.let { allPacks.addAll(it) }
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error loading sticker_packs collection: ${e.message}")
-                }
-            }
-
-            Log.d(TAG, "Total packs loaded: ${allPacks.size}")
-            
-            // Update cache
-            if (allPacks.isNotEmpty()) {
-                cachedFirestorePacks = allPacks
-                lastCacheTime = System.currentTimeMillis()
-            }
-
-        } catch (e: Exception) {
-            Log.e(TAG, "Error loading from Firestore: ${e.message}")
-        }
-
-        return allPacks
-    }
-
-    private fun parsePackDocument(doc: com.google.firebase.firestore.DocumentSnapshot, isPremiumOverride: Boolean?): Pack? {
-        return try {
-            val data = doc.data ?: return null
-            val stickers = parseStickers(data["stickers"])
-            val isPremium = isPremiumOverride ?: (data["isPremium"] as? Boolean ?: false)
-
-            val isActive = data["is_active"] as? Boolean ?: true
-            Log.d(TAG, "Pack ${doc.id}: ${stickers.size} stickers, isPremium: $isPremium, isActive: $isActive")
-            if (stickers.isNotEmpty()) {
-                Log.d(TAG, "First sticker URL: ${stickers.first().url.take(80)}...")
-            }
-
-            // WhatsApp zorunlu alanlar için varsayılan değerler
-            val publisher = (data["publisher"] as? String).takeIf { !it.isNullOrBlank() } ?: "Sticky"
-            val email = (data["publisher_email"] as? String).takeIf { !it.isNullOrBlank() } ?: "contact@sticky.com"
-            val privacy = (data["privacy_policy_website"] as? String).takeIf { !it.isNullOrBlank() } ?: "https://sticky.com/privacy"
-
-            val translations = data.filterKeys { it.startsWith("name_") }
-                .mapValues { it.value?.toString() ?: "" }
-                .mapKeys { it.key.substringAfter("name_") }
-
-            Pack(
-                id = doc.id,
-                name = data["name"] as? String ?: doc.id.replace("_", " ").replaceFirstChar { it.uppercase() },
-                nameTr = data["name_tr"] as? String ?: "",
-                nameZh = data["name_zh"] as? String ?: "",
-                nameEs = data["name_es"] as? String ?: "",
-                nameAr = data["name_ar"] as? String ?: "",
-                nameHi = data["name_hi"] as? String ?: "",
-                namePt = data["name_pt"] as? String ?: "",
-                translations = translations,
-                pub = publisher,
-                email = email,
-                privacy = privacy,
-                license = data["license_agreement_website"] as? String ?: "",
-                version = data["image_data_version"] as? String ?: "1",
-                avoidCache = data["avoid_cache"] as? Boolean ?: false,
-                tray = data["tray_image_file"] as? String ?: "tray.webp",
-                trayUrl = data["tray_url"] as? String ?: "",
-                stickers = stickers,
-                isPremium = isPremium,
-                productId = data["product_id"] as? String ?: "",
-                storagePath = "stickers", // Tüm dosyalar tek klasörde
-                createdAt = when (val time = data["created_at"]) {
-                    is com.google.firebase.Timestamp -> {
-                        val sdf = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.getDefault())
-                        sdf.format(time.toDate())
-                    }
-                    is String -> time
-                    else -> ""
-                },
-                category = data["category"] as? String ?: "",
-                downloadCount = (data["download_count"] as? Long)?.toInt() ?: 0,
-                fakeDownloadBase = (data["fake_download_base"] as? Long)?.toInt() ?: 0,
-                viewCount = (data["view_count"] as? Long)?.toInt() ?: 0,
-                favoriteCount = (data["favorite_count"] as? Long)?.toInt() ?: 0,
-                isAnimated = (data["is_animated"] as? Boolean) ?: (data["animated_sticker_pack"] as? Boolean) ?: false,
-                isActive = data["is_active"] as? Boolean ?: true,
-                isPopular = data["is_popular"] as? Boolean ?: false,
-                priceTRY = data["price_try"] as? String ?: "",
-                priceUSD = data["price_usd"] as? String ?: "",
-                priceEUR = data["price_eur"] as? String ?: ""
-            )
-        } catch (e: Exception) {
-            Log.e(TAG, "Error parsing pack ${doc.id}: ${e.message}")
-            null
-        }
-    }
-
-    @Suppress("UNCHECKED_CAST")
-    private fun parseStickers(data: Any?): List<Sticker> {
-        if (data == null) return emptyList()
-        return try {
-            (data as? List<*>)?.mapNotNull { item ->
-                val stickerData = item as? Map<String, Any> ?: return@mapNotNull null
-                Sticker(
-                    file = stickerData["image_file"] as? String ?: "",
-                    emojis = (stickerData["emojis"] as? List<String>),
-                    url = stickerData["url"] as? String ?: ""
-                )
-            } ?: emptyList()
-        } catch (e: Exception) {
-            emptyList()
-        }
-    }
-
     private fun normalizeStickerUrl(url: String, packId: String, fileName: String, collection: String = "stickers"): String {
         val trimmed = url.trim()
         // Already a CDN or PocketBase URL → use as-is
@@ -450,12 +264,6 @@ object StickerRepository {
         // Build PocketBase file API URL as default
         return "${PocketBaseHelper.PB_URL}/api/files/$collection/$packId/$fileName"
     }
-
-    /**
-     * Legacy: Previously loaded from Firebase Storage. Now returns empty (PocketBase is primary).
-     */
-    @Suppress("UnusedPrivateMember")
-    private suspend fun loadPacksFromStorage(context: Context): List<Pack> = emptyList()
 
     suspend fun getDownloadUrl(path: String): String {
         return "${PocketBaseHelper.PB_URL}/api/files/$path"
@@ -736,8 +544,8 @@ object StickerRepository {
     }
 
     /**
-     * Cache'deki eski/geçersiz dosyaları temizler
-     * Sadece Firestore'daki paketlere ait olmayan cache klasörlerini siler
+     * Cache'deki eski/gecersiz dosyalari temizler
+     * Sadece PocketBase'deki paketlere ait olmayan cache klasorlerini siler
      */
     fun cleanupInvalidCache(context: Context, validPackIds: Set<String>) {
         try {
@@ -891,19 +699,18 @@ object StickerRepository {
     }
 
     /**
-     * Firestore'dan genel ödeme ayarlarını (fiyatlar vb.) yükler
+     * PocketBase'den genel odeme ayarlarini (fiyatlar vb.) yukler
      */
     suspend fun getGlobalBillingSettings(): BillingSettings = withContext(Dispatchers.IO) {
         try {
-            val doc = firestore.collection("settings").document("billing")
-                .get(com.google.firebase.firestore.Source.SERVER).await()
-
-            if (doc.exists()) {
+            val records = PocketBaseHelper.listRecords("settings", filter = "key='billing'", perPage = 1)
+            if (records.isNotEmpty()) {
+                val doc = records.first()
                 BillingSettings(
-                    priceTRY = doc.getString("price_try") ?: "69,99 TL",
-                    priceUSD = doc.getString("price_usd") ?: "$4.99",
-                    priceEUR = doc.getString("price_eur") ?: "€4.49",
-                    updatedAt = doc.getTimestamp("updated_at")?.toDate()?.toString() ?: ""
+                    priceTRY = doc.optString("price_try", "69,99 TL"),
+                    priceUSD = doc.optString("price_usd", "$4.99"),
+                    priceEUR = doc.optString("price_eur", "€4.49"),
+                    updatedAt = doc.optString("updated_at", "")
                 )
             } else {
                 BillingSettings()
@@ -915,39 +722,41 @@ object StickerRepository {
     }
 
     /**
-     * Firestore'dan genisletilmis fiyatlandirma konfigurasyonunu yukler
-     * settings/billing dokumanindaki plans arrayini ve kampanya bilgisini okur
+     * PocketBase'den genisletilmis fiyatlandirma konfigurasyonunu yukler
      */
     @Suppress("UNCHECKED_CAST")
     suspend fun getBillingConfig(): BillingConfig = withContext(Dispatchers.IO) {
         try {
-            val doc = firestore.collection("settings").document("billing")
-                .get(com.google.firebase.firestore.Source.SERVER).await()
+            val records = PocketBaseHelper.listRecords("settings", filter = "key='billing'", perPage = 1)
+            if (records.isNotEmpty()) {
+                val doc = records.first()
 
-            if (doc.exists()) {
-                val data = doc.data ?: return@withContext BillingConfig()
-
-                val plansRaw = data["plans"] as? List<Map<String, Any>> ?: emptyList()
-                val plans = plansRaw.map { planMap ->
-                    BillingPlan(
-                        id = planMap["id"] as? String ?: "",
-                        name = planMap["name"] as? String ?: "",
-                        type = planMap["type"] as? String ?: "subscription",
-                        priceTry = planMap["price_try"] as? String ?: "",
-                        priceUsd = planMap["price_usd"] as? String ?: "",
-                        priceEur = planMap["price_eur"] as? String ?: "",
-                        isActive = planMap["is_active"] as? Boolean ?: true,
-                        trialDays = (planMap["trial_days"] as? Long)?.toInt() ?: 0,
-                        discountPercentage = (planMap["discount_percentage"] as? Long)?.toInt() ?: 0
-                    )
+                val plansRaw = doc.optJSONArray("plans")
+                val plans = if (plansRaw != null) {
+                    (0 until plansRaw.length()).map { i ->
+                        val planMap = plansRaw.optJSONObject(i) ?: return@map BillingPlan()
+                        BillingPlan(
+                            id = planMap.optString("id", ""),
+                            name = planMap.optString("name", ""),
+                            type = planMap.optString("type", "subscription"),
+                            priceTry = planMap.optString("price_try", ""),
+                            priceUsd = planMap.optString("price_usd", ""),
+                            priceEur = planMap.optString("price_eur", ""),
+                            isActive = planMap.optBoolean("is_active", true),
+                            trialDays = planMap.optInt("trial_days", 0),
+                            discountPercentage = planMap.optInt("discount_percentage", 0)
+                        )
+                    }
+                } else {
+                    emptyList()
                 }
 
                 BillingConfig(
                     plans = plans,
-                    campaignActive = data["campaign_active"] as? Boolean ?: false,
-                    campaignName = data["campaign_name"] as? String ?: "",
-                    campaignEndDate = data["campaign_end_date"] as? String ?: "",
-                    updatedAt = doc.getTimestamp("updated_at")?.toDate()?.toString() ?: ""
+                    campaignActive = doc.optBoolean("campaign_active", false),
+                    campaignName = doc.optString("campaign_name", ""),
+                    campaignEndDate = doc.optString("campaign_end_date", ""),
+                    updatedAt = doc.optString("updated_at", "")
                 )
             } else {
                 BillingConfig()

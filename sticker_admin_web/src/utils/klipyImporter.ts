@@ -2,6 +2,8 @@
 // Docs: https://docs.klipy.com/stickers-api
 // Migration: https://docs.klipy.com/migrate-from-tenor
 
+import { WORKER_URL } from '../pocketbase';
+
 const KLIPY_API_KEY = 'YRtbKLSbrPqeEcPPpIpdoCqlLqZ9LlfbwQhXefbv3FQucQTjREFmkVLExf9JnI8k';
 
 interface KlipySticker {
@@ -16,15 +18,15 @@ interface KlipySticker {
  * Endpoint: GET /v1/stickers/search
  */
 export async function searchKlipyStickers(query: string, count: number = 20): Promise<KlipySticker[]> {
-    // Cloud Function proxy kullan (CORS bypass)
-    const proxyUrl = `https://us-central1-sticky-dcd20.cloudfunctions.net/klipyProxy?endpoint=search&query=${encodeURIComponent(query)}&limit=${count}`;
+    // Worker proxy kullan (CORS bypass)
+    const proxyUrl = `${WORKER_URL.replace(/\/$/, '')}/api/klipy?endpoint=search&query=${encodeURIComponent(query)}&limit=${count}`;
     
-    console.log('[Klipy] Fetching via Cloud Function:', proxyUrl);
+    console.log('[Klipy] Fetching via Worker:', proxyUrl);
     
     const response = await fetch(proxyUrl);
     
     if (!response.ok) {
-        throw new Error(`Klipy Cloud Function hatası (${response.status}): ${response.statusText}`);
+        throw new Error(`Klipy Worker error (${response.status}): ${response.statusText}`);
     }
 
     const data = await response.json();
@@ -46,15 +48,15 @@ export async function searchKlipyStickers(query: string, count: number = 20): Pr
  * Endpoint: GET /v1/stickers/trending
  */
 export async function trendingKlipyStickers(count: number = 20): Promise<KlipySticker[]> {
-    // Cloud Function proxy kullan (CORS bypass)
-    const proxyUrl = `https://us-central1-sticky-dcd20.cloudfunctions.net/klipyProxy?endpoint=trending&limit=${count}`;
+    // Worker proxy kullan (CORS bypass)
+    const proxyUrl = `${WORKER_URL.replace(/\/$/, '')}/api/klipy?endpoint=trending&limit=${count}`;
     
-    console.log('[Klipy] Fetching trending via Cloud Function:', proxyUrl);
+    console.log('[Klipy] Fetching trending via Worker:', proxyUrl);
     
     const response = await fetch(proxyUrl);
     
     if (!response.ok) {
-        throw new Error(`Klipy Cloud Function hatası (${response.status}): ${response.statusText}`);
+        throw new Error(`Klipy Worker error (${response.status}): ${response.statusText}`);
     }
 
     const data = await response.json();

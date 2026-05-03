@@ -1,9 +1,7 @@
 // Telegram Sticker Pack Importer
 // Downloads curated sticker packs from Telegram via Bot API and imports to PocketBase
 
-import { storage } from '../firebase';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { pb, WORKER_URL } from '../pocketbase';
+import { pb, WORKER_URL, uploadFile } from '../pocketbase';
 import { stickerProcessor } from './stickerProcessor';
 import { deepseekService, autoDetectCategory } from './deepseekService';
 import pako from 'pako';
@@ -411,11 +409,7 @@ async function processTelegramStickerInner(
 
         onProgress?.(`Uploading sticker #${index + 1}...`);
         const fileName = `tg_${sticker.file_unique_id}_${index}.webp`;
-        const storagePath = `stickers/${packId}/${fileName}`;
-        const storageRef = ref(storage, storagePath);
-
-        await uploadBytes(storageRef, webpBlob);
-        const downloadURL = await getDownloadURL(storageRef);
+        const downloadURL = await uploadFile('draft_stickers', packId, 'images', webpBlob, fileName);
 
         return {
             image_file: fileName,
@@ -442,9 +436,7 @@ async function createTrayFromSticker(stickers: Sticker[], packId: string): Promi
         const trayBlob = await stickerProcessor.processTray(tempFile, () => {});
 
         const trayFileName = `tray_${Date.now()}.png`;
-        const trayStorageRef = ref(storage, `stickers/${packId}/${trayFileName}`);
-        await uploadBytes(trayStorageRef, trayBlob);
-        const trayUrl = await getDownloadURL(trayStorageRef);
+        const trayUrl = await uploadFile('draft_stickers', packId, 'tray_image', trayBlob, trayFileName);
 
         return { trayUrl, trayFile: trayFileName };
     } catch (error) {
@@ -760,7 +752,7 @@ export async function importTelegramPacks(
 
                     const { trayUrl, trayFile } = await createTrayFromSticker(subPack.stickers, subPackId);
 
-                    // Save to Firestore
+                    // Save to PocketBase
                     onProgress?.({
                         currentPack: i + 1,
                         totalPacks: packInputs.length,

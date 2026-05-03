@@ -24,15 +24,5 @@
                 "**/node_modules/**"
             ]
         }
-    ],
-    "functions": {
-        "source": "functions",
-        "runtime": "nodejs20"
-    },
-    "firestore": {
-        "rules": "firestore.rules"
-    },
-    "storage": {
-        "rules": "storage.rules"
-    }
+    ]
 }
