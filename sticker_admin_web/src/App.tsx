@@ -279,6 +279,10 @@ function App() {
   const categoryFilterRef = useRef<HTMLButtonElement>(null);
   const statsFilterRef = useRef<HTMLButtonElement>(null);
 
+  // Login form state (must be declared at top level, before any early returns)
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+
   // Mail System States
   const [messages, setMessages] = useState<ContactMessage[]>([]);
   const [suggestions, setSuggestions] = useState<StickerSuggestion[]>([]);
@@ -2291,9 +2295,6 @@ function App() {
       </div>
     );
   }
-
-  const [loginEmail, setLoginEmail] = useState('');
-  const [loginPassword, setLoginPassword] = useState('');
 
   if (!user) {
     return (
