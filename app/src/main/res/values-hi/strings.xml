@@ -341,7 +341,7 @@
     <string name="warm">गरम</string>
     <string name="vintage">बढ़िया शराब</string>
     <string name="adjustments">समायोजन</string>
-    <string name="onboarding_skip">छोडना</string>
+    <string name="onboarding_skip">छोड़ें</string>
     <string name="onboarding_next">अगला</string>
     <string name="onboarding_start">शुरू हो जाओ</string>
     <string name="onboarding_1_title">✨ स्टिकी में आपका स्वागत है</string>
@@ -500,7 +500,7 @@
     <string name="feature_ai_sticker_title">असीमित एआई स्टिकर</string>
     <string name="feature_ai_sticker_desc">स्टिकी एआई के साथ असीमित एआई-संचालित स्टिकर बनाएं - कोई दैनिक सीमा नहीं!</string>
     <string name="edit_video">वीडियो संपादित करें</string>
-    <string name="save">बचाना</string>
+    <string name="save">सहेजें</string>
     <string name="select_trim_portion">वह भाग चुनें जिसे आप ट्रिम करना चाहते हैं</string>
     <string name="crop_none">कोई नहीं</string>
     <string name="crop_circle">घेरा</string>

@@ -341,7 +341,7 @@
     <string name="warm">دافيء</string>
     <string name="vintage">كلاسيكي</string>
     <string name="adjustments">التعديلات</string>
-    <string name="onboarding_skip">يتخطى</string>
+    <string name="onboarding_skip">تخطي</string>
     <string name="onboarding_next">التالي</string>
     <string name="onboarding_start">ابدأ</string>
     <string name="onboarding_1_title">✨ مرحبا بكم في لزجة</string>
@@ -500,7 +500,7 @@
     <string name="feature_ai_sticker_title">ملصقات AI غير محدودة</string>
     <string name="feature_ai_sticker_desc">قم بإنشاء عدد غير محدود من الملصقات المدعومة بالذكاء الاصطناعي باستخدام Sticky AI - بلا حدود يومية!</string>
     <string name="edit_video">تحرير الفيديو</string>
-    <string name="save">يحفظ</string>
+    <string name="save">حفظ</string>
     <string name="select_trim_portion">حدد الجزء الذي تريد قطعه</string>
     <string name="crop_none">لا أحد</string>
     <string name="crop_circle">دائرة</string>

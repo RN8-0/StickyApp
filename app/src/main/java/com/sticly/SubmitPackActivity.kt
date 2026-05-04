@@ -45,6 +45,49 @@ class SubmitPackActivity : AppCompatActivity() {
     private val minStoreStickerCount = 9
     private val maxStoreStickerCount = 30
 
+    private fun escapePb(value: String): String = value.replace("'", "\\'")
+
+    private fun buildPackSignature(stickerFiles: List<File>): String {
+        return stickerFiles
+            .sortedBy { it.name }
+            .joinToString("|") { file -> "${file.name}:${file.length()}:${file.lastModified()}" }
+    }
+
+    private suspend fun ensurePackCanBeSubmittedAgain(
+        sourcePackId: String,
+        userId: String,
+        userEmail: String,
+        deviceId: String,
+        signature: String,
+        stickerCount: Int
+    ) {
+        val records = runCatching {
+            PocketBaseHelper.listAllRecords(
+                "user_submissions",
+                filter = "source_pack_id='${escapePb(sourcePackId)}'",
+                perPage = 200
+            )
+        }.getOrElse { emptyList() }
+
+        val userKeys = listOf(userId, userEmail, deviceId).map { it.trim().lowercase() }.filter { it.isNotBlank() }
+        val matching = records.filter { record ->
+            val ownerKeys = listOf(
+                record.optString("user_id"),
+                record.optString("user_email"),
+                record.optString("device_id")
+            ).map { it.trim().lowercase() }.filter { it.isNotBlank() }
+            userKeys.any { ownerKeys.contains(it) }
+        }
+
+        val unchanged = matching.any { record ->
+            val previousSignature = record.optString("note").substringAfter("source_signature=", "")
+            val previousCount = record.optInt("sticker_count", 0)
+            previousSignature == signature || (previousSignature.isBlank() && previousCount == stickerCount)
+        }
+
+        if (unchanged) throw IllegalStateException(getString(R.string.publish_pack_already_submitted))
+    }
+
     private val categories = listOf(
         "humor" to R.string.category_humor,
         "love" to R.string.category_love,
@@ -213,6 +256,8 @@ class SubmitPackActivity : AppCompatActivity() {
                     if (stickerFiles.size !in minStoreStickerCount..maxStoreStickerCount) {
                         throw IllegalStateException(getString(R.string.publish_pack_count_range))
                     }
+                    val sourceSignature = buildPackSignature(stickerFiles)
+                    ensurePackCanBeSubmittedAgain(packId, userId, email, deviceId, sourceSignature, stickerFiles.size)
 
                     val uploadFiles = stickerFiles.mapIndexed { index, file ->
                         PocketBaseHelper.UploadFile("images", "sticker_${index + 1}.webp", "image/webp", file.readBytes())
@@ -232,6 +277,7 @@ class SubmitPackActivity : AppCompatActivity() {
                         "status" to "pending",
                         "created_at" to java.time.Instant.now().toString(),
                         "is_animated" to pack.isAnimated.toString(),
+                        "note" to "source_signature=$sourceSignature",
                         "stickers" to "[]"
                     )
                     val created = PocketBaseHelper.createMultipartRecord("user_submissions", fields, uploadFiles)

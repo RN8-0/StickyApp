@@ -91,17 +91,33 @@
 
         </LinearLayout>
 
-        <!-- Favori Butonu -->
-        <ImageButton
-            android:id="@+id/btnFavoriteNew"
-            android:layout_width="32dp"
-            android:layout_height="32dp"
+        <LinearLayout
+            android:layout_width="36dp"
+            android:layout_height="40dp"
             android:layout_marginEnd="4dp"
-            android:background="?selectableItemBackgroundBorderless"
-            android:src="@drawable/ic_favorite_border"
-            android:scaleType="fitCenter"
-            android:padding="4dp"
-            android:contentDescription="@string/add_to_favorites" />
+            android:orientation="vertical"
+            android:gravity="center">
+
+            <ImageButton
+                android:id="@+id/btnFavoriteNew"
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:background="?selectableItemBackgroundBorderless"
+                android:src="@drawable/ic_heart"
+                android:scaleType="fitCenter"
+                android:padding="4dp"
+                android:contentDescription="@string/like" />
+
+            <TextView
+                android:id="@+id/tvLikeCount"
+                android:layout_width="match_parent"
+                android:layout_height="12dp"
+                android:gravity="center"
+                android:textColor="@color/text_secondary"
+                android:textSize="9sp"
+                android:includeFontPadding="false"
+                tools:text="12" />
+        </LinearLayout>
 
         <!-- Paket Silme Butonu (Custom paketler için) -->
         <ImageButton

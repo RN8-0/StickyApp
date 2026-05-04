@@ -342,7 +342,7 @@
     <string name="vintage">Jahrgang</string>
     <string name="adjustments">Anpassungen</string>
     <string name="onboarding_skip">Überspringen</string>
-    <string name="onboarding_next">Nächste</string>
+    <string name="onboarding_next">Weiter</string>
     <string name="onboarding_start">Legen Sie los</string>
     <string name="onboarding_1_title">✨ Willkommen bei Sticky</string>
     <string name="onboarding_1_desc">Entdecken Sie Hunderte professioneller Stickerpakete und fügen Sie sie mit einem Klick zu Ihrer WhatsApp hinzu! 🎉</string>
@@ -543,7 +543,7 @@
     <string name="overlays_count">%d Overlay(s) hinzugefügt</string>
     <string name="text_overlay_note">Der Text wird in den Aufkleber eingebrannt</string>
     <string name="emoji_overlay_note">Emojis werden in den Aufkleber eingebrannt</string>
-    <string name="next">Nächste</string>
+    <string name="next">Weiter</string>
     <string name="font_size">Größe</string>
     <string name="rotation">Drehung</string>
     <string name="text_position">Position</string>

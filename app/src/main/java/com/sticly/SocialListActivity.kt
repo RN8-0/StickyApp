@@ -114,10 +114,18 @@ class SocialListActivity : AppCompatActivity() {
             val item = items.optJSONObject(position) ?: JSONObject()
             holder.name.text = item.optString("name", getString(R.string.app_name))
             holder.subtitle.text = item.optString("subtitle")
-            val photo = item.optString("photo")
-            if (photo.isNotBlank()) Glide.with(holder.avatar).load(photo).circleCrop().placeholder(R.drawable.ic_person).into(holder.avatar) else holder.avatar.setImageResource(R.drawable.ic_person)
+            val isPack = item.optString("type") == "pack"
+            val sticker = item.optJSONArray("stickers")?.optJSONObject(0)
+            val photo = item.optString("photo").ifBlank { item.optString("photo_url") }.ifBlank { item.optString("tray_url") }.ifBlank { item.optString("image_url") }.ifBlank { sticker?.optString("url").orEmpty() }
+            val placeholder = if (isPack) R.drawable.sticker_placeholder else R.drawable.ic_person
+            if (photo.isNotBlank()) {
+                val request = Glide.with(holder.avatar).load(photo).placeholder(placeholder).error(placeholder)
+                if (isPack) request.into(holder.avatar) else request.circleCrop().into(holder.avatar)
+            } else {
+                holder.avatar.setImageResource(placeholder)
+            }
             holder.card.setOnClickListener {
-                if (item.optString("type") == "pack") {
+                if (isPack) {
                     startActivity(Intent(this@SocialListActivity, DetailsActivity::class.java).putExtra("id", item.optString("id")))
                 } else {
                     startActivity(Intent(this@SocialListActivity, PublisherProfileActivity::class.java).apply {

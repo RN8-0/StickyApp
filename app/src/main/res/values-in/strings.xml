@@ -341,7 +341,7 @@
     <string name="warm">Hangat</string>
     <string name="vintage">Antik</string>
     <string name="adjustments">Penyesuaian</string>
-    <string name="onboarding_skip">Melewati</string>
+    <string name="onboarding_skip">Lewati</string>
     <string name="onboarding_next">Berikutnya</string>
     <string name="onboarding_start">Memulai</string>
     <string name="onboarding_1_title">✨ Selamat datang di Lengket</string>
@@ -500,7 +500,7 @@
     <string name="feature_ai_sticker_title">Stiker AI tanpa batas</string>
     <string name="feature_ai_sticker_desc">Buat stiker bertenaga AI tanpa batas dengan Sticky AI — tanpa batas harian!</string>
     <string name="edit_video">Sunting Video</string>
-    <string name="save">Menyimpan</string>
+    <string name="save">Simpan</string>
     <string name="select_trim_portion">Pilih bagian yang ingin Anda potong</string>
     <string name="crop_none">Tidak ada</string>
     <string name="crop_circle">Lingkaran</string>

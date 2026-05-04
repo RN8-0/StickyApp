@@ -128,7 +128,10 @@ class PublisherProfileActivity : AppCompatActivity() {
         val stats = profile.optJSONObject("stats") ?: JSONObject()
         publisherId = profileObject.optString("user_id", publisherId).ifBlank { publisherId }
         publisherEmail = profileObject.optString("email", publisherEmail).ifBlank { publisherEmail }
-        publisherPhoto = profileObject.optString("photo_url", publisherPhoto).ifBlank { publisherPhoto }
+        publisherPhoto = profileObject.optString("photo_url", publisherPhoto)
+            .ifBlank { profileObject.optString("avatar_url") }
+            .ifBlank { profileObject.optString("picture") }
+            .ifBlank { publisherPhoto }
         publisherName = profileObject.optString("display_name", publisherName).ifBlank { publisherName }
         isFollowing = profile.optBoolean("is_following", false)
 
@@ -140,10 +143,22 @@ class PublisherProfileActivity : AppCompatActivity() {
         statFollowers.text = stats.optInt("followers", 0).toString()
         statFollowing.text = stats.optInt("following", 0).toString()
         statLikes.text = stats.optInt("likes", 0).toString()
+        val selfProfile = isSelfPublisher()
+        followButton.visibility = if (selfProfile) View.GONE else View.VISIBLE
         followButton.text = getString(if (isFollowing) R.string.following else R.string.follow)
         if (publisherPhoto.isNotBlank()) {
             Glide.with(this).load(publisherPhoto).circleCrop().placeholder(R.drawable.ic_person).into(avatar)
         }
+    }
+
+    private fun isSelfPublisher(): Boolean {
+        val prefs = getSharedPreferences("sticky_prefs", MODE_PRIVATE)
+        val currentUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid.orEmpty()
+        val currentEmail = prefs.getString("user_email", "").orEmpty()
+        val authRecordId = PocketBaseHelper.getAuthRecordId().orEmpty()
+        val ids = listOf(currentUid, authRecordId, currentEmail).map { it.trim().lowercase() }.filter { it.isNotBlank() }
+        val publisherIds = listOf(publisherId, publisherEmail).map { it.trim().lowercase() }.filter { it.isNotBlank() }
+        return ids.any { value -> publisherIds.contains(value) }
     }
 
     private fun parsePacks(profile: JSONObject): List<PackSummary> {

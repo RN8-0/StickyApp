@@ -342,7 +342,7 @@
     <string name="vintage">优质的</string>
     <string name="adjustments">调整</string>
     <string name="onboarding_skip">跳过</string>
-    <string name="onboarding_next">下一个</string>
+    <string name="onboarding_next">下一步</string>
     <string name="onboarding_start">开始使用</string>
     <string name="onboarding_1_title">✨ 欢迎来到粘贴</string>
     <string name="onboarding_1_desc">发现数百个专业贴纸包，然后一键将它们添加到您的 WhatsApp！ 🎉</string>
@@ -500,7 +500,7 @@
     <string name="feature_ai_sticker_title">无限AI贴纸</string>
     <string name="feature_ai_sticker_desc">使用 Sticky AI 创建无限的人工智能贴纸 — 没有每日限制！</string>
     <string name="edit_video">编辑视频</string>
-    <string name="save">节省</string>
+    <string name="save">保存</string>
     <string name="select_trim_portion">选择要修剪的部分</string>
     <string name="crop_none">没有任何</string>
     <string name="crop_circle">圆圈</string>
@@ -543,7 +543,7 @@
     <string name="overlays_count">添加了 %d 覆盖层</string>
     <string name="text_overlay_note">文字将被烧入贴纸中</string>
     <string name="emoji_overlay_note">表情符号将被烧入贴纸中</string>
-    <string name="next">下一个</string>
+    <string name="next">下一步</string>
     <string name="font_size">尺寸</string>
     <string name="rotation">旋转</string>
     <string name="text_position">位置</string>

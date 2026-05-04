@@ -72,6 +72,7 @@ class DetailsActivity : AppCompatActivity() {
     private var pendingDeletePackId: String? = null
     private var wasPackInWhatsAppBeforeDelete = false
     private var waitingForWhatsAppReturn = false
+    private var autoAddConsumed = false
     // Set to true immediately after a rewarded ad completes for a pack.
     // Prevents showing an interstitial right on top of a just-finished rewarded ad.
     private var rewardedJustCompleted = false
@@ -374,6 +375,11 @@ class DetailsActivity : AppCompatActivity() {
 
         // Butonları ayarla
         setupButtons(pack, hasAccess)
+
+        if (!autoAddConsumed && intent.getBooleanExtra(EXTRA_AUTO_ADD_TO_WHATSAPP, false)) {
+            autoAddConsumed = true
+            btnAction.post { addToWhatsApp(pack) }
+        }
 
         // İlgili paketleri gecikmeli yükle (ilk render'ı bloklamasın)
         rv.post { setupRelatedPacks(pack) }
@@ -845,6 +851,7 @@ class DetailsActivity : AppCompatActivity() {
         val name = findViewById<TextView>(R.id.tvPublisherName)
         val hint = findViewById<TextView>(R.id.tvPublisherHint)
         val followButton = findViewById<MaterialButton>(R.id.btnFollowPublisher)
+        followButton?.visibility = View.GONE
         strip.visibility = View.VISIBLE
 
         if (pack.pub.equals("Sticky", ignoreCase = true)) {
@@ -858,43 +865,11 @@ class DetailsActivity : AppCompatActivity() {
             return
         }
 
-        followButton?.visibility = View.VISIBLE
         hint?.text = getString(R.string.view_profile)
         name?.text = pack.pub
-        updateFollowButton(followButton, pack.email)
-        lifecycleScope.launch {
-            runCatching { SocialRepository.fetchPublisherProfile(pack, this@DetailsActivity) }.onSuccess { social ->
-                val following = social.optBoolean("is_following", false)
-                followButton?.text = getString(if (following) R.string.following else R.string.follow)
-                followButton?.alpha = if (following) 0.75f else 1f
-            }
-        }
         val clickListener = View.OnClickListener { openPublisherProfile(pack) }
         strip.setOnClickListener(clickListener)
         avatar?.setOnClickListener(clickListener)
-        followButton?.setOnClickListener {
-            followButton.isEnabled = false
-            lifecycleScope.launch {
-                runCatching {
-                    SocialRepository.toggleFollow(
-                        this@DetailsActivity,
-                        pack.publisherUserId.ifBlank { pack.email },
-                        pack.email,
-                        pack.pub,
-                        pack.publisherPhotoUrl
-                    )
-                }.onSuccess { result ->
-                    val following = result.optBoolean("following", !isFollowingPublisher(pack.email))
-                    if (following != isFollowingPublisher(pack.email)) togglePublisherFollow(pack.email)
-                    followButton.text = getString(if (following) R.string.following else R.string.follow)
-                    followButton.alpha = if (following) 0.75f else 1f
-                }.onFailure {
-                    togglePublisherFollow(pack.email)
-                    updateFollowButton(followButton, pack.email)
-                }
-                followButton.isEnabled = true
-            }
-        }
 
         if (pack.email.isNotBlank()) {
             lifecycleScope.launch {
@@ -904,6 +879,9 @@ class DetailsActivity : AppCompatActivity() {
                     } catch (_: Exception) { null }
                 }
                 val photoUrl = profile?.optString("photo_url").orEmpty()
+                    .ifBlank { profile?.optString("avatar_url").orEmpty() }
+                    .ifBlank { profile?.optString("picture").orEmpty() }
+                    .ifBlank { pack.publisherPhotoUrl }
                 val displayName = profile?.let { it.optString("display_name", it.optString("name", pack.pub)) }.orEmpty()
                 if (displayName.isNotBlank()) name?.text = displayName
                 if (photoUrl.isNotBlank() && avatar != null) {
@@ -935,6 +913,36 @@ class DetailsActivity : AppCompatActivity() {
         button.alpha = if (following) 0.75f else 1f
     }
 
+    private fun escapePb(value: String): String = value.replace("'", "\\'")
+
+    private suspend fun ensurePackCanBeSubmittedAgain(
+        sourcePackId: String,
+        userId: String,
+        userEmail: String,
+        deviceId: String,
+        signature: String,
+        stickerCount: Int
+    ) {
+        val records = runCatching {
+            PocketBaseHelper.listAllRecords(
+                "user_submissions",
+                filter = "source_pack_id='${escapePb(sourcePackId)}'",
+                perPage = 200
+            )
+        }.getOrElse { emptyList() }
+        val userKeys = listOf(userId, userEmail, deviceId).map { it.trim().lowercase() }.filter { it.isNotBlank() }
+        val unchanged = records.any { record ->
+            val ownerKeys = listOf(record.optString("user_id"), record.optString("user_email"), record.optString("device_id"))
+                .map { it.trim().lowercase() }
+                .filter { it.isNotBlank() }
+            if (userKeys.none { ownerKeys.contains(it) }) return@any false
+            val previousSignature = record.optString("note").substringAfter("source_signature=", "")
+            val previousCount = record.optInt("sticker_count", 0)
+            previousSignature == signature || (previousSignature.isBlank() && previousCount == stickerCount)
+        }
+        if (unchanged) throw IllegalStateException(getString(R.string.publish_pack_already_submitted))
+    }
+
     private fun setupPackSocialActions(pack: Pack) {
         val socialRow = findViewById<View>(R.id.packSocialRow)
         val summaryView = findViewById<TextView>(R.id.tvPackSocialSummary)
@@ -955,6 +963,7 @@ class DetailsActivity : AppCompatActivity() {
         summary?.text = engagementSummary(pack.likeCount, pack.favoriteCount, pack.commentCount)
 
         likeButton.setOnClickListener {
+            if (!requireSocialSignIn()) return@setOnClickListener
             likeButton.isEnabled = false
             animateLikeButton(likeButton)
             lifecycleScope.launch {
@@ -968,7 +977,9 @@ class DetailsActivity : AppCompatActivity() {
             }
         }
 
-        commentsButton.setOnClickListener { showCommentsSheet(pack) }
+        commentsButton.setOnClickListener {
+            if (requireSocialSignIn()) showCommentsSheet(pack)
+        }
         lifecycleScope.launch {
             runCatching { SocialRepository.fetchPackSocial(this@DetailsActivity, pack.id) }.onSuccess { social ->
                 applyLikeVisual(likeButton, social.optBoolean("liked", false))
@@ -999,6 +1010,14 @@ class DetailsActivity : AppCompatActivity() {
         button.strokeColor = ColorStateList.valueOf(color)
         button.rippleColor = ColorStateList.valueOf(color)
         button.alpha = if (liked) 1f else 0.92f
+    }
+
+    private fun requireSocialSignIn(): Boolean {
+        if (SocialRepository.isSignedIn(this)) return true
+        Toast.makeText(this, getString(R.string.profile_login_required), Toast.LENGTH_SHORT).show()
+        startActivity(Intent(this, SettingsActivity::class.java))
+        overridePendingTransition(R.anim.fade_in, R.anim.fade_out)
+        return false
     }
 
     private fun animateLikeButton(button: View) {
@@ -1087,6 +1106,7 @@ class DetailsActivity : AppCompatActivity() {
         }
 
         send.setOnClickListener {
+            if (!requireSocialSignIn()) return@setOnClickListener
             val body = input.text.toString().trim()
             if (body.isBlank()) return@setOnClickListener
             send.isEnabled = false
@@ -1169,6 +1189,7 @@ class DetailsActivity : AppCompatActivity() {
             insetTop = 0
             insetBottom = 0
             setOnClickListener {
+                if (!requireSocialSignIn()) return@setOnClickListener
                 animateLikeButton(this)
                 lifecycleScope.launch {
                     runCatching { SocialRepository.toggleCommentLike(this@DetailsActivity, commentId, packId) }
@@ -1234,6 +1255,7 @@ class DetailsActivity : AppCompatActivity() {
                 setTextColor(ContextCompat.getColor(this@DetailsActivity, R.color.text_secondary))
                 setOnClickListener {
                     if (replyId.isBlank()) return@setOnClickListener
+                    if (!requireSocialSignIn()) return@setOnClickListener
                     animateLikeButton(this)
                     lifecycleScope.launch {
                         runCatching { SocialRepository.toggleReplyLike(this@DetailsActivity, replyId, packId) }
@@ -1312,10 +1334,7 @@ class DetailsActivity : AppCompatActivity() {
         val dialog = AlertDialog.Builder(this)
             .setTitle("Publisher profile")
             .setView(view)
-            .setPositiveButton(if (isFollowingPublisher(pack.email)) "Following" else "Follow") { _, _ ->
-                togglePublisherFollow(pack.email)
-                setupPublisherStrip(pack)
-            }
+            .setPositiveButton(getString(R.string.view_profile)) { _, _ -> openPublisherProfile(pack) }
             .setNegativeButton(R.string.ok, null)
             .show()
 
@@ -1331,7 +1350,7 @@ class DetailsActivity : AppCompatActivity() {
                 } else {
                     packs.joinToString("\n") { "• ${it.optString("name", it.optString("pack_name", "Pack"))}" }
                 }
-                dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.text = if (isFollowingPublisher(pack.email)) "Following" else "Follow"
+                dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.text = getString(R.string.view_profile)
             }
         }
     }
@@ -1344,20 +1363,25 @@ class DetailsActivity : AppCompatActivity() {
         lifecycleScope.launch {
             try {
                 val existing = withContext(Dispatchers.IO) {
-                    val escapedUid = user?.uid?.replace("'", "\\'").orEmpty()
-                    val escapedEmail = email.replace("'", "\\'")
-                    val escapedDeviceId = PreferencesHelper.getDeviceId(this@DetailsActivity).replace("'", "\\'")
-                    val escapedPackId = packId.replace("'", "\\'")
-                    val ownerFilter = listOfNotNull(
-                        escapedUid.takeIf { it.isNotBlank() }?.let { "user_id='$it'" },
-                        escapedEmail.takeIf { it.isNotBlank() }?.let { "user_email='$it'" },
-                        "device_id='$escapedDeviceId'"
-                    ).joinToString(" || ")
-                    PocketBaseHelper.listRecords(
+                    val stickerFiles = CustomStickerManager.getStickerFiles(this@DetailsActivity, packId)
+                    val currentSignature = stickerFiles.sortedBy { it.name }
+                        .joinToString("|") { file -> "${file.name}:${file.length()}:${file.lastModified()}" }
+                    val userKeys = listOf(user?.uid.orEmpty(), email, PreferencesHelper.getDeviceId(this@DetailsActivity))
+                        .map { it.trim().lowercase() }
+                        .filter { it.isNotBlank() }
+                    PocketBaseHelper.listAllRecords(
                         "user_submissions",
-                        filter = "($ownerFilter) && source_pack_id='$escapedPackId' && status!='rejected'",
-                        perPage = 1
-                    )
+                        filter = "source_pack_id='${escapePb(packId)}'",
+                        perPage = 200
+                    ).filter { record ->
+                        val ownerKeys = listOf(record.optString("user_id"), record.optString("user_email"), record.optString("device_id"))
+                            .map { it.trim().lowercase() }
+                            .filter { it.isNotBlank() }
+                        if (userKeys.none { ownerKeys.contains(it) }) return@filter false
+                        val previousSignature = record.optString("note").substringAfter("source_signature=", "")
+                        val previousCount = record.optInt("sticker_count", 0)
+                        previousSignature == currentSignature || (previousSignature.isBlank() && previousCount == stickerFiles.size)
+                    }
                 }
                 callback(existing.isNotEmpty())
             } catch (_: Exception) {
@@ -1488,7 +1512,23 @@ class DetailsActivity : AppCompatActivity() {
                     return@launch
                 }
 
+                val sourceSignature = stickerEntries.joinToString("|") { entry ->
+                    val localFile = CustomStickerManager.getCustomStickerPath(this@DetailsActivity, pack.id, entry.optString("name"))
+                    if (localFile.exists()) "${entry.optString("name")}:${localFile.length()}:${localFile.lastModified()}" else "${entry.optString("name")}:${entry.optString("url")}" 
+                }
+                withContext(Dispatchers.IO) {
+                    ensurePackCanBeSubmittedAgain(
+                        pack.id,
+                        user.uid,
+                        user.email ?: "",
+                        PreferencesHelper.getDeviceId(this@DetailsActivity),
+                        sourceSignature,
+                        stickerEntries.size
+                    )
+                }
+
                 val fields = mapOf(
+                    "device_id" to PreferencesHelper.getDeviceId(this@DetailsActivity),
                     "user_id" to user.uid,
                     "user_email" to (user.email ?: ""),
                     "display_name" to publisherName,
@@ -1501,6 +1541,7 @@ class DetailsActivity : AppCompatActivity() {
                     "sticker_count" to stickerEntries.size.toString(),
                     "source_pack_id" to pack.id,
                     "is_animated" to pack.isAnimated.toString(),
+                    "note" to "source_signature=$sourceSignature",
                     "status" to "pending",
                     "created_at" to java.time.Instant.now().toString()
                 )
@@ -1537,7 +1578,7 @@ class DetailsActivity : AppCompatActivity() {
 
             } catch (e: Exception) {
                 e.printStackTrace()
-                Toast.makeText(this@DetailsActivity, getString(R.string.publish_pack_failed), Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@DetailsActivity, e.message ?: getString(R.string.publish_pack_failed), Toast.LENGTH_SHORT).show()
                 onDone()
             }
         }
@@ -2614,6 +2655,7 @@ class DetailsActivity : AppCompatActivity() {
     }
 
     companion object {
+        const val EXTRA_AUTO_ADD_TO_WHATSAPP = "auto_add_to_whatsapp"
         private const val REQUEST_ADD = 200
         private const val REQUEST_REMOVE = 201
         private const val REQUEST_ADD_STICKER = 202

@@ -99,12 +99,8 @@ class StickyMessagingService : FirebaseMessagingService() {
         val decoratedTitle = "🎉 $title ✨"
         val decoratedBody = "🌟 $body\n\n💫 Hemen keşfet ve arkadaşlarınla paylaş!"
 
-        // Büyük ikon için bitmap
-        val largeIcon = BitmapFactory.decodeResource(resources, R.mipmap.ic_launcher)
-
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification_sticky) // Changed to use the new Sticky logo silhouette
-            .setLargeIcon(largeIcon)
             .setContentTitle(decoratedTitle)
             .setContentText(body)
             .setColor(ContextCompat.getColor(this, R.color.primary))

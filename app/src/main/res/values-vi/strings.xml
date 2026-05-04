@@ -341,7 +341,7 @@
     <string name="warm">Ấm</string>
     <string name="vintage">Cổ điển</string>
     <string name="adjustments">Điều chỉnh</string>
-    <string name="onboarding_skip">Nhảy</string>
+    <string name="onboarding_skip">Bỏ qua</string>
     <string name="onboarding_next">Kế tiếp</string>
     <string name="onboarding_start">Bắt đầu</string>
     <string name="onboarding_1_title">✨ Chào mừng đến với Sticky</string>
@@ -500,7 +500,7 @@
     <string name="feature_ai_sticker_title">Nhãn dán AI không giới hạn</string>
     <string name="feature_ai_sticker_desc">Tạo nhãn dán hỗ trợ AI không giới hạn với Sticky AI - không có giới hạn hàng ngày!</string>
     <string name="edit_video">Chỉnh sửa video</string>
-    <string name="save">Cứu</string>
+    <string name="save">Lưu</string>
     <string name="select_trim_portion">Chọn phần bạn muốn cắt</string>
     <string name="crop_none">Không có</string>
     <string name="crop_circle">Vòng tròn</string>

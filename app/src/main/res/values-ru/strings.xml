@@ -341,7 +341,7 @@
     <string name="warm">Теплый</string>
     <string name="vintage">Винтаж</string>
     <string name="adjustments">Корректировки</string>
-    <string name="onboarding_skip">Пропускать</string>
+    <string name="onboarding_skip">Пропустить</string>
     <string name="onboarding_next">Следующий</string>
     <string name="onboarding_start">Начать</string>
     <string name="onboarding_1_title">✨ Добро пожаловать в Sticky</string>
@@ -500,7 +500,7 @@
     <string name="feature_ai_sticker_title">Неограниченное количество стикеров AI</string>
     <string name="feature_ai_sticker_desc">Создавайте неограниченное количество стикеров на основе искусственного интеллекта с помощью Sticky AI — никаких ежедневных ограничений!</string>
     <string name="edit_video">Редактировать видео</string>
-    <string name="save">Сохранять</string>
+    <string name="save">Сохранить</string>
     <string name="select_trim_portion">Выберите часть, которую хотите обрезать</string>
     <string name="crop_none">Никто</string>
     <string name="crop_circle">Круг</string>

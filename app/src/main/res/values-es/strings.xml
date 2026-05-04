@@ -342,7 +342,7 @@
     <string name="vintage">Antiguo</string>
     <string name="adjustments">Ajustes</string>
     <string name="onboarding_skip">Saltar</string>
-    <string name="onboarding_next">Próximo</string>
+    <string name="onboarding_next">Siguiente</string>
     <string name="onboarding_start">Empezar</string>
     <string name="onboarding_1_title">✨Bienvenido a Sticky</string>
     <string name="onboarding_1_desc">¡Descubre cientos de paquetes de stickers profesionales y agrégalos a tu WhatsApp con un solo clic! 🎉</string>
@@ -500,7 +500,7 @@
     <string name="feature_ai_sticker_title">Pegatinas de IA ilimitadas</string>
     <string name="feature_ai_sticker_desc">Crea pegatinas ilimitadas impulsadas por IA con Sticky AI, ¡sin límites diarios!</string>
     <string name="edit_video">Editar vídeo</string>
-    <string name="save">Ahorrar</string>
+    <string name="save">Guardar</string>
     <string name="select_trim_portion">Seleccione la parte que desea recortar</string>
     <string name="crop_none">Ninguno</string>
     <string name="crop_circle">Círculo</string>
@@ -543,7 +543,7 @@
     <string name="overlays_count">%d superposiciones agregadas</string>
     <string name="text_overlay_note">El texto se grabará en la pegatina.</string>
     <string name="emoji_overlay_note">El emoji se grabará en la pegatina.</string>
-    <string name="next">Próximo</string>
+    <string name="next">Siguiente</string>
     <string name="font_size">Tamaño</string>
     <string name="rotation">Rotación</string>
     <string name="text_position">Posición</string>

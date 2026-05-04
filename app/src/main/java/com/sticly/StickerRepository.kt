@@ -338,6 +338,10 @@ object StickerRepository {
         val trimmed = url.trim()
         val canonicalPocketBaseUrl = "${PocketBaseHelper.PB_URL}/api/files/$collection/$packId/$fileName"
 
+        if (fileName.isNotBlank() && (trimmed.contains("/draft_stickers/") || trimmed.contains("/api/files/draft_stickers/"))) {
+            return canonicalPocketBaseUrl
+        }
+
         if (fileName.isNotBlank() && trimmed.contains("/api/files/")) {
             return if (trimmed.contains("/api/files/$collection/$packId/")) trimmed else canonicalPocketBaseUrl
         }
@@ -460,7 +464,8 @@ object StickerRepository {
                 }
             }
 
-            localFile
+            if (localFile.exists() && localFile.length() <= 0) localFile.delete()
+            null
         } catch (e: Exception) {
             Log.e(TAG, "Download FAILED: $storagePath/$packId/$fileName - ${e.message}")
             null

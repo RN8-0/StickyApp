@@ -341,8 +341,8 @@
     <string name="warm">Caldo</string>
     <string name="vintage">Annata</string>
     <string name="adjustments">Aggiustamenti</string>
-    <string name="onboarding_skip">Saltare</string>
-    <string name="onboarding_next">Prossimo</string>
+    <string name="onboarding_skip">Salta</string>
+    <string name="onboarding_next">Avanti</string>
     <string name="onboarding_start">Inizia</string>
     <string name="onboarding_1_title">✨ Benvenuti su Sticky</string>
     <string name="onboarding_1_desc">Scopri centinaia di pacchetti di adesivi professionali e aggiungili al tuo WhatsApp con un clic! 🎉</string>
@@ -543,7 +543,7 @@
     <string name="overlays_count">%d sovrapposizioni aggiunte</string>
     <string name="text_overlay_note">Il testo verrà bruciato nell\'adesivo</string>
     <string name="emoji_overlay_note">L\'emoji verrà bruciato nell\'adesivo</string>
-    <string name="next">Prossimo</string>
+    <string name="next">Avanti</string>
     <string name="font_size">Misurare</string>
     <string name="rotation">Rotazione</string>
     <string name="text_position">Posizione</string>

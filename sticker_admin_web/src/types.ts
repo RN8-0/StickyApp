@@ -95,13 +95,24 @@ export interface UserData {
         id: string;
         name: string;
         publisher?: string;
+        tray_url?: string;
+        stickers?: Array<{ image_file?: string; image_url?: string; url?: string; name?: string; emojis?: string[] }>;
         sticker_count?: number;
         download_count: number;
         favorite_count: number;
         like_count: number;
         comment_count: number;
         engagement_score?: number;
+        comments?: Array<{
+            id: string;
+            body: string;
+            display_name?: string;
+            user_email?: string;
+            like_count?: number;
+            created_at?: any;
+        }>;
     }>;
+    share_requests?: UserSubmission[];
     recent_comments?: Array<{
         id: string;
         pack_id: string;

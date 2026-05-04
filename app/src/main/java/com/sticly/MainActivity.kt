@@ -150,6 +150,7 @@ class MainActivity : AppCompatActivity() {
     private var currentFilter: FilterType = FilterType.ALL
     private var currentSearchQuery: String = ""
     private var pendingDeletePackId: String? = null
+    private var pendingDirectAddPack: Pack? = null
     private var wasPackInWhatsAppBeforeDelete = false
     private var waitingForWhatsAppReturn = false
     private var sessionPackOpenCount = 0
@@ -553,6 +554,9 @@ class MainActivity : AppCompatActivity() {
             },
             onDeleteClick = { pack ->
                 deleteCustomPack(pack)
+            },
+            onAddClick = { pack ->
+                directAddToWhatsApp(pack)
             },
             onPublisherClick = { pack ->
                 showPacksByPublisher(pack.pub)
@@ -1226,7 +1230,7 @@ Rules:
                 val content = JSONObject(response).getJSONArray("choices")
                     .getJSONObject(0).getJSONObject("message").getString("content").trim()
                 conn.disconnect()
-                content.replace("\"", "")
+                rememberAiInspiredPrompt(content)
             } else {
                 conn.disconnect()
                 randomFallbackPrompt()
@@ -1237,21 +1241,39 @@ Rules:
     }
 
     private fun randomFallbackPrompt(): String {
-        val ideas = listOf(
-            "A chubby orange cat wearing a tiny business suit, sitting at a desk piled with coffee cups, looking absolutely exhausted with huge dark circles under its eyes",
-            "A dramatic slice of pizza wearing sunglasses and a gold chain, doing a mic drop on stage while other food items in the audience look shocked",
-            "A tiny hamster in a superhero cape standing on top of a mountain of cheese, flexing its muscles with an absurdly confident grin",
-            "A grumpy cloud raining donuts on a confused city, with the cloud wearing a chef hat and looking proud of itself",
-            "An avocado ninja doing a flying kick through the air with a determined expression, wearing a black headband with sparkle effects around it",
-            "A baby penguin in oversized headphones dancing on a disco floor, with colorful lights reflecting in its huge excited eyes",
-            "A sleepy panda in pajamas trying to code on a laptop but falling asleep on the keyboard with Z letters floating above",
-            "A taco doing karate with an intense focused expression, breaking a board in half while other tacos cheer in the background",
-            "A robot dog catching a glowing frisbee in space with stars and planets in the background, tongue sticking out happily",
-            "A dramatic hamster wearing a flowing red cape standing heroically on a cliff edge with wind blowing through its fur",
-            "A shocked octopus trying to juggle eight different objects at once including a fish, umbrella, and rubber duck, looking panicked",
-            "A unicorn shredding an electric guitar on a rainbow stage with flames shooting up and the crowd going wild"
-        )
-        return ideas.random()
+        val subjects = listOf("toast detective", "moon barista", "tiny dragon chef", "sleepy cactus", "glitter robot", "angry cupcake", "wizard lemon", "skateboarding sushi", "opera banana", "pirate marshmallow", "nervous volcano", "disco mushroom", "astronaut jellybean", "royal potato", "paint-splattered ghost", "karate dumpling")
+        val actions = listOf("solving a mystery", "spilling rainbow coffee", "guarding a treasure map", "dancing under neon lights", "launching confetti rockets", "arguing with a toaster", "painting stars in the sky", "surfing on a soap bubble", "carrying too many balloons", "celebrating a tiny victory", "dodging flying sprinkles", "posing for a dramatic poster")
+        val expressions = listOf("wildly excited", "deeply suspicious", "proud and smug", "panicked but cute", "sleepy and confused", "overconfident", "dramatically shocked", "mischievous")
+        val props = listOf("oversized sunglasses", "a tiny crown", "a glowing backpack", "sparkly boots", "a cracked teacup", "a miniature keyboard", "a neon scarf", "a golden spoon", "a space helmet", "a crooked party hat")
+        val settings = listOf("inside a pastel arcade", "on a floating cloud kitchen", "in a tiny subway station", "beside a lava lamp waterfall", "at a midnight snack parade", "on a desk covered with sticky notes", "in a pocket-sized castle", "under a shower of candy stars")
+        val prefs = getSharedPreferences("sticky_prefs", MODE_PRIVATE)
+        val used = prefs.getStringSet("ai_inspire_used_prompts", emptySet())?.toMutableSet() ?: mutableSetOf()
+        val last = prefs.getString("ai_inspire_last_prompt", "").orEmpty()
+        if (used.size > 80) used.clear()
+        repeat(24) {
+            val prompt = "A ${expressions.random()} ${subjects.random()} ${actions.random()}, wearing ${props.random()}, ${settings.random()}, bold cartoon sticker style, clean white background, thick outline, vibrant colors"
+            if (prompt != last && !used.contains(prompt)) {
+                used.add(prompt)
+                prefs.edit().putStringSet("ai_inspire_used_prompts", used).putString("ai_inspire_last_prompt", prompt).apply()
+                return prompt
+            }
+        }
+        used.clear()
+        prefs.edit().putStringSet("ai_inspire_used_prompts", used).putString("ai_inspire_last_prompt", "").apply()
+        return randomFallbackPrompt()
+    }
+
+    private fun rememberAiInspiredPrompt(prompt: String): String {
+        val cleaned = prompt.trim().replace("\"", "")
+        if (cleaned.isBlank()) return randomFallbackPrompt()
+        val prefs = getSharedPreferences("sticky_prefs", MODE_PRIVATE)
+        val used = prefs.getStringSet("ai_inspire_used_prompts", emptySet())?.toMutableSet() ?: mutableSetOf()
+        val last = prefs.getString("ai_inspire_last_prompt", "").orEmpty()
+        if (cleaned == last || used.contains(cleaned)) return randomFallbackPrompt()
+        if (used.size > 80) used.clear()
+        used.add(cleaned)
+        prefs.edit().putStringSet("ai_inspire_used_prompts", used).putString("ai_inspire_last_prompt", cleaned).apply()
+        return cleaned
     }
 
     private suspend fun aiGenerateImage(prompt: String, onPoll: () -> Unit): Bitmap? =
@@ -2268,7 +2290,19 @@ Rules:
                 put("id", if (type == "likes") item.optString("id") else item.optString("id", item.optString("email")))
                 put("name", if (type == "likes") item.optString("name") else item.optString("name", item.optString("email")))
                 put("subtitle", if (type == "likes") "${item.optInt("like_count", 0)} ${getString(R.string.likes_short)}" else item.optString("email"))
-                put("photo", item.optString("photo_url"))
+                val firstSticker = item.optJSONArray("stickers")?.optJSONObject(0)
+                val image = if (type == "likes") {
+                    item.optString("tray_url").ifBlank {
+                        firstSticker?.optString("url").orEmpty().ifBlank { firstSticker?.optString("image_url").orEmpty() }
+                    }
+                } else {
+                    item.optString("photo_url").ifBlank { item.optString("photo") }
+                        .ifBlank { item.optString("avatar_url") }
+                        .ifBlank { item.optString("picture") }
+                }
+                put("photo", image)
+                put("tray_url", item.optString("tray_url"))
+                put("image_url", firstSticker?.optString("url").orEmpty())
                 put("email", item.optString("email"))
             })
         }
@@ -3492,7 +3526,8 @@ Rules:
                     dialog.dismiss()
                     startActivity(android.content.Intent(this@MainActivity, DetailsActivity::class.java).putExtra("id", pack.id))
                     overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left)
-                }
+                },
+                onAddClick = { pack -> directAddToWhatsApp(pack) }
             )
         }
         dialog.setView(rv)
@@ -3900,9 +3935,109 @@ Rules:
     companion object {
         private const val REQUEST_DELETE_PACK = 2001
         private const val REQUEST_STICKER_MAKER = 2002
+        private const val REQUEST_DIRECT_ADD_PACK = 2003
         private const val AI_DAILY_FREE_LIMIT = 5
         private const val AI_PREFS_COUNT = "ai_gen_count"
         private const val AI_PREFS_DATE = "ai_gen_date"
+    }
+
+    private fun isWhatsAppInstalled(): Boolean {
+        return try {
+            packageManager.getPackageInfo("com.whatsapp", 0)
+            true
+        } catch (_: Exception) {
+            try {
+                packageManager.getPackageInfo("com.whatsapp.w4b", 0)
+                true
+            } catch (_: Exception) {
+                false
+            }
+        }
+    }
+
+    private fun directAddToWhatsApp(pack: Pack) {
+        startActivity(Intent(this, DetailsActivity::class.java).apply {
+            putExtra("id", pack.id)
+            putExtra(DetailsActivity.EXTRA_AUTO_ADD_TO_WHATSAPP, true)
+        })
+        overridePendingTransition(0, 0)
+    }
+
+    private fun showRewardedAdForDirectAdd(pack: Pack) {
+        if (!AdManager.isRewardedReady()) {
+            Toast.makeText(this, R.string.ad_loading_please_wait, Toast.LENGTH_SHORT).show()
+            AdManager.loadRewardedAd(this)
+            loadingOverlay.visibility = View.VISIBLE
+            lifecycleScope.launch {
+                var waited = 0
+                while (!AdManager.isRewardedReady() && waited < 12) {
+                    delay(250)
+                    waited++
+                }
+                loadingOverlay.visibility = View.GONE
+                if (AdManager.isRewardedReady()) {
+                    showRewardedAdForDirectAdd(pack)
+                } else {
+                    Toast.makeText(this@MainActivity, R.string.ad_not_available, Toast.LENGTH_SHORT).show()
+                    PreferencesHelper.unlockPack(this@MainActivity, pack.id)
+                    prepareAndSendToWhatsApp(pack, skipInterstitial = true)
+                }
+            }
+            return
+        }
+
+        AdManager.showRewardedAd(this,
+            onRewarded = {
+                PreferencesHelper.unlockPack(this, pack.id)
+                prepareAndSendToWhatsApp(pack, skipInterstitial = true)
+            },
+            onFailed = {
+                Toast.makeText(this, R.string.ad_failed_try_again, Toast.LENGTH_SHORT).show()
+            }
+        )
+    }
+
+    private fun prepareAndSendToWhatsApp(pack: Pack, skipInterstitial: Boolean) {
+        loadingOverlay.visibility = View.VISIBLE
+        lifecycleScope.launch {
+            val ready = withContext(Dispatchers.IO) {
+                val currentPacks = StickerRepository.allPacksCache
+                val packsToSave = if (currentPacks.any { it.id == pack.id }) currentPacks else currentPacks + pack
+                StickerRepository.saveCacheToDisk(this@MainActivity, packsToSave)
+                if (StickerRepository.isPackCached(this@MainActivity, pack)) true else StickerRepository.downloadPackToCache(this@MainActivity, pack)
+            }
+            loadingOverlay.visibility = View.GONE
+            if (!ready) {
+                Toast.makeText(this@MainActivity, R.string.stickers_load_failed, Toast.LENGTH_SHORT).show()
+                return@launch
+            }
+            launchDirectWhatsApp(pack, skipInterstitial)
+        }
+    }
+
+    private fun launchDirectWhatsApp(pack: Pack, skipInterstitial: Boolean) {
+        val launch = {
+            val intent = Intent().apply {
+                action = "com.whatsapp.intent.action.ENABLE_STICKER_PACK"
+                putExtra("sticker_pack_id", pack.id)
+                putExtra("sticker_pack_authority", "${packageName}.stickers")
+                putExtra("sticker_pack_name", pack.localizedName)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            try {
+                pendingDirectAddPack = pack
+                @Suppress("DEPRECATION")
+                startActivityForResult(intent, REQUEST_DIRECT_ADD_PACK)
+            } catch (e: Exception) {
+                pendingDirectAddPack = null
+                Toast.makeText(this, R.string.whatsapp_not_available_title, Toast.LENGTH_SHORT).show()
+            }
+        }
+        if (!PreferencesHelper.isPremium(this) && !skipInterstitial) {
+            AdManager.showInterstitialIfNeeded(this) { launch() }
+        } else {
+            launch()
+        }
     }
 
     private fun deleteCustomPack(pack: Pack) {
@@ -3989,6 +4124,28 @@ Rules:
     @Suppress("DEPRECATION")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+
+        if (requestCode == REQUEST_DIRECT_ADD_PACK) {
+            val pack = pendingDirectAddPack ?: return
+            pendingDirectAddPack = null
+            if (resultCode == Activity.RESULT_OK) {
+                PreferencesHelper.addInstalledPack(this@MainActivity, pack.id)
+                Toast.makeText(this@MainActivity, R.string.pack_added, Toast.LENGTH_SHORT).show()
+                StickerRepository.incrementDownloadCount(pack.id, pack.isPremium)
+                PreferencesHelper.incrementStickersAddedCount(this@MainActivity)
+                PreferencesHelper.incrementPacksSincePromo(this@MainActivity)
+                adapter.notifyDataSetChanged()
+            }
+            lifecycleScope.launch {
+                delay(300)
+                val isWhitelisted = withContext(Dispatchers.IO) { WhitelistCheck.isWhitelisted(this@MainActivity, pack.id) }
+                if (isWhitelisted) {
+                    PreferencesHelper.addInstalledPack(this@MainActivity, pack.id)
+                    adapter.notifyDataSetChanged()
+                }
+            }
+            return
+        }
 
         if (requestCode == REQUEST_DELETE_PACK) {
             val packId = pendingDeletePackId ?: return

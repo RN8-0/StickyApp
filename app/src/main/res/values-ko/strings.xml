@@ -341,7 +341,7 @@
     <string name="warm">따뜻한</string>
     <string name="vintage">포도 수확</string>
     <string name="adjustments">조정</string>
-    <string name="onboarding_skip">건너뛰다</string>
+    <string name="onboarding_skip">건너뛰기</string>
     <string name="onboarding_next">다음</string>
     <string name="onboarding_start">시작하기</string>
     <string name="onboarding_1_title">✨ Sticky에 오신 것을 환영합니다</string>
@@ -500,7 +500,7 @@
     <string name="feature_ai_sticker_title">무제한 AI 스티커</string>
     <string name="feature_ai_sticker_desc">Sticky AI를 사용하여 AI 기반 스티커를 무제한으로 만들어 보세요. 일일 제한이 없습니다!</string>
     <string name="edit_video">비디오 편집</string>
-    <string name="save">구하다</string>
+    <string name="save">저장</string>
     <string name="select_trim_portion">다듬고 싶은 부분을 선택하세요</string>
     <string name="crop_none">없음</string>
     <string name="crop_circle">원</string>

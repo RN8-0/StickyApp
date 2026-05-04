@@ -1583,7 +1583,10 @@ function App() {
         total_stickers_added: data.total_stickers_added || 0,
         custom_packs_count: data.custom_packs_count || 0,
         social: data.social || undefined,
+        followers_list: data.followers_list || [],
+        following_list: data.following_list || [],
         published_packs: data.published_packs || [],
+        share_requests: data.share_requests || [],
         recent_comments: data.recent_comments || [],
       }));
       setUsersData(usersList);
@@ -1910,56 +1913,37 @@ function App() {
     setIsProcessing(true);
 
     try {
-      const updatedData: any = { ...editFormData };
+      const sanitizePackUpdate = (data: Partial<StickerPack>) => {
+        const allowed = new Set([
+          'name', 'publisher', 'publisher_email', 'publisher_user_id', 'publisher_photo_url',
+          'category', 'is_animated',
+          'is_active', 'is_popular', 'product_id', 'price_try', 'price_usd', 'price_eur',
+          'image_data_version'
+        ]);
+        return Object.fromEntries(
+          Object.entries(data).filter(([key, value]) =>
+            value !== undefined &&
+            (allowed.has(key) || key.startsWith('name_'))
+          )
+        );
+      };
+
+      const updatedData: any = sanitizePackUpdate(editFormData);
       updatedData.image_data_version = Date.now().toString();
 
-      // Premium'a çevriliyorsa ve fiyat yoksa default fiyat ata
-      if (updatedData.is_premium && !selectedPack.is_premium) {
-        if (!updatedData.price_try) updatedData.price_try = "69,99 TL";
-        if (!updatedData.price_usd) updatedData.price_usd = "$4.99";
-        if (!updatedData.price_eur) updatedData.price_eur = "€4.49";
-      }
-
       const oldCollection = selectedPack.is_premium ? 'premium_stickers' : 'stickers';
-      const newCollection = updatedData.is_premium ? 'premium_stickers' : 'stickers';
 
-      if (oldCollection !== newCollection) {
-        // Koleksiyonlar arası geçiş
-        console.log(`[UPDATE] ${oldCollection} -> ${newCollection} taşınıyor: ${selectedPack.id}`);
-        const fullData = { ...selectedPack, ...updatedData };
-
-        // PocketBase: yeni koleksiyona ekle, eskisinden sil
-        let pbSuccess = false;
-        try {
-          await pb.collection(newCollection).create({ id: selectedPack.id, ...fullData });
-          try { await pb.collection(oldCollection).delete(selectedPack.id); } catch (_) {}
-          pbSuccess = true;
-        } catch (pbErr) {
-          console.warn('PocketBase collection move failed:', pbErr);
-        }
-        if (!pbSuccess) {
-          throw new Error('Failed to move pack between collections');
-        }
-
-        const updated = fullData as StickerPack;
-        setPacks(packs.map(p => p.id === selectedPack.id ? updated : p));
-        setSelectedPack(updated);
-        setShowEditPackModal(false);
-        alert(`Pack updated successfully.`);
-      } else {
-        // Sadece bilgi güncelleme
-        try {
-          await pb.collection(oldCollection).update(selectedPack.id, updatedData);
-        } catch (pbErr) {
-          console.warn('PocketBase update failed:', pbErr);
-          throw pbErr;
-        }
-        const updated = { ...selectedPack, ...updatedData } as StickerPack;
-        setPacks(packs.map(p => p.id === selectedPack.id ? updated : p));
-        setSelectedPack(updated);
-        setShowEditPackModal(false);
-        alert("Pack details updated successfully.");
+      try {
+        await pb.collection(oldCollection).update(selectedPack.id, updatedData);
+      } catch (pbErr) {
+        console.warn('PocketBase update failed:', pbErr);
+        throw pbErr;
       }
+      const updated = { ...selectedPack, ...updatedData } as StickerPack;
+      setPacks(packs.map(p => p.id === selectedPack.id ? updated : p));
+      setSelectedPack(updated);
+      setShowEditPackModal(false);
+      alert("Pack details updated successfully.");
 
     } catch (e: any) {
       console.error('[UPDATE] Hata:', e);
@@ -4888,11 +4872,48 @@ function App() {
                             <span className="text-[9px] font-bold text-textSec/60 uppercase tracking-widest flex items-center gap-1 mb-2">
                               <Package size={10} /> Published Packs ({selectedUser.published_packs.length})
                             </span>
-                            <div className="space-y-2">
+                            <div className="space-y-3">
                               {selectedUser.published_packs.map(pack => (
-                                <div key={pack.id} className="p-2 rounded-lg bg-white/[0.03]">
-                                  <p className="text-xs font-bold text-white truncate">{pack.name}</p>
-                                  <p className="text-[9px] text-textSec/60">{pack.download_count || 0} downloads / {pack.favorite_count || 0} fav / {pack.like_count || 0} likes / {pack.comment_count || 0} comments</p>
+                                <div key={pack.id} className="p-3 rounded-xl bg-white/[0.03] border border-white/5 space-y-3">
+                                  <div className="flex items-start gap-3">
+                                    {pack.tray_url ? (
+                                      <img src={pack.tray_url} alt={pack.name} className="w-12 h-12 rounded-lg object-cover bg-black/20 border border-white/10 shrink-0" />
+                                    ) : (
+                                      <div className="w-12 h-12 rounded-lg bg-white/5 border border-white/10 shrink-0" />
+                                    )}
+                                    <div className="min-w-0 flex-1">
+                                      <p className="text-xs font-black text-white truncate">{pack.name}</p>
+                                      <p className="text-[9px] text-textSec/60">{pack.sticker_count || pack.stickers?.length || 0} stickers</p>
+                                      <div className="grid grid-cols-4 gap-1.5 mt-2 text-center">
+                                        <span className="rounded-lg bg-white/[0.04] px-2 py-1 text-[9px] font-bold text-textSec">DL {pack.download_count || 0}</span>
+                                        <span className="rounded-lg bg-white/[0.04] px-2 py-1 text-[9px] font-bold text-textSec">Fav {pack.favorite_count || 0}</span>
+                                        <span className="rounded-lg bg-white/[0.04] px-2 py-1 text-[9px] font-bold text-primary">Likes {pack.like_count || 0}</span>
+                                        <span className="rounded-lg bg-white/[0.04] px-2 py-1 text-[9px] font-bold text-accent">Com {pack.comment_count || 0}</span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                  {pack.stickers && pack.stickers.length > 0 && (
+                                    <div className="grid grid-cols-8 sm:grid-cols-10 md:grid-cols-12 gap-1.5">
+                                      {pack.stickers.slice(0, 24).map((sticker, index) => (
+                                        <img
+                                          key={`${pack.id}-sticker-${index}`}
+                                          src={sticker.url || sticker.image_url}
+                                          alt={sticker.name || `Sticker ${index + 1}`}
+                                          className="w-full aspect-square rounded-lg object-cover bg-black/20 border border-white/5"
+                                        />
+                                      ))}
+                                    </div>
+                                  )}
+                                  {pack.comments && pack.comments.length > 0 && (
+                                    <div className="rounded-xl bg-black/10 border border-white/5 p-2 space-y-1.5 max-h-32 overflow-y-auto custom-scrollbar">
+                                      {pack.comments.map(comment => (
+                                        <div key={comment.id} className="rounded-lg bg-white/[0.03] px-2 py-1.5">
+                                          <p className="text-[10px] font-bold text-white/70">{comment.display_name || comment.user_email || 'User'} <span className="text-primary">{comment.like_count || 0} likes</span></p>
+                                          <p className="text-[11px] text-white/85 leading-relaxed">{comment.body}</p>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
                                 </div>
                               ))}
                             </div>
@@ -4958,30 +4979,46 @@ function App() {
 
                         {/* Submitted Packs */}
                         {(() => {
-                          const subs = userSubmissions.filter(s =>
+                          const fallbackSubs = userSubmissions.filter(s =>
                             (selectedUser.id && (s.user_id === selectedUser.id || s.device_id === selectedUser.id)) ||
                             (selectedUser.email && s.user_email === selectedUser.email)
                           );
+                          const subs = selectedUser.share_requests && selectedUser.share_requests.length > 0 ? selectedUser.share_requests : fallbackSubs;
                           if (subs.length === 0) return null;
                           return (
                             <div className="bg-white/[0.02] rounded-xl p-3 border border-white/5">
                               <span className="text-[9px] font-bold text-textSec/60 uppercase tracking-widest flex items-center gap-1 mb-2">
-                                <UserPlus size={10} /> Submitted Packs ({subs.length})
+                                <UserPlus size={10} /> Share Requests ({subs.length})
                               </span>
-                              <div className="space-y-2">
+                              <div className="space-y-3">
                                 {subs.map(s => (
-                                  <div key={s.id} className="flex items-center justify-between gap-2 p-2 rounded-lg bg-white/[0.03]">
-                                    <div className="min-w-0">
-                                      <p className="text-xs font-bold text-white truncate">{s.pack_name}</p>
-                                      <p className="text-[9px] text-textSec/50">{s.sticker_count || 0} stickers</p>
+                                  <div key={s.id} className="p-3 rounded-xl bg-white/[0.03] border border-white/5 space-y-2">
+                                    <div className="flex items-center justify-between gap-2">
+                                      <div className="min-w-0">
+                                        <p className="text-xs font-bold text-white truncate">{s.pack_name}</p>
+                                        <p className="text-[9px] text-textSec/50">{s.sticker_count || s.stickers?.length || 0} stickers {s.category ? `/ ${s.category}` : ''}</p>
+                                      </div>
+                                      <span className={cn(
+                                        "text-[9px] font-black px-2 py-0.5 rounded-md shrink-0",
+                                        s.status === 'approved' ? "bg-primary/10 text-primary border border-primary/10" :
+                                          s.status === 'rejected' ? "bg-danger/10 text-danger border border-danger/10" :
+                                            s.status === 'pending' ? "bg-yellow-500/10 text-yellow-400 border border-yellow-500/10" :
+                                              "bg-white/5 text-textSec border border-white/5"
+                                      )}>{s.status.toUpperCase()}</span>
                                     </div>
-                                    <span className={cn(
-                                      "text-[9px] font-black px-2 py-0.5 rounded-md shrink-0",
-                                      s.status === 'approved' ? "bg-primary/10 text-primary border border-primary/10" :
-                                        s.status === 'rejected' ? "bg-danger/10 text-danger border border-danger/10" :
-                                          s.status === 'pending' ? "bg-yellow-500/10 text-yellow-400 border border-yellow-500/10" :
-                                            "bg-white/5 text-textSec border border-white/5"
-                                    )}>{s.status.toUpperCase()}</span>
+                                    {s.description && <p className="text-[10px] text-textSec/80 leading-relaxed">{s.description}</p>}
+                                    {s.stickers && s.stickers.length > 0 && (
+                                      <div className="grid grid-cols-8 sm:grid-cols-10 md:grid-cols-12 gap-1.5">
+                                        {s.stickers.slice(0, 24).map((sticker: any, index: number) => (
+                                          <img
+                                            key={`${s.id}-request-sticker-${index}`}
+                                            src={sticker.url || sticker.image_url}
+                                            alt={sticker.name || `Sticker ${index + 1}`}
+                                            className="w-full aspect-square rounded-lg object-cover bg-black/20 border border-white/5"
+                                          />
+                                        ))}
+                                      </div>
+                                    )}
                                   </div>
                                 ))}
                               </div>
@@ -6379,18 +6416,6 @@ function App() {
                           value={draftEditData.publisher_email || ''}
                           onChange={(e: any) => setDraftEditData((prev: any) => ({ ...prev, publisher_email: e.target.value }))}
                         />
-                        <div className="grid grid-cols-2 gap-4">
-                          <Input
-                            label="Privacy Policy Link"
-                            value={draftEditData.privacy_policy_website || ''}
-                            onChange={(e: any) => setDraftEditData((prev: any) => ({ ...prev, privacy_policy_website: e.target.value }))}
-                          />
-                          <Input
-                            label="License Agreement Link"
-                            value={draftEditData.license_agreement_website || ''}
-                            onChange={(e: any) => setDraftEditData((prev: any) => ({ ...prev, license_agreement_website: e.target.value }))}
-                          />
-                        </div>
 
                         {/* Category */}
                         <div className="flex items-center gap-4">
@@ -6763,18 +6788,6 @@ function App() {
               value={editFormData.publisher_email}
               onChange={(e: any) => setEditFormData({ ...editFormData, publisher_email: e.target.value })}
             />
-            <div className="grid grid-cols-2 gap-4">
-              <Input
-                label="Privacy Policy Link"
-                value={editFormData.privacy_policy_website}
-                onChange={(e: any) => setEditFormData({ ...editFormData, privacy_policy_website: e.target.value })}
-              />
-              <Input
-                label="License Agreement Link"
-                value={editFormData.license_agreement_website}
-                onChange={(e: any) => setEditFormData({ ...editFormData, license_agreement_website: e.target.value })}
-              />
-            </div>
             <div className="flex items-center gap-4">
               <div className="flex-1">
                 <label className="text-xs font-bold text-textSec uppercase mb-2 block">Category</label>
@@ -6788,27 +6801,6 @@ function App() {
                   ))}
                 </select>
               </div>
-            </div>
-
-            {/* Premium Toggle */}
-            <div>
-              <label className="text-xs font-bold text-textSec uppercase mb-2 block">Premium Status</label>
-              <div className="flex bg-hover rounded-xl p-1 gap-1">
-                <button
-                  onClick={() => setEditFormData({ ...editFormData, is_premium: false })}
-                  className={cn("flex-1 py-2.5 rounded-lg text-[10px] font-black transition-all flex items-center justify-center gap-1.5", !editFormData.is_premium ? "bg-primary text-white" : "text-textSec")}
-                >🆓 FREE</button>
-                <button
-                  onClick={() => setEditFormData({ ...editFormData, is_premium: true })}
-                  className={cn("flex-1 py-2.5 rounded-lg text-[10px] font-black transition-all flex items-center justify-center gap-1.5", editFormData.is_premium ? "bg-yellow-500 text-black" : "text-textSec")}
-                >💎 PREMIUM</button>
-              </div>
-              {editFormData.is_premium && !selectedPack?.is_premium && (
-                <p className="text-[10px] text-yellow-400 mt-1.5">⚠️ Pack will be moved to premium_stickers collection when saved</p>
-              )}
-              {!editFormData.is_premium && selectedPack?.is_premium && (
-                <p className="text-[10px] text-violet-400 mt-1.5">⚠️ Pack will be moved to stickers collection (free) when saved</p>
-              )}
             </div>
 
             <div className="flex items-center gap-4">

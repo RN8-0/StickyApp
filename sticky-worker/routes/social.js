@@ -65,20 +65,27 @@ function lower(value) {
   return clean(value).toLowerCase();
 }
 
-function userMatches(record, identifiers) {
-  const values = [
+function identityValues(record = {}) {
+  return [
     record.id,
     record.user_id,
     record.uid,
+    record.owner_id,
+    record.created_by,
     record.device_id,
     record.email,
+    record.user_email,
     record.publisher_email,
     record.publisher_user_id,
     record.display_name,
     record.name,
     record.publisher,
+    record.publisher_name,
   ].map(lower).filter(Boolean);
-  return values.some((value) => identifiers.has(value));
+}
+
+function userMatches(record, identifiers) {
+  return identityValues(record).some((value) => identifiers.has(value));
 }
 
 function normalizeProfile(profile = {}, fallback = {}) {
@@ -91,6 +98,10 @@ function normalizeProfile(profile = {}, fallback = {}) {
     bio: clean(profile.bio || fallback.bio),
     show_email: profile.show_email !== false,
   };
+}
+
+function profilePhoto(profile = {}, fallback = '') {
+  return clean(profile.photo_url || profile.avatar_url || profile.picture || profile.photo || fallback);
 }
 
 function packName(pack, lang = '') {
@@ -236,6 +247,45 @@ function sameIdentity(a = '', b = '') {
   return lower(a) && lower(a) === lower(b);
 }
 
+function identitySet(values = []) {
+  return new Set(values.map(lower).filter(Boolean));
+}
+
+function intersects(a, b) {
+  for (const value of a) if (b.has(value)) return true;
+  return false;
+}
+
+async function expandIdentityKeys(values = []) {
+  const keys = identitySet(values);
+  if (keys.size === 0) return keys;
+  const profiles = await safeFetchAll('user_profiles');
+  profiles
+    .filter((profile) => userMatches(profile, keys))
+    .forEach((profile) => identityValues(profile).forEach((value) => keys.add(value)));
+  return keys;
+}
+
+async function packOwnerIdentityKeys(pack = {}) {
+  const ownerKeys = await expandIdentityKeys([
+    pack.publisher_user_id,
+    pack.publisher_email,
+    pack.email,
+    pack.publisher,
+    pack.publisher_name,
+    pack.user_id,
+    pack.user_email,
+    pack.owner_id,
+    pack.created_by,
+    pack.device_id,
+  ]);
+  const submissions = await safeFetchAll('user_submissions');
+  submissions
+    .filter((submission) => [submission.sticker_pack_id, submission.source_pack_id, submission.pack_id].map(clean).includes(clean(pack.id)))
+    .forEach((submission) => identityValues(submission).forEach((value) => ownerKeys.add(value)));
+  return ownerKeys;
+}
+
 async function createNotification(userId, payload) {
   if (!clean(userId)) return;
   const resp = await pbFetch('/api/collections/notifications/records', {
@@ -259,8 +309,20 @@ async function createNotification(userId, payload) {
 }
 
 async function notifyMany(recipients, payload, actor = {}) {
-  const filtered = unique(recipients).filter((recipient) => !sameIdentity(recipient, actor.id) && !sameIdentity(recipient, actor.email));
+  const actorValues = await expandIdentityKeys([actor.id, actor.email, actor.name, actor.device_id]);
+  const filtered = unique(recipients).filter((recipient) => !actorValues.has(lower(recipient)));
   await Promise.all(filtered.map((recipient) => createNotification(recipient, payload).catch((err) => console.warn('[Social notification]', err.message))));
+}
+
+async function hasFollowNotification(followerId, followerEmail, targetKeys = []) {
+  const notifications = await safeFetchAll('notifications');
+  const targets = identitySet(targetKeys);
+  return notifications.some((notification) => {
+    if (clean(notification.topic) !== 'social_follow') return false;
+    if (!targets.has(lower(notification.user_id))) return false;
+    const data = typeof notification.data === 'object' && notification.data ? notification.data : {};
+    return sameIdentity(data.actor_id, followerId) || sameIdentity(data.actor_email, followerEmail);
+  });
 }
 
 async function profileRecipientKeys(targetId, targetEmail) {
@@ -274,7 +336,7 @@ async function packRecipientKeys(pack) {
   const identifiers = new Set([pack.publisher_user_id, pack.publisher_email, pack.email, pack.publisher].map(lower).filter(Boolean));
   const profiles = await safeFetchAll('user_profiles');
   const profile = profiles.find((item) => userMatches(item, identifiers));
-  return unique([pack.publisher_user_id, pack.publisher_email, pack.email, profile?.user_id, profile?.uid, profile?.email, profile?.device_id]);
+  return unique([pack.publisher_user_id, pack.publisher_email, pack.email, pack.user_id, pack.user_email, pack.device_id, profile?.user_id, profile?.uid, profile?.email, profile?.device_id]);
 }
 
 async function deleteRecordsWhere(collection, predicate) {
@@ -338,6 +400,11 @@ router.get('/profile', async (req, res) => {
       return values.some((value) => viewerIdentifiers.has(value));
     });
 
+    const profileFor = (...values) => {
+      const keys = identitySet(values);
+      return state.profiles.find((item) => userMatches(item, keys));
+    };
+
     res.json({
       profile,
       packs,
@@ -350,8 +417,16 @@ router.get('/profile', async (req, res) => {
         followers: followers.length,
         following: following.length,
       },
-      followers: followers.map((follow) => ({ id: follow.follower_id, email: follow.follower_email, name: follow.follower_name, photo_url: follow.follower_photo })),
-      following: following.map((follow) => ({ id: follow.target_id || follow.following_id, email: follow.target_email || follow.following_email, name: follow.target_name || follow.following_name, photo_url: follow.target_photo })),
+      followers: followers.map((follow) => {
+        const followerProfile = profileFor(follow.follower_id, follow.follower_email, follow.follower_name);
+        const photo = clean(follow.follower_photo) || profilePhoto(followerProfile);
+        return { id: follow.follower_id, email: follow.follower_email, name: follow.follower_name || followerProfile?.display_name || followerProfile?.name, photo_url: photo, photo, avatar_url: photo };
+      }),
+      following: following.map((follow) => {
+        const targetProfile = profileFor(follow.target_id || follow.following_id, follow.target_email || follow.following_email, follow.target_name || follow.following_name);
+        const photo = clean(follow.target_photo || follow.following_photo) || profilePhoto(targetProfile);
+        return { id: follow.target_id || follow.following_id, email: follow.target_email || follow.following_email, name: follow.target_name || follow.following_name || targetProfile?.display_name || targetProfile?.name, photo_url: photo, photo, avatar_url: photo };
+      }),
       is_following: isFollowing,
     });
   } catch (err) {
@@ -368,6 +443,11 @@ router.post('/follow', async (req, res) => {
     const targetEmail = clean(req.body.target_email);
     if ((!followerId && !followerEmail) || (!targetId && !targetEmail)) {
       return res.status(400).json({ error: 'Missing follower or target.' });
+    }
+    const followerKeys = identitySet([followerId, followerEmail]);
+    const targetKeys = identitySet([targetId, targetEmail]);
+    if ([...followerKeys].some((value) => targetKeys.has(value))) {
+      return res.json({ following: false, self: true });
     }
     const follows = await safeFetchAll('user_follows');
     const existing = follows.find((follow) =>
@@ -393,19 +473,22 @@ router.post('/follow', async (req, res) => {
     const resp = await pbFetch('/api/collections/user_follows/records', { method: 'POST', body: JSON.stringify(payload) });
     if (!resp.ok) throw new Error(await resp.text());
     const recipients = await profileRecipientKeys(targetId, targetEmail);
-    await notifyMany(recipients, {
-      topic: 'social_follow',
-      title: 'New follower',
-      body: `${payload.follower_name || payload.follower_email || 'Someone'} started following you.`,
-      image_url: payload.follower_photo,
-      actor_name: payload.follower_name,
-      data: {
-        actor_id: followerId,
-        actor_email: followerEmail,
+    const alreadyNotified = await hasFollowNotification(followerId, followerEmail, recipients);
+    if (!alreadyNotified) {
+      await notifyMany(recipients, {
+        topic: 'social_follow',
+        title: 'New follower',
+        body: `${payload.follower_name || payload.follower_email || 'Someone'} started following you.`,
+        image_url: payload.follower_photo,
         actor_name: payload.follower_name,
-        actor_photo: payload.follower_photo,
-      },
-    }, { id: followerId, email: followerEmail });
+        data: {
+          actor_id: followerId,
+          actor_email: followerEmail,
+          actor_name: payload.follower_name,
+          actor_photo: payload.follower_photo,
+        },
+      }, { id: followerId, email: followerEmail, name: payload.follower_name });
+    }
     res.json({ following: true });
   } catch (err) {
     console.error('[Social follow]', err.message);
@@ -472,6 +555,7 @@ router.post('/like', async (req, res) => {
     const packId = clean(req.body.pack_id);
     const userId = clean(req.body.user_id);
     const userEmail = clean(req.body.user_email);
+    const actorDeviceId = clean(req.body.device_id);
     if (!packId || (!userId && !userEmail)) return res.status(400).json({ error: 'Missing pack or user.' });
     const likes = await safeFetchAll('pack_likes');
     const existing = likes.find((like) => clean(like.pack_id) === packId &&
@@ -496,23 +580,30 @@ router.post('/like', async (req, res) => {
     const counters = await updatePackCounters(packId, payload.collection);
     const { record } = await findPackRecord(packId, payload.collection);
     if (record) {
-      const recipients = await packRecipientKeys(record);
-      await notifyMany(recipients, {
-        topic: 'pack_like',
-        title: 'New pack like',
-        body: `${payload.display_name || payload.user_email || 'Someone'} liked your "${packName(record)}" pack.`,
-        pack_id: packId,
-        image_url: clean(record.publisher_photo_url),
-        actor_name: payload.display_name,
-        data: {
-          actor_id: userId,
-          actor_email: userEmail,
-          actor_name: payload.display_name,
-          actor_photo: clean(req.body.photo_url),
+      const actorKeys = await expandIdentityKeys([userId, userEmail, payload.display_name, actorDeviceId]);
+      const ownerKeys = await packOwnerIdentityKeys(record);
+      const isSelfLike = intersects(actorKeys, ownerKeys);
+      if (!isSelfLike) {
+        const recipients = await packRecipientKeys(record);
+        await notifyMany(recipients, {
+          topic: 'pack_like',
+          title: 'New pack like',
+          body: `${payload.display_name || payload.user_email || 'Someone'} liked your "${packName(record)}" pack.`,
           pack_id: packId,
-          pack_name: packName(record),
-        },
-      }, { id: userId, email: userEmail });
+          image_url: clean(record.publisher_photo_url),
+          actor_name: payload.display_name,
+          data: {
+            actor_id: userId,
+            actor_email: userEmail,
+            actor_name: payload.display_name,
+            actor_photo: clean(req.body.photo_url),
+            pack_id: packId,
+            pack_name: packName(record),
+          },
+        }, { id: userId, email: userEmail, name: payload.display_name, device_id: actorDeviceId });
+      } else {
+        return res.json({ liked: true, self_like: true, ...counters });
+      }
     }
     res.json({ liked: true, ...counters });
   } catch (err) {

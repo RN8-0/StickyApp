@@ -52,6 +52,7 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun isUserLoggedIn(): Boolean {
+        if (com.google.firebase.auth.FirebaseAuth.getInstance().currentUser != null) return true
         val email = getSharedPreferences("sticky_prefs", MODE_PRIVATE).getString("user_email", "") ?: ""
         return email.trim().isNotEmpty()
     }
@@ -59,6 +60,7 @@ class SettingsActivity : AppCompatActivity() {
     private fun updateLoginSwitches() {
         val isLoggedIn = isUserLoggedIn()
         val switchG = findViewById<androidx.appcompat.widget.SwitchCompat>(R.id.switchGoogle)
+        findViewById<View>(R.id.btnLogin)?.visibility = if (isLoggedIn) View.GONE else View.VISIBLE
 
         if (isLoggedIn) {
             // CONNECTED -> GREEN
@@ -173,6 +175,10 @@ class SettingsActivity : AppCompatActivity() {
         // Connection switch
         val switchG = findViewById<androidx.appcompat.widget.SwitchCompat>(R.id.switchGoogle)
 
+        findViewById<View>(R.id.btnLogin)?.setOnClickListener {
+            if (!isUserLoggedIn()) loginWithGoogle()
+        }
+
         switchG.setOnClickListener {
             if (isUserLoggedIn()) {
                 switchG.isChecked = true
@@ -245,6 +251,11 @@ class SettingsActivity : AppCompatActivity() {
                     withContext(Dispatchers.IO) {
                         PocketBaseHelper.authWithOAuth("google", idToken)
                     }
+                    PreferencesHelper.setPocketBaseAuth(
+                        this@SettingsActivity,
+                        PocketBaseHelper.getToken(),
+                        PocketBaseHelper.getAuthRecordId()
+                    )
                 } catch (_: Exception) {}
                 val deviceId = PreferencesHelper.getDeviceId(this@SettingsActivity)
                 PreferencesHelper.syncUserDataWithPocketBase(this@SettingsActivity, deviceId)

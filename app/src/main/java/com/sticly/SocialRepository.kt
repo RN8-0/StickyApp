@@ -33,6 +33,15 @@ object SocialRepository {
         return CurrentUser(id, email, name, photo)
     }
 
+    fun isSignedIn(context: Context): Boolean {
+        val prefs = context.getSharedPreferences("sticky_prefs", Context.MODE_PRIVATE)
+        return FirebaseAuth.getInstance().currentUser != null || !prefs.getString("user_email", "")?.trim().isNullOrEmpty()
+    }
+
+    private fun requireSignedIn(context: Context) {
+        if (!isSignedIn(context)) throw IllegalStateException("Sign in required")
+    }
+
     suspend fun fetchPublisherProfile(pack: Pack, context: Context): JSONObject = withContext(Dispatchers.IO) {
         val viewer = currentUser(context)
         val language = PreferencesHelper.getLanguage(context)
@@ -85,6 +94,7 @@ object SocialRepository {
     }
 
     suspend fun addComment(context: Context, pack: Pack, body: String): JSONObject = withContext(Dispatchers.IO) {
+        requireSignedIn(context)
         val viewer = currentUser(context)
         val payload = JSONObject().apply {
             put("pack_id", pack.id)
@@ -105,12 +115,14 @@ object SocialRepository {
     }
 
     suspend fun togglePackLike(context: Context, pack: Pack): JSONObject = withContext(Dispatchers.IO) {
+        requireSignedIn(context)
         val viewer = currentUser(context)
         runCatching { postJson("/api/social/like", JSONObject().apply {
             put("pack_id", pack.id)
             put("collection", if (pack.isPremium) "premium_stickers" else "stickers")
             put("user_id", viewer.id)
             put("user_email", viewer.email)
+            put("device_id", PreferencesHelper.getDeviceId(context))
             put("display_name", viewer.name.ifBlank { viewer.email })
             put("photo_url", viewer.photoUrl)
         }) }.getOrElse {
@@ -120,6 +132,7 @@ object SocialRepository {
     }
 
     suspend fun toggleCommentLike(context: Context, commentId: String, packId: String): JSONObject = withContext(Dispatchers.IO) {
+        requireSignedIn(context)
         val viewer = currentUser(context)
         runCatching { postJson("/api/social/comments/like", JSONObject().apply {
             put("comment_id", commentId)
@@ -131,6 +144,7 @@ object SocialRepository {
     }
 
     suspend fun addCommentReply(context: Context, commentId: String, packId: String, body: String): JSONObject = withContext(Dispatchers.IO) {
+        requireSignedIn(context)
         val viewer = currentUser(context)
         postJson("/api/social/comments/reply", JSONObject().apply {
             put("comment_id", commentId)
@@ -144,6 +158,7 @@ object SocialRepository {
     }
 
     suspend fun toggleReplyLike(context: Context, replyId: String, packId: String): JSONObject = withContext(Dispatchers.IO) {
+        requireSignedIn(context)
         val viewer = currentUser(context)
         runCatching { postJson("/api/social/comments/reply/like", JSONObject().apply {
             put("reply_id", replyId)
@@ -266,6 +281,21 @@ object SocialRepository {
         val following = follows.filter { follow -> listOf(follow.optString("follower_id"), follow.optString("follower_email")).map { it.lowercase() }.any { it in identifiers } }
         val isFollowing = followers.any { follow -> listOf(follow.optString("follower_id"), follow.optString("follower_email")).map { it.lowercase() }.any { it in viewerKeys } }
 
+        fun profileFor(vararg values: String): JSONObject? {
+            val keys = values.map { it.trim().lowercase() }.filter { it.isNotBlank() }.toSet()
+            if (keys.isEmpty()) return null
+            return profiles.firstOrNull { record ->
+                listOf(
+                    record.optString("id"), record.optString("user_id"), record.optString("uid"), record.optString("device_id"),
+                    record.optString("email"), record.optString("user_email"), record.optString("display_name"), record.optString("name")
+                ).map { it.trim().lowercase() }.any { it in keys }
+            }
+        }
+
+        fun profilePhoto(record: JSONObject?): String = record?.optString("photo_url").orEmpty()
+            .ifBlank { record?.optString("avatar_url").orEmpty() }
+            .ifBlank { record?.optString("picture").orEmpty() }
+
         return JSONObject().apply {
             put("profile", profile)
             put("packs", packSummaries)
@@ -277,6 +307,34 @@ object SocialRepository {
                 put("comments", (0 until packSummaries.length()).sumOf { packSummaries.getJSONObject(it).optInt("comment_count", 0) })
                 put("followers", followers.size)
                 put("following", following.size)
+            })
+            put("followers", JSONArray().apply {
+                followers.forEach { follow ->
+                    val followerProfile = profileFor(follow.optString("follower_id"), follow.optString("follower_email"), follow.optString("follower_name"))
+                    val photo = follow.optString("follower_photo").ifBlank { profilePhoto(followerProfile) }
+                    put(JSONObject().apply {
+                        put("id", follow.optString("follower_id"))
+                        put("email", follow.optString("follower_email"))
+                        put("name", follow.optString("follower_name").ifBlank { followerProfile?.optString("display_name").orEmpty().ifBlank { followerProfile?.optString("name").orEmpty() } })
+                        put("photo_url", photo)
+                        put("photo", photo)
+                        put("avatar_url", photo)
+                    })
+                }
+            })
+            put("following", JSONArray().apply {
+                following.forEach { follow ->
+                    val targetProfile = profileFor(follow.optString("target_id"), follow.optString("following_id"), follow.optString("target_email"), follow.optString("following_email"), follow.optString("target_name"), follow.optString("following_name"))
+                    val photo = follow.optString("target_photo").ifBlank { follow.optString("following_photo") }.ifBlank { profilePhoto(targetProfile) }
+                    put(JSONObject().apply {
+                        put("id", follow.optString("target_id").ifBlank { follow.optString("following_id") })
+                        put("email", follow.optString("target_email").ifBlank { follow.optString("following_email") })
+                        put("name", follow.optString("target_name").ifBlank { follow.optString("following_name") }.ifBlank { targetProfile?.optString("display_name").orEmpty().ifBlank { targetProfile?.optString("name").orEmpty() } })
+                        put("photo_url", photo)
+                        put("photo", photo)
+                        put("avatar_url", photo)
+                    })
+                }
             })
             put("is_following", isFollowing)
         }

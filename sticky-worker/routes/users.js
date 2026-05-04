@@ -78,6 +78,70 @@ function matchesAnyUserField(record, identifiers, fields) {
     .some((value) => identifiers.has(value));
 }
 
+function parseArrayField(value) {
+  if (Array.isArray(value)) return value;
+  if (typeof value !== 'string' || !value.trim()) return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+function pbFileUrl(record, filename) {
+  if (!filename) return '';
+  const collection = record.collectionId || record.collectionName;
+  if (!collection || !record.id) return '';
+  return `${PB_URL}/api/files/${collection}/${record.id}/${filename}`;
+}
+
+function stickerPreviews(record) {
+  const stickers = parseArrayField(record.stickers || record.sticker_data)
+    .map((sticker, index) => ({
+      name: sticker.name || sticker.image_file || `sticker_${index + 1}`,
+      image_file: sticker.image_file || sticker.name || '',
+      image_url: sticker.image_url || sticker.url || pbFileUrl(record, sticker.image_file || sticker.name || ''),
+      url: sticker.url || sticker.image_url || pbFileUrl(record, sticker.image_file || sticker.name || ''),
+      emojis: Array.isArray(sticker.emojis) ? sticker.emojis : ['⭐'],
+    }))
+    .filter((sticker) => sticker.url || sticker.image_url);
+  const images = Array.isArray(record.images) ? record.images : (record.images ? [record.images] : []);
+  const imageStickers = images.map((filename, index) => ({
+    name: `sticker_${index + 1}`,
+    image_file: filename,
+    image_url: pbFileUrl(record, filename),
+    url: pbFileUrl(record, filename),
+    emojis: ['⭐'],
+  }));
+  return imageStickers.length > stickers.length ? imageStickers : stickers;
+}
+
+function normalizeSubmission(record) {
+  const stickers = stickerPreviews(record);
+  return {
+    id: record.id,
+    user_id: record.user_id || '',
+    device_id: record.device_id || '',
+    user_email: record.user_email || '',
+    display_name: record.display_name || '',
+    publisher_name: record.publisher_name || '',
+    pack_name: record.pack_name || record.name || '',
+    description: record.description || '',
+    category: record.category || '',
+    stickers,
+    status: record.status || 'pending',
+    flag_reasons: record.flag_reasons || [],
+    rejection_reason: record.rejection_reason || '',
+    sticker_count: Number(record.sticker_count || stickers.length || 0),
+    sticker_pack_id: record.sticker_pack_id || '',
+    created_at: record.created_at || record.created || null,
+    processed_at: record.processed_at || null,
+    approved_at: record.approved_at || null,
+    note: record.note || '',
+  };
+}
+
 function mergeUserProfile(profile, authUser = {}) {
   return {
     ...authUser,
@@ -101,12 +165,13 @@ router.get('/', async (req, res) => {
       console.warn('[Users GET] auth users merge skipped:', err.message);
       return [];
     });
-    const [follows, comments, likes, stickerPacks, premiumPacks] = await Promise.all([
+    const [follows, comments, likes, stickerPacks, premiumPacks, submissions] = await Promise.all([
       fetchAllRecords('user_follows').catch((err) => { console.warn('[Users GET] follows skipped:', err.message); return []; }),
       fetchAllRecords('pack_comments').catch((err) => { console.warn('[Users GET] comments skipped:', err.message); return []; }),
       fetchAllRecords('pack_likes').catch((err) => { console.warn('[Users GET] likes skipped:', err.message); return []; }),
       fetchAllRecords('stickers').catch((err) => { console.warn('[Users GET] stickers skipped:', err.message); return []; }),
       fetchAllRecords('premium_stickers').catch((err) => { console.warn('[Users GET] premium stickers skipped:', err.message); return []; }),
+      fetchAllRecords('user_submissions').catch((err) => { console.warn('[Users GET] submissions skipped:', err.message); return []; }),
     ]);
 
     const authByKey = new Map();
@@ -135,6 +200,9 @@ router.get('/', async (req, res) => {
         );
         const userComments = comments.filter((comment) =>
           matchesAnyUserField(comment, identifiers, ['user_id', 'user_email', 'display_name'])
+        );
+        const userSubmissions = submissions.filter((submission) =>
+          matchesAnyUserField(submission, identifiers, ['user_id', 'user_email', 'device_id', 'display_name', 'publisher_name'])
         );
         const followerCount = follows.filter((follow) =>
           matchesAnyUserField(follow, identifiers, ['target_id', 'target_email', 'following_id', 'following_email'])
@@ -167,17 +235,38 @@ router.get('/', async (req, res) => {
             name: follow.target_name || follow.following_name || follow.target_email || follow.following_email || '',
             photo_url: follow.target_photo || follow.following_photo || '',
           })),
-          published_packs: publishedPacks.map((pack) => ({
-            id: pack.id,
-            name: pack.name || pack.name_en || pack.name_tr || pack.pack_name || pack.id,
-            publisher: pack.publisher || '',
-            sticker_count: Number(pack.sticker_count || (Array.isArray(pack.stickers) ? pack.stickers.length : 0) || 0),
-            download_count: Number(pack.download_count || 0),
-            favorite_count: Number(pack.favorite_count || 0),
-            like_count: Number(pack.like_count || likes.filter((like) => like.pack_id === pack.id).length || 0),
-            comment_count: Number(pack.comment_count || comments.filter((comment) => comment.pack_id === pack.id).length || 0),
-            engagement_score: Number(pack.engagement_score || 0),
-          })),
+          published_packs: publishedPacks.map((pack) => {
+            const packLikes = likes.filter((like) => like.pack_id === pack.id);
+            const packComments = comments
+              .filter((comment) => comment.pack_id === pack.id)
+              .sort((a, b) => sortTimestamp(b.created || b.created_at) - sortTimestamp(a.created || a.created_at));
+            const stickers = stickerPreviews(pack);
+            return {
+              id: pack.id,
+              name: pack.name || pack.name_en || pack.name_tr || pack.pack_name || pack.id,
+              publisher: pack.publisher || '',
+              tray_url: pack.tray_url || pbFileUrl(pack, pack.tray_image_file) || stickers[0]?.url || '',
+              stickers,
+              sticker_count: Number(pack.sticker_count || stickers.length || 0),
+              download_count: Number(pack.download_count || 0),
+              favorite_count: Number(pack.favorite_count || 0),
+              like_count: Number(packLikes.length),
+              comment_count: Number(packComments.length),
+              engagement_score: Number(pack.engagement_score || 0),
+              comments: packComments.slice(0, 25).map((comment) => ({
+                id: comment.id,
+                body: comment.body || '',
+                display_name: comment.display_name || '',
+                user_email: comment.user_email || '',
+                like_count: Number(comment.like_count || 0),
+                created_at: comment.created_at || comment.created || null,
+              })),
+            };
+          }),
+          share_requests: userSubmissions
+            .slice()
+            .sort((a, b) => sortTimestamp(b.created_at || b.created) - sortTimestamp(a.created_at || a.created))
+            .map(normalizeSubmission),
           recent_comments: userComments
             .slice()
             .sort((a, b) => sortTimestamp(b.created || b.created_at) - sortTimestamp(a.created || a.created_at))
