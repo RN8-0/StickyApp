@@ -3083,9 +3083,10 @@ Rules:
                     }
                 }
 
-                // 2. Firebase'den güncel veriyi çek (arka planda)
+                // 2. PocketBase'den güncel veriyi çek (arka planda). Açılışta disk cache gösterildiyse
+                // forceRefresh=false eski cache'i tekrar döndürür; bu yüzden arka plan senkronu her zaman sunucuya gider.
                 val loadedPacks = withContext(Dispatchers.IO) {
-                    StickerRepository.loadPacks(this@MainActivity, forceRefresh)
+                    StickerRepository.loadPacks(this@MainActivity, forceRefresh = true)
                 }
 
                 if (loadedPacks.isNotEmpty()) {

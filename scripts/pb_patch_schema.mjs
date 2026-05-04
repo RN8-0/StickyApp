@@ -18,6 +18,15 @@ async function api(method, path, data, token) {
 
 const LANGS = ['tr','de','fr','es','pt','it','ru','ar','hi','ja','ko','zh','th','vi','id','fil'];
 const langFields = LANGS.map(l => ({ name: `name_${l}`, type: 'text' }));
+const fileField = (name, maxSelect = 1, maxSize = 5242880, mimeTypes = ['image/webp','image/png','image/gif']) => ({
+  name,
+  type: 'file',
+  maxSelect,
+  maxSize,
+  mimeTypes,
+  thumbs: [],
+  protected: false,
+});
 
 const packFields = [
   { name:'publisher_email',         type:'email'  },
@@ -29,6 +38,14 @@ const packFields = [
   { name:'image_data_version',      type:'text'   },
   { name:'privacy_policy_website',  type:'url'    },
   { name:'license_agreement_website',type:'url'   },
+  { name:'batch_generated',         type:'bool'   },
+  { name:'batch_search_term',       type:'text'   },
+  { name:'telegram_set_title',      type:'text'   },
+  { name:'telegram_part',           type:'number' },
+  { name:'telegram_total_parts',    type:'number' },
+  { name:'created_at',              type:'text'   },
+  fileField('images', 99, 10485760),
+  fileField('tray_image', 1, 5242880, ['image/webp','image/png']),
 ];
 
 const PATCHES = {
@@ -38,6 +55,9 @@ const PATCHES = {
     { name:'publisher',               type:'text'   },
     { name:'publisher_email',         type:'email'  },
     { name:'publisher_user_id',       type:'text'   },
+    { name:'name',                    type:'text'   },
+    { name:'status',                  type:'text'   },
+    { name:'draft_data',              type:'json'   },
     { name:'category',                type:'text'   },
     { name:'is_premium',              type:'bool'   },
     { name:'is_animated',             type:'bool'   },
@@ -56,9 +76,18 @@ const PATCHES = {
     { name:'fake_download_base',      type:'number' },
     { name:'privacy_policy_website',  type:'url'    },
     { name:'license_agreement_website',type:'url'   },
+    { name:'batch_generated',         type:'bool'   },
+    { name:'batch_source',            type:'text'   },
+    { name:'batch_search_term',       type:'text'   },
     { name:'source',                  type:'text'   },
     { name:'telegram_set_name',       type:'text'   },
+    { name:'telegram_set_title',      type:'text'   },
+    { name:'telegram_part',           type:'number' },
+    { name:'telegram_total_parts',    type:'number' },
+    { name:'created_at',              type:'text'   },
     { name:'disabled_reason',         type:'text'   },
+    fileField('images', 99, 10485760),
+    fileField('tray_image', 1, 5242880, ['image/webp','image/png']),
     ...langFields,
   ],
   messages: [
@@ -103,7 +132,7 @@ const PATCHES = {
     { name:'is_animated',      type:'bool'   },
     { name:'created_at',       type:'date'   },
     { name:'processed_at',     type:'date'   },
-    { name:'images',           type:'file', options: { maxSelect: 99, maxSize: 5242880, mimeTypes: ['image/webp', 'image/png', 'image/gif'] } },
+    fileField('images', 99, 5242880),
   ],
   user_profiles: [
     { name:'device_id',        type:'text'   },

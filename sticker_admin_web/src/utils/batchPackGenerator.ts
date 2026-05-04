@@ -471,6 +471,7 @@ export async function generateBatchPacks(config: BatchPackConfig): Promise<Compl
         let packCreated = false;
 
         while (!packCreated && retryCount <= MAX_RETRIES) {
+            let draftRecordId = '';
             try {
                 const retryLabel = retryCount > 0 ? ` (retry ${retryCount})` : '';
 
@@ -524,11 +525,29 @@ export async function generateBatchPacks(config: BatchPackConfig): Promise<Compl
                     break; // Don't retry if no results at all
                 }
 
-                // === STEP 3: Pack ID ===
-                const packId = searchTerm.toLowerCase()
-                    .replace(/[^a-z0-9\s]/g, '')
-                    .replace(/\s+/g, '_')
-                    .substring(0, 40) + '_' + Date.now().toString(36);
+                // === STEP 3: Create draft record before uploading files ===
+                const category = autoDetectCategory(searchTerm);
+                const draftRecord = await pb.collection('draft_stickers').create({
+                    name: packName,
+                    name_en: packName,
+                    publisher: 'Sticky',
+                    publisher_email: 'contact@arain.digital',
+                    category,
+                    is_premium: false,
+                    is_animated: true,
+                    is_active: false,
+                    status: 'processing',
+                    sticker_count: 0,
+                    stickers: [],
+                    tray_url: '',
+                    tray_image_file: '',
+                    image_data_version: Date.now().toString(),
+                    batch_generated: true,
+                    batch_search_term: searchTerm,
+                    batch_source: source,
+                    created_at: new Date().toISOString(),
+                });
+                draftRecordId = draftRecord.id;
 
                 // === STEP 4: Process stickers (guaranteed count) ===
                 const processedStickers: Sticker[] = [];
@@ -545,7 +564,7 @@ export async function generateBatchPacks(config: BatchPackConfig): Promise<Compl
                         completedPacks
                     });
 
-                    const sticker = await processAndUploadSticker(rawGifs[j], packId, j, (msg) => {
+                    const sticker = await processAndUploadSticker(rawGifs[j], draftRecordId, j, (msg) => {
                         onProgress?.({
                             currentPack: i + 1,
                             totalPacks: totalTarget,
@@ -569,6 +588,8 @@ export async function generateBatchPacks(config: BatchPackConfig): Promise<Compl
 
                 if (processedStickers.length < 3) {
                     console.warn(`[BATCH] "${searchTerm}": too few stickers (${processedStickers.length}), retrying...`);
+                    await pb.collection('draft_stickers').delete(draftRecordId).catch(() => {});
+                    draftRecordId = '';
                     retryCount++;
                     continue;
                 }
@@ -583,7 +604,7 @@ export async function generateBatchPacks(config: BatchPackConfig): Promise<Compl
                     completedPacks
                 });
 
-                const { trayUrl, trayFile } = await createTrayImage(processedStickers, packId);
+                const { trayUrl, trayFile } = await createTrayImage(processedStickers, draftRecordId);
 
                 // === STEP 6: Translation ===
                 onProgress?.({
@@ -596,9 +617,6 @@ export async function generateBatchPacks(config: BatchPackConfig): Promise<Compl
                 });
 
                 const translations = await translatePack(packName, useAiTranslation);
-
-                // === STEP 7: Auto-detect category ===
-                const category = autoDetectCategory(searchTerm);
 
                 // === STEP 8: Save to PocketBase ===
                 onProgress?.({
@@ -627,6 +645,7 @@ export async function generateBatchPacks(config: BatchPackConfig): Promise<Compl
                     sticker_count: processedStickers.length,
                     image_data_version: Date.now().toString(),
                     is_active: true,
+                    status: 'draft',
                     stickers: processedStickers,
                     tray_url: trayUrl,
                     tray_image_file: trayFile,
@@ -636,10 +655,10 @@ export async function generateBatchPacks(config: BatchPackConfig): Promise<Compl
                     batch_source: source
                 };
 
-                await pb.collection('draft_stickers').create({ ...packData });
+                await pb.collection('draft_stickers').update(draftRecordId, packData);
 
                 const completed: CompletedPack = {
-                    id: packId,
+                    id: draftRecordId,
                     name: packName,
                     stickerCount: processedStickers.length,
                     searchTerm,
@@ -662,6 +681,9 @@ export async function generateBatchPacks(config: BatchPackConfig): Promise<Compl
 
             } catch (error: any) {
                 console.error(`[BATCH] Pack creation error (${searchTerm}, retry ${retryCount}):`, error);
+                if (draftRecordId) {
+                    await pb.collection('draft_stickers').delete(draftRecordId).catch(() => {});
+                }
 
                 if (retryCount < MAX_RETRIES) {
                     retryCount++;

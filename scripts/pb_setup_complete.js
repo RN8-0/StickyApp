@@ -42,7 +42,7 @@ const LANGS = ['tr','de','fr','es','pt','it','ru','ar','hi','ja','ko','zh','th',
 const langFields = LANGS.map(l => ({ name: `name_${l}`, type: 'text' }));
 
 function fileField(name, maxSelect = 1, maxSize = 5242880, mimeTypes = ['image/webp','image/png','image/gif']) {
-  return { name, type: 'file', options: { maxSelect, maxSize, mimeTypes } };
+  return { name, type: 'file', maxSelect, maxSize, mimeTypes, thumbs: [], protected: false };
 }
 
 const collections = [
@@ -121,12 +121,35 @@ const collections = [
       { name: 'stickers', type: 'json' },
       { name: 'translations', type: 'json' },
       { name: 'category', type: 'text' },
+      { name: 'is_premium', type: 'bool' },
       { name: 'is_animated', type: 'bool' },
+      { name: 'is_active', type: 'bool' },
+      { name: 'is_popular', type: 'bool' },
       { name: 'tray_image_file', type: 'text' },
       { name: 'tray_url', type: 'url' },
       { name: 'publisher', type: 'text' },
       { name: 'publisher_email', type: 'text' },
+      { name: 'publisher_user_id', type: 'text' },
       { name: 'sticker_count', type: 'number' },
+      { name: 'download_count', type: 'number' },
+      { name: 'view_count', type: 'number' },
+      { name: 'favorite_count', type: 'number' },
+      { name: 'fake_download_base', type: 'number' },
+      { name: 'image_data_version', type: 'text' },
+      { name: 'privacy_policy_website', type: 'url' },
+      { name: 'license_agreement_website', type: 'url' },
+      { name: 'batch_generated', type: 'bool' },
+      { name: 'batch_source', type: 'text' },
+      { name: 'batch_search_term', type: 'text' },
+      { name: 'source', type: 'text' },
+      { name: 'telegram_set_name', type: 'text' },
+      { name: 'telegram_set_title', type: 'text' },
+      { name: 'telegram_part', type: 'number' },
+      { name: 'telegram_total_parts', type: 'number' },
+      { name: 'created_at', type: 'text' },
+      { name: 'disabled_reason', type: 'text' },
+      fileField('images', 99, 10485760),
+      fileField('tray_image', 1, 5242880, ['image/webp','image/png']),
       ...langFields,
     ],
     listRule: ADMIN_RULE, viewRule: ADMIN_RULE, createRule: ADMIN_RULE, updateRule: ADMIN_RULE, deleteRule: ADMIN_RULE,

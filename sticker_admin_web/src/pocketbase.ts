@@ -6,7 +6,7 @@ const APP_URL = import.meta.env.VITE_APP_URL || RUNTIME_ORIGIN;
 const PB_PUBLIC_URL = import.meta.env.VITE_PB_PUBLIC_URL || 'https://sh3xlf9j7symlj3otlw6s8rx.46.225.95.201.sslip.io';
 // Always point directly to PocketBase - do NOT fall back to the admin panel origin
 const PB_URL = import.meta.env.VITE_PB_URL || PB_PUBLIC_URL;
-const WORKER_URL = import.meta.env.VITE_WORKER_URL || `${APP_URL}/worker`;
+const WORKER_URL = import.meta.env.VITE_WORKER_URL || 'https://sticky-worker.46.225.95.201.sslip.io';
 const IMAGE_PROXY_URL = import.meta.env.VITE_IMAGE_PROXY_URL || 'https://sticky-images.46.225.95.201.sslip.io';
 // OAuth redirect must go through PocketBase (not the admin panel URL)
 const OAUTH_REDIRECT_URL = import.meta.env.VITE_OAUTH_REDIRECT_URL || `${PB_PUBLIC_URL}/api/oauth2-redirect`;
@@ -107,7 +107,8 @@ export async function uploadFile(
 ): Promise<string> {
   const formData = new FormData();
   const f = file instanceof File ? file : new File([file], filename || 'file.webp');
-  formData.append(fieldName, f);
+  const uploadFieldName = fieldName === 'images' ? `${fieldName}+` : fieldName;
+  formData.append(uploadFieldName, f);
 
   const record = await pb.collection(collectionName).update(recordId, formData);
   const uploadedFilename = record[fieldName];

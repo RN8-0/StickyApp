@@ -171,6 +171,23 @@ object PocketBaseHelper {
         return (0 until items.length()).map { items.getJSONObject(it) }
     }
 
+    suspend fun listAllRecords(collection: String, filter: String? = null, perPage: Int = 500): List<JSONObject> {
+        val allItems = mutableListOf<JSONObject>()
+        var page = 1
+        while (true) {
+            val params = mutableListOf("perPage=$perPage", "page=$page")
+            filter?.let { params.add("filter=${java.net.URLEncoder.encode(it, "UTF-8")}") }
+            val query = params.joinToString("&")
+            val result = get("/api/collections/$collection/records?$query")
+            val items = result.optJSONArray("items") ?: JSONArray()
+            for (i in 0 until items.length()) allItems.add(items.getJSONObject(i))
+            val totalPages = result.optInt("totalPages", page)
+            if (page >= totalPages || items.length() == 0) break
+            page++
+        }
+        return allItems
+    }
+
     /**
      * Get a single record
      */

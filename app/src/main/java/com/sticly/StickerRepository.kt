@@ -128,11 +128,11 @@ object StickerRepository {
         val allPacks = mutableListOf<Pack>()
         try {
             val stickersJob = kotlinx.coroutines.CoroutineScope(Dispatchers.IO).async {
-                try { PocketBaseHelper.listRecords("stickers", perPage = 500) }
+                try { PocketBaseHelper.listAllRecords("stickers", perPage = 500) }
                 catch (e: Exception) { Log.e(TAG, "PB stickers error: ${e.message}"); emptyList() }
             }
             val premiumJob = kotlinx.coroutines.CoroutineScope(Dispatchers.IO).async {
-                try { PocketBaseHelper.listRecords("premium_stickers", perPage = 500) }
+                try { PocketBaseHelper.listAllRecords("premium_stickers", perPage = 500) }
                 catch (e: Exception) { Log.e(TAG, "PB premium error: ${e.message}"); emptyList() }
             }
             stickersJob.await().mapNotNull { parsePocketBasePack(it, false) }.let { allPacks.addAll(it) }

@@ -609,7 +609,6 @@ export async function importTelegramPacks(
                 const partNum = partIdx + 1;
                 // Format: "Duck 🦆" for single, "Duck 1 🦆", "Duck 2 🦆" for multi
                 const packName = totalParts > 1 ? `${baseNameText} ${partNum} ${baseEmoji}` : baseName;
-                const packId = `tg_${setName.toLowerCase()}_${totalParts > 1 ? partNum + '_' : ''}${Date.now().toString(36)}`;
 
                 // Add part number to translations if multi-part: "Name 2 emoji"
                 const partTranslations: Record<string, string> = {};
@@ -640,107 +639,129 @@ export async function importTelegramPacks(
                     completedPacks
                 });
 
-                // Process stickers - parallel for static, sequential for animated (FFmpeg WASM is single-threaded)
-                const processedStickers: Sticker[] = [];
-                const processedIsAnimated: boolean[] = [];
-                const hasAnimated = chunk.some(s => s.is_animated || s.is_video);
-                const PARALLEL_BATCH = hasAnimated ? 1 : 3; // parallel for static packs
+                const animatedSource = chunk.filter(s => s.is_animated || s.is_video);
+                const staticSource = chunk.filter(s => !s.is_animated && !s.is_video);
+                const sourceSubPacks: Array<{ sourceStickers: TelegramSticker[]; isAnimated: boolean; suffix: string }> =
+                    animatedSource.length > 0 && staticSource.length > 0
+                        ? [
+                            { sourceStickers: animatedSource, isAnimated: true, suffix: ' (Animated)' },
+                            { sourceStickers: staticSource, isAnimated: false, suffix: ' (Static)' }
+                        ]
+                        : [{ sourceStickers: chunk, isAnimated: chunk.some(s => s.is_animated || s.is_video), suffix: '' }];
 
-                for (let j = 0; j < chunk.length; j += PARALLEL_BATCH) {
-                    if (abortSignal?.aborted) break;
-                    const batchEnd = Math.min(j + PARALLEL_BATCH, chunk.length);
-                    const batchSlice = chunk.slice(j, batchEnd);
-
+                if (sourceSubPacks.length > 1) {
                     onProgress?.({
                         currentPack: i + 1,
                         totalPacks: packInputs.length,
-                        currentStep: `${totalParts > 1 ? `[Part ${partNum}/${totalParts}] ` : ''}Processing sticker${PARALLEL_BATCH > 1 ? 's' : ''} ${j + 1}${batchEnd > j + 1 ? `-${batchEnd}` : ''}/${chunk.length}`,
+                        currentStep: `🔀 Mixed pack detected: splitting into animated/static drafts`,
                         packName,
-                        stickerProgress: { current: j, total: chunk.length },
-                        status: 'running',
-                        completedPacks
-                    });
-
-                    const results = await Promise.all(
-                        batchSlice.map((s, bIdx) => {
-                            const globalIdx = partIdx * stickerLimit + j + bIdx;
-                            return processTelegramSticker(cleanBotToken, s, packId, globalIdx, (msg) => {
-                                onProgress?.({
-                                    currentPack: i + 1,
-                                    totalPacks: packInputs.length,
-                                    currentStep: msg,
-                                    packName,
-                                    stickerProgress: { current: j + bIdx, total: chunk.length },
-                                    status: 'running',
-                                    completedPacks
-                                });
-                            }, abortSignal);
-                        })
-                    );
-
-                    results.forEach((sticker, bIdx) => {
-                        if (sticker) {
-                            processedStickers.push(sticker);
-                            processedIsAnimated.push(batchSlice[bIdx].is_animated || batchSlice[bIdx].is_video);
-                        }
-                    });
-
-                    onProgress?.({
-                        currentPack: i + 1,
-                        totalPacks: packInputs.length,
-                        currentStep: `✓ ${processedStickers.length}/${chunk.length} stickers done`,
-                        packName,
-                        stickerProgress: { current: batchEnd, total: chunk.length },
                         status: 'running',
                         completedPacks
                     });
                 }
 
-                if (processedStickers.length === 0) {
-                    onProgress?.({
-                        currentPack: i + 1,
-                        totalPacks: packInputs.length,
-                        currentStep: `⚠️ No stickers processed for "${packName}"`,
-                        status: 'running',
-                        completedPacks
-                    });
-                    continue;
-                }
+                for (const sourceSubPack of sourceSubPacks) {
+                    if (sourceSubPack.sourceStickers.length === 0) continue;
 
-                // WhatsApp requires packs to be either ALL animated or ALL static
-                // Determine actual pack type based on processed stickers
-                const animatedCount = processedIsAnimated.filter(Boolean).length;
-                const staticCount = processedStickers.length - animatedCount;
+                    const subPackName = packName + sourceSubPack.suffix;
+                    const localizedNames = { ...partTranslations, name_en: subPackName };
+                    const createdAt = new Date().toISOString();
+                    const initialPackData: any = {
+                        name: subPackName,
+                        ...localizedNames,
+                        publisher: 'Sticky Telegram',
+                        publisher_email: 'contact@arain.digital',
+                        privacy_policy_website: '',
+                        license_agreement_website: '',
+                        category,
+                        is_premium: false,
+                        is_animated: sourceSubPack.isAnimated,
+                        download_count: 0,
+                        fake_download_base: Math.floor(Math.random() * 7001) + 3000,
+                        view_count: 0,
+                        favorite_count: 0,
+                        sticker_count: 0,
+                        image_data_version: Date.now().toString(),
+                        is_active: false,
+                        stickers: [],
+                        tray_url: '',
+                        tray_image_file: '',
+                        created_at: createdAt,
+                        status: 'processing',
+                        batch_generated: true,
+                        batch_source: 'telegram',
+                        batch_search_term: setName,
+                        telegram_set_name: setName,
+                        telegram_set_title: stickerSet.title,
+                        ...(totalParts > 1 ? { telegram_part: partNum, telegram_total_parts: totalParts } : {})
+                    };
 
-                // Build list of sub-packs to save (1 pack if pure, 2 if mixed)
-                const subPacks: Array<{ stickers: any[]; isAnimated: boolean; suffix: string }> = [];
+                    const draftRecord = await pb.collection('draft_stickers').create(initialPackData);
+                    const draftRecordId = draftRecord.id;
 
-                if (animatedCount > 0 && staticCount > 0) {
-                    // Mixed pack! Split into two separate packs
-                    const animatedStickers = processedStickers.filter((_, idx) => processedIsAnimated[idx]);
-                    const staticStickers = processedStickers.filter((_, idx) => !processedIsAnimated[idx]);
-                    console.log(`[TELEGRAM] Mixed pack detected: splitting into ${animatedCount} animated + ${staticCount} static`);
-                    onProgress?.({
-                        currentPack: i + 1,
-                        totalPacks: packInputs.length,
-                        currentStep: `🔀 Mixed pack detected: splitting into ${animatedCount} animated + ${staticCount} static packs`,
-                        packName,
-                        status: 'running',
-                        completedPacks
-                    });
-                    if (animatedStickers.length > 0) subPacks.push({ stickers: animatedStickers, isAnimated: true, suffix: ' (Animated)' });
-                    if (staticStickers.length > 0) subPacks.push({ stickers: staticStickers, isAnimated: false, suffix: ' (Static)' });
-                } else {
-                    subPacks.push({ stickers: processedStickers, isAnimated: animatedCount > 0, suffix: '' });
-                }
+                    const processedStickers: Sticker[] = [];
+                    const sourceList = sourceSubPack.sourceStickers;
+                    const PARALLEL_BATCH = sourceSubPack.isAnimated ? 1 : 3;
 
-                for (const subPack of subPacks) {
-                    if (subPack.stickers.length === 0) continue;
+                    for (let j = 0; j < sourceList.length; j += PARALLEL_BATCH) {
+                        if (abortSignal?.aborted) break;
+                        const batchEnd = Math.min(j + PARALLEL_BATCH, sourceList.length);
+                        const batchSlice = sourceList.slice(j, batchEnd);
 
-                    const subPackName = packName + subPack.suffix;
-                    const subPackId = subPack.suffix ? `${packId}_${subPack.isAnimated ? 'anim' : 'static'}` : packId;
+                        onProgress?.({
+                            currentPack: i + 1,
+                            totalPacks: packInputs.length,
+                            currentStep: `${totalParts > 1 ? `[Part ${partNum}/${totalParts}] ` : ''}Processing sticker${PARALLEL_BATCH > 1 ? 's' : ''} ${j + 1}${batchEnd > j + 1 ? `-${batchEnd}` : ''}/${sourceList.length}`,
+                            packName: subPackName,
+                            stickerProgress: { current: j, total: sourceList.length },
+                            status: 'running',
+                            completedPacks
+                        });
 
-                    // Create tray
+                        const results = await Promise.all(
+                            batchSlice.map((s, bIdx) => {
+                                const globalIdx = partIdx * stickerLimit + j + bIdx;
+                                return processTelegramSticker(cleanBotToken, s, draftRecordId, globalIdx, (msg) => {
+                                    onProgress?.({
+                                        currentPack: i + 1,
+                                        totalPacks: packInputs.length,
+                                        currentStep: msg,
+                                        packName: subPackName,
+                                        stickerProgress: { current: j + bIdx, total: sourceList.length },
+                                        status: 'running',
+                                        completedPacks
+                                    });
+                                }, abortSignal);
+                            })
+                        );
+
+                        results.forEach((sticker) => {
+                            if (sticker) processedStickers.push(sticker);
+                        });
+
+                        onProgress?.({
+                            currentPack: i + 1,
+                            totalPacks: packInputs.length,
+                            currentStep: `✓ ${processedStickers.length}/${sourceList.length} stickers done`,
+                            packName: subPackName,
+                            stickerProgress: { current: batchEnd, total: sourceList.length },
+                            status: 'running',
+                            completedPacks
+                        });
+                    }
+
+                    if (processedStickers.length === 0) {
+                        await pb.collection('draft_stickers').delete(draftRecordId).catch(() => {});
+                        onProgress?.({
+                            currentPack: i + 1,
+                            totalPacks: packInputs.length,
+                            currentStep: `⚠️ No stickers processed for "${subPackName}"`,
+                            status: 'running',
+                            completedPacks
+                        });
+                        continue;
+                    }
+
                     onProgress?.({
                         currentPack: i + 1,
                         totalPacks: packInputs.length,
@@ -750,66 +771,47 @@ export async function importTelegramPacks(
                         completedPacks
                     });
 
-                    const { trayUrl, trayFile } = await createTrayFromSticker(subPack.stickers, subPackId);
+                    const { trayUrl, trayFile } = await createTrayFromSticker(processedStickers, draftRecordId);
 
-                    // Save to PocketBase
                     onProgress?.({
                         currentPack: i + 1,
                         totalPacks: packInputs.length,
-                        currentStep: `Saving "${subPackName}" to database...`,
+                        currentStep: `Saving "${subPackName}" to drafts...`,
                         packName: subPackName,
                         status: 'running',
                         completedPacks
                     });
 
-                    const packData: any = {
-                        name: subPackName,
-                        ...partTranslations,
-                        publisher: 'Sticky Telegram',
-                        publisher_email: 'contact@arain.digital',
-                        privacy_policy_website: '',
-                        license_agreement_website: '',
-                        category,
-                        is_premium: false,
-                        is_animated: subPack.isAnimated,
-                        download_count: 0,
-                        fake_download_base: Math.floor(Math.random() * 7001) + 3000,
-                        view_count: 0,
-                        favorite_count: 0,
-                        sticker_count: subPack.stickers.length,
-                        image_data_version: Date.now().toString(),
+                    const finalPackData: any = {
+                        ...initialPackData,
                         is_active: true,
-                        stickers: subPack.stickers,
+                        status: 'draft',
+                        sticker_count: processedStickers.length,
+                        image_data_version: Date.now().toString(),
+                        stickers: processedStickers,
                         tray_url: trayUrl,
-                        tray_image_file: trayFile,
-                        created_at: new Date().toISOString(),
-                        batch_generated: true,
-                        batch_source: 'telegram',
-                        batch_search_term: setName,
-                        telegram_set_name: setName,
-                        telegram_set_title: stickerSet.title,
-                        ...(totalParts > 1 ? { telegram_part: partNum, telegram_total_parts: totalParts } : {})
+                        tray_image_file: trayFile
                     };
 
-                    await pb.collection('draft_stickers').create({ ...packData });
+                    await pb.collection('draft_stickers').update(draftRecordId, finalPackData);
 
                     completedPacks.push({
-                        id: subPackId,
+                        id: draftRecordId,
                         name: subPackName,
-                        stickerCount: subPack.stickers.length,
+                        stickerCount: processedStickers.length,
                         telegramName: setName
                     });
 
                     onProgress?.({
                         currentPack: i + 1,
                         totalPacks: packInputs.length,
-                        currentStep: `✅ "${subPackName}" imported! (${subPack.stickers.length} ${subPack.isAnimated ? 'animated' : 'static'} stickers)`,
+                        currentStep: `✅ "${subPackName}" imported to drafts! (${processedStickers.length} ${sourceSubPack.isAnimated ? 'animated' : 'static'} stickers)`,
                         packName: subPackName,
                         status: 'running',
                         completedPacks
                     });
 
-                    console.log(`[TELEGRAM] ✅ Imported: ${subPackName} (${subPack.stickers.length} ${subPack.isAnimated ? 'animated' : 'static'} stickers from @${setName})`);
+                    console.log(`[TELEGRAM] ✅ Imported to drafts: ${subPackName} (${processedStickers.length} ${sourceSubPack.isAnimated ? 'animated' : 'static'} stickers from @${setName})`);
                 }
             }
 

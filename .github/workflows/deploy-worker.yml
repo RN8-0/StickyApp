@@ -56,7 +56,7 @@ jobs:
               -l "traefik.http.routers.sticky-worker.tls.certresolver=letsencrypt" \
               -l "traefik.http.services.sticky-worker.loadbalancer.server.port=3000" \
               -e GOOGLE_APPLICATION_CREDENTIALS=/app/firebase-service-account.json \
-              -e PB_URL=http://sh3xlf9j7symlj3otlw6s8rx-193542936752:8090 \
+              -e PB_URL=https://sh3xlf9j7symlj3otlw6s8rx.46.225.95.201.sslip.io \
               -e PB_ADMIN_EMAIL=arainunger@gmail.com \
               -e PB_ADMIN_PASS=StickyAdmin2026! \
               -e NTFY_URL=http://sticky-ntfy:80 \

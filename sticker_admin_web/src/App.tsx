@@ -705,8 +705,7 @@ function App() {
         return;
       }
 
-      // 1. Build sticker list from existing PocketBase URLs (no re-upload needed)
-      const finalStickers: Sticker[] = submissionStickers
+      const sourceStickerRefs: Sticker[] = submissionStickers
         .filter((s: any) => s.image_url || s.url)
         .map((s: any, i: number) => ({
           image_file: s.image_file || s.name || `sticker_${i + 1}.webp`,
@@ -714,13 +713,13 @@ function App() {
           emojis: s.emojis || ['⭐'],
         }));
 
-      if (finalStickers.length < 9) {
+      if (sourceStickerRefs.length < 9) {
         alert('A public pack must contain at least 9 stickers with valid image URLs.');
         setIsProcessing(false);
         return;
       }
 
-      // 2. Create the pack with all sticker data at once
+      // 2. Create the public pack first, then copy submission files into that record.
       const packData: any = {
         name: submission.pack_name,
         publisher: submission.publisher_name || submission.display_name || 'Community Artist',
@@ -732,14 +731,52 @@ function App() {
         download_count: 0,
         view_count: 0,
         favorite_count: 0,
-        sticker_count: finalStickers.length,
+        sticker_count: 0,
         image_data_version: '1',
         is_active: true,
-        stickers: finalStickers,
-        tray_url: finalStickers[0]?.url || '',
+        stickers: [],
+        tray_url: '',
+        tray_image_file: '',
         created_at: new Date().toISOString(),
       };
       const created = await pb.collection('stickers').create(packData);
+
+      const copiedStickers: Sticker[] = [];
+      try {
+        for (let index = 0; index < sourceStickerRefs.length; index++) {
+          const sticker = sourceStickerRefs[index];
+          const requestedName = normalizeFileName(sticker.image_file || `sticker_${index + 1}.webp`, `sticker_${index + 1}.webp`);
+          const file = await fetchAsFile(sticker.url, requestedName);
+          const uploadedUrl = await uploadFile('stickers', created.id, 'images', file, requestedName);
+          const uploadedName = filenameFromUrl(uploadedUrl, requestedName);
+
+          copiedStickers.push({
+            image_file: uploadedName,
+            url: uploadedUrl,
+            emojis: Array.isArray(sticker.emojis) && sticker.emojis.length > 0 ? sticker.emojis : ['⭐'],
+          });
+        }
+
+        let trayUrl = '';
+        let trayFile = '';
+        if (sourceStickerRefs[0]?.url) {
+          const requestedTrayName = normalizeFileName(sourceStickerRefs[0].image_file || 'tray.png', 'tray.png');
+          const trayFileObject = await fetchAsFile(sourceStickerRefs[0].url, requestedTrayName);
+          trayUrl = await uploadFile('stickers', created.id, 'tray_image', trayFileObject, requestedTrayName);
+          trayFile = filenameFromUrl(trayUrl, requestedTrayName);
+        }
+
+        await pb.collection('stickers').update(created.id, {
+          stickers: copiedStickers,
+          sticker_count: copiedStickers.length,
+          tray_url: trayUrl || copiedStickers[0]?.url || '',
+          tray_image_file: trayFile,
+          image_data_version: Date.now().toString(),
+        });
+      } catch (copyError) {
+        await pb.collection('stickers').delete(created.id).catch(() => {});
+        throw copyError;
+      }
 
       // 3. Update submission status
       await pb.collection('user_submissions').update(submission.id, {
@@ -1064,6 +1101,131 @@ function App() {
     }
   };
 
+  const stripDraftPublishMeta = (draft: StickerPack, translations: Record<string, string>, currentName: string) => {
+    const packDataWithoutMeta = { ...(draft as any) };
+    [
+      'id',
+      'collectionId',
+      'collectionName',
+      'expand',
+      'created',
+      'updated',
+      'images',
+      'tray_image',
+      'status',
+      'draft_data',
+    ].forEach((key) => delete packDataWithoutMeta[key]);
+
+    return {
+      ...packDataWithoutMeta,
+      ...translations,
+      name: currentName,
+      name_en: currentName,
+      is_active: true,
+    };
+  };
+
+  const filenameFromUrl = (url: string, fallback: string) => {
+    try {
+      const lastSegment = new URL(url).pathname.split('/').filter(Boolean).pop();
+      return lastSegment ? decodeURIComponent(lastSegment) : fallback;
+    } catch {
+      return fallback;
+    }
+  };
+
+  const normalizeFileName = (name: string, fallback: string) => {
+    const clean = (name || fallback).split('/').pop()?.replace(/[^a-zA-Z0-9._-]/g, '_') || fallback;
+    return clean.includes('.') ? clean : `${clean}.webp`;
+  };
+
+  const fetchAsFile = async (url: string, fileName: string) => {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`File copy failed (${response.status}) for ${fileName}`);
+    const blob = await response.blob();
+    return new File([blob], fileName, { type: blob.type || 'image/webp' });
+  };
+
+  const publishDraftRecord = async (
+    draft: StickerPack,
+    targetCollection: 'stickers' | 'premium_stickers',
+    packData: any,
+    onStep?: (step: string, percent: number) => void
+  ) => {
+    const sourceStickers = Array.isArray(draft.stickers) ? draft.stickers : [];
+    if (sourceStickers.length === 0) throw new Error('Draft has no stickers to publish.');
+
+    let targetRecord: any;
+    const initialData = {
+      ...packData,
+      stickers: [],
+      sticker_count: 0,
+      tray_url: '',
+      tray_image_file: '',
+      image_data_version: Date.now().toString(),
+    };
+
+    try {
+      try {
+        targetRecord = await pb.collection(targetCollection).create({ id: draft.id, ...initialData });
+      } catch (pbErr: any) {
+        if (pbErr?.status === 400 || pbErr?.message?.toLowerCase?.().includes('id')) {
+          targetRecord = await pb.collection(targetCollection).create(initialData);
+        } else {
+          throw pbErr;
+        }
+      }
+
+      const copiedStickers: Sticker[] = [];
+      for (let index = 0; index < sourceStickers.length; index++) {
+        const sticker: any = sourceStickers[index];
+        const sourceUrl = sticker.url || sticker.image_url;
+        if (!sourceUrl) throw new Error(`Sticker #${index + 1} is missing a source URL.`);
+
+        onStep?.(`Copying sticker ${index + 1}/${sourceStickers.length}...`, 55 + Math.round((index / sourceStickers.length) * 25));
+        const requestedName = normalizeFileName(sticker.image_file || sticker.name || `sticker_${index + 1}.webp`, `sticker_${index + 1}.webp`);
+        const file = await fetchAsFile(sourceUrl, requestedName);
+        const uploadedUrl = await uploadFile(targetCollection, targetRecord.id, 'images', file, requestedName);
+        const uploadedName = filenameFromUrl(uploadedUrl, requestedName);
+
+        copiedStickers.push({
+          image_file: uploadedName,
+          url: uploadedUrl,
+          emojis: Array.isArray(sticker.emojis) && sticker.emojis.length > 0 ? sticker.emojis : ['⭐'],
+        });
+      }
+
+      let trayUrl = '';
+      let trayFile = '';
+      const traySourceUrl = draft.tray_url || copiedStickers[0]?.url;
+      if (traySourceUrl) {
+        onStep?.('Copying tray image...', 84);
+        const requestedTrayName = normalizeFileName(draft.tray_image_file || 'tray.png', 'tray.png');
+        const trayFileObject = await fetchAsFile(traySourceUrl, requestedTrayName);
+        trayUrl = await uploadFile(targetCollection, targetRecord.id, 'tray_image', trayFileObject, requestedTrayName);
+        trayFile = filenameFromUrl(trayUrl, requestedTrayName);
+      }
+
+      const finalData = {
+        ...packData,
+        stickers: copiedStickers,
+        sticker_count: copiedStickers.length,
+        tray_url: trayUrl,
+        tray_image_file: trayFile,
+        image_data_version: Date.now().toString(),
+        is_active: true,
+      };
+
+      onStep?.('Finalizing published pack...', 88);
+      return await pb.collection(targetCollection).update(targetRecord.id, finalData);
+    } catch (error) {
+      if (targetRecord?.id) {
+        await pb.collection(targetCollection).delete(targetRecord.id).catch(() => {});
+      }
+      throw error;
+    }
+  };
+
   const publishDraft = async (draft: StickerPack) => {
     if (!window.confirm(`Are you sure you want to publish "${draft.name}"?`)) return;
     setDraftPublishing(draft.id);
@@ -1080,24 +1242,12 @@ function App() {
 
       setSinglePublishProgress({ step: `Publishing ${stickerCount} stickers to database...`, percent: 55 });
       const targetCollection = draft.is_premium ? 'premium_stickers' : 'stickers';
-      const { id, collectionId, collectionName, expand, ...packDataWithoutMeta } = draft as any;
-      const packData = {
-        ...packDataWithoutMeta,
-        ...translations,
-        name: currentName,
-        name_en: currentName,
-        is_active: true,
-      };
-      try {
-        await pb.collection(targetCollection).create({ id: draft.id, ...packData });
-      } catch (pbErr: any) {
-        // If ID conflict, try without specifying id
-        if (pbErr?.message?.includes('id') || pbErr?.status === 400) {
-          await pb.collection(targetCollection).create(packData);
-        } else throw pbErr;
-      }
+      const packData = stripDraftPublishMeta(draft, translations, currentName);
+      await publishDraftRecord(draft, targetCollection, packData, (step, percent) => {
+        setSinglePublishProgress({ step, percent });
+      });
 
-      setSinglePublishProgress({ step: 'Cleaning up draft...', percent: 75 });
+      setSinglePublishProgress({ step: 'Cleaning up draft...', percent: 92 });
       await pb.collection('draft_stickers').delete(draft.id);
       setDraftPacks(prev => prev.filter(p => p.id !== draft.id));
       if (selectedDraft?.id === draft.id) setSelectedDraft(null);
@@ -1131,13 +1281,8 @@ function App() {
           try { translations = await deepseekService.translatePackName(currentName); } catch { translations = {}; }
         }
         const targetCollection = draft.is_premium ? 'premium_stickers' : 'stickers';
-        const { id, collectionId, collectionName, expand, ...packDataWithoutMeta } = draft as any;
-        const packData = { ...packDataWithoutMeta, ...translations, name: currentName, name_en: currentName, is_active: true };
-        try {
-          await pb.collection(targetCollection).create({ id: draft.id, ...packData });
-        } catch {
-          await pb.collection(targetCollection).create(packData);
-        }
+        const packData = stripDraftPublishMeta(draft, translations, currentName);
+        await publishDraftRecord(draft, targetCollection, packData);
         await pb.collection('draft_stickers').delete(draft.id).catch(() => {});
         published++;
       } catch (error: any) {
