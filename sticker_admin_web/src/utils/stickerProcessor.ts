@@ -109,17 +109,21 @@ class StickerProcessor {
     /**
      * Static image processing
      */
-    async processStatic(file: File, onProgress?: (p: StickerProgress) => void): Promise<Blob> {
-        onProgress?.({ message: 'Removing background...', percentage: 20 });
-
-        const removedBgBlob = await removeBackground(file, {
-            progress: (message: string) => {
-                onProgress?.({ message: `Removing background: ${message}`, percentage: 80 });
-            }
-        });
+    async processStatic(file: File, onProgress?: (p: StickerProgress) => void, removeBg: boolean = false): Promise<Blob> {
+        let source: Blob = file;
+        if (removeBg) {
+            onProgress?.({ message: 'Removing background...', percentage: 20 });
+            source = await removeBackground(file, {
+                progress: (message: string) => {
+                    onProgress?.({ message: `Removing background: ${message}`, percentage: 80 });
+                }
+            });
+        } else {
+            onProgress?.({ message: 'Optimizing sticker...', percentage: 70 });
+        }
 
         onProgress?.({ message: 'Resizing...', percentage: 90 });
-        return this.resizeAndCenter(removedBgBlob);
+        return this.resizeAndCenter(source);
     }
 
     /**

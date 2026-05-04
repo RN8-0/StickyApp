@@ -2,6 +2,9 @@
 <resources>
     <string name="app_name">Sticky</string>
     <string name="search_hint">Paketleri ara…</string>
+    <string name="clear_search">Aramayı temizle</string>
+    <string name="shared_by_sticky">Sticky tarafından paylaşıldı</string>
+    <string name="view_profile">Profili görüntüle</string>
     <string name="settings">Ayarlar</string>
     <string name="theme">Tema</string>
     <string name="faq">SSS</string>
@@ -14,7 +17,7 @@
     <string name="faq_title">Sıkça Sorulan Sorular</string>
     <string name="faq_content">Çıkartma nasıl eklenir?\nBir paket seçin ve \"WhatsApp\'a Ekle\" düğmesini tıklayın.\n\nÇıkartmalar neden eklenmiyor?\nWhatsApp\'ın güncel olduğundan emin olun.\n\nKaç çıkartma ekleyebilirim?\nİstediğiniz kadar paket ekleyebilirsiniz.</string>
     <string name="ok">TAMAM</string>
-    <string name="cancel">İptal etmek</string>
+    <string name="cancel">İptal</string>
     <string name="contact_us">Bize Ulaşın</string>
     <string name="rate_us">Bizi Değerlendirin</string>
     <string name="premium">prim</string>
@@ -39,7 +42,7 @@
     <string name="contact_email_hint">E-postanız</string>
     <string name="contact_subject_hint">Ders</string>
     <string name="contact_message_hint">Mesajınız</string>
-    <string name="send">Göndermek</string>
+    <string name="send">Gönder</string>
     <string name="sending">Gönderiliyor…</string>
     <string name="message_sent">Mesajınız başarıyla gönderildi!</string>
     <string name="message_error">Mesaj gönderilemedi. Lütfen tekrar deneyin.</string>
@@ -341,7 +344,7 @@
     <string name="warm">Ilık</string>
     <string name="vintage">Nostaljik</string>
     <string name="adjustments">Ayarlamalar</string>
-    <string name="onboarding_skip">Atlamak</string>
+    <string name="onboarding_skip">Atla</string>
     <string name="onboarding_next">Sonraki</string>
     <string name="onboarding_start">Başlayın</string>
     <string name="onboarding_1_title">✨ Yapışkan\'a hoş geldiniz</string>
@@ -500,7 +503,7 @@
     <string name="feature_ai_sticker_title">Sınırsız Yapay Zeka Çıkartmaları</string>
     <string name="feature_ai_sticker_desc">Yapışkan AI ile sınırsız AI destekli çıkartmalar oluşturun - günlük sınır yok!</string>
     <string name="edit_video">Videoyu Düzenle</string>
-    <string name="save">Kaydetmek</string>
+    <string name="save">Kaydet</string>
     <string name="select_trim_portion">Kırpmak istediğiniz kısmı seçin</string>
     <string name="crop_none">Hiçbiri</string>
     <string name="crop_circle">Daire</string>
@@ -622,9 +625,9 @@
     <string name="profile_stat_published">Yayınlandı</string>
     <string name="profile_stat_downloads">İndirilenler</string>
     <string name="profile_stat_favorites">Favoriler</string>
-    <string name="profile_share_pack">Çıkartma Paketini Paylaş</string>
+    <string name="profile_share_pack">Paketi uygulamada paylaş</string>
     <string name="profile_my_published_packs">Yayınlanan Paketlerim</string>
-    <string name="profile_no_packs">Henüz herhangi bir paket yayınlamadınız.\nİlk paketinizi göndermek için \"Çıkartma Paketini Paylaş\"a dokunun!</string>
+    <string name="profile_no_packs">Henüz herhangi bir paket yayınlamadınız.\nİlk paketinizi paylaşmak için \"Paketi uygulamada paylaş\"a dokunun!</string>
     <string name="profile_login_title">Devam etmek için Oturum Açın</string>
     <string name="profile_login_desc">Profilinizi oluşturmak, çıkartma paketleri yayınlamak ve istatistiklerinizi takip etmek için Google hesabınızla oturum açın.</string>
     <string name="profile_sign_in">Google ile oturum açın</string>
@@ -632,9 +635,10 @@
     <string name="profile_loading">Profil yükleniyor…</string>
 
     <!-- Submit Pack -->
-    <string name="submit_pack_title">Çıkartma Paketini Gönder</string>
+    <string name="submit_pack_title">Paketi uygulamada paylaş</string>
     <string name="submit_pack_name_hint">Paket Adı</string>
     <string name="submit_category_label">Kategori</string>
+    <string name="submit_category_hint">Bu paketin uygulamada nerede görüneceğini seçin.</string>
     <string name="submit_stickers_label">Çıkartmalar</string>
     <string name="submit_stickers_hint">En az 9 çıkartma ekleyin (en fazla 30). Galeriden eklemek için dokunun.</string>
 
@@ -645,9 +649,22 @@
     <string name="status_rejected">Reddedildi</string>
     <string name="profile_notifications_title">Bildirimler</string>
     <string name="no_notifications">Henüz bildirim yok</string>
+    <string name="notification_follow_title">Yeni takipçi</string>
+    <string name="notification_follow_body">%1$s seni takip etmeye başladı.</string>
+    <string name="notification_pack_like_title">Yeni paket beğenisi</string>
+    <string name="notification_pack_like_body">%1$s &quot;%2$s&quot; paketini beğendi.</string>
+    <string name="notification_category_social">Sosyal</string>
+    <string name="sticker_pack">Çıkartma paketi</string>
+    <string name="category_update">Güncelleme</string>
+    <string name="category_approval">Onay</string>
+    <string name="category_new_content">Yeni İçerik</string>
+    <string name="category_premium">Premium</string>
+    <string name="category_promo">Kampanya</string>
+    <string name="category_pack">Çıkartma Paketi</string>
+    <string name="category_general">Genel</string>
     <string name="submit_add_sticker">Çıkartma Ekle</string>
     <string name="submit_add_sticker_count">Çıkartma Ekle (%1$d/%2$d)</string>
-    <string name="submit_pack_button">Paketi Gönder</string>
+    <string name="submit_pack_button">Paketi uygulamada paylaş</string>
     <string name="submit_max_stickers">Paket başına maksimum %d çıkartma</string>
     <string name="submit_min_stickers">Lütfen en az %d çıkartma ekleyin</string>
     <string name="submit_name_required">Paket adı gerekli</string>
@@ -685,7 +702,14 @@
     <string name="rejection_reason_label">Red Nedeni</string>
     <string name="saving_submission">Gönderi kaydediliyor…</string>
     <string name="status_flagged">İşaretlendi ⚠️</string>
-    <string name="submit_my_stickers_hint">Göndermek için koleksiyonunuzdan bir sticker paketi seçin.</string>
-    <string name="submit_select_pack_required">Göndermek için bir sticker paketi seçin</string>
+    <string name="submit_my_stickers_hint">Göndermek için koleksiyonunuzdan bir çıkartma paketi seçin.</string>
+    <string name="submit_select_pack_required">Göndermek için bir çıkartma paketi seçin</string>
+    <string name="comment_hint">Yorum yaz</string>
+    <string name="no_comments_yet">Henüz yorum yok</string>
+    <string name="like">Beğen</string>
+    <string name="liked">Beğenildi</string>
+    <string name="likes_short">beğeni</string>
+    <string name="reply">Yanıtla</string>
+    <string name="reply_to_user">%1$s adlı kullanıcıya yanıt yaz</string>
     <string name="uploading_stickers">Sticker\'lar yükleniyor…</string>
 </resources>

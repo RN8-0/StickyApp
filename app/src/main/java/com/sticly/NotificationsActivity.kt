@@ -1,6 +1,7 @@
 package com.sticly
 
 import android.os.Bundle
+import android.content.Intent
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -34,7 +35,12 @@ class NotificationsActivity : AppCompatActivity() {
         val read: Boolean,
         val dateLabel: String,
         val timestamp: Long,
-        val category: String = "general"
+        val category: String = "general",
+        val type: String = "general",
+        val actorId: String = "",
+        val actorEmail: String = "",
+        val actorName: String = "",
+        val actorPhoto: String = ""
     )
 
     private val items = mutableListOf<Notif>()
@@ -202,8 +208,13 @@ class NotificationsActivity : AppCompatActivity() {
                 val record = arr.getJSONObject(i)
                 val timestamp = record.optString("timestamp", record.optString("created", ""))
                 val date = parseTimestamp(timestamp)
-                val body = record.optString("body", record.optString("message", ""))
-                val title = record.optString("title", getString(R.string.profile_notifications_title))
+                val topic = record.optString("topic", record.optString("type", "general"))
+                val data = notificationData(record)
+                val actorName = data.optString("actor_name", record.optString("from", ""))
+                val packName = data.optString("pack_name", "")
+                val rawBody = record.optString("body", record.optString("message", ""))
+                val rawTitle = record.optString("title", getString(R.string.profile_notifications_title))
+                val (title, body) = localizedNotificationText(topic, actorName, packName, rawTitle, rawBody)
                 Notif(
                     id = record.optString("id"),
                     title = title,
@@ -216,10 +227,33 @@ class NotificationsActivity : AppCompatActivity() {
                         ).format(it)
                     }.orEmpty(),
                     timestamp = date?.time ?: 0L,
-                    category = detectCategory(title, body)
+                    category = detectCategory(topic, title, body),
+                    type = topic,
+                    actorId = data.optString("actor_id"),
+                    actorEmail = data.optString("actor_email"),
+                    actorName = actorName,
+                    actorPhoto = data.optString("actor_photo")
                 )
             }.sortedByDescending { it.timestamp }
         }.getOrElse { emptyList() }
+    }
+
+    private fun notificationData(record: org.json.JSONObject): org.json.JSONObject {
+        val value = record.opt("data")
+        return when (value) {
+            is org.json.JSONObject -> value
+            is String -> runCatching { org.json.JSONObject(value) }.getOrDefault(org.json.JSONObject())
+            else -> org.json.JSONObject()
+        }
+    }
+
+    private fun localizedNotificationText(type: String, actorName: String, packName: String, fallbackTitle: String, fallbackBody: String): Pair<String, String> {
+        val actor = actorName.ifBlank { getString(R.string.publisher_default) }
+        return when (type) {
+            "social_follow" -> getString(R.string.notification_follow_title) to getString(R.string.notification_follow_body, actor)
+            "pack_like" -> getString(R.string.notification_pack_like_title) to getString(R.string.notification_pack_like_body, actor, packName.ifBlank { getString(R.string.sticker_pack) })
+            else -> fallbackTitle to fallbackBody
+        }
     }
 
     private fun buildQueryParams(deviceId: String, userId: String, email: String): String {
@@ -256,7 +290,8 @@ class NotificationsActivity : AppCompatActivity() {
         }
     }
 
-    private fun detectCategory(title: String, body: String): String {
+    private fun detectCategory(type: String, title: String, body: String): String {
+        if (type == "social_follow" || type == "pack_like") return "social"
         val text = "$title $body".lowercase()
         return when {
             text.contains("update") || text.contains("new version") || text.contains("güncelleme") -> "update"
@@ -302,46 +337,61 @@ class NotificationsActivity : AppCompatActivity() {
                     holder.icon.setImageResource(R.drawable.ic_menu)
                     holder.icon.backgroundTintList = android.content.res.ColorStateList.valueOf(ContextCompat.getColor(ctx, R.color.primary_light))
                     holder.icon.setColorFilter(ContextCompat.getColor(ctx, R.color.primary))
-                    holder.category.text = "Update"
+                    holder.category.text = getString(R.string.category_update)
                 }
                 "approval" -> {
                     holder.icon.setImageResource(R.drawable.ic_notification)
                     holder.icon.backgroundTintList = android.content.res.ColorStateList.valueOf(ContextCompat.getColor(ctx, R.color.success) and 0xFFFFFF or 0x20000000.toInt())
                     holder.icon.setColorFilter(ContextCompat.getColor(ctx, R.color.success))
-                    holder.category.text = "Approval"
+                    holder.category.text = getString(R.string.category_approval)
                 }
                 "new_content" -> {
                     holder.icon.setImageResource(R.drawable.ic_menu)
                     holder.icon.backgroundTintList = android.content.res.ColorStateList.valueOf(ContextCompat.getColor(ctx, R.color.warning) and 0xFFFFFF or 0x20000000.toInt())
                     holder.icon.setColorFilter(ContextCompat.getColor(ctx, R.color.warning))
-                    holder.category.text = "New Content"
+                    holder.category.text = getString(R.string.category_new_content)
                 }
                 "premium" -> {
                     holder.icon.setImageResource(R.drawable.ic_menu)
                     holder.icon.backgroundTintList = android.content.res.ColorStateList.valueOf(ContextCompat.getColor(ctx, android.graphics.Color.parseColor("#FFD700")) and 0xFFFFFF or 0x25000000.toInt())
                     holder.icon.setColorFilter(android.graphics.Color.parseColor("#DAA520"))
-                    holder.category.text = "Premium"
+                    holder.category.text = getString(R.string.category_premium)
                 }
                 "promo" -> {
                     holder.icon.setImageResource(R.drawable.ic_menu)
                     holder.icon.backgroundTintList = android.content.res.ColorStateList.valueOf(ContextCompat.getColor(ctx, R.color.danger) and 0xFFFFFF or 0x20000000.toInt())
                     holder.icon.setColorFilter(ContextCompat.getColor(ctx, R.color.danger))
-                    holder.category.text = "Promo"
+                    holder.category.text = getString(R.string.category_promo)
                 }
                 "pack" -> {
                     holder.icon.setImageResource(R.drawable.ic_menu)
                     holder.icon.backgroundTintList = android.content.res.ColorStateList.valueOf(ContextCompat.getColor(ctx, R.color.primary_light))
                     holder.icon.setColorFilter(ContextCompat.getColor(ctx, R.color.primary))
-                    holder.category.text = "Sticker Pack"
+                    holder.category.text = getString(R.string.category_pack)
+                }
+                "social" -> {
+                    holder.icon.setImageResource(R.drawable.ic_person)
+                    holder.icon.backgroundTintList = android.content.res.ColorStateList.valueOf(ContextCompat.getColor(ctx, R.color.primary_light))
+                    holder.icon.setColorFilter(ContextCompat.getColor(ctx, R.color.primary))
+                    holder.category.text = getString(R.string.notification_category_social)
                 }
                 else -> {
                     holder.icon.setImageResource(R.drawable.ic_notification)
                     holder.icon.backgroundTintList = android.content.res.ColorStateList.valueOf(ContextCompat.getColor(ctx, R.color.chip_bg))
                     holder.icon.setColorFilter(ContextCompat.getColor(ctx, R.color.text_secondary))
-                    holder.category.text = "General"
+                    holder.category.text = getString(R.string.category_general)
                 }
             }
             holder.category.visibility = View.VISIBLE
+            holder.itemView.setOnClickListener {
+                if (msg.actorId.isBlank() && msg.actorEmail.isBlank() && msg.actorName.isBlank()) return@setOnClickListener
+                startActivity(Intent(this@NotificationsActivity, PublisherProfileActivity::class.java).apply {
+                    putExtra(PublisherProfileActivity.EXTRA_PUBLISHER_ID, msg.actorId.ifBlank { msg.actorEmail })
+                    putExtra(PublisherProfileActivity.EXTRA_PUBLISHER_EMAIL, msg.actorEmail)
+                    putExtra(PublisherProfileActivity.EXTRA_PUBLISHER_NAME, msg.actorName)
+                    putExtra(PublisherProfileActivity.EXTRA_PUBLISHER_PHOTO, msg.actorPhoto)
+                })
+            }
         }
 
         override fun getItemCount(): Int = items.size

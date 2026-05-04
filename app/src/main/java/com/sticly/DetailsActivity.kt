@@ -31,6 +31,7 @@ import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
 import com.google.android.material.button.MaterialButton
+import com.google.android.material.bottomsheet.BottomSheetDialog
 import kotlinx.coroutines.*
 import org.json.JSONArray
 import org.json.JSONObject
@@ -242,6 +243,10 @@ class DetailsActivity : AppCompatActivity() {
         isAnimatedPack = pack.isAnimated
         isPackReady = false // Reset state when setting up new pack
 
+        if (pack.isAnimated && !pack.id.startsWith("custom_")) {
+            StickerRepository.prepareAnimatedPackCache(this, pack.id)
+        }
+
         // View count ve interstitial — tamamen arka planda
         lifecycleScope.launch(Dispatchers.IO) {
             StickerRepository.incrementViewCount(pack.id, pack.isPremium)
@@ -260,6 +265,7 @@ class DetailsActivity : AppCompatActivity() {
         btnConfirmDelete = findViewById(R.id.btnConfirmDelete)
         installedIcon = findViewById(R.id.installedIcon)
         btnFixedWhatsApp = findViewById(R.id.btnFixedWhatsApp)
+        setupPackSocialActions(pack)
 
         val toolbarLayout = findViewById<View>(R.id.toolbarLayout)
         val bottomContainer = findViewById<View>(R.id.bottomContainer)
@@ -353,7 +359,14 @@ class DetailsActivity : AppCompatActivity() {
             kotlinx.coroutines.delay(1500) // Preload'un bitmesini bekle
             pack.stickers.forEach { sticker ->
                 try {
-                    StickerRepository.downloadStickerToCache(this@DetailsActivity, pack.id, sticker.file, storagePath)
+                    StickerRepository.downloadStickerToCache(
+                        this@DetailsActivity,
+                        pack.id,
+                        sticker.file,
+                        storagePath,
+                        sticker.url,
+                        allowCompression = !pack.isAnimated
+                    )
                 } catch (_: Exception) {}
             }
         }
@@ -646,7 +659,14 @@ class DetailsActivity : AppCompatActivity() {
             pack.stickers.forEachIndexed { index, sticker ->
                 launch(Dispatchers.IO) {
                     try {
-                        StickerRepository.downloadStickerToCache(this@DetailsActivity, pack.id, sticker.file, pack.storagePath)
+                        StickerRepository.downloadStickerToCache(
+                            this@DetailsActivity,
+                            pack.id,
+                            sticker.file,
+                            pack.storagePath,
+                            sticker.url,
+                            allowCompression = !pack.isAnimated
+                        )
                         successCount++
                         // İndirme tamamlandığında hemen bu sticker'ı güncelle
                         withContext(Dispatchers.Main) {
@@ -779,10 +799,11 @@ class DetailsActivity : AppCompatActivity() {
 
         section.visibility = View.VISIBLE
         val tvRelatedTitle = findViewById<TextView>(R.id.tvRelatedTitle)
-        tvRelatedTitle?.text = "You May Also Like"
+        tvRelatedTitle?.text = getString(R.string.related_packs)
         rvRelated.layoutManager = androidx.recyclerview.widget.LinearLayoutManager(this)
         rvRelated.setHasFixedSize(false)
         rvRelated.itemAnimator = null
+        installCenteredListPadding(rvRelated)
 
         val relatedAdapter = PackAdapter(
             items = relatedPacks,
@@ -796,6 +817,18 @@ class DetailsActivity : AppCompatActivity() {
         rvRelated.adapter = relatedAdapter
     }
 
+    private fun installCenteredListPadding(list: RecyclerView) {
+        val minPadding = 8.dp()
+        val maxContentWidth = 620.dp()
+        list.clipToPadding = false
+        list.addOnLayoutChangeListener { view, _, _, _, _, _, _, _, _ ->
+            val sidePadding = ((view.width - maxContentWidth) / 2).coerceAtLeast(minPadding)
+            if (view.paddingLeft != sidePadding || view.paddingRight != sidePadding) {
+                view.setPadding(sidePadding, view.paddingTop, sidePadding, view.paddingBottom)
+            }
+        }
+    }
+
     private fun launchPremiumPurchase() {
         startActivity(Intent(this, PremiumActivity::class.java))
     }
@@ -803,22 +836,63 @@ class DetailsActivity : AppCompatActivity() {
     private fun setupPublisherStrip(pack: Pack) {
         val isCustom = pack.category == "custom" || pack.id.startsWith("custom_")
         val strip = findViewById<LinearLayout>(R.id.publisherStrip) ?: return
-        if (isCustom || pack.pub.isBlank() || pack.pub.equals("Sticky", ignoreCase = true)) {
+        if (isCustom || pack.pub.isBlank()) {
             strip.visibility = View.GONE
             return
         }
         val avatar = findViewById<ImageView>(R.id.publisherAvatar)
         val name = findViewById<TextView>(R.id.tvPublisherName)
+        val hint = findViewById<TextView>(R.id.tvPublisherHint)
         val followButton = findViewById<MaterialButton>(R.id.btnFollowPublisher)
         strip.visibility = View.VISIBLE
+
+        if (pack.pub.equals("Sticky", ignoreCase = true)) {
+            name?.text = getString(R.string.app_name)
+            hint?.text = getString(R.string.shared_by_sticky)
+            followButton?.visibility = View.GONE
+            avatar?.setImageResource(R.mipmap.ic_launcher_round)
+            val stickyClick = View.OnClickListener { showThemedSnackbar(getString(R.string.shared_by_sticky)) }
+            strip.setOnClickListener(stickyClick)
+            avatar?.setOnClickListener(stickyClick)
+            return
+        }
+
+        followButton?.visibility = View.VISIBLE
+        hint?.text = getString(R.string.view_profile)
         name?.text = pack.pub
         updateFollowButton(followButton, pack.email)
+        lifecycleScope.launch {
+            runCatching { SocialRepository.fetchPublisherProfile(pack, this@DetailsActivity) }.onSuccess { social ->
+                val following = social.optBoolean("is_following", false)
+                followButton?.text = getString(if (following) R.string.following else R.string.follow)
+                followButton?.alpha = if (following) 0.75f else 1f
+            }
+        }
         val clickListener = View.OnClickListener { openPublisherProfile(pack) }
         strip.setOnClickListener(clickListener)
         avatar?.setOnClickListener(clickListener)
         followButton?.setOnClickListener {
-            togglePublisherFollow(pack.email)
-            updateFollowButton(followButton, pack.email)
+            followButton.isEnabled = false
+            lifecycleScope.launch {
+                runCatching {
+                    SocialRepository.toggleFollow(
+                        this@DetailsActivity,
+                        pack.publisherUserId.ifBlank { pack.email },
+                        pack.email,
+                        pack.pub,
+                        pack.publisherPhotoUrl
+                    )
+                }.onSuccess { result ->
+                    val following = result.optBoolean("following", !isFollowingPublisher(pack.email))
+                    if (following != isFollowingPublisher(pack.email)) togglePublisherFollow(pack.email)
+                    followButton.text = getString(if (following) R.string.following else R.string.follow)
+                    followButton.alpha = if (following) 0.75f else 1f
+                }.onFailure {
+                    togglePublisherFollow(pack.email)
+                    updateFollowButton(followButton, pack.email)
+                }
+                followButton.isEnabled = true
+            }
         }
 
         if (pack.email.isNotBlank()) {
@@ -860,6 +934,245 @@ class DetailsActivity : AppCompatActivity() {
         button.alpha = if (following) 0.75f else 1f
     }
 
+    private fun setupPackSocialActions(pack: Pack) {
+        val likeButton = findViewById<MaterialButton>(R.id.btnPackLike) ?: return
+        val commentsButton = findViewById<MaterialButton>(R.id.btnPackComments) ?: return
+        val summary = findViewById<TextView>(R.id.tvPackSocialSummary)
+        likeButton.text = ""
+        likeButton.contentDescription = getString(R.string.like)
+        likeButton.icon = ContextCompat.getDrawable(this, R.drawable.ic_heart)
+        likeButton.iconTint = ColorStateList.valueOf(ContextCompat.getColor(this, R.color.primary))
+        summary?.text = engagementSummary(pack.likeCount, pack.favoriteCount, pack.commentCount)
+
+        likeButton.setOnClickListener {
+            likeButton.isEnabled = false
+            animateLikeButton(likeButton)
+            lifecycleScope.launch {
+                runCatching { SocialRepository.togglePackLike(this@DetailsActivity, pack) }
+                    .onSuccess { result ->
+                        applyLikeVisual(likeButton, result.optBoolean("liked", false))
+                        summary?.text = engagementSummary(result.optInt("like_count", pack.likeCount), pack.favoriteCount, pack.commentCount)
+                    }
+                    .onFailure { showThemedSnackbar(it.message ?: getString(R.string.error_generic)) }
+                likeButton.isEnabled = true
+            }
+        }
+
+        commentsButton.setOnClickListener { showCommentsSheet(pack) }
+        lifecycleScope.launch {
+            runCatching { SocialRepository.fetchPackSocial(this@DetailsActivity, pack.id) }.onSuccess { social ->
+                applyLikeVisual(likeButton, social.optBoolean("liked", false))
+                summary?.text = engagementSummary(social.optInt("like_count", pack.likeCount), pack.favoriteCount, social.optInt("comment_count", pack.commentCount))
+                commentsButton.text = "${getString(R.string.comments)} (${social.optInt("comment_count", pack.commentCount)})"
+            }.onFailure {
+                runCatching { SocialRepository.fetchComments(this@DetailsActivity, pack.id) }.onSuccess { comments ->
+                    commentsButton.text = "${getString(R.string.comments)} (${comments.length()})"
+                }
+            }
+        }
+    }
+
+    private fun engagementSummary(likes: Int, favorites: Int, comments: Int): String =
+        "$likes ${getString(R.string.likes_short)} / $comments ${getString(R.string.comments).lowercase()} / $favorites favorites"
+
+    private fun applyLikeVisual(button: MaterialButton, liked: Boolean) {
+        val color = ContextCompat.getColor(this, if (liked) R.color.danger else R.color.primary)
+        button.iconTint = ColorStateList.valueOf(color)
+        button.strokeColor = ColorStateList.valueOf(color)
+        button.rippleColor = ColorStateList.valueOf(color)
+        button.alpha = if (liked) 1f else 0.92f
+    }
+
+    private fun animateLikeButton(button: View) {
+        button.animate().cancel()
+        button.scaleX = 0.82f
+        button.scaleY = 0.82f
+        button.animate()
+            .scaleX(1.15f)
+            .scaleY(1.15f)
+            .setDuration(120)
+            .withEndAction {
+                button.animate().scaleX(1f).scaleY(1f).setDuration(140).setInterpolator(OvershootInterpolator()).start()
+            }
+            .start()
+    }
+
+    private fun showCommentsSheet(pack: Pack) {
+        val sheet = BottomSheetDialog(this)
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(20.dp(), 10.dp(), 20.dp(), 16.dp())
+            background = ContextCompat.getDrawable(this@DetailsActivity, R.drawable.bg_bottom_sheet_rounded)
+        }
+        root.addView(View(this).apply {
+            background = ContextCompat.getDrawable(this@DetailsActivity, R.drawable.bg_bottom_sheet_handle)
+        }, LinearLayout.LayoutParams(44.dp(), 5.dp()).apply { gravity = android.view.Gravity.CENTER_HORIZONTAL; bottomMargin = 14.dp() })
+        val title = TextView(this).apply {
+            text = getString(R.string.comments)
+            textSize = 20f
+            setTypeface(null, android.graphics.Typeface.BOLD)
+            setTextColor(ContextCompat.getColor(this@DetailsActivity, R.color.text_primary))
+        }
+        root.addView(title)
+        val commentsContainer = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val scroll = ScrollView(this).apply { addView(commentsContainer) }
+        root.addView(scroll, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 360.dp()).apply { topMargin = 12.dp() })
+
+        var replyToCommentId: String? = null
+        val inputRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = android.view.Gravity.CENTER_VERTICAL
+            setPadding(0, 10.dp(), 0, 0)
+        }
+        val input = EditText(this).apply {
+            hint = getString(R.string.comment_hint)
+            maxLines = 3
+            background = ContextCompat.getDrawable(this@DetailsActivity, R.drawable.bg_modern_input)
+            setPadding(14.dp(), 8.dp(), 14.dp(), 8.dp())
+        }
+        val send = MaterialButton(this).apply {
+            text = getString(R.string.send)
+            isAllCaps = false
+            cornerRadius = 18.dp()
+            setTextColor(ContextCompat.getColor(this@DetailsActivity, R.color.white))
+            backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this@DetailsActivity, R.color.primary))
+        }
+        inputRow.addView(input, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply { marginEnd = 10.dp() })
+        inputRow.addView(send, LinearLayout.LayoutParams(92.dp(), 46.dp()))
+        root.addView(inputRow)
+
+        fun refreshComments() {
+            commentsContainer.removeAllViews()
+            commentsContainer.addView(TextView(this).apply {
+                text = getString(R.string.profile_loading)
+                setTextColor(ContextCompat.getColor(this@DetailsActivity, R.color.text_secondary))
+                setPadding(0, 18.dp(), 0, 18.dp())
+            })
+            lifecycleScope.launch {
+                runCatching { SocialRepository.fetchComments(this@DetailsActivity, pack.id) }
+                    .onSuccess { comments -> bindComments(commentsContainer, comments, pack.id) { commentId, author ->
+                        replyToCommentId = commentId
+                        input.hint = getString(R.string.reply_to_user, author)
+                        input.requestFocus()
+                    } }
+                    .onFailure { bindComments(commentsContainer, JSONArray(), pack.id) { _, _ -> } }
+            }
+        }
+
+        send.setOnClickListener {
+            val body = input.text.toString().trim()
+            if (body.isBlank()) return@setOnClickListener
+            send.isEnabled = false
+            lifecycleScope.launch {
+                runCatching {
+                    val parentId = replyToCommentId
+                    if (parentId == null) SocialRepository.addComment(this@DetailsActivity, pack, body)
+                    else SocialRepository.addCommentReply(this@DetailsActivity, parentId, pack.id, body)
+                }.onSuccess {
+                    input.setText("")
+                    replyToCommentId = null
+                    input.hint = getString(R.string.comment_hint)
+                    refreshComments()
+                    setupPackSocialActions(pack)
+                }.onFailure { showThemedSnackbar(it.message ?: getString(R.string.error_generic)) }
+                send.isEnabled = true
+            }
+        }
+
+        sheet.setContentView(root)
+        sheet.setOnShowListener { refreshComments() }
+        sheet.show()
+    }
+
+    private fun bindComments(container: LinearLayout, comments: JSONArray, packId: String, onReply: (String, String) -> Unit) {
+        container.removeAllViews()
+        if (comments.length() == 0) {
+            container.addView(TextView(this).apply {
+                text = getString(R.string.no_comments_yet)
+                textSize = 14f
+                setTextColor(ContextCompat.getColor(this@DetailsActivity, R.color.text_secondary))
+                setPadding(0, 28.dp(), 0, 28.dp())
+                gravity = android.view.Gravity.CENTER
+            })
+            return
+        }
+        for (index in 0 until comments.length()) {
+            val comment = comments.optJSONObject(index) ?: continue
+            container.addView(buildCommentRow(comment, packId, onReply), LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+        }
+    }
+
+    private fun buildCommentRow(comment: JSONObject, packId: String, onReply: (String, String) -> Unit): View {
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = ContextCompat.getDrawable(this@DetailsActivity, R.drawable.bg_dialog_rounded)
+            setPadding(14.dp(), 12.dp(), 14.dp(), 10.dp())
+        }
+        val author = comment.optString("display_name").ifBlank { comment.optString("user_email", "Sticky user") }
+        row.addView(TextView(this).apply {
+            text = author
+            textSize = 13f
+            setTypeface(null, android.graphics.Typeface.BOLD)
+            setTextColor(ContextCompat.getColor(this@DetailsActivity, R.color.text_primary))
+        })
+        row.addView(TextView(this).apply {
+            text = comment.optString("body")
+            textSize = 14f
+            setTextColor(ContextCompat.getColor(this@DetailsActivity, R.color.text_primary))
+            setPadding(0, 5.dp(), 0, 6.dp())
+        })
+        val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL }
+        val commentId = comment.optString("id")
+        val like = MaterialButton(this).apply {
+            text = comment.optInt("like_count", 0).toString()
+            icon = ContextCompat.getDrawable(this@DetailsActivity, R.drawable.ic_heart)
+            iconTint = ColorStateList.valueOf(ContextCompat.getColor(this@DetailsActivity, if (comment.optBoolean("liked", false)) R.color.danger else R.color.text_secondary))
+            backgroundTintList = ColorStateList.valueOf(Color.TRANSPARENT)
+            setTextColor(ContextCompat.getColor(this@DetailsActivity, R.color.text_secondary))
+            isAllCaps = false
+            minWidth = 0
+            setOnClickListener {
+                animateLikeButton(this)
+                lifecycleScope.launch {
+                    runCatching { SocialRepository.toggleCommentLike(this@DetailsActivity, commentId, packId) }
+                        .onSuccess { result ->
+                            text = result.optInt("like_count", comment.optInt("like_count", 0)).toString()
+                            iconTint = ColorStateList.valueOf(ContextCompat.getColor(this@DetailsActivity, if (result.optBoolean("liked", false)) R.color.danger else R.color.text_secondary))
+                        }
+                        .onFailure { showThemedSnackbar(it.message ?: getString(R.string.error_generic)) }
+                }
+            }
+        }
+        val reply = MaterialButton(this).apply {
+            text = getString(R.string.reply)
+            backgroundTintList = ColorStateList.valueOf(Color.TRANSPARENT)
+            setTextColor(ContextCompat.getColor(this@DetailsActivity, R.color.primary))
+            isAllCaps = false
+            minWidth = 0
+            setOnClickListener { onReply(commentId, author) }
+        }
+        actions.addView(like)
+        actions.addView(reply)
+        row.addView(actions)
+        val replies = comment.optJSONArray("replies") ?: JSONArray()
+        for (i in 0 until replies.length()) {
+            val item = replies.optJSONObject(i) ?: continue
+            row.addView(TextView(this).apply {
+                text = "${item.optString("display_name", "Sticky user")}: ${item.optString("body", "")}" 
+                textSize = 12f
+                setTextColor(ContextCompat.getColor(this@DetailsActivity, R.color.text_secondary))
+                setPadding(16.dp(), 3.dp(), 0, 0)
+            })
+        }
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(row)
+            setPadding(0, 0, 0, 10.dp())
+        }
+    }
+
+    private fun Int.dp(): Int = (this * resources.displayMetrics.density).toInt()
+
     private fun openPublisherProfile(pack: Pack) {
         // Sticky publisher (default content) — don't open profile page
         if (pack.pub.isBlank() || pack.pub.equals("Sticky", ignoreCase = true)) return
@@ -868,6 +1181,7 @@ class DetailsActivity : AppCompatActivity() {
                 pack.publisherUserId.ifBlank { pack.email })
             putExtra(PublisherProfileActivity.EXTRA_PUBLISHER_NAME, pack.pub)
             putExtra(PublisherProfileActivity.EXTRA_PUBLISHER_PHOTO, pack.publisherPhotoUrl)
+            putExtra(PublisherProfileActivity.EXTRA_PUBLISHER_EMAIL, pack.email)
         }
         startActivity(intent)
     }
@@ -1317,6 +1631,7 @@ class DetailsActivity : AppCompatActivity() {
         } else {
             val cachedFile = StickerRepository.getCachedStickerPath(this, packId, sticker.file)
             when {
+                isAnimatedPack && sticker.url.isNotEmpty() -> sticker.url
                 cachedFile.exists() && cachedFile.length() > 0 -> cachedFile
                 sticker.url.isNotEmpty() -> sticker.url
                 else -> android.net.Uri.parse("file:///android_asset/$packId/${sticker.file}")
@@ -1336,6 +1651,7 @@ class DetailsActivity : AppCompatActivity() {
                 .load(loadSource)
                 .placeholder(R.drawable.transparent_placeholder)
                 .diskCacheStrategy(cacheStrategy)
+                .dontTransform()
                 .error(R.drawable.transparent_placeholder)
 
             if (!isAnimatedPack) {
@@ -1522,7 +1838,7 @@ class DetailsActivity : AppCompatActivity() {
                         chunk.map { sticker ->
                             async {
                                 try {
-                                    StickerRepository.downloadStickerToCache(this@DetailsActivity, pack.id, sticker.file, storagePath, sticker.url)
+                                    StickerRepository.downloadStickerToCache(this@DetailsActivity, pack.id, sticker.file, storagePath, sticker.url, allowCompression = !pack.isAnimated)
                                     downloadedCount.incrementAndGet()
                                 } catch (_: Exception) {}
                             }
@@ -1762,7 +2078,7 @@ class DetailsActivity : AppCompatActivity() {
                         pack.stickers.chunked(16).forEach { chunk ->
                             chunk.map { sticker ->
                                 async {
-                                    StickerRepository.downloadStickerToCache(this@DetailsActivity, pack.id, sticker.file, storagePath, sticker.url)
+                                    StickerRepository.downloadStickerToCache(this@DetailsActivity, pack.id, sticker.file, storagePath, sticker.url, allowCompression = !pack.isAnimated)
                                     val count = downloadedCount.incrementAndGet()
                                     updateProgressText(count, totalFiles)
                                 }
@@ -1898,7 +2214,7 @@ class DetailsActivity : AppCompatActivity() {
                         pack.stickers.chunked(30).forEach { chunk ->
                             chunk.map { sticker ->
                                 async {
-                                    StickerRepository.downloadStickerToCache(this@DetailsActivity, pack.id, sticker.file, storagePath, sticker.url)
+                                    StickerRepository.downloadStickerToCache(this@DetailsActivity, pack.id, sticker.file, storagePath, sticker.url, allowCompression = !pack.isAnimated)
                                     downloadedCount.incrementAndGet()
                                 }
                             }.awaitAll()

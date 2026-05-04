@@ -16,6 +16,8 @@ export interface StickerPack {
     [key: `name_${string}`]: string | any; // Tüm dil kodlarını desteklemek için
     publisher: string;
     publisher_email: string;
+    publisher_user_id?: string;
+    publisher_photo_url?: string;
     privacy_policy_website: string;
     license_agreement_website: string;
     tray_image_file: string;
@@ -28,6 +30,9 @@ export interface StickerPack {
     fake_download_base: number;
     view_count: number;
     favorite_count: number;
+    like_count?: number;
+    comment_count?: number;
+    engagement_score?: number;
     sticker_count: number;
     image_data_version: string;
     is_active: boolean;
@@ -35,6 +40,7 @@ export interface StickerPack {
     stickers: Sticker[];
     created_at?: any;
     batch_source?: string;
+    source?: string;
     batch_generated?: boolean;
 }
 
@@ -74,6 +80,32 @@ export interface UserData {
     created_at?: any;     // Registration date/time
     display_name?: string;
     photo_url?: string;
+    bio?: string;
+    show_email?: boolean;
+    social?: {
+        followers: number;
+        following: number;
+        comments: number;
+        likes: number;
+        published_packs: number;
+    };
+    published_packs?: Array<{
+        id: string;
+        name: string;
+        publisher?: string;
+        sticker_count?: number;
+        download_count: number;
+        favorite_count: number;
+        like_count: number;
+        comment_count: number;
+        engagement_score?: number;
+    }>;
+    recent_comments?: Array<{
+        id: string;
+        pack_id: string;
+        body: string;
+        created_at?: any;
+    }>;
     device_info?: {
         model?: string;
         os_version?: string;

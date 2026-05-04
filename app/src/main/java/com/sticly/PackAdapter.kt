@@ -76,7 +76,7 @@ class PackAdapter(
         val density = context.resources.displayMetrics.density
         // Calculate sticker size to fit exactly STICKER_PREVIEW_COUNT in screen width
         // Account for: RecyclerView paddingHorizontal=8dp (16dp total) + item paddingHorizontal=16dp (32dp total)
-        val screenWidthDp = context.resources.displayMetrics.widthPixels / density
+        val screenWidthDp = (context.resources.displayMetrics.widthPixels / density).coerceAtMost(620f)
         val totalPaddingDp = 48f // 16dp RV padding + 32dp item padding
         val totalMarginDp = (STICKER_PREVIEW_COUNT - 1) * 8f
         val availableDp = screenWidthDp - totalPaddingDp - totalMarginDp
@@ -319,12 +319,8 @@ class PackAdapter(
             h.publisherPhoto?.let { getGlide(context).clear(it) }
         }
 
-        // Publisher name click → show other packs by same publisher
-        if (onPublisherClick != null && pack.pub.isNotBlank()) {
-            h.pub?.setOnClickListener { onPublisherClick.invoke(pack) }
-        } else {
-            h.pub?.setOnClickListener(null)
-        }
+        h.pub?.setOnClickListener { click(pack) }
+        h.publisherPhoto?.setOnClickListener { click(pack) }
 
         h.itemView.setOnClickListener { click(pack) }
 

@@ -33,6 +33,7 @@ const notifyRouter = require('./routes/notify');
 const notificationsRouter = require('./routes/notifications');
 const usersRouter = require('./routes/users');
 const statsRouter = require('./routes/stats');
+const socialRouter = require('./routes/social');
 
 const app = express();
 app.use(express.json());
@@ -89,6 +90,7 @@ app.use('/api/notify', notifyRouter);
 app.use('/api/notifications', notificationsRouter);
 app.use('/api/users', usersRouter);
 app.use('/api/stats', rateLimit, statsRouter);
+app.use('/api/social', rateLimit, socialRouter);
 
 app.get('/health', (_, res) => res.json({ status: 'ok', ts: Date.now() }));
 

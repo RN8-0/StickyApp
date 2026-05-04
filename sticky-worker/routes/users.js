@@ -59,6 +59,25 @@ function userKey(user) {
   return (user.email || '').toLowerCase().trim() || user.device_id || user.user_id || user.uid || user.id;
 }
 
+function userIdentifiers(user) {
+  return new Set([
+    user.id,
+    user.user_id,
+    user.uid,
+    user.device_id,
+    user.email,
+    user.display_name,
+    user.name,
+  ].map((value) => String(value || '').trim().toLowerCase()).filter(Boolean));
+}
+
+function matchesAnyUserField(record, identifiers, fields) {
+  return fields
+    .map((field) => String(record[field] || '').trim().toLowerCase())
+    .filter(Boolean)
+    .some((value) => identifiers.has(value));
+}
+
 function mergeUserProfile(profile, authUser = {}) {
   return {
     ...authUser,
@@ -82,6 +101,13 @@ router.get('/', async (req, res) => {
       console.warn('[Users GET] auth users merge skipped:', err.message);
       return [];
     });
+    const [follows, comments, likes, stickerPacks, premiumPacks] = await Promise.all([
+      fetchAllRecords('user_follows').catch((err) => { console.warn('[Users GET] follows skipped:', err.message); return []; }),
+      fetchAllRecords('pack_comments').catch((err) => { console.warn('[Users GET] comments skipped:', err.message); return []; }),
+      fetchAllRecords('pack_likes').catch((err) => { console.warn('[Users GET] likes skipped:', err.message); return []; }),
+      fetchAllRecords('stickers').catch((err) => { console.warn('[Users GET] stickers skipped:', err.message); return []; }),
+      fetchAllRecords('premium_stickers').catch((err) => { console.warn('[Users GET] premium stickers skipped:', err.message); return []; }),
+    ]);
 
     const authByKey = new Map();
     for (const user of authUsers) authByKey.set(userKey(user), user);
@@ -103,7 +129,55 @@ router.get('/', async (req, res) => {
       const key = userKey(u);
       if (!seen.has(key)) {
         seen.set(key, true);
-        deduped.push(u);
+        const identifiers = userIdentifiers(u);
+        const publishedPacks = [...stickerPacks, ...premiumPacks].filter((pack) =>
+          matchesAnyUserField(pack, identifiers, ['publisher_user_id', 'publisher_email', 'email', 'publisher', 'device_id', 'user_id'])
+        );
+        const userComments = comments.filter((comment) =>
+          matchesAnyUserField(comment, identifiers, ['user_id', 'user_email', 'display_name'])
+        );
+        const followerCount = follows.filter((follow) =>
+          matchesAnyUserField(follow, identifiers, ['target_id', 'target_email', 'following_id', 'following_email'])
+        ).length;
+        const followingCount = follows.filter((follow) =>
+          matchesAnyUserField(follow, identifiers, ['follower_id', 'follower_email'])
+        ).length;
+        const userLikes = likes.filter((like) =>
+          matchesAnyUserField(like, identifiers, ['user_id', 'user_email', 'display_name'])
+        );
+        deduped.push({
+          ...u,
+          bio: u.bio || '',
+          show_email: u.show_email !== false,
+          social: {
+            followers: followerCount,
+            following: followingCount,
+            comments: userComments.length,
+            likes: userLikes.length,
+            published_packs: publishedPacks.length,
+          },
+          published_packs: publishedPacks.map((pack) => ({
+            id: pack.id,
+            name: pack.name || pack.name_en || pack.name_tr || pack.pack_name || pack.id,
+            publisher: pack.publisher || '',
+            sticker_count: Number(pack.sticker_count || (Array.isArray(pack.stickers) ? pack.stickers.length : 0) || 0),
+            download_count: Number(pack.download_count || 0),
+            favorite_count: Number(pack.favorite_count || 0),
+            like_count: Number(pack.like_count || likes.filter((like) => like.pack_id === pack.id).length || 0),
+            comment_count: Number(pack.comment_count || comments.filter((comment) => comment.pack_id === pack.id).length || 0),
+            engagement_score: Number(pack.engagement_score || 0),
+          })),
+          recent_comments: userComments
+            .slice()
+            .sort((a, b) => sortTimestamp(b.created || b.created_at) - sortTimestamp(a.created || a.created_at))
+            .slice(0, 10)
+            .map((comment) => ({
+              id: comment.id,
+              pack_id: comment.pack_id,
+              body: comment.body || '',
+              created_at: comment.created_at || comment.created || null,
+            })),
+        });
       }
     }
 

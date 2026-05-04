@@ -72,6 +72,19 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+function packEngagementScore(pack: Partial<StickerPack>) {
+  const downloads = Number(pack.download_count || 0);
+  const favorites = Number(pack.favorite_count || 0);
+  const likes = Number(pack.like_count || 0);
+  const comments = Number(pack.comment_count || 0);
+  const views = Number(pack.view_count || 0);
+  const createdAt = pack.created_at ? new Date(pack.created_at as any).getTime() : 0;
+  const ageHours = createdAt > 0 ? Math.max(1, (Date.now() - createdAt) / 36e5) : 240;
+  const freshness = 120 / Math.pow(ageHours + 2, 0.35);
+  const communityBoost = pack.source === 'user_submission' || pack.publisher_user_id ? 18 : 0;
+  return Math.round((downloads * 5 + favorites * 4 + likes * 6 + comments * 8 + views * 0.35 + freshness + communityBoost) * 100) / 100;
+}
+
 // Alakalı kelime önerileri - her tema için uygun kelimeler
 const RELEVANT_SUGGESTIONS: Record<string, { words: string[], emojis: string[] }> = {
   // Hayvanlar
@@ -727,12 +740,17 @@ function App() {
         publisher: submission.publisher_name || submission.display_name || 'Community Artist',
         publisher_email: submission.user_email || '',
         publisher_user_id: submission.user_id || submission.user_email || '',
+        publisher_photo_url: (submission as any).photo_url || (submission as any).user_photo_url || '',
+        source: 'user_submission',
         category: submission.category || 'other',
         is_premium: false,
         is_animated: false,
         download_count: 0,
         view_count: 0,
         favorite_count: 0,
+        like_count: 0,
+        comment_count: 0,
+        engagement_score: 0,
         sticker_count: 0,
         image_data_version: '1',
         is_active: true,
@@ -774,6 +792,7 @@ function App() {
           tray_url: trayUrl || copiedStickers[0]?.url || '',
           tray_image_file: trayFile,
           image_data_version: Date.now().toString(),
+          engagement_score: packEngagementScore({ ...packData, sticker_count: copiedStickers.length }),
         });
       } catch (copyError) {
         await pb.collection('stickers').delete(created.id).catch(() => {});
@@ -789,6 +808,30 @@ function App() {
 
       // 5. Send notification to user
       await notifySubmissionUser(submission, 'Pack approved! 🎉', `Your pack "${submission.pack_name}" has been approved and is now live in Sticky!`, { type: 'submission_approved', sticker_pack_id: created.id });
+
+      pb.collection('user_follows').getFullList().then(async (follows: any[]) => {
+        const publisherKeys = [submission.user_id, submission.user_email, submission.display_name, submission.publisher_name]
+          .filter(Boolean)
+          .map((value) => String(value).trim().toLowerCase());
+        const recipients = follows.filter((follow) =>
+          [follow.target_id, follow.target_email, follow.target_name, follow.following_id, follow.following_email]
+            .filter(Boolean)
+            .some((value) => publisherKeys.includes(String(value).trim().toLowerCase()))
+        );
+        await Promise.all(recipients.map((follow) => pb.collection('notifications').create({
+          title: 'New sticker pack',
+          body: `${submission.publisher_name || submission.display_name || 'A creator you follow'} published "${submission.pack_name}"`,
+          message: `${submission.publisher_name || submission.display_name || 'A creator you follow'} published "${submission.pack_name}"`,
+          user_id: follow.follower_id || follow.follower_email,
+          pack_id: created.id,
+          from: 'publisher_follow',
+          read: false,
+          sent: false,
+          timestamp: new Date().toISOString(),
+          topic: 'followed_publisher_pack',
+          data: { type: 'followed_publisher_pack', sticker_pack_id: created.id, publisher_user_id: submission.user_id || '', publisher_email: submission.user_email || '' },
+        }).catch((e) => console.warn('Follower notification skipped:', e))));
+      }).catch((e) => console.warn('Follower notification lookup skipped:', e));
 
       setUserSubmissions(userSubmissions.map(s => s.id === submission.id ? { ...s, status: 'approved' as any, sticker_pack_id: created.id } : s));
       alert(`"${submission.pack_name}" approved and published!`);
@@ -831,9 +874,18 @@ function App() {
       : `Permanently delete "${submission.pack_name}"? This cannot be undone.`;
     if (!window.confirm(msg)) return;
     try {
-      await pb.collection('user_submissions').delete(submission.id);
       if (submission.status === 'approved' && submission.sticker_pack_id) {
-        await pb.collection('stickers').delete(submission.sticker_pack_id).catch(() => {});
+        const cascade = await fetch(`${WORKER_URL}/api/social/pack/delete`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ submission_id: submission.id, pack_id: submission.sticker_pack_id, collection: 'stickers', admin: true })
+        }).catch(() => null);
+        if (!cascade?.ok) {
+          await pb.collection('user_submissions').delete(submission.id);
+          await pb.collection('stickers').delete(submission.sticker_pack_id).catch(() => {});
+        }
+      } else {
+        await pb.collection('user_submissions').delete(submission.id);
       }
       setUserSubmissions(userSubmissions.filter(s => s.id !== submission.id));
     } catch (e) {
@@ -1046,6 +1098,12 @@ function App() {
     fake_download_base: Number(r.fake_download_base || 0),
     view_count: Number(r.view_count || 0),
     favorite_count: Number(r.favorite_count || 0),
+    like_count: Number(r.like_count || 0),
+    comment_count: Number(r.comment_count || 0),
+    engagement_score: Number(r.engagement_score || packEngagementScore(r) || 0),
+    source: r.source || r.batch_source || '',
+    publisher_user_id: r.publisher_user_id || '',
+    publisher_photo_url: r.publisher_photo_url || r.photo_url || '',
     sticker_count: Number(r.sticker_count || (r.stickers as any[])?.length || 0),
   } as StickerPack);
 
@@ -1110,14 +1168,24 @@ function App() {
           url: getFileUrl(collId, draft.id, filename),
           emojis: ['⭐'],
         }));
-        const jsonStickers = parseField(draft.stickers).map((sticker: any, index: number) => ({
-          ...sticker,
-          name: sticker.name || `sticker_${index + 1}`,
-          image_url: sticker.image_url || sticker.url || getFileUrl(collId, draft.id, sticker.image_file || sticker.name || ''),
-          url: sticker.url || sticker.image_url || getFileUrl(collId, draft.id, sticker.image_file || sticker.name || ''),
-          emojis: Array.isArray(sticker.emojis) && sticker.emojis.length > 0 ? sticker.emojis : ['⭐'],
-        }));
-        const stickers = fileStickers.length > jsonStickers.length ? fileStickers : (jsonStickers.length > 0 ? jsonStickers : fileStickers);
+        const imageNames = new Set(images);
+        const jsonStickers = parseField(draft.stickers).map((sticker: any, index: number) => {
+          const jsonFile = sticker.image_file || sticker.name || '';
+          const fileFromImages = imageNames.has(jsonFile) ? jsonFile : images[index];
+          const imageFile = fileFromImages || jsonFile;
+          const pbUrl = imageFile ? getFileUrl(collId, draft.id, imageFile) : '';
+          return {
+            ...sticker,
+            name: sticker.name || `sticker_${index + 1}`,
+            image_file: imageFile,
+            image_url: pbUrl || sticker.image_url || sticker.url || '',
+            url: pbUrl || sticker.url || sticker.image_url || '',
+            emojis: Array.isArray(sticker.emojis) && sticker.emojis.length > 0 ? sticker.emojis : ['⭐'],
+          };
+        });
+        const stickers = jsonStickers.length > 0
+          ? [...jsonStickers, ...fileStickers.slice(jsonStickers.length)]
+          : fileStickers;
         const trayFallback = draft.tray_url || stickers[0]?.url || '';
         return {
           ...draft,
@@ -1395,8 +1463,9 @@ function App() {
       const stickers = [...draft.stickers];
       const [moved] = stickers.splice(fromIdx, 1);
       stickers.splice(toIdx, 0, moved);
-      await pb.collection('draft_stickers').update(draft.id, { stickers });
-      const updated = { ...draft, stickers } as StickerPack;
+      const image_data_version = Date.now().toString();
+      await pb.collection('draft_stickers').update(draft.id, { stickers, image_data_version });
+      const updated = { ...draft, stickers, image_data_version } as StickerPack;
       setDraftPacks(prev => prev.map(p => p.id === draft.id ? updated : p));
     } catch (error: any) {
       console.error('Reorder error:', error);
@@ -1411,6 +1480,7 @@ function App() {
       await pb.collection('draft_stickers').update(draft.id, {
         stickers: updatedStickers,
         sticker_count: updatedStickers.length,
+        image_data_version: Date.now().toString(),
       });
       const updated = { ...draft, stickers: updatedStickers, sticker_count: updatedStickers.length } as StickerPack;
       setDraftPacks(prev => prev.map(p => p.id === draft.id ? updated : p));
@@ -1512,6 +1582,9 @@ function App() {
         device_info: data.device_info || null,
         total_stickers_added: data.total_stickers_added || 0,
         custom_packs_count: data.custom_packs_count || 0,
+        social: data.social || undefined,
+        published_packs: data.published_packs || [],
+        recent_comments: data.recent_comments || [],
       }));
       setUsersData(usersList);
     } catch (error) {
@@ -1896,7 +1969,7 @@ function App() {
     }
   };
 
-  const uploadStickersBatch = async (files: File[], removeBgForVideos: boolean = false) => {
+  const uploadStickersBatch = async (files: File[], removeBackground: boolean = false) => {
     if (!selectedPack) return;
 
     const uploadCount = files.length;
@@ -1959,14 +2032,14 @@ function App() {
               });
             }
           } else if (isAnimatedPack) {
-            // Video için removeBgForVideos parametresini geçir
+            // Video/GIF için removeBackground parametresini geçir
             processedBlob = await stickerProcessor.processAnimated(file, (p) => {
               setUploadProgress(prev => prev ? { ...prev, message: `${file.name}: ${p.message}` } : null);
-            }, removeBgForVideos);
+            }, removeBackground);
           } else {
             processedBlob = await stickerProcessor.processStatic(file, (p) => {
               setUploadProgress(prev => prev ? { ...prev, message: `${file.name}: ${p.message}` } : null);
-            });
+            }, removeBackground);
           }
         } catch (processingError: any) {
           // Dosya işleme hatası - kullanıcıya bildir ve bu dosyayı atla
@@ -2163,20 +2236,8 @@ function App() {
 
     const files = Array.from(filesList);
 
-    // Video (MP4) veya GIF kontrolü
-    const hasAnimatedWithPrompt = files.some(f =>
-      f.type.startsWith('video/mp4') || f.name.endsWith('.mp4') ||
-      f.type === 'image/gif' || f.name.endsWith('.gif')
-    );
-
-    if (hasAnimatedWithPrompt) {
-      setPendingFiles(files);
-      setShowVideoBgModal(true);
-      e.target.value = '';
-      return;
-    }
-
-    await uploadStickersBatch(files, false);
+    setPendingFiles(files);
+    setShowVideoBgModal(true);
     e.target.value = '';
   };
 
@@ -2188,7 +2249,12 @@ function App() {
     try {
       setDeleteProgress({ deleting: true, message: 'Deleting from database...', current: 0, total: 1 });
       const collectionName = pack.is_premium ? 'premium_stickers' : 'stickers';
-      await pb.collection(collectionName).delete(pack.id);
+      const cascade = await fetch(`${WORKER_URL}/api/social/pack/delete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pack_id: pack.id, collection: collectionName, admin: true })
+      }).catch(() => null);
+      if (!cascade?.ok) await pb.collection(collectionName).delete(pack.id);
 
       setPacks(packs.filter(p => p.id !== pack.id));
       if (selectedPack?.id === pack.id) setSelectedPack(null);
@@ -2568,6 +2634,7 @@ function App() {
     if (statusFilter === 'premium') return p.is_premium === true;
     if (statusFilter === 'new') return isNew(p);
     if (statusFilter === 'user_submission') {
+      if (p.source === 'user_submission') return true;
       const approvedPackIds = new Set(userSubmissions.filter(s => s.status === 'approved' && s.sticker_pack_id).map(s => s.sticker_pack_id));
       return approvedPackIds.has(p.id);
     }
@@ -3372,6 +3439,9 @@ function App() {
                   const totalViews = sPacks.reduce((acc, p) => acc + (p.view_count || 0), 0);
                   const totalStickers = sPacks.reduce((acc, p) => acc + (p.sticker_count || 0), 0);
                   const totalFavorites = sPacks.reduce((acc, p) => acc + (p.favorite_count || 0), 0);
+                  const totalLikes = sPacks.reduce((acc, p) => acc + (p.like_count || 0), 0);
+                  const totalComments = sPacks.reduce((acc, p) => acc + (p.comment_count || 0), 0);
+                  const totalEngagement = sPacks.reduce((acc, p) => acc + packEngagementScore(p), 0);
                   const avgCVR = totalViews > 0 ? (totalDL / totalViews) * 100 : 0;
 
                   return (
@@ -3401,11 +3471,12 @@ function App() {
                           <div className="w-10 h-10 bg-yellow-500/10 rounded-xl flex items-center justify-center">
                             <Lightbulb size={18} className="text-yellow-400" />
                           </div>
-                          <span className="text-[8px] font-black text-yellow-400/60 bg-yellow-500/5 px-1.5 py-0.5 rounded uppercase tracking-widest">CVR</span>
+                          <span className="text-[8px] font-black text-yellow-400/60 bg-yellow-500/5 px-1.5 py-0.5 rounded uppercase tracking-widest">Score</span>
                         </div>
-                        <p className="text-2xl font-black text-white">%{avgCVR.toFixed(1)}</p>
+                        <p className="text-2xl font-black text-white">{Math.round(totalEngagement).toLocaleString()}</p>
+                        <p className="text-[9px] font-bold text-textSec/50 mt-0.5">CVR %{avgCVR.toFixed(1)}</p>
                         <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden mt-2">
-                          <div className="h-full bg-yellow-400 rounded-full" style={{ width: `${Math.min(100, avgCVR)}%` }} />
+                          <div className="h-full bg-yellow-400 rounded-full" style={{ width: `${Math.min(100, totalEngagement / Math.max(1, sPacks.length * 25))}%` }} />
                         </div>
                       </div>
 
@@ -3428,6 +3499,7 @@ function App() {
                           <span className="text-[8px] font-black text-pink-400/60 bg-pink-500/5 px-1.5 py-0.5 rounded uppercase tracking-widest">Favorites</span>
                         </div>
                         <p className="text-2xl font-black text-white">{totalFavorites.toLocaleString()}</p>
+                        <p className="text-[9px] font-bold text-textSec/50 mt-0.5">{totalLikes.toLocaleString()} likes</p>
                       </div>
 
                       <div className="glass rounded-xl p-4 border border-cyan-500/10 group hover:border-cyan-500/30 transition-all">
@@ -3435,10 +3507,10 @@ function App() {
                           <div className="w-10 h-10 bg-cyan-500/10 rounded-xl flex items-center justify-center">
                             <Users size={18} className="text-cyan-400" />
                           </div>
-                          <span className="text-[8px] font-black text-cyan-400/60 bg-cyan-500/5 px-1.5 py-0.5 rounded uppercase tracking-widest">Users</span>
+                          <span className="text-[8px] font-black text-cyan-400/60 bg-cyan-500/5 px-1.5 py-0.5 rounded uppercase tracking-widest">Comments</span>
                         </div>
-                        <p className="text-2xl font-black text-white">{usersData.length.toLocaleString()}</p>
-                        <p className="text-[9px] font-bold text-textSec/50 mt-0.5">{userStats.premium} premium</p>
+                        <p className="text-2xl font-black text-white">{totalComments.toLocaleString()}</p>
+                        <p className="text-[9px] font-bold text-textSec/50 mt-0.5">{usersData.length.toLocaleString()} users</p>
                       </div>
                     </>
                   );
@@ -3479,14 +3551,17 @@ function App() {
                             if (statsFilter === 'normal') return p.is_premium === false;
                             return true;
                           })
-                          .sort((a, b) => (b.download_count || 0) - (a.download_count || 0))
+                          .sort((a, b) => packEngagementScore(b) - packEngagementScore(a))
                           .slice(0, 10)
                           .map(p => {
                             const pName = p.name || 'Unnamed Pack';
                             return {
                               name: pName.length > 10 ? pName.substring(0, 8) + '..' : pName,
                               downloads: p.download_count || 0,
-                              views: p.view_count || 0
+                              views: p.view_count || 0,
+                              score: packEngagementScore(p),
+                              likes: p.like_count || 0,
+                              comments: p.comment_count || 0,
                             };
                           })}
                         margin={{ top: 10, right: 10, left: 0, bottom: 20 }}
@@ -3521,7 +3596,7 @@ function App() {
                 <div className="glass rounded-2xl border border-white/5 flex flex-col overflow-hidden">
                   <div className="p-5 border-b border-white/5 bg-white/[0.02]">
                     <h3 className="text-sm font-black text-white uppercase tracking-wider">🏆 Leaderboard</h3>
-                    <p className="text-[9px] font-bold text-textSec mt-0.5">Top 5 most downloaded</p>
+                    <p className="text-[9px] font-bold text-textSec mt-0.5">Top 5 by engagement score</p>
                   </div>
                   <div className="flex-1 p-4 space-y-2.5">
                     {packs
@@ -3534,7 +3609,7 @@ function App() {
                         if (statsFilter === 'normal') return p.is_premium === false;
                         return true;
                       })
-                      .sort((a, b) => (b.download_count || 0) - (a.download_count || 0))
+                      .sort((a, b) => packEngagementScore(b) - packEngagementScore(a))
                       .slice(0, 5)
                       .map((p, i) => (
                         <div key={p.id} className="flex items-center gap-3 p-3 rounded-xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.05] hover:border-white/10 transition-all group">
@@ -3548,10 +3623,11 @@ function App() {
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="text-xs font-bold text-white truncate group-hover:text-primary transition-colors">{p.name || 'Unnamed Pack'}</div>
-                            <div className="text-[9px] font-bold text-textSec/50">{p.category}</div>
+                            <div className="text-[9px] font-bold text-textSec/50">{p.category} · {(p.like_count || 0).toLocaleString()} likes · {(p.comment_count || 0).toLocaleString()} comments</div>
                           </div>
                           <div className="text-right shrink-0">
-                            <div className="text-xs font-black text-primary">{(p.download_count || 0).toLocaleString()}</div>
+                            <div className="text-xs font-black text-primary">{Math.round(packEngagementScore(p)).toLocaleString()}</div>
+                            <div className="text-[8px] font-bold text-textSec/50">score</div>
                           </div>
                         </div>
                       ))}
@@ -3574,14 +3650,17 @@ function App() {
                 {(() => {
                   const activePacks = packs.filter(p => p.is_active !== false);
                   // Category performance analysis
-                  const catMap = new Map<string, { downloads: number; views: number; favorites: number; packs: number; totalStickers: number }>();
+                  const catMap = new Map<string, { downloads: number; views: number; favorites: number; likes: number; comments: number; score: number; packs: number; totalStickers: number }>();
                   activePacks.forEach(p => {
                     const cat = p.category || 'uncategorized';
-                    const prev = catMap.get(cat) || { downloads: 0, views: 0, favorites: 0, packs: 0, totalStickers: 0 };
+                    const prev = catMap.get(cat) || { downloads: 0, views: 0, favorites: 0, likes: 0, comments: 0, score: 0, packs: 0, totalStickers: 0 };
                     catMap.set(cat, {
                       downloads: prev.downloads + (p.download_count || 0),
                       views: prev.views + (p.view_count || 0),
                       favorites: prev.favorites + (p.favorite_count || 0),
+                      likes: prev.likes + (p.like_count || 0),
+                      comments: prev.comments + (p.comment_count || 0),
+                      score: prev.score + packEngagementScore(p),
                       packs: prev.packs + 1,
                       totalStickers: prev.totalStickers + (p.sticker_count || 0)
                     });
@@ -3591,7 +3670,7 @@ function App() {
                       name,
                       ...d,
                       cvr: d.views > 0 ? (d.downloads / d.views) * 100 : 0,
-                      engagementPerPack: d.packs > 0 ? (d.downloads + d.favorites * 3) / d.packs : 0
+                      engagementPerPack: d.packs > 0 ? d.score / d.packs : 0
                     }))
                     .sort((a, b) => b.engagementPerPack - a.engagementPerPack);
                   const maxEng = catArr[0]?.engagementPerPack || 1;
@@ -3617,6 +3696,8 @@ function App() {
                             <div className="flex items-center gap-2 shrink-0">
                               <span className="text-[9px] font-bold text-primary">{cat.downloads}↓</span>
                               <span className="text-[9px] font-bold text-yellow-400">{cat.favorites}♥</span>
+                              <span className="text-[9px] font-bold text-pink-400">{cat.likes} likes</span>
+                              <span className="text-[9px] font-bold text-cyan-400">{cat.comments} comments</span>
                               <span className="text-[9px] font-bold text-textSec">{cat.cvr.toFixed(1)}%</span>
                             </div>
                           </div>
@@ -4739,6 +4820,73 @@ function App() {
                             <span className="text-[9px] font-bold text-textSec uppercase">Custom Packs</span>
                           </div>
                         </div>
+
+                        {(selectedUser.bio || selectedUser.social) && (
+                          <div className="bg-white/[0.02] rounded-xl p-3 border border-white/5 space-y-3">
+                            {selectedUser.bio && (
+                              <div>
+                                <span className="text-[9px] font-bold text-textSec/60 uppercase tracking-widest block mb-1">Bio</span>
+                                <p className="text-xs font-medium text-white/80 leading-relaxed">{selectedUser.bio}</p>
+                              </div>
+                            )}
+                            {selectedUser.social && (
+                              <div className="grid grid-cols-5 gap-2 text-center">
+                                <div>
+                                  <p className="text-sm font-black text-primary">{selectedUser.social.followers || 0}</p>
+                                  <span className="text-[8px] text-textSec uppercase">Followers</span>
+                                </div>
+                                <div>
+                                  <p className="text-sm font-black text-primary">{selectedUser.social.following || 0}</p>
+                                  <span className="text-[8px] text-textSec uppercase">Following</span>
+                                </div>
+                                <div>
+                                  <p className="text-sm font-black text-primary">{selectedUser.social.published_packs || 0}</p>
+                                  <span className="text-[8px] text-textSec uppercase">Packs</span>
+                                </div>
+                                <div>
+                                  <p className="text-sm font-black text-primary">{selectedUser.social.likes || 0}</p>
+                                  <span className="text-[8px] text-textSec uppercase">Likes</span>
+                                </div>
+                                <div>
+                                  <p className="text-sm font-black text-primary">{selectedUser.social.comments || 0}</p>
+                                  <span className="text-[8px] text-textSec uppercase">Comments</span>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {selectedUser.published_packs && selectedUser.published_packs.length > 0 && (
+                          <div className="bg-white/[0.02] rounded-xl p-3 border border-white/5">
+                            <span className="text-[9px] font-bold text-textSec/60 uppercase tracking-widest flex items-center gap-1 mb-2">
+                              <Package size={10} /> Published Packs ({selectedUser.published_packs.length})
+                            </span>
+                            <div className="space-y-2">
+                              {selectedUser.published_packs.map(pack => (
+                                <div key={pack.id} className="p-2 rounded-lg bg-white/[0.03]">
+                                  <p className="text-xs font-bold text-white truncate">{pack.name}</p>
+                                  <p className="text-[9px] text-textSec/60">{pack.download_count || 0} downloads / {pack.favorite_count || 0} fav / {pack.like_count || 0} likes / {pack.comment_count || 0} comments</p>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {selectedUser.recent_comments && selectedUser.recent_comments.length > 0 && (
+                          <div className="bg-white/[0.02] rounded-xl p-3 border border-white/5">
+                            <span className="text-[9px] font-bold text-textSec/60 uppercase tracking-widest flex items-center gap-1 mb-2">
+                              <MessageSquare size={10} /> Recent Comments
+                            </span>
+                            <div className="space-y-2">
+                              {selectedUser.recent_comments.map(comment => (
+                                <div key={comment.id} className="p-2 rounded-lg bg-white/[0.03]">
+                                  <p className="text-xs font-medium text-white/80 leading-relaxed">{comment.body}</p>
+                                  <p className="text-[9px] text-textSec/40 mt-1">Pack: {comment.pack_id}</p>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
 
                         {/* UID */}
                         <div className="bg-white/[0.02] rounded-xl p-3 border border-white/5">
@@ -6151,6 +6299,33 @@ function App() {
                           </p>
                         </div>
 
+                        <div className="space-y-3">
+                          <Input
+                            label="Pack Name"
+                            value={draftEditData.name || ''}
+                            onChange={(e: any) => setDraftEditData((prev: any) => ({ ...prev, name: e.target.value }))}
+                          />
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between px-1">
+                              <span className="text-[10px] font-black text-textSec uppercase tracking-widest">Emoji Library</span>
+                              <span className="text-[10px] text-textSec/60">Tap to add to pack name</span>
+                            </div>
+                            <div className="flex flex-wrap gap-1.5 rounded-xl border border-white/5 bg-white/[0.02] p-2">
+                              {PACK_NAME_EMOJIS.map((emoji) => (
+                                <button
+                                  key={emoji}
+                                  type="button"
+                                  onClick={() => setDraftEditData((prev: any) => ({ ...prev, name: `${(prev.name || '').trimEnd()} ${emoji}`.trim() }))}
+                                  className="w-8 h-8 flex items-center justify-center rounded-lg bg-white/5 hover:bg-primary/20 border border-white/5 hover:border-primary/30 text-base transition-all hover:scale-110 active:scale-95"
+                                  title={`Add ${emoji}`}
+                                >
+                                  {emoji}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+
                         {/* Publisher */}
                         <Input
                           label="Publisher"
@@ -6796,8 +6971,8 @@ function App() {
         )
       }
 
-      {/* Video/GIF Background Removal Modal */}
-      <Modal show={showVideoBgModal} onClose={() => setShowVideoBgModal(false)} title="Animated Media Processing">
+      {/* Sticker Background Removal Modal */}
+      <Modal show={showVideoBgModal} onClose={() => setShowVideoBgModal(false)} title="Sticker Processing">
         <div className="space-y-6">
           <div className="bg-primary/10 border border-primary/20 p-6 rounded-2xl flex items-center gap-4">
             <div className="bg-primary/20 p-3 rounded-xl animate-pulse">
@@ -6805,7 +6980,7 @@ function App() {
             </div>
             <div>
               <h3 className="text-lg font-black text-white">Remove Background?</h3>
-              <p className="text-textSec text-xs mt-1">The background of the uploaded video or GIF can be automatically removed using AI.</p>
+              <p className="text-textSec text-xs mt-1">Keep the original look for fast upload, or use AI only when you want the background removed.</p>
             </div>
           </div>
 

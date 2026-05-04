@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import java.io.ByteArrayOutputStream
 import java.io.File
+import kotlin.math.pow
 
 /**
  * PocketBase'den sticker paketlerini yukleyen repository
@@ -32,13 +33,31 @@ object StickerRepository {
     
     private val _packsUpdateFlow = MutableSharedFlow<List<Pack>>(replay = 1)
     val packsUpdateFlow = _packsUpdateFlow.asSharedFlow()
+    private var observerJob: Job? = null
+    private var lastObservedSignature: String = ""
 
     /**
      * Tum paketleri yukler (PocketBase + Ozel + Lokal Assets)
      */
     suspend fun loadPacks(context: Context, forceRefresh: Boolean = false): List<Pack> = withContext(Dispatchers.IO) {
-        // Helper: Paketleri karışık sırala (ID hash'ine göre tutarlı sıralama)
-        fun shufflePacks(packs: List<Pack>) = packs.sortedBy { it.id.hashCode() }
+        fun youtubeStyleScore(pack: Pack): Double {
+            if (pack.category == "custom") return Double.MAX_VALUE + pack.id.hashCode().mod(1000).toDouble()
+            val ageHours = runCatching {
+                if (pack.createdAt.isBlank()) 240.0 else {
+                    val created = java.time.Instant.parse(pack.createdAt)
+                    java.time.Duration.between(created, java.time.Instant.now()).toHours().coerceAtLeast(1).toDouble()
+                }
+            }.getOrDefault(240.0)
+            val engagement = pack.downloadCount * 5.0 + pack.favoriteCount * 4.0 + pack.likeCount * 6.0 + pack.commentCount * 8.0 + pack.viewCount * 0.35
+            val freshness = 18.0 / (ageHours + 6.0).pow(0.42)
+            val qualityBoost = if (pack.isPopular) 18.0 else 0.0
+            val communityBoost = if (pack.source == "user_submission" || pack.publisherUserId.isNotBlank()) 4.0 else 0.0
+            return pack.engagementScore.takeIf { it > 0.0 } ?: (engagement + freshness + qualityBoost + communityBoost)
+        }
+        fun shufflePacks(packs: List<Pack>) = packs.sortedWith(
+            compareByDescending<Pack> { youtubeStyleScore(it) }
+                .thenBy { it.id.hashCode() }
+        )
         
         if (!forceRefresh && allPacksCache.isNotEmpty()) {
             return@withContext allPacksCache
@@ -72,7 +91,9 @@ object StickerRepository {
             Log.d(TAG, "Loaded ${localPacks.size} local asset packs")
             allPacks.addAll(localPacks)
 
+            val previousPacks = allPacksCache
             val result = shufflePacks(allPacks)
+            clearChangedPackCaches(context, previousPacks, result)
             allPacksCache = result // Statik cache'i güncelle
             saveCacheToDisk(context, result) // Diske kaydet (Provider için)
             return@withContext result
@@ -198,6 +219,9 @@ object StickerRepository {
                 fakeDownloadBase = json.optInt("fake_download_base", 0),
                 viewCount = json.optInt("view_count", 0),
                 favoriteCount = json.optInt("favorite_count", 0),
+                likeCount = json.optInt("like_count", 0),
+                commentCount = json.optInt("comment_count", 0),
+                engagementScore = json.optDouble("engagement_score", 0.0),
                 isAnimated = json.optBoolean("is_animated", false),
                 isActive = json.optBoolean("is_active", true),
                 isPopular = json.optBoolean("is_popular", false),
@@ -215,15 +239,76 @@ object StickerRepository {
     }
 
     /**
-     * Gercek zamanli takip - PocketBase kullaniyor, listener gerekmez
+     * PocketBase does not have a Firestore-style Android listener here, so poll
+     * the live pack list and emit only when visible pack metadata changes.
      */
     fun startObservingPacks(context: Context) {
-        Log.d(TAG, "startObservingPacks: PocketBase primary, no Firestore listener needed")
+        if (observerJob?.isActive == true) return
+        val appContext = context.applicationContext
+        lastObservedSignature = packSignature(allPacksCache)
+        observerJob = repositoryScope.launch {
+            delay(2_000)
+            while (isActive) {
+                try {
+                    val packs = loadPacks(appContext, forceRefresh = true)
+                    val signature = packSignature(packs)
+                    if (signature != lastObservedSignature) {
+                        lastObservedSignature = signature
+                        _packsUpdateFlow.emit(packs)
+                        Log.d(TAG, "PocketBase poll update emitted: ${packs.size} packs")
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "PocketBase poll failed: ${e.message}")
+                }
+                delay(6_000)
+            }
+        }
     }
 
     fun stopObservingPacks() {
-        // No-op: Firestore listeners removed
+        observerJob?.cancel()
+        observerJob = null
     }
+
+    private fun packSignature(packs: List<Pack>): String = packs
+        .filter { !it.id.startsWith("custom_") }
+        .sortedBy { it.id }
+        .joinToString("|") { pack ->
+            val files = pack.stickers.joinToString(",") { it.file }
+            "${pack.id}:${pack.version}:${pack.name}:${pack.isActive}:${pack.isPremium}:${pack.isAnimated}:${pack.stickers.size}:$files"
+        }
+
+    private fun clearChangedPackCaches(context: Context, oldPacks: List<Pack>, newPacks: List<Pack>) {
+        if (oldPacks.isEmpty()) return
+        val oldById = oldPacks.associateBy { it.id }
+        newPacks.forEach { newPack ->
+            if (newPack.id.startsWith("custom_")) return@forEach
+            val oldPack = oldById[newPack.id] ?: return@forEach
+            val oldFiles = oldPack.stickers.map { it.file }
+            val newFiles = newPack.stickers.map { it.file }
+            if (oldPack.version != newPack.version || oldPack.tray != newPack.tray || oldFiles != newFiles) {
+                clearPackCache(context, newPack.id)
+            }
+        }
+        val newIds = newPacks.map { it.id }.toSet()
+        oldPacks.filter { !it.id.startsWith("custom_") && it.id !in newIds }.forEach { clearPackCache(context, it.id) }
+    }
+
+    fun prepareAnimatedPackCache(context: Context, packId: String) {
+        try {
+            val cacheDir = File(context.cacheDir, "$CACHE_DIR/$packId")
+            if (!cacheDir.exists()) cacheDir.mkdirs()
+            val marker = File(cacheDir, ".animated")
+            if (!marker.exists()) {
+                cacheDir.listFiles()?.forEach { file ->
+                    if (file.name != ".animated") file.deleteRecursively()
+                }
+                marker.createNewFile()
+            }
+        } catch (_: Exception) {}
+    }
+
+    private fun markAnimatedCache(context: Context, packId: String) = prepareAnimatedPackCache(context, packId)
 
     // Debounce real-time refresh to avoid cascading reloads
     private var lastRefreshTime = 0L
@@ -251,18 +336,23 @@ object StickerRepository {
 
     private fun normalizeStickerUrl(url: String, packId: String, fileName: String, collection: String = "stickers"): String {
         val trimmed = url.trim()
+        val canonicalPocketBaseUrl = "${PocketBaseHelper.PB_URL}/api/files/$collection/$packId/$fileName"
+
+        if (fileName.isNotBlank() && trimmed.contains("/api/files/")) {
+            return if (trimmed.contains("/api/files/$collection/$packId/")) trimmed else canonicalPocketBaseUrl
+        }
+
+        if (trimmed.contains("firebasestorage.googleapis.com") && fileName.isNotBlank()) {
+            return canonicalPocketBaseUrl
+        }
+
         // Already a CDN or PocketBase URL → use as-is
         if (trimmed.contains("sticky-images.46.225.95.201.sslip.io")) return trimmed
         if (trimmed.contains("sslip.io") || trimmed.contains("api/files")) return trimmed
 
-        if (trimmed.contains("firebasestorage.googleapis.com")) {
-            // Migrate Firebase URLs to PocketBase file API
-            return "${PocketBaseHelper.PB_URL}/api/files/$collection/$packId/$fileName"
-        }
-
         if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) return trimmed
         // Build PocketBase file API URL as default
-        return "${PocketBaseHelper.PB_URL}/api/files/$collection/$packId/$fileName"
+        return canonicalPocketBaseUrl
     }
 
     suspend fun getDownloadUrl(path: String): String {
@@ -276,7 +366,7 @@ object StickerRepository {
     private val urlCache = java.util.concurrent.ConcurrentHashMap<String, String>(256)
 
     fun getDirectStorageUrl(storagePath: String, packId: String, fileName: String): String {
-        val key = "$packId/$fileName"
+        val key = "$storagePath/$packId/$fileName"
         urlCache[key]?.let { return it }
         val url = "${PocketBaseHelper.PB_URL}/api/files/$storagePath/$packId/$fileName"
         urlCache[key] = url
@@ -323,17 +413,20 @@ object StickerRepository {
         packId: String,
         fileName: String,
         storagePath: String = STORAGE_PATH,
-        directUrl: String = ""
+        directUrl: String = "",
+        allowCompression: Boolean = true
     ): File? = withContext(Dispatchers.IO) {
         try {
             val cacheDir = File(context.cacheDir, "$CACHE_DIR/$packId")
             if (!cacheDir.exists()) cacheDir.mkdirs()
+            if (!allowCompression) markAnimatedCache(context, packId)
+            val isAnimatedPack = File(cacheDir, ".animated").exists()
 
             val localFile = File(cacheDir, fileName)
 
             if (localFile.exists() && localFile.length() > 0) {
                 // Daha önce indirilmiş ama çok büyükse sıkıştır
-                if (!fileName.startsWith("tray")) compressForWhatsApp(localFile)
+                if (allowCompression && !isAnimatedPack && !fileName.startsWith("tray")) compressForWhatsApp(localFile)
                 return@withContext localFile
             }
 
@@ -355,7 +448,7 @@ object StickerRepository {
                         conn.disconnect()
                         if (localFile.exists() && localFile.length() > 0) {
                             Log.d(TAG, "Downloaded via URL: $downloadUrl")
-                            if (!fileName.startsWith("tray")) compressForWhatsApp(localFile)
+                            if (allowCompression && !isAnimatedPack && !fileName.startsWith("tray")) compressForWhatsApp(localFile)
                             return@withContext localFile
                         }
                     } else {
@@ -412,6 +505,9 @@ object StickerRepository {
         withContext(Dispatchers.IO) {
             try {
                 val storagePath = pack.storagePath
+                if (pack.isAnimated) {
+                    markAnimatedCache(context, pack.id)
+                }
 
                 coroutineScope {
                     // Tray image - ayrı olarak başlat
@@ -422,15 +518,8 @@ object StickerRepository {
                     // Tüm stickerları paralel olarak indir (maksimum 6 eşzamanlı)
                     val stickerJobs = pack.stickers.map { sticker ->
                         async {
-                            downloadStickerToCache(context, pack.id, sticker.file, storagePath, sticker.url)
+                            downloadStickerToCache(context, pack.id, sticker.file, storagePath, sticker.url, allowCompression = !pack.isAnimated)
                         }
-                    }
-
-                    // KRITIK: Reconstructed provider fallback için animated bilgisini işaretle
-                    if (pack.isAnimated) {
-                        try {
-                            File(File(context.cacheDir, "$CACHE_DIR/${pack.id}"), ".animated").createNewFile()
-                        } catch (_: Exception) {}
                     }
 
                     // Hepsini bekle ve sonuçları kontrol et
@@ -467,6 +556,9 @@ object StickerRepository {
         withContext(Dispatchers.IO) {
             try {
                 val storagePath = pack.storagePath
+                if (pack.isAnimated) {
+                    markAnimatedCache(context, pack.id)
+                }
 
                 coroutineScope {
                     // Tray image
@@ -478,7 +570,7 @@ object StickerRepository {
                     val firstStickers = pack.stickers.take(count)
                     val stickerJobs = firstStickers.map { sticker ->
                         async {
-                            downloadStickerToCache(context, pack.id, sticker.file, storagePath, sticker.url)
+                            downloadStickerToCache(context, pack.id, sticker.file, storagePath, sticker.url, allowCompression = !pack.isAnimated)
                         }
                     }
 
@@ -831,12 +923,18 @@ object TranslationHelper {
  * Paketin mevcut dile uygun ismini döner
  */
 val Pack.localizedName: String
-    get() {
-        val locale = java.util.Locale.getDefault().language
-        
+    get() = localizedNameFor(java.util.Locale.getDefault().language)
+
+fun Pack.localizedNameFor(language: String): String {
+        val locale = language.substringBefore('-').substringBefore('_').lowercase()
+
         // 1. Check dynamic translations map (Populated from Gemini)
         val dynamicName = translations[locale]
         if (!dynamicName.isNullOrBlank()) return dynamicName
+        if (locale == "en") {
+            val englishName = translations["en"].orEmpty().ifBlank { TranslationHelper.translate(name.ifBlank { nameTr }) }
+            if (englishName.isNotBlank()) return englishName
+        }
 
         // 2. Check legacy hardcoded fields
         when (locale) {
@@ -853,6 +951,8 @@ val Pack.localizedName: String
             if (nameTr.isNotBlank()) nameTr else name
         } else {
             // ENGLISH/GLOBAL MODE (for en, zh, es, ar, hi, pt etc.)
+            val englishFallback = translations["en"].orEmpty().ifBlank { TranslationHelper.translate(name.ifBlank { nameTr }) }
+            if (englishFallback.isNotBlank() && englishFallback != name) return englishFallback
             
             // 1. Try name directly if it looks non-Turkish
             if (name.isNotBlank() && !isLikelyTurkish(name)) return name

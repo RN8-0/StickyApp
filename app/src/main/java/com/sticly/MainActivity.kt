@@ -36,6 +36,8 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import com.google.android.material.chip.Chip
 import com.google.android.material.chip.ChipGroup
+import com.google.android.material.bottomsheet.BottomSheetDialog
+import com.google.android.material.snackbar.Snackbar
 import com.google.android.material.switchmaterial.SwitchMaterial
 import com.google.android.material.textfield.TextInputEditText
 import com.google.firebase.messaging.FirebaseMessaging
@@ -108,6 +110,7 @@ class MainActivity : AppCompatActivity() {
     private var btnPremiumHeaderCached: View? = null
     private var navActiveColor = 0
     private var navInactiveColor = 0
+    private var lastForegroundPackRefresh = 0L
 
     // Regional Popular
     private lateinit var regionalPopularContainer: View
@@ -310,6 +313,17 @@ class MainActivity : AppCompatActivity() {
                 .addOnCompleteListener(this) { authTask ->
                     if (authTask.isSuccessful) {
                         Toast.makeText(this, "✅ Signed in as ${account.email}", Toast.LENGTH_SHORT).show()
+                        lifecycleScope.launch {
+                            try {
+                                val idToken = account.idToken ?: return@launch
+                                withContext(Dispatchers.IO) { PocketBaseHelper.authWithOAuth("google", idToken) }
+                                PreferencesHelper.setPocketBaseAuth(
+                                    this@MainActivity,
+                                    PocketBaseHelper.getToken(),
+                                    PocketBaseHelper.getAuthRecordId()
+                                )
+                            } catch (_: Exception) {}
+                        }
                         // Sync premium status from Firebase first, then update UI
                         syncPremiumStatus {
                             aiRestoreCount()
@@ -404,6 +418,10 @@ class MainActivity : AppCompatActivity() {
                 PreferencesHelper.syncUserData(this, currentUser.uid)
                 PreferencesHelper.startRealtimeSync(this, currentUser.uid)
             }
+            syncPremiumStatus {
+                updateBottomNavUI()
+                if (::adapter.isInitialized) applyFilters()
+            }
 
             checkAndRequestNotificationPermission()
             checkInstallationUpdates()
@@ -417,13 +435,13 @@ class MainActivity : AppCompatActivity() {
 
         // Start data loading (will update UI when complete)
         if (NetworkUtils.isOnline(this)) {
-            loadPacks()
             observePacksUpdateFlow()
+            loadPacks(forceRefresh = true)
         }
         
         // Delay real-time observer start to avoid cascading reloads during initial load
         lifecycleScope.launch {
-            delay(10_000)
+            delay(2_500)
             StickerRepository.startObservingPacks(this@MainActivity)
         }
     }
@@ -513,6 +531,7 @@ class MainActivity : AppCompatActivity() {
         rv.setHasFixedSize(true)
         rv.setItemViewCacheSize(10)
         rv.itemAnimator = null
+        installCenteredListPadding(rv)
         (rv.layoutManager as LinearLayoutManager).initialPrefetchItemCount = 6
         val viewPool = RecyclerView.RecycledViewPool()
         viewPool.setMaxRecycledViews(0, 20) // TYPE_PACK
@@ -730,10 +749,11 @@ class MainActivity : AppCompatActivity() {
         aiContentContainer?.visibility = View.GONE
         profileContentContainer?.visibility = View.GONE
         mainContent.visibility = View.VISIBLE
+        val isPremiumUser = PreferencesHelper.isPremium(this)
         btnPremiumHeaderCached?.visibility = View.VISIBLE
         menuBtn.visibility = View.VISIBLE
         findViewById<View>(R.id.toolbarNotificationContainer)?.visibility = View.GONE
-        toolbarTitle.text = getString(R.string.app_name)
+        toolbarTitle.text = if (isPremiumUser) "Premium" else getString(R.string.app_name)
         // FAB only on My Stickers
         btnCreateFab?.visibility = View.GONE
 
@@ -1234,37 +1254,48 @@ Rules:
 
     private suspend fun aiGenerateImage(prompt: String, onPoll: () -> Unit): Bitmap? =
         withContext(Dispatchers.IO) {
-            // Race all providers in parallel — first successful result wins
-            val resultChannel = kotlinx.coroutines.channels.Channel<Bitmap?>(kotlinx.coroutines.channels.Channel.UNLIMITED)
-            val jobs = mutableListOf<kotlinx.coroutines.Job>()
-
-            val providers: List<suspend () -> Bitmap?> = listOf(
-                { aiPollinationsRequest(prompt, "turbo") },
-                { aiPollinationsRequest(prompt, "flux") },
-                { aiApiAirforceRequest(prompt, "grok-imagine") },
-                { aiApiAirforceRequest(prompt, "flux-2-dev") },
-                { aiApiAirforceRequest(prompt, "z-image") }
-            )
-
-            kotlinx.coroutines.coroutineScope {
-                for (provider in providers) {
-                    val job = launch(Dispatchers.IO) {
-                        val bitmap = runCatching { provider() }.getOrNull()
-                        resultChannel.trySend(bitmap)
+            suspend fun raceProviders(timeoutMs: Long, providers: List<suspend () -> Bitmap?>): Bitmap? =
+                kotlinx.coroutines.coroutineScope {
+                    val resultChannel = kotlinx.coroutines.channels.Channel<Bitmap?>(providers.size)
+                    val jobs = providers.map { provider ->
+                        launch(Dispatchers.IO) {
+                            val bitmap = kotlinx.coroutines.withTimeoutOrNull(timeoutMs - 1_000) {
+                                runCatching { provider() }.getOrNull()
+                            }
+                            resultChannel.trySend(bitmap)
+                        }
                     }
-                    jobs.add(job)
+
+                    val winner = kotlinx.coroutines.withTimeoutOrNull(timeoutMs) {
+                        repeat(providers.size) {
+                            val result = resultChannel.receiveCatching().getOrNull()
+                            if (result != null) return@withTimeoutOrNull result
+                        }
+                        null
+                    }
+                    jobs.forEach { it.cancel() }
+                    resultChannel.close()
+                    winner
                 }
 
-                var found: Bitmap? = null
-                repeat(providers.size) {
-                    val result = resultChannel.receive()
-                    if (result != null && found == null) {
-                        found = result
-                        jobs.forEach { it.cancel() }
-                    }
-                }
-                resultChannel.close()
-                found
+            raceProviders(
+                timeoutMs = 28_000,
+                providers = listOf(
+                    { aiPollinationsRequest(prompt, "turbo") },
+                    { aiPollinationsRequest(prompt, "flux") }
+                )
+            ) ?: run {
+                onPoll()
+                kotlinx.coroutines.delay(800)
+                raceProviders(
+                    timeoutMs = 34_000,
+                    providers = listOf(
+                        { aiPollinationsRequest(prompt, "turbo") },
+                        { aiApiAirforceRequest(prompt, "z-image") },
+                        { aiApiAirforceRequest(prompt, "flux-2-dev") },
+                        { aiApiAirforceRequest(prompt, "grok-imagine") }
+                    )
+                )
             }
         }
 
@@ -1867,6 +1898,120 @@ Rules:
         return !prefs.getString("user_email", "")?.trim().isNullOrEmpty()
     }
 
+    private fun installCenteredListPadding(list: RecyclerView) {
+        val minPadding = (8 * resources.displayMetrics.density).toInt()
+        val maxContentWidth = (620 * resources.displayMetrics.density).toInt()
+        list.clipToPadding = false
+        list.addOnLayoutChangeListener { view, _, _, _, _, _, _, _, _ ->
+            val sidePadding = ((view.width - maxContentWidth) / 2).coerceAtLeast(minPadding)
+            if (view.paddingLeft != sidePadding || view.paddingRight != sidePadding) {
+                view.setPadding(sidePadding, view.paddingTop, sidePadding, view.paddingBottom)
+            }
+        }
+    }
+
+    private fun showEditProfileDialog() {
+        val prefs = getSharedPreferences("sticky_prefs", MODE_PRIVATE)
+        val firebaseUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(24.dpToPx(), 24.dpToPx(), 24.dpToPx(), 20.dpToPx())
+            background = androidx.core.content.ContextCompat.getDrawable(this@MainActivity, R.drawable.bg_dialog_rounded)
+        }
+        content.addView(TextView(this).apply {
+            text = getString(R.string.profile_edit)
+            textSize = 22f
+            setTypeface(null, android.graphics.Typeface.BOLD)
+            setTextColor(getColor(R.color.text_primary))
+        })
+
+        fun styledInput(hintText: String, value: String, singleLine: Boolean = true): EditText = EditText(this).apply {
+            hint = hintText
+            setText(value)
+            setSingleLine(singleLine)
+            if (!singleLine) {
+                minLines = 2
+                maxLines = 4
+                setSingleLine(false)
+            }
+            textSize = 15f
+            background = androidx.core.content.ContextCompat.getDrawable(this@MainActivity, R.drawable.bg_modern_input)
+            setPadding(16.dpToPx(), 12.dpToPx(), 16.dpToPx(), 12.dpToPx())
+        }
+
+        val nameInput = styledInput(getString(R.string.profile_display_name), prefs.getString("user_display_name", "") ?: "")
+        val bioInput = styledInput(getString(R.string.profile_bio_hint), prefs.getString("user_bio", "") ?: "", singleLine = false)
+        val showEmail = CheckBox(this).apply {
+            text = getString(R.string.profile_show_email)
+            isChecked = prefs.getBoolean("user_show_email", true)
+            setTextColor(getColor(R.color.text_primary))
+        }
+
+        listOf(nameInput, bioInput).forEach { input ->
+            content.addView(input, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = 12.dpToPx() })
+        }
+        content.addView(showEmail, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = 8.dpToPx() })
+
+        val dialog = AlertDialog.Builder(this)
+            .setView(content)
+            .create()
+
+        fun animateButton(button: View, after: () -> Unit) {
+            button.animate().scaleX(0.96f).scaleY(0.96f).alpha(0.85f).setDuration(80).withEndAction {
+                button.animate().scaleX(1f).scaleY(1f).alpha(1f).setDuration(120).withEndAction { after() }.start()
+            }.start()
+        }
+
+        val buttons = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.END }
+        val cancel = MaterialButton(this).apply {
+            text = getString(R.string.cancel)
+            isAllCaps = false
+            backgroundTintList = android.content.res.ColorStateList.valueOf(getColor(R.color.chip_bg))
+            setTextColor(getColor(R.color.text_primary))
+            cornerRadius = 22.dpToPx()
+            minHeight = 44.dpToPx()
+            setOnClickListener { animateButton(this) { dialog.dismiss() } }
+        }
+        val save = MaterialButton(this).apply {
+            text = getString(R.string.save)
+            isAllCaps = false
+            setTextColor(getColor(R.color.white))
+            backgroundTintList = android.content.res.ColorStateList.valueOf(getColor(R.color.primary))
+            cornerRadius = 22.dpToPx()
+            minHeight = 44.dpToPx()
+            setOnClickListener {
+                animateButton(this) {
+                    isEnabled = false
+                    val displayName = nameInput.text.toString().trim()
+                    val bio = bioInput.text.toString().trim()
+                    val photoUrl = prefs.getString("user_photo_url", "")?.takeIf { it.isNotBlank() } ?: firebaseUser?.photoUrl?.toString().orEmpty()
+                    prefs.edit()
+                        .putString("user_display_name", displayName)
+                        .putString("user_bio", bio)
+                        .putBoolean("user_show_email", showEmail.isChecked)
+                        .apply()
+                    lifecycleScope.launch {
+                        runCatching {
+                            SocialRepository.updateProfile(this@MainActivity, displayName, bio, showEmail.isChecked, photoUrl)
+                        }.onFailure { error ->
+                            Snackbar.make(rv, error.message ?: getString(R.string.profile_update_failed), Snackbar.LENGTH_SHORT).show()
+                        }
+                        loadProfileData()
+                        dialog.dismiss()
+                    }
+                }
+            }
+        }
+        buttons.addView(cancel, LinearLayout.LayoutParams(108.dpToPx(), 44.dpToPx()))
+        buttons.addView(save, LinearLayout.LayoutParams(112.dpToPx(), 44.dpToPx()).apply { marginStart = 8.dpToPx() })
+        content.addView(buttons, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = 12.dpToPx() })
+        dialog.setOnShowListener {
+            dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+            dialog.window?.setDimAmount(0.38f)
+        }
+        dialog.show()
+    }
+
     private fun loadProfileData() {
         val deviceId = PreferencesHelper.getDeviceId(this)
         val loginPrompt = findViewById<View>(R.id.profileLoginPrompt)
@@ -1875,6 +2020,8 @@ Rules:
         val avatar = findViewById<ImageView>(R.id.profileAvatar)
         val displayName = findViewById<TextView>(R.id.profileDisplayName)
         val email = findViewById<TextView>(R.id.profileEmail)
+        val bio = findViewById<TextView>(R.id.profileBio)
+        val btnEditProfile = findViewById<MaterialButton>(R.id.btnEditProfile)
         val statsRow = findViewById<View>(R.id.profileStatsRow)
         val btnSharePack = findViewById<MaterialButton>(R.id.btnShareStickerPack)
         val btnNotifications = findViewById<android.widget.ImageButton>(R.id.btnProfileNotifications)
@@ -1894,6 +2041,8 @@ Rules:
             adminMessages?.visibility = View.GONE
             avatar?.visibility = View.GONE
             displayName?.visibility = View.GONE
+            bio?.visibility = View.GONE
+            btnEditProfile?.visibility = View.GONE
             email?.text = ""
             return
         }
@@ -1905,14 +2054,18 @@ Rules:
         packsTitle?.visibility = View.VISIBLE
         avatar?.visibility = View.VISIBLE
         displayName?.visibility = View.VISIBLE
+        bio?.visibility = View.VISIBLE
+        btnEditProfile?.visibility = View.VISIBLE
 
         val prefs = getSharedPreferences("sticky_prefs", MODE_PRIVATE)
         val firebaseUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
         val profileEmail = prefs.getString("user_email", "") ?: firebaseUser?.email.orEmpty()
         displayName?.text = prefs.getString("user_display_name", getString(R.string.profile_guest))
-        email?.text = profileEmail
+        bio?.text = prefs.getString("user_bio", "") ?: ""
+        email?.text = if (prefs.getBoolean("user_show_email", true)) profileEmail else ""
+        btnEditProfile?.setOnClickListener { showEditProfileDialog() }
 
-        val photoUrl = prefs.getString("user_photo_url", null)
+        val photoUrl = prefs.getString("user_photo_url", null)?.takeIf { it.isNotBlank() } ?: firebaseUser?.photoUrl?.toString()
         if (photoUrl != null) {
             avatar?.let {
                 com.bumptech.glide.Glide.with(this)
@@ -1937,6 +2090,8 @@ Rules:
                         put("display_name", prefs.getString("user_display_name", "") ?: "")
                         put("email", prefs.getString("user_email", "") ?: "")
                         put("photo_url", photoUrl ?: "")
+                        put("bio", prefs.getString("user_bio", "") ?: "")
+                        put("show_email", prefs.getBoolean("user_show_email", true))
                         put("packs_published", 0)
                         put("total_downloads", 0)
                         put("total_favorites", 0)
@@ -1954,10 +2109,34 @@ Rules:
                     val published = doc.optInt("packs_published", 0)
                     val downloads = doc.optInt("total_downloads", 0)
                     val favorites = doc.optInt("total_favorites", 0)
+                    val serverBio = doc.optString("bio", prefs.getString("user_bio", "") ?: "")
+                    val showEmail = doc.optBoolean("show_email", prefs.getBoolean("user_show_email", true))
                     withContext(Dispatchers.Main) {
+                        prefs.edit()
+                            .putString("user_bio", serverBio)
+                            .putBoolean("user_show_email", showEmail)
+                            .apply()
+                        bio?.text = serverBio
+                        email?.text = if (showEmail) profileEmail else ""
                         findViewById<TextView>(R.id.statPublished)?.text = published.toString()
                         findViewById<TextView>(R.id.statDownloads)?.text = downloads.toString()
                         findViewById<TextView>(R.id.statFavorites)?.text = favorites.toString()
+                    }
+                }
+
+                runCatching {
+                    SocialRepository.fetchPublisherProfile(
+                        Pack(id = "", name = "", pub = prefs.getString("user_display_name", "") ?: "", email = profileEmail, publisherUserId = firebaseUser?.uid.orEmpty()),
+                        this@MainActivity
+                    )
+                }.onSuccess { social ->
+                    val stats = social.optJSONObject("stats")
+                    withContext(Dispatchers.Main) {
+                        stats?.let {
+                            findViewById<TextView>(R.id.statPublished)?.text = it.optInt("packs", 0).toString()
+                            findViewById<TextView>(R.id.statDownloads)?.text = it.optInt("downloads", 0).toString()
+                            findViewById<TextView>(R.id.statFavorites)?.text = it.optInt("favorites", 0).toString()
+                        }
                     }
                 }
 
@@ -1972,32 +2151,65 @@ Rules:
     private fun loadUserSubmissionsFromPB(deviceId: String, userId: String, email: String, rv: RecyclerView?, emptyState: View?) {
         lifecycleScope.launch {
             try {
-                val records = withContext(Dispatchers.IO) {
-                    PocketBaseHelper.listRecords("user_submissions", filter = ownerFilter(deviceId, userId, email))
-                }
-                val items = records.mapNotNull { record ->
-                    val name = record.optString("pack_name", record.optString("name", "")).takeIf { it.isNotBlank() } ?: return@mapNotNull null
-                    val stickers = record.optJSONArray("stickers") ?: record.optJSONArray("sticker_data")
-                    val stickerUrls = mutableListOf<String>()
-                    if (stickers != null) {
-                        for (i in 0 until minOf(stickers.length(), 6)) {
-                            val obj = stickers.optJSONObject(i) ?: continue
-                            val url = obj.optString("image_url", obj.optString("url", ""))
-                            if (url.isNotBlank()) stickerUrls.add(url)
+                val submissionItems = withContext(Dispatchers.IO) {
+                    val records = PocketBaseHelper.listRecords("user_submissions", filter = ownerFilter(deviceId, userId, email))
+                    records.mapNotNull { record ->
+                        val name = record.optString("pack_name", record.optString("name", "")).takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                        val stickers = record.optJSONArray("stickers") ?: record.optJSONArray("sticker_data")
+                        val stickerUrls = mutableListOf<String>()
+                        if (stickers != null) {
+                            for (i in 0 until minOf(stickers.length(), 6)) {
+                                val obj = stickers.optJSONObject(i) ?: continue
+                                val url = obj.optString("image_url", obj.optString("url", ""))
+                                if (url.isNotBlank()) stickerUrls.add(url)
+                            }
                         }
+                        SubmissionItem(
+                            id = record.optString("id"),
+                            name = name,
+                            status = record.optString("status", "pending"),
+                            stickerCount = record.optInt("sticker_count", stickers?.length() ?: 0),
+                            rejectionReason = record.optString("rejection_reason").takeIf { it.isNotBlank() },
+                            createdAt = record.optString("created_at", record.optString("created", "")).takeIf { it.isNotBlank() },
+                            stickerUrls = stickerUrls,
+                            storePackId = record.optString("sticker_pack_id").takeIf { it.isNotBlank() }
+                        )
                     }
+                }
+                val social = runCatching {
+                    withContext(Dispatchers.IO) {
+                        SocialRepository.fetchPublisherProfile(
+                            Pack(id = "", name = "", pub = getSharedPreferences("sticky_prefs", MODE_PRIVATE).getString("user_display_name", "") ?: "", email = email, publisherUserId = userId),
+                            this@MainActivity
+                        )
+                    }
+                }.getOrDefault(JSONObject())
+                val socialPacks = social.optJSONArray("packs") ?: JSONArray()
+                val socialItems = (0 until socialPacks.length()).mapNotNull { index ->
+                    val pack = socialPacks.optJSONObject(index) ?: return@mapNotNull null
+                    val packId = pack.optString("id").takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                    val stickers = pack.optJSONArray("stickers") ?: JSONArray()
                     SubmissionItem(
-                        id = record.optString("id"),
-                        name = name,
-                        status = record.optString("status", "pending"),
-                        stickerCount = record.optInt("sticker_count", stickers?.length() ?: 0),
-                        rejectionReason = record.optString("rejection_reason").takeIf { it.isNotBlank() },
-                        createdAt = record.optString("created_at", record.optString("created", "")).takeIf { it.isNotBlank() },
-                        stickerUrls = stickerUrls,
-                        storePackId = record.optString("sticker_pack_id").takeIf { it.isNotBlank() }
+                        id = packId,
+                        name = pack.optString("name", packId),
+                        status = "approved",
+                        stickerCount = pack.optInt("sticker_count", stickers.length()),
+                        rejectionReason = null,
+                        createdAt = pack.optString("created_at", pack.optString("created", "")).takeIf { it.isNotBlank() },
+                        stickerUrls = (0 until minOf(stickers.length(), 6)).mapNotNull { stickers.optJSONObject(it)?.optString("url")?.takeIf { url -> url.isNotBlank() } },
+                        storePackId = packId,
+                        downloadCount = pack.optInt("download_count", 0),
+                        favoriteCount = pack.optInt("favorite_count", 0),
+                        likeCount = pack.optInt("like_count", 0),
+                        commentCount = pack.optInt("comment_count", 0)
                     )
-                }.sortedByDescending { it.createdAt ?: "" }
+                }
+                val knownStoreIds = submissionItems.mapNotNull { it.storePackId }.toSet()
+                val knownNames = submissionItems.map { it.name.lowercase() }.toSet()
+                val items = (submissionItems + socialItems.filter { it.storePackId !in knownStoreIds && it.name.lowercase() !in knownNames })
+                    .sortedByDescending { it.createdAt ?: "" }
                 val approvedCount = items.count { it.status == "approved" }
+                val stats = social.optJSONObject("stats")
                 withContext(Dispatchers.Main) {
                     if (items.isEmpty()) {
                         rv?.visibility = View.GONE
@@ -2008,7 +2220,11 @@ Rules:
                         if (rv?.layoutManager == null) rv?.layoutManager = LinearLayoutManager(this@MainActivity)
                         rv?.adapter = SubmissionAdapter(items)
                     }
-                    findViewById<TextView>(R.id.statPublished)?.text = approvedCount.toString()
+                    findViewById<TextView>(R.id.statPublished)?.text = maxOf(approvedCount, stats?.optInt("packs", 0) ?: 0).toString()
+                    stats?.let {
+                        findViewById<TextView>(R.id.statDownloads)?.text = it.optInt("downloads", 0).toString()
+                        findViewById<TextView>(R.id.statFavorites)?.text = it.optInt("favorites", 0).toString()
+                    }
                 }
             } catch (_: Exception) {
                 withContext(Dispatchers.Main) {
@@ -2236,7 +2452,9 @@ Rules:
         val stickerUrls: List<String> = emptyList(),
         val storePackId: String? = null,
         val downloadCount: Int = 0,
-        val favoriteCount: Int = 0
+        val favoriteCount: Int = 0,
+        val likeCount: Int = 0,
+        val commentCount: Int = 0
     )
 
     private inner class SubmissionAdapter(private val items: List<SubmissionItem>) :
@@ -2314,7 +2532,7 @@ Rules:
             // Analytics (downloads / favorites / views) for approved packs — from PocketBase
             if (item.status == "approved" && item.storePackId != null) {
                 holder.tvAnalytics.visibility = View.VISIBLE
-                holder.tvAnalytics.text = "📥 —  ❤️ —"
+                holder.tvAnalytics.text = "📥 ${item.downloadCount}  ❤️ ${item.favoriteCount}  ♥ ${item.likeCount}  💬 ${item.commentCount}"
                 lifecycleScope.launch {
                     runCatching {
                         val record = withContext(Dispatchers.IO) {
@@ -2323,7 +2541,9 @@ Rules:
                         val dl  = record.optInt("download_count", 0)
                         val fav = record.optInt("favorite_count", 0)
                         val vw  = record.optInt("view_count", 0)
-                        holder.tvAnalytics.text = "📥 $dl  ❤️ $fav  👁 $vw"
+                        val likes = record.optInt("like_count", item.likeCount)
+                        val comments = record.optInt("comment_count", item.commentCount)
+                        holder.tvAnalytics.text = "📥 $dl  ❤️ $fav  ♥ $likes  💬 $comments  👁 $vw"
                     }.onFailure { holder.tvAnalytics.visibility = View.GONE }
                 }
             } else {
@@ -2343,9 +2563,14 @@ Rules:
                     .setPositiveButton("Delete") { _, _ ->
                         lifecycleScope.launch {
                             withContext(Dispatchers.IO) {
-                                PocketBaseHelper.deleteRecord("user_submissions", item.id)
-                                if (item.status == "approved" && item.storePackId != null) {
-                                    PocketBaseHelper.deleteRecord("stickers", item.storePackId)
+                                val deletedByWorker = runCatching {
+                                    SocialRepository.deleteSharedPack(this@MainActivity, item.id, item.storePackId ?: item.id).optBoolean("success", false)
+                                }.getOrDefault(false)
+                                if (!deletedByWorker) {
+                                    PocketBaseHelper.deleteRecord("user_submissions", item.id)
+                                    if (item.status == "approved" && item.storePackId != null) {
+                                        PocketBaseHelper.deleteRecord("stickers", item.storePackId)
+                                    }
                                 }
                             }
                             Toast.makeText(this@MainActivity, "Submission deleted", Toast.LENGTH_SHORT).show()
@@ -2373,6 +2598,11 @@ Rules:
                         val idToken = account.idToken ?: throw Exception("Missing ID token")
                         try {
                             withContext(Dispatchers.IO) { PocketBaseHelper.authWithOAuth("google", idToken) }
+                            PreferencesHelper.setPocketBaseAuth(
+                                this@MainActivity,
+                                PocketBaseHelper.getToken(),
+                                PocketBaseHelper.getAuthRecordId()
+                            )
                         } catch (_: Exception) {
                             // PocketBase sync is optional; continue with local profile
                         }
@@ -2823,6 +3053,7 @@ Rules:
 
     private fun setupSearch() {
         val searchBox = findViewById<EditText>(R.id.searchBox)
+        val btnSearchClear = findViewById<View>(R.id.btnSearchClear)
 
         var searchJob: Job? = null
         searchBox.addTextChangedListener(object : TextWatcher {
@@ -2830,10 +3061,17 @@ Rules:
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
             override fun afterTextChanged(s: Editable?) {
                 searchJob?.cancel()
+                val query = s?.toString().orEmpty()
+                btnSearchClear?.visibility = if (query.isNotBlank()) View.VISIBLE else View.GONE
+                if (query.isNotBlank()) hideHomeSections()
                 searchJob = lifecycleScope.launch {
                     delay(400) // Debounce
-                    currentSearchQuery = s?.toString() ?: ""
+                    val wasSearching = currentSearchQuery.isNotBlank()
+                    currentSearchQuery = query
                     applyFilters()
+                    if (!wasSearching && currentSearchQuery.isNotBlank()) {
+                        findViewById<RecyclerView>(R.id.rv)?.scrollToPosition(0)
+                    }
                     // If search returns no results, silently refresh from server once
                     if (currentSearchQuery.isNotEmpty() && ::adapter.isInitialized && adapter.getItems().isEmpty()) {
                         delay(300)
@@ -2842,6 +3080,15 @@ Rules:
                 }
             }
         })
+
+        btnSearchClear?.setOnClickListener { clearButton ->
+            searchJob?.cancel()
+            searchBox.setText("")
+            currentSearchQuery = ""
+            clearButton.visibility = View.GONE
+            applyFilters()
+            if (currentFilter == FilterType.ALL || currentFilter == FilterType.PREMIUM) showHomeSections()
+        }
 
         searchBox.setOnEditorActionListener { _, actionId, _ ->
             if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH) {
@@ -2852,7 +3099,7 @@ Rules:
             } else false
         }
 
-        // When search loses focus (keyboard dismissed), clear search and exit
+        // Keep typed search stable when focus changes; only refresh sections for an empty query.
         searchBox.setOnFocusChangeListener { _, hasFocus ->
             if (!hasFocus && searchBox.text.isNullOrEmpty()) {
                 currentSearchQuery = ""
@@ -2921,6 +3168,19 @@ Rules:
         // Reload profile data when on Profile tab
         if (currentFilter == FilterType.PROFILE && profileContentContainer != null) {
             loadProfileData()
+        }
+
+        syncPremiumStatus {
+            updateBottomNavUI()
+            if (::adapter.isInitialized) applyFilters()
+        }
+
+        if (NetworkUtils.isOnline(this)) {
+            val now = System.currentTimeMillis()
+            if (now - lastForegroundPackRefresh > 8_000) {
+                lastForegroundPackRefresh = now
+                loadPacks(forceRefresh = true)
+            }
         }
 
         // Ensure pack list is visible after returning from background
@@ -3035,13 +3295,21 @@ Rules:
         lifecycleScope.launch(Dispatchers.IO) {
             try {
                 val escaped = docId.replace("'", "\\'")
-                val filter = "uid='$escaped' || user_id='$escaped' || device_id='$escaped'"
+                val email = (user?.email ?: getSharedPreferences("sticky_prefs", MODE_PRIVATE).getString("user_email", "") ?: "").replace("'", "\\'")
+                val pbUserId = PocketBaseHelper.getAuthRecordId().orEmpty().replace("'", "\\'")
+                val filters = mutableListOf("uid='$escaped'", "user_id='$escaped'", "device_id='$escaped'")
+                if (email.isNotBlank()) filters.add("email='$email'")
+                if (pbUserId.isNotBlank()) {
+                    filters.add("uid='$pbUserId'")
+                    filters.add("user_id='$pbUserId'")
+                }
+                val filter = filters.joinToString(" || ")
                 val existing = PocketBaseHelper.listRecords("user_profiles", filter = filter, perPage = 1)
                 if (existing.isNotEmpty()) {
                     val profile = existing.first()
                     val isPremium = profile.optBoolean("is_premium", false)
                     val premiumType = profile.optString("premium_type", "none")
-                    val premiumExpiry = profile.optLong("premium_expiry", 0L)
+                    val premiumExpiry = parsePremiumExpiry(profile.opt("premium_expiry"))
                     withContext(Dispatchers.Main) {
                         if (isPremium) PreferencesHelper.updateLocalPremiumStatus(this@MainActivity, true, premiumType, premiumExpiry)
                         else PreferencesHelper.updateLocalPremiumStatus(this@MainActivity, false, "none", 0L)
@@ -3054,11 +3322,23 @@ Rules:
         }
     }
 
+    private fun parsePremiumExpiry(raw: Any?): Long {
+        return when (raw) {
+            is Number -> raw.toLong()
+            is String -> raw.toLongOrNull() ?: runCatching { java.time.Instant.parse(raw).toEpochMilli() }.getOrDefault(0L)
+            else -> 0L
+        }
+    }
+
     private var hasPreloadedOnce = false
     private var hasPreloadedPopular = false
 
     private fun displayPacks(packs: List<Pack>) {
-        allPacks = packs.distinctBy { it.id }
+        val distinctPacks = packs.distinctBy { it.id }
+        val oldSignature = allPacks.sortedBy { it.id }.joinToString("|") { "${it.id}:${it.version}:${it.stickers.size}:${it.isActive}" }
+        val newSignature = distinctPacks.sortedBy { it.id }.joinToString("|") { "${it.id}:${it.version}:${it.stickers.size}:${it.isActive}" }
+        if (oldSignature != newSignature) savedExploreList = null
+        allPacks = distinctPacks
         setupCategoryChips()
         updateRegionalPacks(packs)
         updateStoryPacks(packs)
@@ -3130,11 +3410,7 @@ Rules:
                 if (now - lastPacksUpdateTime < 2000) return@collect
                 lastPacksUpdateTime = now
                 Log.d("MainActivity", "Real-time update received: ${updatedPacks.size} packs")
-                allPacks = updatedPacks.distinctBy { it.id }
-                setupCategoryChips()
-                applyFilters()
-                updateRegionalPacks(updatedPacks)
-                updateStoryPacks(updatedPacks)
+                displayPacks(updatedPacks)
             }
         }
     }
@@ -3178,8 +3454,15 @@ Rules:
             if (currentSearchQuery.isNotEmpty()) {
                 val query = currentSearchQuery.lowercase(Locale.getDefault())
                 filtered = filtered.filter {
-                    it.localizedName.lowercase(Locale.getDefault()).contains(query) ||
-                    it.pub.lowercase(Locale.getDefault()).contains(query)
+                    listOf(
+                        it.localizedName,
+                        it.name,
+                        it.pub,
+                        it.email,
+                        it.publisherUserId,
+                        it.source,
+                        it.category
+                    ).any { value -> value.lowercase(Locale.getDefault()).contains(query) }
                 }
             }
 
@@ -3316,8 +3599,8 @@ Rules:
                     if (::adapter.isInitialized) adapter.updateListWithDiff(newList, diffResult)
                 }
 
-                // Update home sections visibility - keep story/popular visible for category/premium changes
-                if (currentFilter == FilterType.ALL || currentFilter == FilterType.PREMIUM) {
+                // Update home sections visibility - search results should be the only content while typing.
+                if (currentSearchQuery.isBlank() && (currentFilter == FilterType.ALL || currentFilter == FilterType.PREMIUM)) {
                     showHomeSections()
                 } else {
                     hideHomeSections()
