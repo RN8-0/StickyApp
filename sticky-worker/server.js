@@ -1,5 +1,20 @@
 const express = require('express');
+const admin = require('firebase-admin');
 const { setupPocketBaseHooks } = require('./hooks');
+
+// Firebase Admin initialization — reads service account from env var
+try {
+  const sa = process.env.FIREBASE_SERVICE_ACCOUNT;
+  if (sa) {
+    const serviceAccount = typeof sa === 'string' ? JSON.parse(sa) : sa;
+    admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
+    console.log('[Firebase] initialized for project:', serviceAccount.project_id);
+  } else {
+    console.warn('[Firebase] FIREBASE_SERVICE_ACCOUNT env var not set — FCM disabled');
+  }
+} catch (e) {
+  console.error('[Firebase] init failed:', e.message);
+}
 const giphyRouter = require('./routes/giphy');
 const klipyRouter = require('./routes/klipy');
 const telegramRouter = require('./routes/telegram');
