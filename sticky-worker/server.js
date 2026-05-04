@@ -2,15 +2,24 @@ const express = require('express');
 const admin = require('firebase-admin');
 const { setupPocketBaseHooks } = require('./hooks');
 
-// Firebase Admin initialization — reads service account from env var
+// Firebase Admin initialization
+// Priority: FIREBASE_SERVICE_ACCOUNT env var → firebase-sa-key.json file
 try {
-  const sa = process.env.FIREBASE_SERVICE_ACCOUNT;
-  if (sa) {
-    const serviceAccount = typeof sa === 'string' ? JSON.parse(sa) : sa;
+  let serviceAccount = null;
+  if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+    serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+  } else {
+    const fs = require('fs');
+    const keyPath = require('path').join(__dirname, 'firebase-sa-key.json');
+    if (fs.existsSync(keyPath)) {
+      serviceAccount = JSON.parse(fs.readFileSync(keyPath, 'utf8'));
+    }
+  }
+  if (serviceAccount) {
     admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
     console.log('[Firebase] initialized for project:', serviceAccount.project_id);
   } else {
-    console.warn('[Firebase] FIREBASE_SERVICE_ACCOUNT env var not set — FCM disabled');
+    console.warn('[Firebase] No credentials found — FCM via Admin SDK disabled');
   }
 } catch (e) {
   console.error('[Firebase] init failed:', e.message);
