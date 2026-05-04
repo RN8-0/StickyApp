@@ -169,6 +169,8 @@ object StickerRepository {
         return try {
             val id = json.optString("id").takeIf { it.isNotBlank() } ?: return null
             val collection = if (isPremium) "premium_stickers" else "stickers"
+            // Read is_premium from the record field so admin can toggle it without moving collections
+            val isPremiumPack = json.optBoolean("is_premium", isPremium)
             val stickersJson = json.optJSONArray("stickers") ?: return null
             val stickers = (0 until stickersJson.length()).mapNotNull { i ->
                 val s = stickersJson.optJSONObject(i) ?: return@mapNotNull null
@@ -209,9 +211,9 @@ object StickerRepository {
                 tray = json.optString("tray_image_file").ifBlank { "tray.webp" },
                 trayUrl = normalizeStickerUrl(json.optString("tray_url"), id, json.optString("tray_image_file").ifBlank { "tray.webp" }, collection),
                 stickers = stickers,
-                isPremium = isPremium,
+                isPremium = isPremiumPack,
                 productId = json.optString("product_id"),
-                storagePath = if (isPremium) "premium_stickers" else "stickers",
+                storagePath = collection,  // actual collection for correct file URL construction
                 createdAt = json.optString("created"),
                 category = json.optString("category"),
                 publisherPhotoUrl = json.optString("publisher_photo_url"),

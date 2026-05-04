@@ -98,7 +98,7 @@ object SocialRepository {
         val viewer = currentUser(context)
         val payload = JSONObject().apply {
             put("pack_id", pack.id)
-            put("collection", if (pack.isPremium) "premium_stickers" else "stickers")
+            put("collection", pack.storagePath)
             put("user_id", viewer.id)
             put("user_email", viewer.email)
             put("display_name", viewer.name.ifBlank { viewer.email })
@@ -119,7 +119,7 @@ object SocialRepository {
         val viewer = currentUser(context)
         runCatching { postJson("/api/social/like", JSONObject().apply {
             put("pack_id", pack.id)
-            put("collection", if (pack.isPremium) "premium_stickers" else "stickers")
+            put("collection", pack.storagePath)
             put("user_id", viewer.id)
             put("user_email", viewer.email)
             put("device_id", PreferencesHelper.getDeviceId(context))

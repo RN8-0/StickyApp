@@ -1939,24 +1939,12 @@ function App() {
         if (!updatedData.price_eur) updatedData.price_eur = '€4.49';
       }
 
+      // Always update in-place; Android reads is_premium field directly from the record.
+      // Moving records between collections is avoided because file references are tied to collectionId/recordId.
       const oldCollection = selectedPack.is_premium ? 'premium_stickers' : 'stickers';
-      const newCollection = updatedData.is_premium ? 'premium_stickers' : 'stickers';
+      await pb.collection(oldCollection).update(selectedPack.id, updatedData);
 
-      if (oldCollection !== newCollection) {
-        const fullData = { ...selectedPack, ...updatedData, is_premium: newCollection === 'premium_stickers' } as StickerPack;
-        const movableData = { ...fullData } as any;
-        delete movableData.collectionId;
-        delete movableData.collectionName;
-        delete movableData.expand;
-        delete movableData.created;
-        delete movableData.updated;
-        await pb.collection(newCollection).create({ ...movableData, id: selectedPack.id });
-        await pb.collection(oldCollection).delete(selectedPack.id).catch(() => undefined);
-      } else {
-        await pb.collection(oldCollection).update(selectedPack.id, updatedData);
-      }
-
-      const updated = { ...selectedPack, ...updatedData, is_premium: newCollection === 'premium_stickers' } as StickerPack;
+      const updated = { ...selectedPack, ...updatedData } as StickerPack;
       setPacks(packs.map(p => p.id === selectedPack.id ? updated : p));
       setSelectedPack(updated);
       setShowEditPackModal(false);
