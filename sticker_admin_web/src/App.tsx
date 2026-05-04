@@ -1092,7 +1092,8 @@ function App() {
 
   const mapPbRecord = (r: any, isPremium: boolean): StickerPack => ({
     ...r,
-    is_premium: isPremium,
+    _collection: isPremium ? 'premium_stickers' : 'stickers',
+    is_premium: r.is_premium !== undefined ? r.is_premium : isPremium,
     is_animated: r.is_animated ?? r.animated ?? false,
     download_count: Number(r.download_count || 0),
     fake_download_base: Number(r.fake_download_base || 0),
@@ -1908,6 +1909,9 @@ function App() {
     }
   };
 
+  const packCollection = (pack: StickerPack): string =>
+    (pack as any)._collection || (pack.is_premium ? 'premium_stickers' : 'stickers');
+
   const handleUpdatePack = async () => {
     if (!selectedPack || !editFormData) return;
     setIsProcessing(true);
@@ -1930,18 +1934,20 @@ function App() {
 
       const updatedData: any = sanitizePackUpdate(editFormData);
       updatedData.publisher = (updatedData.publisher || 'Sticky').trim() || 'Sticky';
-      updatedData.publisher_email = '';
-      updatedData.publisher_user_id = '';
-      updatedData.image_data_version = Date.now().toString();
+      updatedData.image_data_version = (Number(selectedPack.image_data_version || 0) + 1).toString();
       if (updatedData.is_premium) {
         if (!updatedData.price_try) updatedData.price_try = '69,99 TL';
         if (!updatedData.price_usd) updatedData.price_usd = '$4.99';
         if (!updatedData.price_eur) updatedData.price_eur = '€4.49';
+      } else {
+        updatedData.price_try = '';
+        updatedData.price_usd = '';
+        updatedData.price_eur = '';
       }
 
-      // Always update in-place; Android reads is_premium field directly from the record.
+      // Update in-place; Android reads is_premium field directly from the record.
       // Moving records between collections is avoided because file references are tied to collectionId/recordId.
-      const oldCollection = selectedPack.is_premium ? 'premium_stickers' : 'stickers';
+      const oldCollection = (selectedPack as any)._collection || (selectedPack.is_premium ? 'premium_stickers' : 'stickers');
       await pb.collection(oldCollection).update(selectedPack.id, updatedData);
 
       const updated = { ...selectedPack, ...updatedData } as StickerPack;
@@ -1952,7 +1958,8 @@ function App() {
 
     } catch (e: any) {
       console.error('[UPDATE] Hata:', e);
-      alert("Error: " + e.message);
+      const details = e?.data ? '\n' + Object.entries(e.data).map(([k, v]: any) => `${k}: ${v?.message || JSON.stringify(v)}`).join('\n') : '';
+      alert("Error: " + e.message + details);
     } finally {
       setIsProcessing(false);
     }
@@ -1966,7 +1973,7 @@ function App() {
     setUploadProgress({ current: 0, total: uploadCount, message: 'Processing started...' });
 
     try {
-      const collectionName = selectedPack.is_premium ? 'premium_stickers' : 'stickers';
+      const collectionName = packCollection(selectedPack);
       const newStickers: Sticker[] = [];
       const processedBlobs: Blob[] = [];
 
@@ -2150,7 +2157,7 @@ function App() {
     setImportProgress({ current: 0, total: importCount, message: 'Starting...' });
 
     try {
-      const collectionName = selectedPack.is_premium ? 'premium_stickers' : 'stickers';
+      const collectionName = packCollection(selectedPack);
       const importedStickers = await importStickers({
         source: 'giphy',
         contentType: importContentType,
@@ -2237,7 +2244,7 @@ function App() {
 
     try {
       setDeleteProgress({ deleting: true, message: 'Deleting from database...', current: 0, total: 1 });
-      const collectionName = pack.is_premium ? 'premium_stickers' : 'stickers';
+      const collectionName = packCollection(pack);
       const cascade = await fetch(`${WORKER_URL}/api/social/pack/delete`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -2258,7 +2265,7 @@ function App() {
     if (!window.confirm('Are you sure you want to delete this sticker?')) return;
 
     try {
-      const collectionName = pack.is_premium ? 'premium_stickers' : 'stickers';
+      const collectionName = packCollection(pack);
       const newVersion = Date.now().toString();
       const newStickerCount = Math.max(0, (pack.stickers?.length || pack.sticker_count) - 1);
       const newStickers = pack.stickers.filter(s => s.image_file !== sticker.image_file);
@@ -2312,7 +2319,7 @@ function App() {
       });
 
       // PocketBase'e yükle
-      const collectionName = pack.is_premium ? 'premium_stickers' : 'stickers';
+      const collectionName = packCollection(pack);
       const trayFileName = `tray_${Date.now()}.png`;
       const trayUrl = await uploadFile(collectionName, pack.id, 'tray_image', trayProcessedBlob, trayFileName);
 
@@ -2346,7 +2353,7 @@ function App() {
 
     try {
       setIsProcessing(true);
-      const collectionName = selectedPack.is_premium ? 'premium_stickers' : 'stickers';
+      const collectionName = packCollection(selectedPack);
 
       const stickersToDelete = (selectedPack.stickers || []).filter(s => selectedStickerIds.includes(s.url));
       const remainingStickers = (selectedPack.stickers || []).filter(s => !selectedStickerIds.includes(s.url));
@@ -2418,7 +2425,7 @@ function App() {
     newStickers.splice(toIndex, 0, movedSticker);
 
     try {
-      const collectionName = pack.is_premium ? 'premium_stickers' : 'stickers';
+      const collectionName = packCollection(pack);
       const newVersion = Date.now().toString();
 
       await pb.collection(collectionName).update(pack.id, {
@@ -2442,7 +2449,7 @@ function App() {
   const resetStats = async (pack: StickerPack) => {
     if (!window.confirm("Do you want to reset the statistics?")) return;
     try {
-      const collectionName = pack.is_premium ? 'premium_stickers' : 'stickers';
+      const collectionName = packCollection(pack);
       await pb.collection(collectionName).update(pack.id, {
         download_count: 0,
         view_count: 0
@@ -2462,7 +2469,7 @@ function App() {
     try {
       for (const p of packs) {
         try {
-          const col = p.is_premium ? 'premium_stickers' : 'stickers';
+          const col = packCollection(p);
           await pb.collection(col).update(p.id, {
             download_count: 0,
             view_count: 0,
@@ -6769,7 +6776,7 @@ function App() {
             <Input
               label="Publisher Name"
               value={editFormData.publisher || 'Sticky'}
-              onChange={(e: any) => setEditFormData({ ...editFormData, publisher: e.target.value || 'Sticky', publisher_email: '', publisher_user_id: '' } as any)}
+              onChange={(e: any) => setEditFormData({ ...editFormData, publisher: e.target.value || 'Sticky' } as any)}
             />
             <div className="flex items-center gap-4">
               <div className="flex-1">
