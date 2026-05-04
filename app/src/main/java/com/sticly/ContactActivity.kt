@@ -54,7 +54,34 @@ class ContactActivity : AppCompatActivity() {
         btnSend.setOnClickListener {
             validateAndSend()
         }
+        prefillSignedInUser()
         setupEdgeToEdge()
+    }
+
+    private fun prefillSignedInUser() {
+        val firebaseUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser ?: return
+        val prefs = getSharedPreferences("sticky_prefs", MODE_PRIVATE)
+        val name = firebaseUser.displayName?.trim().orEmpty()
+            .ifBlank { prefs.getString("user_display_name", "")?.trim().orEmpty() }
+        val email = firebaseUser.email?.trim().orEmpty()
+            .ifBlank { prefs.getString("user_email", "")?.trim().orEmpty() }
+
+        if (name.isNotBlank()) {
+            inputName.setText(name)
+            makeReadOnly(inputName)
+        }
+        if (email.isNotBlank()) {
+            inputEmail.setText(email)
+            makeReadOnly(inputEmail)
+        }
+    }
+
+    private fun makeReadOnly(input: TextInputEditText) {
+        input.keyListener = null
+        input.isFocusable = false
+        input.isFocusableInTouchMode = false
+        input.isCursorVisible = false
+        input.setTextColor(getColor(R.color.text_primary))
     }
 
     private fun setupEdgeToEdge() {
@@ -121,9 +148,7 @@ class ContactActivity : AppCompatActivity() {
                 progressBar.visibility = View.GONE
                 Toast.makeText(this@ContactActivity, R.string.message_sent, Toast.LENGTH_LONG).show()
 
-                // Clear fields
-                inputName.text?.clear()
-                inputEmail.text?.clear()
+                // Clear editable fields
                 inputSubject.text?.clear()
                 inputMessage.text?.clear()
 

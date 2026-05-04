@@ -44,8 +44,30 @@ class SubmitPackActivity : AppCompatActivity() {
     private val maxStoreStickerCount = 30
 
     private val categories = listOf(
-        "humor", "love", "entertainment", "animals", "memes",
-        "anime", "cute", "gaming", "sports", "food", "emoji", "other"
+        "humor" to R.string.category_humor,
+        "love" to R.string.category_love,
+        "religious" to R.string.category_religious,
+        "entertainment" to R.string.category_entertainment,
+        "background" to R.string.category_background,
+        "morning" to R.string.category_morning,
+        "night" to R.string.category_night,
+        "birthday" to R.string.category_birthday,
+        "congrats" to R.string.category_congrats,
+        "animals" to R.string.category_animals,
+        "sports" to R.string.category_sports,
+        "gaming" to R.string.category_gaming,
+        "movie" to R.string.category_movie,
+        "music" to R.string.category_music,
+        "food" to R.string.category_food,
+        "emoji" to R.string.category_emoji,
+        "cars" to R.string.category_cars,
+        "motivation" to R.string.category_motivation,
+        "cute" to R.string.category_cute,
+        "text" to R.string.category_text,
+        "memes" to R.string.category_memes,
+        "anime" to R.string.category_anime,
+        "nature" to R.string.category_nature,
+        "other" to R.string.category_other
     )
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -85,10 +107,16 @@ class SubmitPackActivity : AppCompatActivity() {
     }
 
     private fun setupCategories() {
-        categories.forEach { category ->
+        chipGroupCategory.isSelectionRequired = true
+        categories.forEach { (category, stringRes) ->
             val chip = Chip(this).apply {
-                text = category.replaceFirstChar { it.uppercase() }
+                text = getString(stringRes)
                 isCheckable = true
+                isCheckedIconVisible = true
+                minHeight = resources.getDimensionPixelSize(R.dimen.chip_min_height)
+                chipCornerRadius = resources.getDimension(R.dimen.chip_corner_radius)
+                setChipStrokeColorResource(R.color.primary)
+                chipStrokeWidth = resources.getDimension(R.dimen.chip_stroke_width)
                 chipBackgroundColor = android.content.res.ColorStateList.valueOf(
                     androidx.core.content.ContextCompat.getColor(this@SubmitPackActivity, R.color.chip_bg)
                 )
@@ -165,25 +193,6 @@ class SubmitPackActivity : AppCompatActivity() {
         val userId = firebaseUid.ifBlank { PocketBaseHelper.getAuthRecordId().orEmpty().ifBlank { email } }
 
         lifecycleScope.launch {
-            // Check for existing pending submission
-            val hasPending = withContext(Dispatchers.IO) {
-                try {
-                    val escapedEmail = email.replace("'", "\\'")
-                    val filter = "status='pending' && (user_email='$escapedEmail')"
-                    val result = PocketBaseHelper.listRecords("user_submissions", filter, 1)
-                    result.isNotEmpty()
-                } catch (e: Exception) {
-                    android.util.Log.w("SubmitPack", "Pending check failed: ${e.message}")
-                    false
-                }
-            }
-            if (hasPending) {
-                Toast.makeText(this@SubmitPackActivity, getString(R.string.submit_pending_exists), Toast.LENGTH_LONG).show()
-                isSubmitting = false
-                btnSubmitPack.isEnabled = true
-                btnSubmitPack.text = getString(R.string.submit_pack_button)
-                return@launch
-            }
             try {
                 withContext(Dispatchers.IO) {
                     val stickerFiles = CustomStickerManager.getStickerFiles(this@SubmitPackActivity, packId)
@@ -200,6 +209,7 @@ class SubmitPackActivity : AppCompatActivity() {
                         "user_email" to email,
                         "display_name" to displayName,
                         "publisher_name" to displayName,
+                        "photo_url" to (prefs.getString("user_photo_url", "") ?: ""),
                         "source_pack_id" to packId,
                         "pack_name" to packName,
                         "name" to packName,

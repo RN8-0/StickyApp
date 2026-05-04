@@ -29,12 +29,27 @@ class SuggestActivity : AppCompatActivity() {
     private val categories = listOf(
         "humor" to R.string.category_humor,
         "love" to R.string.category_love,
-        "memes" to R.string.category_memes,
+        "religious" to R.string.category_religious,
+        "entertainment" to R.string.category_entertainment,
+        "background" to R.string.category_background,
+        "morning" to R.string.category_morning,
+        "night" to R.string.category_night,
+        "birthday" to R.string.category_birthday,
+        "congrats" to R.string.category_congrats,
         "animals" to R.string.category_animals,
-        "anime" to R.string.category_anime,
         "sports" to R.string.category_sports,
-        "movie" to R.string.category_movie,
         "gaming" to R.string.category_gaming,
+        "movie" to R.string.category_movie,
+        "music" to R.string.category_music,
+        "food" to R.string.category_food,
+        "emoji" to R.string.category_emoji,
+        "cars" to R.string.category_cars,
+        "motivation" to R.string.category_motivation,
+        "cute" to R.string.category_cute,
+        "text" to R.string.category_text,
+        "memes" to R.string.category_memes,
+        "anime" to R.string.category_anime,
+        "nature" to R.string.category_nature,
         "other" to R.string.category_other
     )
 
@@ -74,14 +89,18 @@ class SuggestActivity : AppCompatActivity() {
     }
 
     private fun setupCategoryChips() {
+        categoryChipGroup.isSelectionRequired = true
         categories.forEach { (key, stringRes) ->
             val chip = Chip(this).apply {
                 text = getString(stringRes)
                 isCheckable = true
                 isCheckedIconVisible = true
+                minHeight = resources.getDimensionPixelSize(R.dimen.chip_min_height)
+                chipCornerRadius = resources.getDimension(R.dimen.chip_corner_radius)
                 setChipBackgroundColorResource(R.color.chip_bg)
+                setChipStrokeColorResource(R.color.accent)
+                chipStrokeWidth = resources.getDimension(R.dimen.chip_stroke_width)
                 setTextColor(getColor(R.color.text_primary))
-                chipStrokeWidth = 0f
                 setOnCheckedChangeListener { _, isChecked ->
                     if (isChecked) {
                         selectedCategory = key
@@ -95,6 +114,7 @@ class SuggestActivity : AppCompatActivity() {
             }
             categoryChipGroup.addView(chip)
         }
+        (categoryChipGroup.getChildAt(0) as? Chip)?.isChecked = true
     }
 
     private fun sendSuggestion() {

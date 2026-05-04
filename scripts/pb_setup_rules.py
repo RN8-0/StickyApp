@@ -118,11 +118,11 @@ rules = {
         "updateRule": ADMIN_CHECK,
         "deleteRule": ADMIN_CHECK,
     },
-    # user_submissions: auth create own, read own+admin, update own draft+admin
+    # user_submissions: Android uses Firebase auth, so create is public; admin owns review/update/delete
     "user_submissions": {
-        "listRule": "@request.auth.id != '' && (user_id = @request.auth.id || " + ADMIN_CHECK + ")",
-        "viewRule": "@request.auth.id != '' && (user_id = @request.auth.id || " + ADMIN_CHECK + ")",
-        "createRule": "@request.auth.id != ''",
+        "listRule": ADMIN_CHECK,
+        "viewRule": ADMIN_CHECK,
+        "createRule": "",
         "updateRule": ADMIN_CHECK,
         "deleteRule": ADMIN_CHECK,
     },

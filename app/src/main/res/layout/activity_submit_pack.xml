@@ -5,7 +5,8 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:fitsSystemWindows="true">
+    android:fitsSystemWindows="true"
+    android:background="@color/background">
 
     <!-- Toolbar -->
     <LinearLayout
@@ -88,7 +89,9 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
                 app:singleSelection="true"
-                app:selectionRequired="true" />
+                app:selectionRequired="true"
+                app:chipSpacingHorizontal="8dp"
+                app:chipSpacingVertical="8dp" />
 
             <!-- Sticker Upload Area -->
             <TextView

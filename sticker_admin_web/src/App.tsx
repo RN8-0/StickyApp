@@ -42,7 +42,6 @@ import {
   Wand2,
   Calendar,
   Smartphone,
-  Zap,
   List,
   Star,
   AlertTriangle,
@@ -66,7 +65,6 @@ import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { stickerProcessor } from './utils/stickerProcessor';
 import { importStickers, type StickerImportProgress } from './utils/stickerImporter';
-import { generateBatchPacks, getCategoryStats, type BatchProgress, type BatchSource } from './utils/batchPackGenerator';
 import { deepseekService } from './utils/deepseekService';
 import { importTelegramPacks, validateBotToken } from './utils/telegramImporter';
 
@@ -268,7 +266,7 @@ function App() {
   const [panelDragIdx, setPanelDragIdx] = useState<number | null>(null);
   const [panelDragOverIdx, setPanelDragOverIdx] = useState<number | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'packs' | 'stats' | 'messages' | 'notifications' | 'users' | 'batch' | 'submissions'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'packs' | 'stats' | 'messages' | 'notifications' | 'users' | 'imports' | 'submissions'>('dashboard');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'passive' | 'animated' | 'static' | 'premium' | 'new' | 'user_submission'>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [statsFilter, setStatsFilter] = useState<'all' | 'active' | 'passive' | 'premium' | 'normal' | 'popular'>('all');
@@ -370,25 +368,15 @@ function App() {
 
   const [showImportModal, setShowImportModal] = useState(false);
 
-  // Batch Generator States
-  const [batchTermsInput, setBatchTermsInput] = useState('');
-  const [batchContentType, setBatchContentType] = useState<'gifs' | 'stickers'>('stickers');
-  const [batchStickersPerPack, setBatchStickersPerPack] = useState(20);
-  const [batchMaxPacks, setBatchMaxPacks] = useState(10);
-  const [batchSource, setBatchSource] = useState<BatchSource>('both');
-  const [batchUseAiNaming, setBatchUseAiNaming] = useState(true);
-  const [batchUseAiTranslation, setBatchUseAiTranslation] = useState(true);
-  const [isBatchRunning, setIsBatchRunning] = useState(false);
-  const [batchProgress, setBatchProgress] = useState<BatchProgress | null>(null);
-  const [batchAiGenerating, setBatchAiGenerating] = useState(false);
   const [importContentType, setImportContentType] = useState<'gifs' | 'stickers'>('stickers');
   const [importCount, setImportCount] = useState(20);
   const [customSearchText, setCustomSearchText] = useState('');
   const [isImporting, setIsImporting] = useState(false);
   const [importProgress, setImportProgress] = useState<{ current: number, total: number, message: string, preview?: string } | null>(null);
 
-  // Draft States
-  const [batchSubTab, setBatchSubTab] = useState<'generator' | 'telegram' | 'drafts'>('generator');
+
+  // Telegram import and draft review states
+  const [importSubTab, setImportSubTab] = useState<'telegram' | 'drafts'>('telegram');
   const [draftPacks, setDraftPacks] = useState<StickerPack[]>([]);
   const [draftLoading, setDraftLoading] = useState(false);
   const [selectedDraft, setSelectedDraft] = useState<StickerPack | null>(null);
@@ -419,10 +407,8 @@ function App() {
   const [telegramSplitPacks, setTelegramSplitPacks] = useState(true);
   const [telegramKeepOriginalName, setTelegramKeepOriginalName] = useState(true);
 
-  // Log state for batch generator and telegram import
-  const [batchLogs, setBatchLogs] = useState<{ time: string; message: string; type: 'info' | 'success' | 'error' | 'warn' }[]>([]);
+  // Log state for imports
   const [telegramLogs, setTelegramLogs] = useState<{ time: string; message: string; type: 'info' | 'success' | 'error' | 'warn' }[]>([]);
-  const batchLogRef = useRef<HTMLDivElement>(null);
   const telegramLogRef = useRef<HTMLDivElement>(null);
 
   // Helper: detect log type from progress message
@@ -431,11 +417,6 @@ function App() {
     if (msg.startsWith('❌') || msg.includes('failed') || msg.includes('Error') || msg.includes('error')) return 'error';
     if (msg.startsWith('⚠️') || msg.startsWith('⏭️') || msg.startsWith('⏱️') || msg.includes('skipping') || msg.includes('timeout') || msg.includes('Mixed pack')) return 'warn';
     return 'info';
-  };
-  const addBatchLog = (msg: string) => {
-    const time = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    setBatchLogs(prev => [...prev, { time, message: msg, type: getLogType(msg) }]);
-    setTimeout(() => batchLogRef.current?.scrollTo({ top: batchLogRef.current.scrollHeight, behavior: 'smooth' }), 50);
   };
   const addTelegramLog = (msg: string) => {
     const time = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -460,6 +441,19 @@ function App() {
     setUser(null);
   };
 
+  const fetchMessagesAndSuggestions = async () => {
+    try {
+      const [msgRecords, suggRecords] = await Promise.all([
+        pb.collection('messages').getFullList({ sort: '-timestamp' }).catch(() => []),
+        pb.collection('suggestions').getFullList({ sort: '-timestamp' }).catch(() => []),
+      ]);
+      setMessages((msgRecords as any[]).map(r => ({ id: r.id, name: r.name || r.title, email: r.email, subject: r.subject || '', message: r.message || r.body || '', timestamp: r.timestamp || new Date(r.created).getTime(), date: r.date || r.created?.split('T')[0] || '', time: r.time || '', status: r.status || 'unread' } as ContactMessage)));
+      setSuggestions((suggRecords as any[]).map(r => ({ id: r.id, suggestion: r.suggestion || r.text || '', timestamp: r.timestamp || new Date(r.created).getTime(), date: r.date || r.created?.split('T')[0] || '', time: r.time || '', category: r.category || 'other' } as StickerSuggestion)));
+    } catch (e) {
+      console.error('PB messages/suggestions fetch error:', e);
+    }
+  };
+
   useEffect(() => {
     if (pb.authStore.isValid && pb.authStore.record?.email) {
       setUser({ email: pb.authStore.record.email });
@@ -470,24 +464,18 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (activeTab !== 'messages') return;
+    if (!user) return;
     let mounted = true;
-    const fetchMessagesAndSuggestions = async () => {
-      try {
-        const [msgRecords, suggRecords] = await Promise.all([
-          pb.collection('messages').getFullList({ sort: '-timestamp' }).catch(() => []),
-          pb.collection('suggestions').getFullList({ sort: '-timestamp' }).catch(() => []),
-        ]);
-        if (!mounted) return;
-        setMessages((msgRecords as any[]).map(r => ({ id: r.id, name: r.name || r.title, email: r.email, subject: r.subject || '', message: r.message || r.body || '', timestamp: r.timestamp || new Date(r.created).getTime(), date: r.date || r.created?.split('T')[0] || '', time: r.time || '', status: r.status || 'unread' } as ContactMessage)));
-        setSuggestions((suggRecords as any[]).map(r => ({ id: r.id, suggestion: r.suggestion || r.text || '', timestamp: r.timestamp || new Date(r.created).getTime(), date: r.date || r.created?.split('T')[0] || '', time: r.time || '' } as StickerSuggestion)));
-      } catch (e) {
-        console.error('PB messages/suggestions fetch error:', e);
-      }
-    };
     fetchMessagesAndSuggestions();
-    return () => { mounted = false; };
-  }, [activeTab]);
+    const subscriptions = [
+      pb.collection('messages').subscribe('*', () => { if (mounted) fetchMessagesAndSuggestions(); }).catch((e) => { console.warn('Messages realtime unavailable:', e); return null; }),
+      pb.collection('suggestions').subscribe('*', () => { if (mounted) fetchMessagesAndSuggestions(); }).catch((e) => { console.warn('Suggestions realtime unavailable:', e); return null; }),
+    ];
+    return () => {
+      mounted = false;
+      subscriptions.forEach((promise) => promise.then((unsubscribe) => unsubscribe?.()).catch(() => {}));
+    };
+  }, [user]);
 
   // Fetch publisher_users and user_submissions from PocketBase
   useEffect(() => {
@@ -540,7 +528,14 @@ function App() {
       }
     };
     fetchData();
-    return () => { mounted = false; };
+    const subscriptions = [
+      pb.collection('publisher_users').subscribe('*', () => { if (mounted) fetchData(); }).catch((e) => { console.warn('Publisher realtime unavailable:', e); return null; }),
+      pb.collection('user_submissions').subscribe('*', () => { if (mounted) fetchData(); }).catch((e) => { console.warn('Submission realtime unavailable:', e); return null; }),
+    ];
+    return () => {
+      mounted = false;
+      subscriptions.forEach((promise) => promise.then((unsubscribe) => unsubscribe?.()).catch(() => {}));
+    };
   }, []);
 
   // Publisher User CRUD handlers
@@ -1387,12 +1382,12 @@ function App() {
     }
   };
 
-  // Fetch drafts when batch tab is active
+  // Fetch drafts when import review is active
   useEffect(() => {
-    if (activeTab === 'batch' && batchSubTab === 'drafts') {
+    if (activeTab === 'imports' && importSubTab === 'drafts') {
       fetchDrafts();
     }
-  }, [activeTab, batchSubTab]);
+  }, [activeTab, importSubTab]);
 
   // ========== STİCKER BOYUT KONTROLÜ (WhatsApp 500KB Limiti) ==========
   const checkStickerSizes = async (pack: StickerPack) => {
@@ -1454,33 +1449,6 @@ function App() {
 
   // ========== KULLANICI YÖNETİM FONKSİYONLARI ==========
 
-  const cleanDuplicateUsers = async () => {
-    if (!window.confirm('Delete all duplicate user records from PocketBase? The newest record per email will be kept. This cannot be undone.')) return;
-    try {
-      const resp = await fetch(`${WORKER_URL}/api/users/duplicates`, { method: 'DELETE' });
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-      const data = await resp.json();
-      alert(`Done — ${data.deleted} duplicate records deleted out of ${data.total} total.`);
-      await fetchUsers();
-    } catch (err) {
-      alert('Error cleaning duplicates: ' + err);
-    }
-  };
-
-  const deleteAllUsers = async () => {
-    if (!window.confirm('⚠️ DELETE ALL USERS from PocketBase? This will erase EVERY user profile record. Cannot be undone.')) return;
-    if (!window.confirm('Are you ABSOLUTELY sure? Type-confirmation skipped, click OK only if certain.')) return;
-    try {
-      const resp = await fetch(`${WORKER_URL}/api/users/all`, { method: 'DELETE' });
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-      const data = await resp.json();
-      alert(`Done — ${data.deleted} user profile records deleted.`);
-      await fetchUsers();
-    } catch (err) {
-      alert('Error deleting all users: ' + err);
-    }
-  };
-
   const fetchUsers = async () => {
     setUsersLoading(true);
     try {
@@ -1500,8 +1468,8 @@ function App() {
         subscription_source: data.subscription_source || 'none',
         subscription_history: data.subscription_history || [],
         created_at: data.created_at || null,
-        display_name: data.display_name || data.displayName || '',
-        photo_url: data.photo_url || data.photoURL || '',
+        display_name: data.display_name || data.displayName || data.name || '',
+        photo_url: data.photo_url || data.photoURL || data.avatar_url || data.picture || '',
         device_info: data.device_info || null,
         total_stickers_added: data.total_stickers_added || 0,
         custom_packs_count: data.custom_packs_count || 0,
@@ -1514,11 +1482,43 @@ function App() {
     }
   };
 
+  const refreshCurrentView = async () => {
+    if (activeTab === 'messages') {
+      await fetchMessagesAndSuggestions();
+    } else if (activeTab === 'users') {
+      await fetchUsers();
+    } else if (activeTab === 'imports') {
+      await fetchDrafts();
+    } else if (activeTab === 'submissions') {
+      const submissions = await pb.collection('user_submissions').getFullList({ sort: '-created_at' }).catch(() => []);
+      setUserSubmissions((submissions as any[]).map(r => {
+        const createdValue = r.created_at || r.created;
+        const createdMs = createdValue ? new Date(createdValue).getTime() : 0;
+        const collId = r.collectionId || 'user_submissions';
+        const images = Array.isArray(r.images) ? r.images : (typeof r.images === 'string' && r.images ? [r.images] : []);
+        const stickers = images.map((filename: string, index: number) => ({
+          name: `sticker_${index + 1}`,
+          image_file: filename,
+          image_url: getFileUrl(collId, r.id, filename),
+          url: getFileUrl(collId, r.id, filename),
+          emojis: ['⭐'],
+        }));
+        return { id: r.id, user_id: r.user_id || '', device_id: r.device_id || '', user_email: r.user_email || '', display_name: r.display_name || '', publisher_name: r.publisher_name, pack_name: r.pack_name || r.name || '', description: r.description, category: r.category || '', stickers, status: r.status || 'pending', sticker_count: r.sticker_count || stickers.length || 0, sticker_pack_id: r.sticker_pack_id, created_at: { seconds: createdMs / 1000 }, note: r.note } as UserSubmission;
+      }).sort((a, b) => (b.created_at?.seconds || 0) - (a.created_at?.seconds || 0)));
+    } else {
+      await fetchPacks();
+      if (selectedPack) checkStickerSizes(selectedPack);
+    }
+  };
+
   const filteredUsers = useMemo(() => {
     let filtered = usersData;
     if (userSearch) {
       const q = userSearch.toLowerCase();
-      filtered = filtered.filter(u => u.email.toLowerCase().includes(q));
+      filtered = filtered.filter(u =>
+        u.email.toLowerCase().includes(q) ||
+        (u.display_name || '').toLowerCase().includes(q)
+      );
     }
     if (userFilter === 'premium') filtered = filtered.filter(u => u.is_premium);
     else if (userFilter === 'free') filtered = filtered.filter(u => !u.is_premium);
@@ -2602,13 +2602,7 @@ function App() {
           </div>
 
           <button
-            onClick={async () => {
-              await fetchPacks();
-              // Seçili paket varsa boyutları yeniden kontrol et
-              if (selectedPack) {
-                checkStickerSizes(selectedPack);
-              }
-            }}
+            onClick={refreshCurrentView}
             className="p-2.5 hover:bg-white/10 rounded-xl transition-all active:scale-90 group relative"
             title="Refresh System"
           >
@@ -2655,6 +2649,7 @@ function App() {
                 { id: 'messages', label: 'Messages', icon: Mail, count: messages.filter(m => m.status === 'unread').length },
                 { id: 'notifications', label: 'Notifications', icon: Bell },
                 { id: 'users', label: 'Users', icon: Users },
+                { id: 'imports', label: 'Telegram Import', icon: Send },
                 { id: 'submissions', label: 'Submissions', icon: Inbox, count: userSubmissions.filter(s => s.status === 'pending' || s.status === 'flagged').length }
               ].map((item) => (
                 <button
@@ -2707,7 +2702,7 @@ function App() {
               { id: 'notifications', icon: Bell, label: 'Notifications' },
               { id: 'users', icon: Users, label: 'Users' },
               { id: 'submissions', icon: Inbox, label: 'Submissions', count: userSubmissions.filter(s => s.status === 'pending' || s.status === 'flagged').length },
-              { id: 'batch', icon: Zap, label: 'Batch Generator' }
+              { id: 'imports', icon: Send, label: 'Telegram Import' }
             ].map(item => (
               <button
                 key={item.id}
@@ -3989,7 +3984,7 @@ function App() {
                 </div>
 
                 {/* Right: Phone Preview */}
-                <div className="hidden xl:flex flex-col items-center gap-3 shrink-0">
+                <div className="hidden flex-col items-center gap-3 shrink-0">
                   <p className="text-[10px] font-black text-textSec uppercase tracking-widest">Live Preview</p>
                   <div className="w-[280px] bg-gradient-to-b from-gray-900 to-gray-950 rounded-[2.5rem] p-3 shadow-2xl border border-white/10">
                     <div className="bg-black rounded-[2rem] overflow-hidden">
@@ -4323,24 +4318,6 @@ function App() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <button
-                      onClick={deleteAllUsers}
-                      disabled={usersLoading}
-                      className="flex items-center gap-2.5 px-5 py-2.5 bg-red-600/15 hover:bg-red-600/25 text-red-300 border border-red-600/30 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
-                      title="DELETE ALL user_profile records from PocketBase"
-                    >
-                      <Trash2 size={14} />
-                      Delete All
-                    </button>
-                    <button
-                      onClick={cleanDuplicateUsers}
-                      disabled={usersLoading}
-                      className="flex items-center gap-2.5 px-5 py-2.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
-                      title="Delete duplicate user records from PocketBase"
-                    >
-                      <Trash2 size={14} />
-                      Clean Duplicates
-                    </button>
                     <button
                       onClick={fetchUsers}
                       disabled={usersLoading}
@@ -5361,56 +5338,33 @@ function App() {
               )}
             </div>
           </div>
-        ) : activeTab === 'batch' ? (
+        ) : activeTab === 'imports' ? (
           <div className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar bg-background">
             <div className="max-w-7xl mx-auto animate-in fade-in duration-500">
               {/* Header */}
               <div className="flex items-center justify-between mb-8">
                 <div className="flex items-center gap-4">
                   <div className="w-12 h-12 bg-gradient-to-br from-yellow-500 to-orange-600 rounded-2xl flex items-center justify-center shadow-lg shadow-orange-500/20">
-                    <Zap className="text-white" size={22} />
+                    <Send className="text-white" size={22} />
                   </div>
                   <div>
-                    <h2 className="text-2xl font-black text-white tracking-tight">Batch Generator V2</h2>
-                    <p className="text-textSec text-xs mt-0.5">Multi-source AI-powered sticker pack factory</p>
+                    <h2 className="text-2xl font-black text-white tracking-tight">Telegram Import</h2>
+                    <p className="text-textSec text-xs mt-0.5">Import Telegram sticker sets into drafts for admin review</p>
                   </div>
                 </div>
-                <div className="hidden md:flex items-center gap-3">
-                  <span className={cn(
-                    "text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 px-3 py-1.5 rounded-lg border",
-                    deepseekService.isConfigured()
-                      ? "text-violet-500 bg-violet-500/5 border-violet-500/10"
-                      : "text-danger bg-danger/5 border-danger/10"
-                  )}>
-                    <span className={cn("w-1.5 h-1.5 rounded-full", deepseekService.isConfigured() ? "bg-violet-500 animate-pulse" : "bg-danger")} />
-                    {deepseekService.isConfigured() ? 'DeepSeek AI' : 'AI Offline'}
-                  </span>
-                  <span className="text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-blue-400 bg-blue-400/5 border-blue-400/10">
-                    <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
-                    Giphy + Klipy
-                  </span>
+                <div className="hidden md:flex items-center gap-2 text-[10px] text-sky-400 font-black uppercase tracking-widest">
+                  <span className="w-1.5 h-1.5 bg-sky-400 rounded-full animate-pulse" />
+                  Draft Review Active
                 </div>
               </div>
 
               {/* Sub-Tab Navigation */}
               <div className="flex items-center gap-2 mb-6">
                 <button
-                  onClick={() => setBatchSubTab('generator')}
+                  onClick={() => setImportSubTab('telegram')}
                   className={cn(
                     "px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all",
-                    batchSubTab === 'generator'
-                      ? "bg-gradient-to-r from-yellow-500 to-orange-500 text-white shadow-lg shadow-orange-500/20"
-                      : "bg-white/5 text-textSec hover:bg-white/10 hover:text-white"
-                  )}
-                >
-                  <Zap size={14} className="inline mr-1.5 -mt-0.5" />
-                  Generator
-                </button>
-                <button
-                  onClick={() => setBatchSubTab('telegram')}
-                  className={cn(
-                    "px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all",
-                    batchSubTab === 'telegram'
+                    importSubTab === 'telegram'
                       ? "bg-gradient-to-r from-sky-500 to-blue-500 text-white shadow-lg shadow-sky-500/20"
                       : "bg-white/5 text-textSec hover:bg-white/10 hover:text-white"
                   )}
@@ -5419,10 +5373,10 @@ function App() {
                   Telegram
                 </button>
                 <button
-                  onClick={() => setBatchSubTab('drafts')}
+                  onClick={() => setImportSubTab('drafts')}
                   className={cn(
                     "px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center gap-2",
-                    batchSubTab === 'drafts'
+                    importSubTab === 'drafts'
                       ? "bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg shadow-blue-500/20"
                       : "bg-white/5 text-textSec hover:bg-white/10 hover:text-white"
                   )}
@@ -5435,302 +5389,7 @@ function App() {
                 </button>
               </div>
 
-              {batchSubTab === 'generator' && !isBatchRunning ? (
-                <div className="max-w-2xl mx-auto space-y-4">
-                  {/* Search Terms */}
-                  <div className="glass rounded-2xl p-5 border border-white/5 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-black text-textSec uppercase tracking-widest flex items-center gap-2">
-                        <List size={10} className="text-primary" /> Search Terms
-                        <span className="ml-1 px-1.5 py-0.5 bg-primary/20 text-primary rounded text-[10px] font-black">{batchTermsInput.split(',').filter(t => t.trim()).length}</span>
-                      </span>
-                      <button
-                        onClick={async () => {
-                          if (!deepseekService.isConfigured()) {
-                            alert('DeepSeek API key not found!');
-                            return;
-                          }
-                          setBatchAiGenerating(true);
-                          try {
-                            const existingTerms = batchTermsInput.split(',').map(t => t.trim()).filter(Boolean);
-                            const catStats = await getCategoryStats();
-                            const suggestions = await deepseekService.generateSearchTerms(batchMaxPacks, existingTerms, [], catStats);
-                            const newTerms = suggestions.map(s => s.searchTerm).join(', ');
-                            setBatchTermsInput(prev => prev ? prev + ', ' + newTerms : newTerms);
-                          } catch (e: any) {
-                            alert('AI topic generation error: ' + e.message);
-                          } finally {
-                            setBatchAiGenerating(false);
-                          }
-                        }}
-                        disabled={batchAiGenerating}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white rounded-lg text-[10px] font-black transition-all disabled:opacity-50"
-                      >
-                        {batchAiGenerating ? <RefreshCcw size={12} className="animate-spin" /> : <Sparkles size={12} />}
-                        {batchAiGenerating ? 'Generating...' : `AI Generate ${batchMaxPacks} Topics`}
-                      </button>
-                    </div>
-                    <textarea
-                      value={batchTermsInput}
-                      onChange={(e) => setBatchTermsInput(e.target.value)}
-                      placeholder="Enter search terms separated by commas...&#10;e.g: cute cats, angry reactions, good morning, birthday party, anime kawaii, love hearts, funny memes..."
-                      rows={4}
-                      className="w-full bg-card/60 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-medium outline-none focus:ring-2 focus:ring-primary focus:border-primary/50 transition-all resize-none placeholder:text-white/15"
-                    />
-                  </div>
-
-                  {/* Settings Row */}
-                  <div className="glass rounded-2xl p-5 border border-white/5 space-y-3">
-                    <div className="flex items-center gap-3 flex-wrap">
-                      {/* Source */}
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] font-black text-textSec uppercase tracking-widest shrink-0">Source</span>
-                        <div className="flex rounded-lg border border-white/10 overflow-hidden">
-                          {([
-                            { id: 'both' as BatchSource, label: 'Both' },
-                            { id: 'giphy' as BatchSource, label: 'Giphy' },
-                            { id: 'klipy' as BatchSource, label: 'Klipy' },
-                          ]).map(s => (
-                            <button
-                              key={s.id}
-                              onClick={() => setBatchSource(s.id)}
-                              className={cn(
-                                "px-3 py-1.5 text-[10px] font-bold transition-all",
-                                batchSource === s.id ? "bg-purple-600 text-white" : "bg-white/5 text-textSec hover:text-white"
-                              )}
-                            >
-                              {s.label}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* Content Type */}
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] font-black text-textSec uppercase tracking-widest shrink-0">Type</span>
-                        <div className="flex rounded-lg border border-white/10 overflow-hidden">
-                          <button
-                            onClick={() => setBatchContentType('stickers')}
-                            className={cn("px-3 py-1.5 text-[10px] font-bold transition-all", batchContentType === 'stickers' ? "bg-purple-600 text-white" : "bg-white/5 text-textSec hover:text-white")}
-                          >Stickers</button>
-                          <button
-                            onClick={() => setBatchContentType('gifs')}
-                            className={cn("px-3 py-1.5 text-[10px] font-bold transition-all", batchContentType === 'gifs' ? "bg-purple-600 text-white" : "bg-white/5 text-textSec hover:text-white")}
-                          >GIFs</button>
-                        </div>
-                      </div>
-
-                      {/* Max Packs */}
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] font-black text-textSec uppercase tracking-widest shrink-0">Packs</span>
-                        <input
-                          type="number" min={1} max={50}
-                          value={batchMaxPacks}
-                          onChange={(e) => setBatchMaxPacks(Number(e.target.value))}
-                          className="w-14 h-8 bg-card/60 border border-white/10 rounded-lg px-2 text-white text-xs font-bold text-center outline-none focus:border-purple-500/50"
-                        />
-                      </div>
-
-                      {/* Per Pack */}
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] font-black text-textSec uppercase tracking-widest shrink-0">Per Pack</span>
-                        <input
-                          type="number" min={5} max={30} step={5}
-                          value={batchStickersPerPack}
-                          onChange={(e) => setBatchStickersPerPack(Number(e.target.value))}
-                          className="w-14 h-8 bg-card/60 border border-white/10 rounded-lg px-2 text-white text-xs font-bold text-center outline-none focus:border-purple-500/50"
-                        />
-                      </div>
-                    </div>
-
-                    {/* AI Toggles */}
-                    <div className="flex items-center gap-4 pt-1 border-t border-white/5">
-                      <button
-                        onClick={() => setBatchUseAiNaming(!batchUseAiNaming)}
-                        className="flex items-center gap-2 py-1"
-                      >
-                        <div className={cn("w-8 h-4 rounded-full transition-all relative", batchUseAiNaming ? "bg-purple-600" : "bg-white/10")}>
-                          <div className={cn("w-3 h-3 rounded-full bg-white absolute top-0.5 transition-all", batchUseAiNaming ? "left-4" : "left-0.5")} />
-                        </div>
-                        <span className={cn("text-[10px] font-bold", batchUseAiNaming ? "text-purple-300" : "text-textSec")}>AI Naming</span>
-                      </button>
-                      <button
-                        onClick={() => setBatchUseAiTranslation(!batchUseAiTranslation)}
-                        className="flex items-center gap-2 py-1"
-                      >
-                        <div className={cn("w-8 h-4 rounded-full transition-all relative", batchUseAiTranslation ? "bg-purple-600" : "bg-white/10")}>
-                          <div className={cn("w-3 h-3 rounded-full bg-white absolute top-0.5 transition-all", batchUseAiTranslation ? "left-4" : "left-0.5")} />
-                        </div>
-                        <span className={cn("text-[10px] font-bold", batchUseAiTranslation ? "text-purple-300" : "text-textSec")}>AI Translation</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Launch */}
-                  <button
-                    onClick={async () => {
-                      const terms = batchTermsInput.split(',').map(t => t.trim()).filter(Boolean);
-                      if (terms.length === 0) {
-                        alert('Please enter at least one search term!');
-                        return;
-                      }
-                      const limitedTerms = terms.slice(0, batchMaxPacks);
-                      const actualCount = limitedTerms.length;
-                      if (!window.confirm(`${actualCount} packs will be created (Limit: ${batchMaxPacks}). This may take a while. Do you want to continue?`)) return;
-                      setIsBatchRunning(true);
-                      setBatchProgress(null);
-                      setBatchLogs([]);
-                      try {
-                        const completedPacks = await generateBatchPacks({
-                          searchTerms: limitedTerms,
-                          source: batchSource,
-                          stickersPerPack: batchStickersPerPack,
-                          useAiNaming: batchUseAiNaming,
-                          useAiTranslation: batchUseAiTranslation,
-                          existingPackNames: packs.map(p => p.name.toLowerCase()),
-                          contentType: batchContentType,
-                          onProgress: (progress) => {
-                            setBatchProgress(progress);
-                            if (progress.currentStep) addBatchLog(progress.currentStep);
-                          }
-                        });
-                        addBatchLog(`✅ Batch complete! ${completedPacks.length} packs created as drafts.`);
-                        await fetchDrafts();
-                        alert(`✅ ${completedPacks.length} packs created as drafts! You can review and publish them from the Drafts tab.`);
-                      } catch (error: any) {
-                        console.error('Batch generation error:', error);
-                        addBatchLog(`❌ Fatal error: ${error.message}`);
-                        alert(`Error: ${error.message}`);
-                      } finally {
-                        setIsBatchRunning(false);
-                      }
-                    }}
-                    disabled={batchTermsInput.split(',').filter(t => t.trim()).length === 0}
-                    className="w-full py-4 bg-gradient-to-r from-yellow-500 via-orange-500 to-red-500 hover:from-yellow-600 hover:via-orange-600 hover:to-red-600 text-white rounded-2xl font-black text-sm shadow-xl shadow-orange-500/20 transition-all hover:translate-y-[-2px] active:translate-y-0 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-3"
-                  >
-                    <Zap size={20} />
-                    START BATCH GENERATION
-                    <span className="text-xs font-bold opacity-70">~{Math.min(batchTermsInput.split(',').filter(t => t.trim()).length, batchMaxPacks) * batchStickersPerPack} stickers</span>
-                  </button>
-                </div>
-              ) : batchSubTab === 'generator' && isBatchRunning ? (
-                /* Batch Progress UI */
-                <div className="space-y-6">
-                  <div className="glass rounded-[2rem] p-8 border border-white/5 space-y-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h3 className="text-xl font-black text-white">
-                          {batchProgress?.status === 'done' ? 'Generation Complete!' : 'Generation in Progress...'}
-                        </h3>
-                        <p className="text-sm text-textSec mt-1">
-                          Pack {batchProgress?.currentPack || 0} / {batchProgress?.totalPacks || 0}
-                        </p>
-                      </div>
-                      {batchProgress?.status === 'done' && (
-                        <button
-                          onClick={() => {
-                            setIsBatchRunning(false);
-                            setBatchProgress(null);
-                          }}
-                          className="px-6 py-3 bg-primary text-white rounded-xl font-black text-xs uppercase tracking-widest"
-                        >
-                          New Generation
-                        </button>
-                      )}
-                    </div>
-
-                    {/* Progress Bar */}
-                    <div className="space-y-2">
-                      <div className="w-full bg-white/5 h-3 rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-gradient-to-r from-yellow-500 via-orange-500 to-red-500 transition-all duration-500 rounded-full"
-                          style={{ width: `${batchProgress?.totalPacks ? (batchProgress.currentPack / batchProgress.totalPacks) * 100 : 0}%` }}
-                        />
-                      </div>
-                      <div className="flex justify-between text-[10px] font-bold text-textSec">
-                        <span>{Math.round(batchProgress?.totalPacks ? (batchProgress.currentPack / batchProgress.totalPacks) * 100 : 0)}%</span>
-                        <span>{batchProgress?.currentPack || 0} / {batchProgress?.totalPacks || 0} packs</span>
-                      </div>
-                    </div>
-
-                    {/* Current Step */}
-                    <div className="bg-primary/5 border border-primary/20 px-5 py-3 rounded-xl">
-                      <p className="text-xs text-primary font-bold">{batchProgress?.currentStep || 'Starting...'}</p>
-                    </div>
-
-                    {/* Sticker Progress (if available) */}
-                    {batchProgress?.stickerProgress && (
-                      <div className="space-y-1">
-                        <div className="flex justify-between text-[10px] font-bold text-textSec">
-                          <span>Sticker: {batchProgress.stickerProgress.current} / {batchProgress.stickerProgress.total}</span>
-                          <span>{batchProgress.packName}</span>
-                        </div>
-                        <div className="w-full bg-white/5 h-1.5 rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-accent transition-all duration-300 rounded-full"
-                            style={{ width: `${(batchProgress.stickerProgress.current / batchProgress.stickerProgress.total) * 100}%` }}
-                          />
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Completed Packs List */}
-                  {batchProgress?.completedPacks && batchProgress.completedPacks.length > 0 && (
-                    <div className="glass rounded-[2rem] p-6 border border-white/5 space-y-4">
-                      <h4 className="text-sm font-black text-white uppercase tracking-widest flex items-center gap-2">
-                        <Check size={16} className="text-violet-500" />
-                        Created Packs ({batchProgress.completedPacks.length})
-                      </h4>
-                      <div className="space-y-2 max-h-[300px] overflow-y-auto custom-scrollbar">
-                        {batchProgress.completedPacks.map((pack, idx) => (
-                          <div key={pack.id} className="flex items-center gap-3 p-3 bg-white/[0.02] rounded-xl border border-white/5">
-                            <span className="w-7 h-7 rounded-lg bg-violet-500/20 text-violet-500 flex items-center justify-center text-[10px] font-black">{idx + 1}</span>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-bold text-white truncate">{pack.name}</p>
-                              <p className="text-[10px] text-textSec">{pack.stickerCount} sticker • {pack.searchTerm}</p>
-                            </div>
-                            <span className="text-[9px] font-bold text-textSec uppercase bg-white/5 px-2 py-1 rounded">{pack.source}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Batch Generator Log Panel */}
-                  {batchLogs.length > 0 && (
-                    <div className="glass rounded-[2rem] border border-white/5 overflow-hidden">
-                      <div className="flex items-center justify-between px-5 py-3 border-b border-white/5 bg-white/[0.02]">
-                        <div className="flex items-center gap-2">
-                          <div className="w-2 h-2 rounded-full bg-yellow-500 animate-pulse" />
-                          <span className="text-[10px] font-black text-textSec uppercase tracking-widest">Live Log</span>
-                          <span className="text-[9px] text-textSec bg-white/5 px-2 py-0.5 rounded-md">{batchLogs.length} entries</span>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <button onClick={() => {
-                            const text = batchLogs.map(l => `${l.time} ${l.message}`).join('\n');
-                            navigator.clipboard.writeText(text);
-                          }} className="text-[9px] text-textSec hover:text-white transition-colors font-bold uppercase tracking-wider">Copy</button>
-                          <button onClick={() => setBatchLogs([])} className="text-[9px] text-textSec hover:text-white transition-colors font-bold uppercase tracking-wider">Clear</button>
-                        </div>
-                      </div>
-                      <div ref={batchLogRef} className="max-h-[250px] overflow-y-auto p-3 space-y-0.5 font-mono text-[11px] bg-black/40">
-                        {batchLogs.map((log, idx) => (
-                          <div key={idx} className="flex gap-2 py-0.5 px-2 rounded hover:bg-white/5">
-                            <span className="text-white/20 shrink-0 select-none">{log.time}</span>
-                            <span className={
-                              log.type === 'success' ? 'text-green-400' :
-                              log.type === 'error' ? 'text-red-400' :
-                              log.type === 'warn' ? 'text-yellow-400' :
-                              'text-white/60'
-                            }>{log.message}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ) : batchSubTab === 'telegram' ? (
+              {importSubTab === 'telegram' ? (
                 /* ========== TELEGRAM IMPORT UI ========== */
                 <div className="max-w-2xl mx-auto space-y-4">
                   {/* Bot Token — compact single row */}
@@ -5941,6 +5600,9 @@ function App() {
                             if (p.currentStep) addTelegramLog(p.currentStep);
                           }
                         });
+                        await fetchDrafts();
+                        setImportSubTab('drafts');
+                        addTelegramLog('✅ Draft list refreshed. Imported packs are ready for review.');
                       } catch (e: any) {
                         addTelegramLog(`❌ Fatal error: ${e.message}`);
                         alert('Import error: ' + e.message);
@@ -6123,7 +5785,7 @@ function App() {
                     </div>
                   )}
                 </div>
-              ) : batchSubTab === 'drafts' ? (
+              ) : importSubTab === 'drafts' ? (
                 /* ========== DRAFTS UI ========== */
                 <div className="space-y-6">
                   {/* Drafts Header */}
@@ -6237,7 +5899,7 @@ function App() {
                         <Package size={36} className="text-textSec" />
                       </div>
                       <h4 className="text-xl font-black text-white mb-3">No Drafts Yet</h4>
-                      <p className="text-sm text-textSec max-w-lg mx-auto leading-relaxed">When you create packs with the batch generator, they will first appear here as drafts. You can review and publish them after approval.</p>
+                      <p className="text-sm text-textSec max-w-lg mx-auto leading-relaxed">Imported Telegram packs appear here as drafts. Review them here before publishing.</p>
                     </div>
                   ) : (
                     <div className="space-y-6">
