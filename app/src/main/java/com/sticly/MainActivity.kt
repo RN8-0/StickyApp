@@ -395,6 +395,7 @@ class MainActivity : AppCompatActivity() {
                 val safeTopic = "user_${deviceIdForFcm.replace(Regex("[^a-zA-Z0-9_-]"), "_")}"
                 FirebaseMessaging.getInstance().subscribeToTopic(safeTopic)
             }
+            PreferencesHelper.restorePocketBaseAuth(this)
             PushTokenManager.refreshAndSync(this)
 
             // Kullanıcı giriş yapmışsa Firebase ile senkronize et (e-posta dahil)

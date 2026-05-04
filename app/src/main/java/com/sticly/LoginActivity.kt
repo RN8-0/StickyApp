@@ -148,7 +148,12 @@ class LoginActivity : AppCompatActivity() {
 
                     try {
                         withContext(Dispatchers.IO) {
-                            PocketBaseHelper.authWithOAuth("google", idToken)
+                            val authResult = PocketBaseHelper.authWithOAuth("google", idToken)
+                            PreferencesHelper.setPocketBaseAuth(
+                                this@LoginActivity,
+                                authResult.optString("token").takeIf { it.isNotBlank() },
+                                authResult.optJSONObject("record")?.optString("id")?.takeIf { it.isNotBlank() }
+                            )
                         }
                     } catch (e: Exception) {
                         android.util.Log.w("LoginActivity", "PocketBase Google auth skipped: ${e.message}")

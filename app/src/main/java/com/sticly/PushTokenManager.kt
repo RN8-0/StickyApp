@@ -11,6 +11,20 @@ import org.json.JSONObject
 object PushTokenManager {
     private const val TAG = "PushTokenManager"
 
+    private fun nonBlank(value: String?): String? = value?.takeIf { it.isNotBlank() }
+
+    private fun bestFirebaseDisplayName(user: com.google.firebase.auth.FirebaseUser?): String {
+        return nonBlank(user?.displayName)
+            ?: user?.providerData?.firstNotNullOfOrNull { nonBlank(it.displayName) }
+            ?: ""
+    }
+
+    private fun bestFirebasePhotoUrl(user: com.google.firebase.auth.FirebaseUser?): String {
+        return nonBlank(user?.photoUrl?.toString())
+            ?: user?.providerData?.firstNotNullOfOrNull { nonBlank(it.photoUrl?.toString()) }
+            ?: ""
+    }
+
     fun refreshAndSync(context: Context) {
         FirebaseMessaging.getInstance().token
             .addOnSuccessListener { token -> syncToken(context, token) }
@@ -28,6 +42,16 @@ object PushTokenManager {
                     put("fcm_token", token)
                     put("notifications_enabled", PreferencesHelper.isNotificationsEnabled(context))
                     put("push_provider", "fcm")
+                    if (firebaseUser != null) {
+                        val displayName = bestFirebaseDisplayName(firebaseUser)
+                        val photoUrl = bestFirebasePhotoUrl(firebaseUser)
+                        put("user_id", firebaseUser.uid)
+                        put("uid", firebaseUser.uid)
+                        put("email", firebaseUser.email ?: "")
+                        put("display_name", displayName)
+                        put("name", displayName)
+                        put("photo_url", photoUrl)
+                    }
                 }
 
                 // Only sync (and possibly create) when authenticated. For unauthenticated users
@@ -58,11 +82,21 @@ object PushTokenManager {
         }
 
         val deviceId = filter.substringAfter("'").substringBefore("'")
-        val email = "$deviceId@device.sticly.local"
-        val escapedEmail = email.replace("'", "\\'")
+        val profileEmail = payload.optString("email").takeIf { it.isNotBlank() }
+        val firebaseUid = payload.optString("user_id").takeIf { it.isNotBlank() }
+        val fallbackEmail = "$deviceId@device.sticly.local"
+        val escapedFallbackEmail = fallbackEmail.replace("'", "\\'")
 
         // Search by BOTH device_id and email in one query — covers all duplicate scenarios
-        val combinedFilter = "device_id='$deviceId' || email='$escapedEmail'"
+        val combinedFilter = buildList {
+            add("device_id='$deviceId'")
+            if (!profileEmail.isNullOrBlank()) add("email='${profileEmail.replace("'", "\\'")}'")
+            if (!firebaseUid.isNullOrBlank()) {
+                add("user_id='${firebaseUid.replace("'", "\\'")}'")
+                add("uid='${firebaseUid.replace("'", "\\'")}'")
+            }
+            add("email='$escapedFallbackEmail'")
+        }.joinToString(" || ")
         val records = PocketBaseHelper.listRecords(collection, filter = combinedFilter, perPage = 50)
 
         if (records.isNotEmpty()) {
@@ -70,7 +104,7 @@ object PushTokenManager {
             val updatePayload = JSONObject(payload.toString()).apply {
                 put("device_id", deviceId)
                 if (collection != "users") {
-                    put("user_id", deviceId)
+                    if (!has("user_id") || optString("user_id").isBlank()) put("user_id", deviceId)
                     put("provider", "device")
                     put("platform", "android")
                 }
@@ -93,8 +127,8 @@ object PushTokenManager {
 
         val createPayload = JSONObject(payload.toString()).apply {
             put("device_id", deviceId)
-            put("email", email)
-            put("display_name", "Guest")
+            put("email", profileEmail ?: fallbackEmail)
+            if (optString("display_name").isBlank()) put("display_name", "Guest")
             if (collection == "users") {
                 val password = java.util.UUID.randomUUID().toString()
                 put("password", password)

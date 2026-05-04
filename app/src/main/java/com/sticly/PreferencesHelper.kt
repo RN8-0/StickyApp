@@ -34,15 +34,45 @@ object PreferencesHelper {
     private const val KEY_TOTAL_STICKERS_ADDED = "total_stickers_added"
     private const val KEY_INITIAL_LOAD_DONE = "initial_load_done"
     private const val KEY_PACKS_SINCE_PROMO = "packs_since_promo"
+    private const val KEY_PB_AUTH_TOKEN = "pb_auth_token"
+    private const val KEY_PB_AUTH_RECORD_ID = "pb_auth_record_id"
 
     // ========== User Profile (Google login via PocketBase) ==========
 
+    private fun nonBlank(value: String?): String? = value?.takeIf { it.isNotBlank() }
+
+    private fun bestFirebaseDisplayName(user: com.google.firebase.auth.FirebaseUser?): String? {
+        return nonBlank(user?.displayName)
+            ?: user?.providerData?.firstNotNullOfOrNull { nonBlank(it.displayName) }
+    }
+
+    private fun bestFirebasePhotoUrl(user: com.google.firebase.auth.FirebaseUser?): String? {
+        return nonBlank(user?.photoUrl?.toString())
+            ?: user?.providerData?.firstNotNullOfOrNull { nonBlank(it.photoUrl?.toString()) }
+    }
+
     fun setUserProfile(context: Context, email: String?, displayName: String?, photoUrl: String?) {
+        val prefs = getPrefs(context)
         getPrefs(context).edit()
-            .putString("user_email", email ?: "")
-            .putString("user_display_name", displayName ?: "")
-            .putString("user_photo_url", photoUrl ?: "")
+            .putString("user_email", nonBlank(email) ?: prefs.getString("user_email", "") ?: "")
+            .putString("user_display_name", nonBlank(displayName) ?: prefs.getString("user_display_name", "") ?: "")
+            .putString("user_photo_url", nonBlank(photoUrl) ?: prefs.getString("user_photo_url", "") ?: "")
             .apply()
+    }
+
+    fun setPocketBaseAuth(context: Context, token: String?, recordId: String?) {
+        getPrefs(context).edit()
+            .putString(KEY_PB_AUTH_TOKEN, token ?: "")
+            .putString(KEY_PB_AUTH_RECORD_ID, recordId ?: "")
+            .apply()
+        PocketBaseHelper.setAuth(token, recordId)
+    }
+
+    fun restorePocketBaseAuth(context: Context) {
+        val prefs = getPrefs(context)
+        val token = prefs.getString(KEY_PB_AUTH_TOKEN, "")?.takeIf { it.isNotBlank() }
+        val recordId = prefs.getString(KEY_PB_AUTH_RECORD_ID, "")?.takeIf { it.isNotBlank() }
+        if (!token.isNullOrBlank()) PocketBaseHelper.setAuth(token, recordId)
     }
 
     fun syncUserDataWithPocketBase(context: Context, deviceId: String) {
@@ -647,10 +677,13 @@ object PreferencesHelper {
      */
     fun syncUserData(context: Context, uid: String) {
         val currentUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
-        val userEmail = currentUser?.email ?: ""
-        val displayName = currentUser?.displayName ?: ""
-        val photoUrl = currentUser?.photoUrl?.toString() ?: ""
+        val prefs = getPrefs(context)
+        val userEmail = nonBlank(currentUser?.email) ?: prefs.getString("user_email", "") ?: ""
+        val displayName = bestFirebaseDisplayName(currentUser) ?: prefs.getString("user_display_name", "") ?: ""
+        val photoUrl = bestFirebasePhotoUrl(currentUser) ?: prefs.getString("user_photo_url", "") ?: ""
         val localFavorites = getFavoritePacks(context).toList()
+
+        setUserProfile(context, userEmail, displayName, photoUrl)
 
         syncCurrentUserProfile(context, JSONObject().apply {
             put("uid", uid)

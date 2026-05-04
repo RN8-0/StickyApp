@@ -51,6 +51,15 @@ PACK_FIELDS = [
     field("image_data_version", "text"),
     field("privacy_policy_website", "url"),
     field("license_agreement_website", "url"),
+    field("batch_generated", "bool"),
+    field("batch_source", "text"),
+    field("batch_search_term", "text"),
+    field("source", "text"),
+    field("telegram_set_name", "text"),
+    field("telegram_set_title", "text"),
+    field("telegram_part", "number"),
+    field("telegram_total_parts", "number"),
+    field("created_at", "text"),
 ]
 
 PATCHES = {
@@ -92,8 +101,17 @@ PATCHES = {
         field("created_at", "date"), field("processed_at", "date"), field("images", "file", options=file_opts(99, 5242880)),
     ],
     "user_profiles": [
-        field("device_id", "text"), field("email", "email"), field("photo_url", "url"),
-        field("packs_published", "number"), field("total_downloads", "number"), field("total_favorites", "number"), field("joined_at", "date"),
+        field("user_id", "text"), field("uid", "text"), field("device_id", "text"),
+        field("name", "text"), field("display_name", "text"), field("email", "email"), field("photo_url", "url"),
+        field("provider", "text"), field("platform", "text"), field("app_version", "text"),
+        field("fcm_token", "text"), field("fcm_tokens", "json"), field("notifications_enabled", "bool"), field("push_provider", "text"),
+        field("is_premium", "bool"), field("premium_type", "text"), field("premium_expiry", "number"), field("premium_expires_at", "date"),
+        field("last_sync", "date"), field("cancelled_at", "date"), field("cancelled_reason", "text"),
+        field("subscription_source", "text"), field("subscription_history", "json"),
+        field("device_info", "json"), field("favorite_packs", "json"),
+        field("total_stickers_added", "number"), field("custom_packs_count", "number"),
+        field("packs_published", "number"), field("total_downloads", "number"), field("total_favorites", "number"),
+        field("created_at", "date"), field("joined_at", "date"),
     ],
     "users": [
         field("uid", "text"), field("name", "text"), field("display_name", "text"), field("photo_url", "url"),

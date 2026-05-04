@@ -39,6 +39,11 @@ object PocketBaseHelper {
         if (token == null) authRecordId = null
     }
 
+    fun setAuth(token: String?, recordId: String?) {
+        authToken = token
+        authRecordId = recordId
+    }
+
     fun getToken(): String? = authToken
 
     fun getAuthRecordId(): String? = authRecordId

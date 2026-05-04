@@ -317,6 +317,7 @@ class SettingsActivity : AppCompatActivity() {
             googleSignInClient.signOut().addOnCompleteListener {
                 getSharedPreferences("sticky_prefs", MODE_PRIVATE).edit()
                     .remove("user_email").remove("user_display_name").remove("user_photo_url").apply()
+                PreferencesHelper.setPocketBaseAuth(this, null, null)
                 Toast.makeText(this, "Logged out from Google", Toast.LENGTH_SHORT).show()
                 updateNotificationStatus()
                 updateLoginSwitches()
@@ -324,6 +325,7 @@ class SettingsActivity : AppCompatActivity() {
         } else {
             getSharedPreferences("sticky_prefs", MODE_PRIVATE).edit()
                 .remove("user_email").remove("user_display_name").remove("user_photo_url").apply()
+            PreferencesHelper.setPocketBaseAuth(this, null, null)
             Toast.makeText(this, "Logged out", Toast.LENGTH_SHORT).show()
         }
     }

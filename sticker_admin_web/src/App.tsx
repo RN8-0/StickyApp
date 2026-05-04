@@ -202,6 +202,13 @@ const CATEGORIES = [
   { id: 'other', name: 'Other', emoji: '📂' }
 ];
 
+const PACK_NAME_EMOJIS = [
+  '😂', '❤️', '🔥', '✨', '😍', '😘', '🥰', '😭', '😎', '🤩', '🥳', '😈',
+  '🎉', '🎁', '🎂', '💎', '⭐', '🌟', '💫', '⚡', '🚀', '💯', '👑', '🔔',
+  '🐱', '🐶', '🐻', '🐼', '🦊', '🐰', '🧸', '🌸', '🌙', '☀️', '🌈', '🌿',
+  '🎮', '🎬', '🎵', '⚽', '🍔', '☕', '🚗', '✍️', '🕌', '⛩️', '🎭', '📂'
+];
+
 // ========== COMPONENTS ==========
 
 const StatCard = ({ label, value, color }: { label: string, value: number, color: 'primary' | 'accent' }) => (
@@ -1076,7 +1083,7 @@ function App() {
   const fetchDrafts = async () => {
     setDraftLoading(true);
     try {
-      const records = await pb.collection('draft_stickers').getFullList({ sort: '-created' });
+      const records = await pb.collection('draft_stickers').getFullList({ sort: '-created_at' });
       const drafts: StickerPack[] = (records as any[]).map(r => ({
         id: r.id,
         ...r,
@@ -1086,9 +1093,41 @@ function App() {
         fake_download_base: Number(r.fake_download_base || 0),
         view_count: 0,
         favorite_count: 0,
-        sticker_count: Number(r.sticker_count || r.stickers?.length || 0),
-      } as StickerPack));
-      setDraftPacks(drafts.sort((a, b) => (a.name || '').localeCompare(b.name || '')));
+      } as StickerPack)).map((draft: any) => {
+        const collId = draft.collectionId || 'draft_stickers';
+        const parseField = (raw: any): any[] => {
+          if (Array.isArray(raw) && raw.length > 0) return raw;
+          if (typeof raw === 'string' && raw.length > 2) {
+            try { const parsed = JSON.parse(raw); return Array.isArray(parsed) ? parsed : []; } catch { return []; }
+          }
+          return [];
+        };
+        const images = Array.isArray(draft.images) ? draft.images : (typeof draft.images === 'string' && draft.images ? [draft.images] : []);
+        const fileStickers = images.map((filename: string, index: number) => ({
+          name: `sticker_${index + 1}`,
+          image_file: filename,
+          image_url: getFileUrl(collId, draft.id, filename),
+          url: getFileUrl(collId, draft.id, filename),
+          emojis: ['⭐'],
+        }));
+        const jsonStickers = parseField(draft.stickers).map((sticker: any, index: number) => ({
+          ...sticker,
+          name: sticker.name || `sticker_${index + 1}`,
+          image_url: sticker.image_url || sticker.url || getFileUrl(collId, draft.id, sticker.image_file || sticker.name || ''),
+          url: sticker.url || sticker.image_url || getFileUrl(collId, draft.id, sticker.image_file || sticker.name || ''),
+          emojis: Array.isArray(sticker.emojis) && sticker.emojis.length > 0 ? sticker.emojis : ['⭐'],
+        }));
+        const stickers = fileStickers.length > jsonStickers.length ? fileStickers : (jsonStickers.length > 0 ? jsonStickers : fileStickers);
+        const trayFallback = draft.tray_url || stickers[0]?.url || '';
+        return {
+          ...draft,
+          status: draft.status === 'processing' && stickers.length > 0 ? 'draft' : (draft.status || 'draft'),
+          stickers,
+          tray_url: trayFallback,
+          sticker_count: Number(draft.sticker_count || stickers.length || 0),
+        } as StickerPack;
+      });
+      setDraftPacks(drafts);
     } catch (error: any) {
       console.error('Draft fetch error:', error);
     } finally {
@@ -1460,14 +1499,14 @@ function App() {
         email: data.email || '',
         is_premium: data.is_premium || false,
         premium_type: data.premium_type || 'none',
-        premium_expiry: data.premium_expiry || 0,
+        premium_expiry: data.premium_expiry || data.premium_expires_at || 0,
         favorite_packs: data.favorite_packs || [],
-        last_sync: data.last_sync || null,
+        last_sync: data.last_sync || data.updated || null,
         cancelled_at: data.cancelled_at || null,
         cancelled_reason: data.cancelled_reason || '',
         subscription_source: data.subscription_source || 'none',
         subscription_history: data.subscription_history || [],
-        created_at: data.created_at || null,
+        created_at: data.created_at || data.joined_at || data.created || null,
         display_name: data.display_name || data.displayName || data.name || '',
         photo_url: data.photo_url || data.photoURL || data.avatar_url || data.picture || '',
         device_info: data.device_info || null,
@@ -3984,7 +4023,7 @@ function App() {
                 </div>
 
                 {/* Right: Phone Preview */}
-                <div className="hidden flex-col items-center gap-3 shrink-0">
+                <div className="hidden xl:flex flex-col items-center gap-3 shrink-0">
                   <p className="text-[10px] font-black text-textSec uppercase tracking-widest">Live Preview</p>
                   <div className="w-[280px] bg-gradient-to-b from-gray-900 to-gray-950 rounded-[2.5rem] p-3 shadow-2xl border border-white/10">
                     <div className="bg-black rounded-[2rem] overflow-hidden">
@@ -6471,11 +6510,32 @@ function App() {
                 🌍 Translations are handled automatically. Pack names will be translated to all supported languages via Cloud Function when saved.
               </p>
             </div>
-            <Input
-              label="Pack Name"
-              value={editFormData.name || ''}
-              onChange={(e: any) => setEditFormData({ ...editFormData, name: e.target.value })}
-            />
+            <div className="space-y-3">
+              <Input
+                label="Pack Name"
+                value={editFormData.name || ''}
+                onChange={(e: any) => setEditFormData({ ...editFormData, name: e.target.value })}
+              />
+              <div className="space-y-2">
+                <div className="flex items-center justify-between px-1">
+                  <span className="text-[10px] font-black text-textSec uppercase tracking-widest">Emoji Library</span>
+                  <span className="text-[10px] text-textSec/60">Tap to add to pack name</span>
+                </div>
+                <div className="flex flex-wrap gap-1.5 rounded-xl border border-white/5 bg-white/[0.02] p-2">
+                  {PACK_NAME_EMOJIS.map((emoji) => (
+                    <button
+                      key={emoji}
+                      type="button"
+                      onClick={() => setEditFormData({ ...editFormData, name: `${(editFormData.name || '').trimEnd()} ${emoji}`.trim() })}
+                      className="w-8 h-8 flex items-center justify-center rounded-lg bg-white/5 hover:bg-primary/20 border border-white/5 hover:border-primary/30 text-base transition-all hover:scale-110 active:scale-95"
+                      title={`Add ${emoji}`}
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
             <Input
               label="Publisher"
               value={editFormData.publisher}

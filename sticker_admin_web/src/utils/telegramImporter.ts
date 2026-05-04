@@ -247,16 +247,27 @@ async function renderTgsFrames(
 // Thumbnail fallback: resize thumbnail to 512x512 static WebP (last resort)
 // ========== DUPLICATE DETECTION ==========
 
+function escapePbText(value: string): string {
+    return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+}
+
 async function checkDuplicatePack(setName: string): Promise<{ exists: boolean; location?: string }> {
     try {
+        const filter = `telegram_set_name = "${escapePbText(setName)}"`;
         const [stickersRes, premiumRes, draftsRes] = await Promise.all([
-            pb.collection('stickers').getList(1, 1, { filter: `telegram_set_name = "${setName}"` }).catch(() => ({ totalItems: 0 })),
-            pb.collection('premium_stickers').getList(1, 1, { filter: `telegram_set_name = "${setName}"` }).catch(() => ({ totalItems: 0 })),
-            pb.collection('draft_stickers').getList(1, 1, { filter: `telegram_set_name = "${setName}"` }).catch(() => ({ totalItems: 0 })),
+            pb.collection('stickers').getList(1, 1, { filter }).catch(() => ({ totalItems: 0 })),
+            pb.collection('premium_stickers').getList(1, 1, { filter }).catch(() => ({ totalItems: 0 })),
+            pb.collection('draft_stickers').getList(1, 10, { filter, sort: '-created_at' }).catch(() => ({ totalItems: 0, items: [] })),
         ]);
         if (stickersRes.totalItems > 0) return { exists: true, location: 'published (free)' };
         if (premiumRes.totalItems > 0) return { exists: true, location: 'published (premium)' };
-        if (draftsRes.totalItems > 0) return { exists: true, location: 'drafts' };
+        const draftItems = Array.isArray((draftsRes as any).items) ? (draftsRes as any).items : [];
+        const hasUsableDraft = draftItems.some((draft: any) => {
+            const stickers = Array.isArray(draft.stickers) ? draft.stickers.length : 0;
+            const images = Array.isArray(draft.images) ? draft.images.length : 0;
+            return draft.status === 'draft' && (Number(draft.sticker_count || 0) > 0 || stickers > 0 || images > 0);
+        });
+        if (hasUsableDraft) return { exists: true, location: 'drafts' };
         return { exists: false };
     } catch {
         return { exists: false };
