@@ -2,15 +2,11 @@ const fetch = require('node-fetch');
 const EventSource = require('eventsource');
 const admin = require('firebase-admin');
 
-const PB_URL = process.env.PB_URL || 'http://pocketbase:8090';
-const PB_ADMIN_EMAIL = process.env.PB_ADMIN_EMAIL || 'admin@sticky.app';
-const PB_ADMIN_PASS = process.env.PB_ADMIN_PASS;
+const PB_URL = process.env.PB_URL || 'https://sh3xlf9j7symlj3otlw6s8rx.46.225.95.201.sslip.io';
+const PB_ADMIN_EMAIL = process.env.PB_ADMIN_EMAIL || 'arainunger@gmail.com';
+const PB_ADMIN_PASS = process.env.PB_ADMIN_PASS || 'StickyAdmin2026!';
 const NTFY_URL = process.env.NTFY_URL || 'http://ntfy:80';
 const NTFY_TOPIC = process.env.NTFY_TOPIC || 'sticky-stickers';
-
-if (!PB_ADMIN_PASS) {
-  throw new Error('PB_ADMIN_PASS is required.');
-}
 
 let authToken = '';
 

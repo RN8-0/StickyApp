@@ -3,9 +3,9 @@ const fetch = require('node-fetch');
 
 const router = Router();
 
-const PB_URL = process.env.PB_URL || 'http://pocketbase:8090';
-const PB_ADMIN_EMAIL = process.env.PB_ADMIN_EMAIL || 'admin@sticky.app';
-const PB_ADMIN_PASS = process.env.PB_ADMIN_PASS;
+const PB_URL = process.env.PB_URL || 'https://sh3xlf9j7symlj3otlw6s8rx.46.225.95.201.sslip.io';
+const PB_ADMIN_EMAIL = process.env.PB_ADMIN_EMAIL || 'arainunger@gmail.com';
+const PB_ADMIN_PASS = process.env.PB_ADMIN_PASS || 'StickyAdmin2026!';
 
 let pbToken = '';
 

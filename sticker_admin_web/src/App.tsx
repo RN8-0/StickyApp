@@ -6665,6 +6665,11 @@ function App() {
               </p>
             </div>
             <Input
+              label="Pack Name"
+              value={editFormData.name || ''}
+              onChange={(e: any) => setEditFormData({ ...editFormData, name: e.target.value })}
+            />
+            <Input
               label="Publisher"
               value={editFormData.publisher}
               onChange={(e: any) => setEditFormData({ ...editFormData, publisher: e.target.value })}
