@@ -72,6 +72,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var drawer: DrawerLayout
     private lateinit var rv: RecyclerView
     private lateinit var loadingOverlay: View
+    private lateinit var addLoadingOverlay: View
     // skeleton removed
     private lateinit var swipeRefresh: SwipeRefreshLayout
     private lateinit var mainContent: View
@@ -471,6 +472,7 @@ class MainActivity : AppCompatActivity() {
         drawer.setDrawerLockMode(androidx.drawerlayout.widget.DrawerLayout.LOCK_MODE_LOCKED_CLOSED)
         rv = findViewById(R.id.rv)
         loadingOverlay = findViewById(R.id.loadingOverlay)
+        addLoadingOverlay = findViewById(R.id.addLoadingOverlay)
 
         swipeRefresh = findViewById(R.id.swipeRefresh)
         menuBtn = findViewById(R.id.menuBtn)
@@ -2993,15 +2995,18 @@ Rules:
                 isCheckable = true
                 isChecked = isActive
                 tag = info.id
-                chipStartPadding = 10.dpToPx().toFloat()
-                chipEndPadding = 10.dpToPx().toFloat()
-                chipCornerRadius = 20.dpToPx().toFloat()
-                chipMinHeight = 30.dpToPx().toFloat()
+                chipStartPadding = 12.dpToPx().toFloat()
+                chipEndPadding = 12.dpToPx().toFloat()
+                chipCornerRadius = 50.dpToPx().toFloat()
+                chipMinHeight = 38.dpToPx().toFloat()
                 textSize = 13f
-                setChipBackgroundColorResource(if (isActive) R.color.accent else R.color.chip_bg)
+                typeface = if (isActive) android.graphics.Typeface.DEFAULT_BOLD else android.graphics.Typeface.DEFAULT
+                setChipBackgroundColorResource(if (isActive) R.color.accent else R.color.white)
                 setTextColor(getColor(if (isActive) R.color.white else R.color.text_primary))
-                chipStrokeWidth = if (isActive) 0f else 1.dpToPx().toFloat()
-                chipStrokeColor = android.content.res.ColorStateList.valueOf(getColor(R.color.primary_light))
+                chipStrokeWidth = if (isActive) 0f else (1.5f * resources.displayMetrics.density)
+                chipStrokeColor = android.content.res.ColorStateList.valueOf(
+                    if (isActive) getColor(R.color.accent) else getColor(R.color.primary_light)
+                )
                 setOnClickListener {
                     currentFilter = info.filterType
                     currentCategory = "all"
@@ -3031,15 +3036,18 @@ Rules:
                 isCheckable = true
                 isChecked = isActive
                 tag = categoryKey
-                chipStartPadding = 10.dpToPx().toFloat()
-                chipEndPadding = 10.dpToPx().toFloat()
-                chipCornerRadius = 20.dpToPx().toFloat()
-                chipMinHeight = 30.dpToPx().toFloat()
+                chipStartPadding = 12.dpToPx().toFloat()
+                chipEndPadding = 12.dpToPx().toFloat()
+                chipCornerRadius = 50.dpToPx().toFloat()
+                chipMinHeight = 38.dpToPx().toFloat()
                 textSize = 13f
-                setChipBackgroundColorResource(if (isActive) R.color.accent else R.color.chip_bg)
+                typeface = if (isActive) android.graphics.Typeface.DEFAULT_BOLD else android.graphics.Typeface.DEFAULT
+                setChipBackgroundColorResource(if (isActive) R.color.accent else R.color.white)
                 setTextColor(getColor(if (isActive) R.color.white else R.color.text_primary))
-                chipStrokeWidth = if (isActive) 0f else 1.dpToPx().toFloat()
-                chipStrokeColor = android.content.res.ColorStateList.valueOf(getColor(R.color.primary_light))
+                chipStrokeWidth = if (isActive) 0f else (1.5f * resources.displayMetrics.density)
+                chipStrokeColor = android.content.res.ColorStateList.valueOf(
+                    if (isActive) getColor(R.color.accent) else getColor(R.color.primary_light)
+                )
                 setOnClickListener {
                     currentFilter = FilterType.ALL
                     currentCategory = categoryKey
@@ -3062,9 +3070,13 @@ Rules:
                 else -> currentFilter == FilterType.ALL && currentCategory == tag
             }
             chip.isChecked = isActive
-            chip.setChipBackgroundColorResource(if (isActive) R.color.accent else R.color.chip_bg)
+            chip.setChipBackgroundColorResource(if (isActive) R.color.accent else R.color.white)
             chip.setTextColor(getColor(if (isActive) R.color.white else R.color.text_primary))
-            chip.chipStrokeWidth = if (isActive) 0f else 1.dpToPx().toFloat()
+            chip.typeface = if (isActive) android.graphics.Typeface.DEFAULT_BOLD else android.graphics.Typeface.DEFAULT
+            chip.chipStrokeWidth = if (isActive) 0f else (1.5f * resources.displayMetrics.density)
+            chip.chipStrokeColor = android.content.res.ColorStateList.valueOf(
+                if (isActive) getColor(R.color.accent) else getColor(R.color.primary_light)
+            )
         }
     }
 
@@ -3088,11 +3100,18 @@ Rules:
                 isCheckable = true
                 isChecked = isActive
                 tag = info.id
-                chipStartPadding = 8.dpToPx().toFloat()
-                chipEndPadding = 8.dpToPx().toFloat()
-                setChipBackgroundColorResource(if (isActive) R.color.accent else R.color.chip_bg)
+                chipStartPadding = 12.dpToPx().toFloat()
+                chipEndPadding = 12.dpToPx().toFloat()
+                chipCornerRadius = 50.dpToPx().toFloat()
+                chipMinHeight = 38.dpToPx().toFloat()
+                textSize = 13f
+                typeface = if (isActive) android.graphics.Typeface.DEFAULT_BOLD else android.graphics.Typeface.DEFAULT
+                setChipBackgroundColorResource(if (isActive) R.color.accent else R.color.white)
                 setTextColor(getColor(if (isActive) R.color.white else R.color.text_primary))
-                chipStrokeWidth = 0f
+                chipStrokeWidth = if (isActive) 0f else (1.5f * resources.displayMetrics.density)
+                chipStrokeColor = android.content.res.ColorStateList.valueOf(
+                    if (isActive) getColor(R.color.accent) else getColor(R.color.primary_light)
+                )
                 setOnClickListener {
                     currentFilter = info.filterType
                     applyFilters()
@@ -3978,14 +3997,14 @@ Rules:
         if (!AdManager.isRewardedReady()) {
             Toast.makeText(this, R.string.ad_loading_please_wait, Toast.LENGTH_SHORT).show()
             AdManager.loadRewardedAd(this)
-            loadingOverlay.visibility = View.VISIBLE
+            addLoadingOverlay.visibility = View.VISIBLE
             lifecycleScope.launch {
                 var waited = 0
                 while (!AdManager.isRewardedReady() && waited < 12) {
                     delay(250)
                     waited++
                 }
-                loadingOverlay.visibility = View.GONE
+                addLoadingOverlay.visibility = View.GONE
                 if (AdManager.isRewardedReady()) {
                     showRewardedAdForDirectAdd(pack)
                 } else {
@@ -4009,7 +4028,7 @@ Rules:
     }
 
     private fun prepareAndSendToWhatsApp(pack: Pack, skipInterstitial: Boolean) {
-        loadingOverlay.visibility = View.VISIBLE
+        addLoadingOverlay.visibility = View.VISIBLE
         lifecycleScope.launch {
             val ready = withContext(Dispatchers.IO) {
                 val currentPacks = StickerRepository.allPacksCache
@@ -4017,7 +4036,7 @@ Rules:
                 StickerRepository.saveCacheToDisk(this@MainActivity, packsToSave)
                 if (StickerRepository.isPackCached(this@MainActivity, pack)) true else StickerRepository.downloadPackToCache(this@MainActivity, pack)
             }
-            loadingOverlay.visibility = View.GONE
+            addLoadingOverlay.visibility = View.GONE
             if (!ready) {
                 Toast.makeText(this@MainActivity, R.string.stickers_load_failed, Toast.LENGTH_SHORT).show()
                 return@launch

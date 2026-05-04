@@ -359,6 +359,62 @@
 
                 </LinearLayout>
 
+                <!-- Floating ADD Overlay: shown during sticker preparation, main page stays visible -->
+                <FrameLayout
+                    android:id="@+id/addLoadingOverlay"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:background="#88000000"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:visibility="gone">
+
+                    <com.google.android.material.card.MaterialCardView
+                        android:layout_width="220dp"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="center"
+                        app:cardCornerRadius="24dp"
+                        app:cardElevation="16dp"
+                        app:cardBackgroundColor="@color/card_bg">
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="vertical"
+                            android:gravity="center"
+                            android:paddingTop="32dp"
+                            android:paddingBottom="28dp"
+                            android:paddingHorizontal="24dp">
+
+                            <com.google.android.material.progressindicator.CircularProgressIndicator
+                                android:id="@+id/circularProgressDirect"
+                                android:layout_width="64dp"
+                                android:layout_height="64dp"
+                                app:indicatorColor="@color/primary"
+                                app:trackColor="@color/chip_bg"
+                                app:trackThickness="5dp"
+                                app:indicatorSize="64dp"
+                                app:trackCornerRadius="3dp"
+                                android:indeterminate="true" />
+
+                            <TextView
+                                android:id="@+id/tvDirectAddStatus"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="20dp"
+                                android:text="@string/stickers_preparing"
+                                android:textColor="@color/text_secondary"
+                                android:textSize="13sp"
+                                android:gravity="center"
+                                android:lineSpacingMultiplier="1.3"
+                                android:fontFamily="sans-serif" />
+
+                        </LinearLayout>
+
+                    </com.google.android.material.card.MaterialCardView>
+
+                </FrameLayout>
+
                 <!-- Empty State View -->
                 <LinearLayout
                     android:id="@+id/emptyStateView"
