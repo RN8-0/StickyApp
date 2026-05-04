@@ -709,6 +709,9 @@
     <string name="like">Beğen</string>
     <string name="liked">Beğenildi</string>
     <string name="likes_short">beğeni</string>
+    <string name="following">Takip edilen</string>
+    <string name="followers">Takipçi</string>
+    <string name="social_list_empty">Henüz gösterilecek bir şey yok</string>
     <string name="reply">Yanıtla</string>
     <string name="reply_to_user">%1$s adlı kullanıcıya yanıt yaz</string>
     <string name="uploading_stickers">Sticker\'lar yükleniyor…</string>

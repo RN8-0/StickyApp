@@ -138,24 +138,35 @@ router.get('/', async (req, res) => {
         );
         const followerCount = follows.filter((follow) =>
           matchesAnyUserField(follow, identifiers, ['target_id', 'target_email', 'following_id', 'following_email'])
-        ).length;
+        );
         const followingCount = follows.filter((follow) =>
           matchesAnyUserField(follow, identifiers, ['follower_id', 'follower_email'])
-        ).length;
-        const userLikes = likes.filter((like) =>
-          matchesAnyUserField(like, identifiers, ['user_id', 'user_email', 'display_name'])
         );
+        const publishedPackIds = new Set(publishedPacks.map((pack) => pack.id));
+        const receivedLikes = likes.filter((like) => publishedPackIds.has(like.pack_id));
         deduped.push({
           ...u,
           bio: u.bio || '',
           show_email: u.show_email !== false,
           social: {
-            followers: followerCount,
-            following: followingCount,
+            followers: followerCount.length,
+            following: followingCount.length,
             comments: userComments.length,
-            likes: userLikes.length,
+            likes: receivedLikes.length,
             published_packs: publishedPacks.length,
           },
+          followers_list: followerCount.map((follow) => ({
+            id: follow.follower_id || '',
+            email: follow.follower_email || '',
+            name: follow.follower_name || follow.follower_email || '',
+            photo_url: follow.follower_photo || '',
+          })),
+          following_list: followingCount.map((follow) => ({
+            id: follow.target_id || follow.following_id || '',
+            email: follow.target_email || follow.following_email || '',
+            name: follow.target_name || follow.following_name || follow.target_email || follow.following_email || '',
+            photo_url: follow.target_photo || follow.following_photo || '',
+          })),
           published_packs: publishedPacks.map((pack) => ({
             id: pack.id,
             name: pack.name || pack.name_en || pack.name_tr || pack.pack_name || pack.id,

@@ -102,7 +102,7 @@ class NotificationsActivity : AppCompatActivity() {
             val list = withContext(Dispatchers.IO) { fetchFromWorker(deviceId, userId, userEmail) }
             progress.visibility = View.GONE
             items.clear()
-            items.addAll(list)
+            items.addAll(list.map { it.copy(read = true) })
             if (items.isEmpty()) {
                 emptyView.visibility = View.VISIBLE
                 rv.visibility = View.GONE
@@ -206,7 +206,9 @@ class NotificationsActivity : AppCompatActivity() {
             val arr = org.json.JSONArray(json)
             (0 until arr.length()).map { i ->
                 val record = arr.getJSONObject(i)
-                val timestamp = record.optString("timestamp", record.optString("created", ""))
+                val timestamp = record.optString("timestamp").ifBlank {
+                    record.optString("created", record.optString("created_at", record.optString("updated", "")))
+                }
                 val date = parseTimestamp(timestamp)
                 val topic = record.optString("topic", record.optString("type", "general"))
                 val data = notificationData(record)
@@ -285,7 +287,15 @@ class NotificationsActivity : AppCompatActivity() {
             try {
                 java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSSXXX", java.util.Locale.US).parse(value)
             } catch (_: Exception) {
-                null
+                try {
+                    java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS'Z'", java.util.Locale.US).parse(value)
+                } catch (_: Exception) {
+                    try {
+                        java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", java.util.Locale.US).parse(value)
+                    } catch (_: Exception) {
+                        null
+                    }
+                }
             }
         }
     }
@@ -327,7 +337,7 @@ class NotificationsActivity : AppCompatActivity() {
             holder.date.text = msg.dateLabel
 
             // Read state
-            holder.itemView.alpha = if (msg.read) 0.65f else 1f
+            holder.itemView.alpha = 1f
             holder.unreadDot.visibility = if (msg.read) View.GONE else View.VISIBLE
 
             // Category icon & label

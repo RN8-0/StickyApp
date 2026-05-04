@@ -92,6 +92,31 @@
                 android:textSize="13sp"
                 android:textColor="@color/text_secondary" />
 
+            <TextView
+                android:id="@+id/profileBio"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginHorizontal="24dp"
+                android:layout_marginTop="8dp"
+                android:gravity="center"
+                android:maxLines="4"
+                android:textColor="@color/text_primary"
+                android:textSize="13sp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnEditProfile"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:layout_width="wrap_content"
+                android:layout_height="40dp"
+                android:layout_marginTop="12dp"
+                android:minWidth="120dp"
+                android:text="@string/profile_edit"
+                android:textAllCaps="false"
+                android:textColor="@color/primary"
+                app:cornerRadius="12dp"
+                app:strokeColor="@color/primary"
+                app:strokeWidth="1dp" />
+
         </LinearLayout>
 
         <!-- Stats Row -->
@@ -99,10 +124,13 @@
             android:id="@+id/profileStatsRow"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginHorizontal="16dp"
+            android:layout_marginTop="8dp"
             android:orientation="horizontal"
             android:gravity="center"
+            android:minHeight="76dp"
             android:paddingVertical="12dp"
-            android:background="@color/surface">
+            android:background="@drawable/bg_dialog_rounded">
 
             <!-- Published Packs -->
             <LinearLayout
@@ -135,7 +163,7 @@
                 android:layout_height="32dp"
                 android:background="@color/divider" />
 
-            <!-- Downloads -->
+            <!-- Followers -->
             <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
@@ -155,7 +183,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="@string/profile_stat_downloads"
+                    android:text="@string/followers"
                     android:textSize="11sp"
                     android:textColor="@color/text_secondary" />
 
@@ -166,7 +194,38 @@
                 android:layout_height="32dp"
                 android:background="@color/divider" />
 
-            <!-- Favorites -->
+            <!-- Following -->
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:gravity="center">
+
+                <TextView
+                    android:id="@+id/statFollowing"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="0"
+                    android:textSize="18sp"
+                    android:textStyle="bold"
+                    android:textColor="@color/primary" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/following"
+                    android:textSize="11sp"
+                    android:textColor="@color/text_secondary" />
+
+            </LinearLayout>
+
+            <View
+                android:layout_width="1dp"
+                android:layout_height="32dp"
+                android:background="@color/divider" />
+
+            <!-- Likes -->
             <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
@@ -186,7 +245,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="@string/profile_stat_favorites"
+                    android:text="@string/likes_short"
                     android:textSize="11sp"
                     android:textColor="@color/text_secondary" />
 
@@ -207,7 +266,7 @@
             android:textAllCaps="false"
             android:textStyle="bold"
             app:backgroundTint="@color/primary"
-            app:cornerRadius="12dp"
+            app:cornerRadius="18dp"
             app:icon="@drawable/ic_share"
             app:iconGravity="textStart"
             app:iconTint="@color/white"

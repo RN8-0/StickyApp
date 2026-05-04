@@ -143,6 +143,17 @@ object SocialRepository {
         })
     }
 
+    suspend fun toggleReplyLike(context: Context, replyId: String, packId: String): JSONObject = withContext(Dispatchers.IO) {
+        val viewer = currentUser(context)
+        runCatching { postJson("/api/social/comments/reply/like", JSONObject().apply {
+            put("reply_id", replyId)
+            put("pack_id", packId)
+            put("user_id", viewer.id)
+            put("user_email", viewer.email)
+            put("display_name", viewer.name.ifBlank { viewer.email })
+        }) }.getOrElse { JSONObject().put("liked", false) }
+    }
+
     suspend fun updateProfile(context: Context, displayName: String, bio: String, showEmail: Boolean, photoUrl: String): JSONObject = withContext(Dispatchers.IO) {
         val viewer = currentUser(context)
         postPatchJson("/api/social/profile", JSONObject().apply {

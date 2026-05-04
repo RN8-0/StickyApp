@@ -9,8 +9,10 @@
     android:focusable="true"
     android:foreground="?attr/selectableItemBackground"
     app:cardBackgroundColor="@color/surface"
-    app:cardCornerRadius="10dp"
-    app:cardElevation="1dp">
+    app:cardCornerRadius="18dp"
+    app:cardElevation="3dp"
+    app:strokeColor="@color/primary_light"
+    app:strokeWidth="1dp">
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -21,8 +23,8 @@
 
         <ImageView
             android:id="@+id/ivPackCover"
-            android:layout_width="56dp"
-            android:layout_height="56dp"
+            android:layout_width="62dp"
+            android:layout_height="62dp"
             android:background="@drawable/bg_category_unselected"
             android:scaleType="centerCrop" />
 

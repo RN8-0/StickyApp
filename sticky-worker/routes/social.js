@@ -203,7 +203,15 @@ async function commentsWithState(packId, viewerId = '', viewerEmail = '') {
         liked: likes.some((like) => viewerMatches(like, viewerId, viewerEmail)),
         replies: replies
           .filter((reply) => clean(reply.comment_id) === clean(comment.id))
-          .sort((a, b) => Date.parse(a.created || a.created_at || 0) - Date.parse(b.created || b.created_at || 0)),
+          .sort((a, b) => Date.parse(a.created || a.created_at || 0) - Date.parse(b.created || b.created_at || 0))
+          .map((reply) => {
+            const replyLikes = commentLikes.filter((like) => clean(like.comment_id) === clean(reply.id));
+            return {
+              ...reply,
+              like_count: replyLikes.length,
+              liked: replyLikes.some((like) => viewerMatches(like, viewerId, viewerEmail)),
+            };
+          }),
       };
     });
 }
@@ -623,6 +631,36 @@ router.post('/comments/reply', async (req, res) => {
     res.json({ reply: await resp.json() });
   } catch (err) {
     console.error('[Social comment reply]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/comments/reply/like', async (req, res) => {
+  try {
+    const replyId = clean(req.body.reply_id);
+    const packId = clean(req.body.pack_id);
+    const userId = clean(req.body.user_id);
+    const userEmail = clean(req.body.user_email);
+    if (!replyId || (!userId && !userEmail)) return res.status(400).json({ error: 'Missing reply or user.' });
+    const likes = await safeFetchAll('comment_likes');
+    const existing = likes.find((like) => clean(like.comment_id) === replyId && viewerMatches(like, userId, userEmail));
+    let liked = true;
+    if (existing) {
+      const resp = await pbFetch(`/api/collections/comment_likes/records/${existing.id}`, { method: 'DELETE' });
+      if (!resp.ok && resp.status !== 204) throw new Error(await resp.text());
+      liked = false;
+    } else {
+      const resp = await pbFetch('/api/collections/comment_likes/records', {
+        method: 'POST',
+        body: JSON.stringify({ comment_id: replyId, pack_id: packId, user_id: userId, user_email: userEmail, display_name: clean(req.body.display_name), created_at: new Date().toISOString() })
+      });
+      if (!resp.ok) throw new Error(await resp.text());
+    }
+    const nextLikes = await safeFetchAll('comment_likes');
+    const likeCount = nextLikes.filter((like) => clean(like.comment_id) === replyId).length;
+    res.json({ liked, like_count: likeCount });
+  } catch (err) {
+    console.error('[Social reply like]', err.message);
     res.status(500).json({ error: err.message });
   }
 });

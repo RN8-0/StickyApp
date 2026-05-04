@@ -4,10 +4,12 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.content.res.ColorStateList
 import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.lifecycleScope
@@ -112,21 +114,33 @@ class SubmitPackActivity : AppCompatActivity() {
             val chip = Chip(this).apply {
                 text = getString(stringRes)
                 isCheckable = true
-                isCheckedIconVisible = true
+                isCheckedIconVisible = false
                 minHeight = resources.getDimensionPixelSize(R.dimen.chip_min_height)
-                chipCornerRadius = resources.getDimension(R.dimen.chip_corner_radius)
-                setChipStrokeColorResource(R.color.primary)
-                chipStrokeWidth = resources.getDimension(R.dimen.chip_stroke_width)
-                chipBackgroundColor = android.content.res.ColorStateList.valueOf(
-                    androidx.core.content.ContextCompat.getColor(this@SubmitPackActivity, R.color.chip_bg)
-                )
-                setTextColor(androidx.core.content.ContextCompat.getColor(this@SubmitPackActivity, R.color.text_primary))
+                chipCornerRadius = 22.dp().toFloat()
+                chipStartPadding = 12.dp().toFloat()
+                chipEndPadding = 12.dp().toFloat()
+                textSize = 13f
                 tag = category
+                setOnCheckedChangeListener { _, checked -> styleCategoryChip(this, checked) }
             }
+            styleCategoryChip(chip, false)
             chipGroupCategory.addView(chip)
         }
         (chipGroupCategory.getChildAt(0) as? Chip)?.isChecked = true
     }
+
+    private fun styleCategoryChip(chip: Chip, checked: Boolean) {
+        val background = ContextCompat.getColor(this, if (checked) R.color.primary else R.color.surface)
+        val stroke = ContextCompat.getColor(this, if (checked) R.color.primary else R.color.primary_light)
+        val text = ContextCompat.getColor(this, if (checked) R.color.white else R.color.text_primary)
+        chip.chipBackgroundColor = ColorStateList.valueOf(background)
+        chip.chipStrokeColor = ColorStateList.valueOf(stroke)
+        chip.chipStrokeWidth = 1.dp().toFloat()
+        chip.setTextColor(text)
+        chip.elevation = if (checked) 4.dp().toFloat() else 0f
+    }
+
+    private fun Int.dp(): Int = (this * resources.displayMetrics.density).toInt()
 
     private fun loadMyPacks() {
         val packs = CustomStickerManager.getCustomPacks(this)

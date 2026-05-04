@@ -740,6 +740,7 @@
     <string name="follow">Follow</string>
     <string name="following">Following</string>
     <string name="followers">Followers</string>
+    <string name="social_list_empty">Nothing to show yet</string>
     <string name="comments">Comments</string>
     <string name="comment_hint">Write a comment</string>
     <string name="no_comments_yet">No comments yet</string>

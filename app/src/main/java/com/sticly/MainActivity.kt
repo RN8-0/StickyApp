@@ -138,6 +138,7 @@ class MainActivity : AppCompatActivity() {
     // Profile
     private var profileContentContainer: View? = null
     private var profileSetupDone = false
+    private var profileSocialJson: JSONObject? = null
 
 
     // Category Chips
@@ -566,6 +567,7 @@ class MainActivity : AppCompatActivity() {
 
         // Toolbar notification bell — shown only on profile tab; opens NotificationsActivity
         findViewById<View>(R.id.toolbarNotificationBtn)?.setOnClickListener {
+            clearNotificationBadges()
             startActivity(Intent(this, NotificationsActivity::class.java))
             overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left)
         }
@@ -1888,6 +1890,7 @@ Rules:
         }
 
         btnNotifications?.setOnClickListener {
+            clearNotificationBadges()
             startActivity(Intent(this, NotificationsActivity::class.java))
             overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left)
         }
@@ -2064,6 +2067,9 @@ Rules:
         bio?.text = prefs.getString("user_bio", "") ?: ""
         email?.text = if (prefs.getBoolean("user_show_email", true)) profileEmail else ""
         btnEditProfile?.setOnClickListener { showEditProfileDialog() }
+        findViewById<TextView>(R.id.statDownloads)?.setOnClickListener { openProfileSocialList("followers") }
+        findViewById<TextView>(R.id.statFollowing)?.setOnClickListener { openProfileSocialList("following") }
+        findViewById<TextView>(R.id.statFavorites)?.setOnClickListener { openProfileSocialList("likes") }
 
         val photoUrl = prefs.getString("user_photo_url", null)?.takeIf { it.isNotBlank() } ?: firebaseUser?.photoUrl?.toString()
         if (photoUrl != null) {
@@ -2103,6 +2109,7 @@ Rules:
                     withContext(Dispatchers.Main) {
                         findViewById<TextView>(R.id.statPublished)?.text = "0"
                         findViewById<TextView>(R.id.statDownloads)?.text = "0"
+                        findViewById<TextView>(R.id.statFollowing)?.text = "0"
                         findViewById<TextView>(R.id.statFavorites)?.text = "0"
                     }
                 } else {
@@ -2119,8 +2126,9 @@ Rules:
                         bio?.text = serverBio
                         email?.text = if (showEmail) profileEmail else ""
                         findViewById<TextView>(R.id.statPublished)?.text = published.toString()
-                        findViewById<TextView>(R.id.statDownloads)?.text = downloads.toString()
-                        findViewById<TextView>(R.id.statFavorites)?.text = favorites.toString()
+                        findViewById<TextView>(R.id.statDownloads)?.text = "0"
+                        findViewById<TextView>(R.id.statFollowing)?.text = "0"
+                        findViewById<TextView>(R.id.statFavorites)?.text = "0"
                     }
                 }
 
@@ -2132,10 +2140,12 @@ Rules:
                 }.onSuccess { social ->
                     val stats = social.optJSONObject("stats")
                     withContext(Dispatchers.Main) {
+                        profileSocialJson = social
                         stats?.let {
                             findViewById<TextView>(R.id.statPublished)?.text = it.optInt("packs", 0).toString()
-                            findViewById<TextView>(R.id.statDownloads)?.text = it.optInt("downloads", 0).toString()
-                            findViewById<TextView>(R.id.statFavorites)?.text = it.optInt("favorites", 0).toString()
+                            findViewById<TextView>(R.id.statDownloads)?.text = it.optInt("followers", 0).toString()
+                            findViewById<TextView>(R.id.statFollowing)?.text = it.optInt("following", 0).toString()
+                            findViewById<TextView>(R.id.statFavorites)?.text = it.optInt("likes", 0).toString()
                         }
                     }
                 }
@@ -2175,6 +2185,7 @@ Rules:
                             storePackId = record.optString("sticker_pack_id").takeIf { it.isNotBlank() }
                         )
                     }
+
                 }
                 val social = runCatching {
                     withContext(Dispatchers.IO) {
@@ -2222,8 +2233,9 @@ Rules:
                     }
                     findViewById<TextView>(R.id.statPublished)?.text = maxOf(approvedCount, stats?.optInt("packs", 0) ?: 0).toString()
                     stats?.let {
-                        findViewById<TextView>(R.id.statDownloads)?.text = it.optInt("downloads", 0).toString()
-                        findViewById<TextView>(R.id.statFavorites)?.text = it.optInt("favorites", 0).toString()
+                        findViewById<TextView>(R.id.statDownloads)?.text = it.optInt("followers", 0).toString()
+                        findViewById<TextView>(R.id.statFollowing)?.text = it.optInt("following", 0).toString()
+                        findViewById<TextView>(R.id.statFavorites)?.text = it.optInt("likes", 0).toString()
                     }
                 }
             } catch (_: Exception) {
@@ -2233,6 +2245,37 @@ Rules:
                 }
             }
         }
+    }
+
+    private fun openProfileSocialList(type: String) {
+        val social = profileSocialJson ?: return
+        val title = when (type) {
+            "followers" -> getString(R.string.followers)
+            "following" -> getString(R.string.following)
+            else -> getString(R.string.likes_short)
+        }
+        val source = when (type) {
+            "followers" -> social.optJSONArray("followers") ?: JSONArray()
+            "following" -> social.optJSONArray("following") ?: JSONArray()
+            else -> social.optJSONArray("packs") ?: JSONArray()
+        }
+        val items = JSONArray()
+        for (i in 0 until source.length()) {
+            val item = source.optJSONObject(i) ?: continue
+            if (type == "likes" && item.optInt("like_count", 0) <= 0) continue
+            items.put(JSONObject().apply {
+                put("type", if (type == "likes") "pack" else "profile")
+                put("id", if (type == "likes") item.optString("id") else item.optString("id", item.optString("email")))
+                put("name", if (type == "likes") item.optString("name") else item.optString("name", item.optString("email")))
+                put("subtitle", if (type == "likes") "${item.optInt("like_count", 0)} ${getString(R.string.likes_short)}" else item.optString("email"))
+                put("photo", item.optString("photo_url"))
+                put("email", item.optString("email"))
+            })
+        }
+        startActivity(Intent(this, SocialListActivity::class.java).apply {
+            putExtra(SocialListActivity.EXTRA_TITLE, title)
+            putExtra(SocialListActivity.EXTRA_ITEMS, items.toString())
+        })
     }
 
     private fun ownerFilter(deviceId: String, userId: String, email: String): String {
@@ -2300,6 +2343,11 @@ Rules:
     }
 
     // Admin notifications now loaded via loadAdminNotificationsFromPB (PocketBase)
+
+    private fun clearNotificationBadges() {
+        profileContentContainer?.rootView?.findViewById<TextView>(R.id.profileNotificationBadge)?.visibility = View.GONE
+        findViewById<TextView>(R.id.toolbarNotificationBadge)?.visibility = View.GONE
+    }
 
     private fun loadAdminNotificationsFromPB(deviceId: String, userId: String, email: String) {
         val container = profileContentContainer?.rootView?.findViewById<android.widget.LinearLayout>(R.id.adminMessagesContainer)
@@ -2532,7 +2580,7 @@ Rules:
             // Analytics (downloads / favorites / views) for approved packs — from PocketBase
             if (item.status == "approved" && item.storePackId != null) {
                 holder.tvAnalytics.visibility = View.VISIBLE
-                holder.tvAnalytics.text = "📥 ${item.downloadCount}  ❤️ ${item.favoriteCount}  ♥ ${item.likeCount}  💬 ${item.commentCount}"
+                holder.tvAnalytics.text = "📥 ${item.downloadCount}  ☆ ${item.favoriteCount}  ❤️ ${item.likeCount}  💬 ${item.commentCount}"
                 lifecycleScope.launch {
                     runCatching {
                         val record = withContext(Dispatchers.IO) {
@@ -2543,13 +2591,20 @@ Rules:
                         val vw  = record.optInt("view_count", 0)
                         val likes = record.optInt("like_count", item.likeCount)
                         val comments = record.optInt("comment_count", item.commentCount)
-                        holder.tvAnalytics.text = "📥 $dl  ❤️ $fav  ♥ $likes  💬 $comments  👁 $vw"
+                        holder.tvAnalytics.text = "📥 $dl  ☆ $fav  ❤️ $likes  💬 $comments  👁 $vw"
                     }.onFailure { holder.tvAnalytics.visibility = View.GONE }
                 }
             } else {
                 holder.tvAnalytics.visibility = View.GONE
             }
 
+
+            holder.itemView.setOnClickListener {
+                val targetPackId = item.storePackId ?: item.id.takeIf { value -> item.status == "approved" && value.isNotBlank() }
+                if (!targetPackId.isNullOrBlank()) {
+                    startActivity(Intent(this@MainActivity, DetailsActivity::class.java).putExtra("id", targetPackId))
+                }
+            }
             // Delete button for ALL statuses
             holder.btnDelete.visibility = View.VISIBLE
             holder.btnDelete.setOnClickListener {

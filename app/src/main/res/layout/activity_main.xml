@@ -166,6 +166,19 @@
                     android:elevation="1dp" />
 
                 <ImageButton
+                    android:id="@+id/btnSearchClear"
+                    android:layout_width="38dp"
+                    android:layout_height="38dp"
+                    android:layout_marginStart="4dp"
+                    android:background="@drawable/bg_close_circle"
+                    android:src="@drawable/ic_close"
+                    app:tint="@color/primary"
+                    android:padding="11dp"
+                    android:scaleType="fitCenter"
+                    android:visibility="gone"
+                    android:contentDescription="@string/clear_search" />
+
+                <ImageButton
                     android:id="@+id/btnAddStickerHeader"
                     android:layout_width="38dp"
                     android:layout_height="38dp"

@@ -8,6 +8,7 @@ import android.content.res.ColorStateList
 import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
+import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -935,6 +936,15 @@ class DetailsActivity : AppCompatActivity() {
     }
 
     private fun setupPackSocialActions(pack: Pack) {
+        val socialRow = findViewById<View>(R.id.packSocialRow)
+        val summaryView = findViewById<TextView>(R.id.tvPackSocialSummary)
+        if (pack.id.startsWith("custom_")) {
+            socialRow?.visibility = View.GONE
+            summaryView?.visibility = View.GONE
+            return
+        }
+        socialRow?.visibility = View.VISIBLE
+        summaryView?.visibility = View.VISIBLE
         val likeButton = findViewById<MaterialButton>(R.id.btnPackLike) ?: return
         val commentsButton = findViewById<MaterialButton>(R.id.btnPackComments) ?: return
         val summary = findViewById<TextView>(R.id.tvPackSocialSummary)
@@ -975,6 +985,14 @@ class DetailsActivity : AppCompatActivity() {
     private fun engagementSummary(likes: Int, favorites: Int, comments: Int): String =
         "$likes ${getString(R.string.likes_short)} / $comments ${getString(R.string.comments).lowercase()} / $favorites favorites"
 
+    private fun roundedDrawable(color: Int, radiusDp: Int, strokeColor: Int? = null, strokeWidthDp: Int = 1): GradientDrawable =
+        GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            cornerRadius = radiusDp.dp().toFloat()
+            setColor(color)
+            strokeColor?.let { setStroke(strokeWidthDp.dp(), it) }
+        }
+
     private fun applyLikeVisual(button: MaterialButton, liked: Boolean) {
         val color = ContextCompat.getColor(this, if (liked) R.color.danger else R.color.primary)
         button.iconTint = ColorStateList.valueOf(color)
@@ -1001,7 +1019,7 @@ class DetailsActivity : AppCompatActivity() {
         val sheet = BottomSheetDialog(this)
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(20.dp(), 10.dp(), 20.dp(), 16.dp())
+            setPadding(18.dp(), 10.dp(), 18.dp(), 14.dp())
             background = ContextCompat.getDrawable(this@DetailsActivity, R.drawable.bg_bottom_sheet_rounded)
         }
         root.addView(View(this).apply {
@@ -1016,7 +1034,7 @@ class DetailsActivity : AppCompatActivity() {
         root.addView(title)
         val commentsContainer = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         val scroll = ScrollView(this).apply { addView(commentsContainer) }
-        root.addView(scroll, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 360.dp()).apply { topMargin = 12.dp() })
+        root.addView(scroll, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 390.dp()).apply { topMargin = 12.dp() })
 
         var replyToCommentId: String? = null
         val inputRow = LinearLayout(this).apply {
@@ -1027,13 +1045,22 @@ class DetailsActivity : AppCompatActivity() {
         val input = EditText(this).apply {
             hint = getString(R.string.comment_hint)
             maxLines = 3
-            background = ContextCompat.getDrawable(this@DetailsActivity, R.drawable.bg_modern_input)
-            setPadding(14.dp(), 8.dp(), 14.dp(), 8.dp())
+            background = roundedDrawable(
+                ContextCompat.getColor(this@DetailsActivity, R.color.surface),
+                22,
+                ContextCompat.getColor(this@DetailsActivity, R.color.divider)
+            )
+            setPadding(16.dp(), 10.dp(), 16.dp(), 10.dp())
+            setTextColor(ContextCompat.getColor(this@DetailsActivity, R.color.text_primary))
+            setHintTextColor(ContextCompat.getColor(this@DetailsActivity, R.color.text_secondary))
         }
         val send = MaterialButton(this).apply {
             text = getString(R.string.send)
             isAllCaps = false
-            cornerRadius = 18.dp()
+            cornerRadius = 22.dp()
+            minWidth = 0
+            insetTop = 0
+            insetBottom = 0
             setTextColor(ContextCompat.getColor(this@DetailsActivity, R.color.white))
             backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this@DetailsActivity, R.color.primary))
         }
@@ -1105,8 +1132,12 @@ class DetailsActivity : AppCompatActivity() {
     private fun buildCommentRow(comment: JSONObject, packId: String, onReply: (String, String) -> Unit): View {
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            background = ContextCompat.getDrawable(this@DetailsActivity, R.drawable.bg_dialog_rounded)
-            setPadding(14.dp(), 12.dp(), 14.dp(), 10.dp())
+            background = roundedDrawable(
+                ContextCompat.getColor(this@DetailsActivity, R.color.surface),
+                18,
+                ContextCompat.getColor(this@DetailsActivity, R.color.divider)
+            )
+            setPadding(16.dp(), 14.dp(), 16.dp(), 12.dp())
         }
         val author = comment.optString("display_name").ifBlank { comment.optString("user_email", "Sticky user") }
         row.addView(TextView(this).apply {
@@ -1127,10 +1158,16 @@ class DetailsActivity : AppCompatActivity() {
             text = comment.optInt("like_count", 0).toString()
             icon = ContextCompat.getDrawable(this@DetailsActivity, R.drawable.ic_heart)
             iconTint = ColorStateList.valueOf(ContextCompat.getColor(this@DetailsActivity, if (comment.optBoolean("liked", false)) R.color.danger else R.color.text_secondary))
-            backgroundTintList = ColorStateList.valueOf(Color.TRANSPARENT)
+            backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this@DetailsActivity, R.color.background))
+            strokeColor = ColorStateList.valueOf(ContextCompat.getColor(this@DetailsActivity, R.color.divider))
+            strokeWidth = 1.dp()
+            cornerRadius = 18.dp()
             setTextColor(ContextCompat.getColor(this@DetailsActivity, R.color.text_secondary))
             isAllCaps = false
             minWidth = 0
+            minHeight = 36.dp()
+            insetTop = 0
+            insetBottom = 0
             setOnClickListener {
                 animateLikeButton(this)
                 lifecycleScope.launch {
@@ -1145,24 +1182,84 @@ class DetailsActivity : AppCompatActivity() {
         }
         val reply = MaterialButton(this).apply {
             text = getString(R.string.reply)
-            backgroundTintList = ColorStateList.valueOf(Color.TRANSPARENT)
+            backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this@DetailsActivity, R.color.chip_bg))
             setTextColor(ContextCompat.getColor(this@DetailsActivity, R.color.primary))
+            strokeColor = ColorStateList.valueOf(ContextCompat.getColor(this@DetailsActivity, R.color.primary_light))
+            strokeWidth = 1.dp()
+            cornerRadius = 18.dp()
             isAllCaps = false
             minWidth = 0
+            minHeight = 36.dp()
+            insetTop = 0
+            insetBottom = 0
             setOnClickListener { onReply(commentId, author) }
         }
-        actions.addView(like)
-        actions.addView(reply)
+        actions.addView(like, LinearLayout.LayoutParams(82.dp(), 38.dp()).apply { marginEnd = 8.dp() })
+        actions.addView(reply, LinearLayout.LayoutParams(104.dp(), 38.dp()))
         row.addView(actions)
         val replies = comment.optJSONArray("replies") ?: JSONArray()
         for (i in 0 until replies.length()) {
             val item = replies.optJSONObject(i) ?: continue
-            row.addView(TextView(this).apply {
-                text = "${item.optString("display_name", "Sticky user")}: ${item.optString("body", "")}" 
+            val replyAuthor = item.optString("display_name", "Sticky user")
+            val replyId = item.optString("id")
+            val replyBox = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                background = roundedDrawable(ContextCompat.getColor(this@DetailsActivity, R.color.background), 14)
+                setPadding(12.dp(), 8.dp(), 12.dp(), 8.dp())
+            }
+            replyBox.addView(TextView(this).apply {
+                text = "$replyAuthor: ${item.optString("body", "")}" 
                 textSize = 12f
                 setTextColor(ContextCompat.getColor(this@DetailsActivity, R.color.text_secondary))
-                setPadding(16.dp(), 3.dp(), 0, 0)
+                setOnClickListener { onReply(commentId, replyAuthor) }
             })
+            val replyActions = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = android.view.Gravity.CENTER_VERTICAL
+                setPadding(0, 6.dp(), 0, 0)
+            }
+            val replyLike = MaterialButton(this).apply {
+                text = item.optInt("like_count", 0).toString()
+                icon = ContextCompat.getDrawable(this@DetailsActivity, R.drawable.ic_heart)
+                iconTint = ColorStateList.valueOf(ContextCompat.getColor(this@DetailsActivity, if (item.optBoolean("liked", false)) R.color.danger else R.color.text_secondary))
+                backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this@DetailsActivity, R.color.surface))
+                strokeColor = ColorStateList.valueOf(ContextCompat.getColor(this@DetailsActivity, R.color.divider))
+                strokeWidth = 1.dp()
+                cornerRadius = 16.dp()
+                minWidth = 0
+                minHeight = 32.dp()
+                insetTop = 0
+                insetBottom = 0
+                isAllCaps = false
+                setTextColor(ContextCompat.getColor(this@DetailsActivity, R.color.text_secondary))
+                setOnClickListener {
+                    if (replyId.isBlank()) return@setOnClickListener
+                    animateLikeButton(this)
+                    lifecycleScope.launch {
+                        runCatching { SocialRepository.toggleReplyLike(this@DetailsActivity, replyId, packId) }
+                            .onSuccess { res ->
+                                text = res.optInt("like_count", text.toString().toIntOrNull() ?: 0).toString()
+                                iconTint = ColorStateList.valueOf(ContextCompat.getColor(this@DetailsActivity, if (res.optBoolean("liked", false)) R.color.danger else R.color.text_secondary))
+                            }
+                    }
+                }
+            }
+            val replyAgain = MaterialButton(this).apply {
+                text = getString(R.string.reply)
+                backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this@DetailsActivity, R.color.chip_bg))
+                setTextColor(ContextCompat.getColor(this@DetailsActivity, R.color.primary))
+                cornerRadius = 16.dp()
+                minWidth = 0
+                minHeight = 32.dp()
+                insetTop = 0
+                insetBottom = 0
+                isAllCaps = false
+                setOnClickListener { onReply(commentId, replyAuthor) }
+            }
+            replyActions.addView(replyLike, LinearLayout.LayoutParams(74.dp(), 34.dp()).apply { marginEnd = 6.dp() })
+            replyActions.addView(replyAgain, LinearLayout.LayoutParams(92.dp(), 34.dp()))
+            replyBox.addView(replyActions)
+            row.addView(replyBox, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = 6.dp(); marginStart = 18.dp() })
         }
         return LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL

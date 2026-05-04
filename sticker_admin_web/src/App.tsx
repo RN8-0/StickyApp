@@ -374,7 +374,7 @@ function App() {
 
   // Submissions State
   const [userSubmissions, setUserSubmissions] = useState<UserSubmission[]>([]);
-  const [submissionFilter, setSubmissionFilter] = useState<'all' | 'pending' | 'flagged' | 'approved' | 'rejected'>('all');
+  const [submissionFilter, setSubmissionFilter] = useState<'pending' | 'flagged' | 'approved' | 'rejected'>('approved');
   const [selectedSubmission, setSelectedSubmission] = useState<UserSubmission | null>(null);
   const [submissionEditData, setSubmissionEditData] = useState<UserSubmission | null>(null);
   const [rejectModalSubmission, setRejectModalSubmission] = useState<UserSubmission | null>(null);
@@ -2625,7 +2625,10 @@ function App() {
     // Kategori Filtresi
     if (categoryFilter !== 'all' && p.category !== categoryFilter) return false;
 
-    if (statusFilter === 'all') return true;
+    if (statusFilter === 'all') {
+      const approvedPackIds = new Set(userSubmissions.filter(s => s.status === 'approved' && s.sticker_pack_id).map(s => s.sticker_pack_id));
+      return p.source !== 'user_submission' && !approvedPackIds.has(p.id);
+    }
     if (statusFilter === 'active') return p.is_active !== false;
     if (statusFilter === 'passive') return p.is_active === false;
 
@@ -2890,7 +2893,7 @@ function App() {
                               { id: 'static', label: 'Static Packs', icon: ImageIcon },
                               { id: 'premium', label: 'Premium Packs', icon: Crown },
                               { id: 'new', label: 'Recently Added', icon: Clock },
-                              { id: 'user_submission', label: 'Users Packs', icon: UserPlus }
+                              { id: 'user_submission', label: 'Approved User Packs', icon: UserPlus }
                             ].map(f => (
                               <button
                                 key={f.id}
@@ -4733,7 +4736,7 @@ function App() {
 
                   {/* User Detail Panel */}
                   {selectedUser ? (
-                    <div className="lg:w-[420px] glass rounded-2xl border border-white/5 overflow-hidden shrink-0">
+                    <div className="fixed left-1/2 top-1/2 z-50 w-[min(1120px,calc(100vw-48px))] max-h-[calc(100vh-48px)] -translate-x-1/2 -translate-y-1/2 glass rounded-3xl border border-white/10 overflow-hidden shrink-0 shadow-2xl shadow-black/40">
                       {/* Detail Header */}
                       <div className="p-5 border-b border-white/5 bg-white/[0.02] flex items-center justify-between">
                         <h3 className="text-sm font-black text-white tracking-tight uppercase">User Details</h3>
@@ -4745,7 +4748,7 @@ function App() {
                         </button>
                       </div>
 
-                      <div className="p-5 space-y-4 max-h-[calc(100vh-420px)] overflow-y-auto custom-scrollbar">
+                      <div className="p-5 space-y-4 max-h-[calc(100vh-150px)] overflow-y-auto custom-scrollbar">
                         {/* User Profile Header */}
                         <div className="flex items-center gap-4 pb-4 border-b border-white/5">
                           {selectedUser.photo_url ? (
@@ -4850,6 +4853,30 @@ function App() {
                                 <div>
                                   <p className="text-sm font-black text-primary">{selectedUser.social.comments || 0}</p>
                                   <span className="text-[8px] text-textSec uppercase">Comments</span>
+                                </div>
+                              </div>
+                            )}
+                            {((selectedUser.followers_list && selectedUser.followers_list.length > 0) || (selectedUser.following_list && selectedUser.following_list.length > 0)) && (
+                              <div className="grid md:grid-cols-2 gap-3 pt-2">
+                                <div className="rounded-xl bg-white/[0.03] border border-white/5 p-3">
+                                  <span className="text-[9px] font-black text-textSec uppercase tracking-widest">Followers</span>
+                                  <div className="mt-2 space-y-1.5 max-h-28 overflow-y-auto custom-scrollbar">
+                                    {(selectedUser.followers_list || []).map((f, i) => (
+                                      <div key={`${f.id || f.email || i}`} className="text-[11px] text-white/80 bg-white/[0.03] rounded-lg px-2 py-1">
+                                        {f.name || f.email || 'Unknown'}
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                                <div className="rounded-xl bg-white/[0.03] border border-white/5 p-3">
+                                  <span className="text-[9px] font-black text-textSec uppercase tracking-widest">Following</span>
+                                  <div className="mt-2 space-y-1.5 max-h-28 overflow-y-auto custom-scrollbar">
+                                    {(selectedUser.following_list || []).map((f, i) => (
+                                      <div key={`${f.id || f.email || i}`} className="text-[11px] text-white/80 bg-white/[0.03] rounded-lg px-2 py-1">
+                                        {f.name || f.email || 'Unknown'}
+                                      </div>
+                                    ))}
+                                  </div>
                                 </div>
                               </div>
                             )}
@@ -5297,7 +5324,7 @@ function App() {
 
               {/* Filter Tabs */}
               <div className="flex gap-2 flex-wrap">
-                {(['all', 'pending', 'flagged', 'approved', 'rejected'] as const).map(f => (
+                {(['approved', 'pending', 'flagged', 'rejected'] as const).map(f => (
                   <button
                     key={f}
                     onClick={() => setSubmissionFilter(f)}
@@ -5308,8 +5335,7 @@ function App() {
                         : "bg-white/5 text-textSec border-transparent hover:bg-white/10"
                     )}
                   >
-                    {f === 'all' ? `All (${userSubmissions.length})` :
-                     f === 'pending' ? `Pending (${userSubmissions.filter(s => s.status === 'pending').length})` :
+                    {f === 'pending' ? `Pending (${userSubmissions.filter(s => s.status === 'pending').length})` :
                      f === 'flagged' ? `Flagged (${userSubmissions.filter(s => s.status === 'flagged').length})` :
                      f === 'approved' ? `Approved (${userSubmissions.filter(s => s.status === 'approved').length})` :
                      `Rejected (${userSubmissions.filter(s => s.status === 'rejected').length})`}
@@ -5319,12 +5345,12 @@ function App() {
 
               {/* Submissions List */}
               <div className="space-y-3">
-                {userSubmissions.filter(s => submissionFilter === 'all' || s.status === submissionFilter).length === 0 ? (
+                {userSubmissions.filter(s => s.status === submissionFilter).length === 0 ? (
                   <div className="glass rounded-2xl p-12 border border-white/5 text-center">
                     <Inbox size={40} className="text-textSec mx-auto mb-3 opacity-40" />
                     <p className="text-textSec text-sm">No submissions found.</p>
                   </div>
-                ) : userSubmissions.filter(s => submissionFilter === 'all' || s.status === submissionFilter).map(sub => (
+                ) : userSubmissions.filter(s => s.status === submissionFilter).map(sub => (
                   <div key={sub.id} className="glass rounded-xl p-4 border border-white/5 hover:border-white/10 transition-all">
                     <div className="flex items-start gap-4">
                       <div className="flex-1 min-w-0">

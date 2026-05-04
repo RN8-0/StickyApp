@@ -31,6 +31,9 @@ data class Pack(
     val fakeDownloadBase: Int = 0,
     val viewCount: Int = 0,      // Görüntülenme sayısı
     val favoriteCount: Int = 0,  // Favori sayısı
+    val likeCount: Int = 0,
+    val commentCount: Int = 0,
+    val engagementScore: Double = 0.0,
     val isAnimated: Boolean = false, // Animasyonlu paket mi?
     val isActive: Boolean = true, // Paket aktif mi?
     val isPopular: Boolean = false, // Popular paket mi? (Ana sayfada gösterilir)

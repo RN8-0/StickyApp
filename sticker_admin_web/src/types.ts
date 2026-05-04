@@ -89,6 +89,8 @@ export interface UserData {
         likes: number;
         published_packs: number;
     };
+    followers_list?: Array<{ id?: string; email?: string; name?: string; photo_url?: string }>;
+    following_list?: Array<{ id?: string; email?: string; name?: string; photo_url?: string }>;
     published_packs?: Array<{
         id: string;
         name: string;
