@@ -170,6 +170,15 @@ class StickerProvider : ContentProvider() {
         }
     }
 
+    private fun getTrayIconName(pack: Pack): String {
+        // WhatsApp requires the tray icon file to start with "tray" so that
+        // openAssetFile routes it through the 96x96 PNG conversion pipeline.
+        // PocketBase packs set tray_image_file to the first sticker filename
+        // (e.g. "3d_party_001.webp"), which doesn't start with "tray" and would
+        // be served as-is at 512x512, causing "Unable to add to WhatsApp".
+        return if (pack.tray.startsWith("tray")) pack.tray else "tray.webp"
+    }
+
     private fun getAllStickerPacks(): Cursor {
         val cursor = MatrixCursor(METADATA_COLUMNS)
         getAllPacks().forEach { pack ->
@@ -177,7 +186,7 @@ class StickerProvider : ContentProvider() {
                 pack.id,
                 pack.localizedName,
                 pack.pub,
-                pack.tray,
+                getTrayIconName(pack),
                 "",
                 "",
                 pack.email,
@@ -199,7 +208,7 @@ class StickerProvider : ContentProvider() {
                 pack.id,
                 pack.localizedName,
                 pack.pub,
-                pack.tray,
+                getTrayIconName(pack),
                 "",
                 "",
                 pack.email,

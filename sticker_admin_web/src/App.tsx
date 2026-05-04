@@ -965,6 +965,36 @@ function App() {
     }
   };
 
+  const handleEmailLogin = async (email: string, password: string) => {
+    setLoading(true);
+    try {
+      const { signInWithEmail } = await import('./pocketbase');
+      const authData = await signInWithEmail(email, password);
+      const userEmail = authData.record?.email;
+      if (!userEmail) throw new Error('Could not get email from login');
+
+      let isAdminUser = false;
+      try {
+        const escaped = userEmail.replace(/'/g, "\\'");
+        const admins = await pb.collection('admins_list').getFullList({ filter: `email='${escaped}'` });
+        if (admins.length > 0) isAdminUser = true;
+      } catch (_) {}
+      if (!isAdminUser) {
+        pb.authStore.clear();
+        alert('Access denied: ' + userEmail + ' is not an admin.');
+        return;
+      }
+
+      setUser({ email: userEmail });
+      fetchPacks();
+    } catch (error: any) {
+      console.error('Email login error:', error);
+      alert('Login failed: ' + (error.message || 'Invalid credentials'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const mapPbRecord = (r: any, isPremium: boolean): StickerPack => ({
     ...r,
     is_premium: isPremium,
@@ -2262,10 +2292,13 @@ function App() {
     );
   }
 
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+
   if (!user) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
-        <div className="glass w-full max-w-md p-8 rounded-3xl space-y-8 animate-in fade-in zoom-in duration-300">
+        <div className="glass w-full max-w-md p-8 rounded-3xl space-y-6 animate-in fade-in zoom-in duration-300">
           <div className="text-center space-y-2">
             <div className="bg-primary w-16 h-16 rounded-2xl flex items-center justify-center mx-auto shadow-lg shadow-primary/20">
               <Lock className="text-white" size={32} />
@@ -2274,6 +2307,37 @@ function App() {
             <p className="text-textSec text-sm">Sign in to access the admin panel</p>
           </div>
 
+          <div className="space-y-3">
+            <input
+              type="email"
+              placeholder="Email"
+              value={loginEmail}
+              onChange={e => setLoginEmail(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleEmailLogin(loginEmail, loginPassword)}
+              className="w-full bg-surface border border-border rounded-xl px-4 py-3 text-sm outline-none focus:border-primary"
+            />
+            <input
+              type="password"
+              placeholder="Password"
+              value={loginPassword}
+              onChange={e => setLoginPassword(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleEmailLogin(loginEmail, loginPassword)}
+              className="w-full bg-surface border border-border rounded-xl px-4 py-3 text-sm outline-none focus:border-primary"
+            />
+            <button
+              onClick={() => handleEmailLogin(loginEmail, loginPassword)}
+              disabled={loading || !loginEmail || !loginPassword}
+              className="w-full bg-primary hover:bg-primary/90 py-3 rounded-xl font-bold text-white transition-all disabled:opacity-50"
+            >
+              {loading ? 'Signing in...' : 'Sign In'}
+            </button>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <div className="flex-1 h-px bg-border" />
+            <span className="text-textSec text-xs">or</span>
+            <div className="flex-1 h-px bg-border" />
+          </div>
 
           <button
             onClick={handleGithubLogin}

@@ -437,6 +437,15 @@ object StickerRepository {
                     val trayFile = trayJob.await()
                     val stickerFiles = stickerJobs.awaitAll()
 
+                    // Ensure tray is also accessible as "tray.webp" so StickerProvider
+                    // can route it through the 96x96 PNG conversion for WhatsApp.
+                    trayFile?.let {
+                        if (it.name != "tray.webp") {
+                            val trayWebp = File(it.parentFile!!, "tray.webp")
+                            if (!trayWebp.exists()) try { it.copyTo(trayWebp) } catch (_: Exception) {}
+                        }
+                    }
+
                     // KRITIK: Eğer herhangi bir dosya indirilemezse başarısız say
                     if (trayFile == null || stickerFiles.any { it == null }) {
                          Log.e(TAG, "Download failed: tray=$trayFile, stickersCount=${stickerFiles.filterNotNull().size}/${stickerFiles.size}")
