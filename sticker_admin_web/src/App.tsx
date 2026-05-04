@@ -323,7 +323,7 @@ function App() {
     name_hi: '',
     name_pt: '',
     publisher: 'Sticky',
-    publisher_email: 'contact@arain.digital',
+    publisher_email: '',
     publisher_user_id: '',
     privacy_policy_website: '',
     license_agreement_website: '',
@@ -1916,7 +1916,7 @@ function App() {
       const sanitizePackUpdate = (data: Partial<StickerPack>) => {
         const allowed = new Set([
           'name', 'publisher', 'publisher_email', 'publisher_user_id', 'publisher_photo_url',
-          'category', 'is_animated',
+          'category', 'is_animated', 'is_premium',
           'is_active', 'is_popular', 'product_id', 'price_try', 'price_usd', 'price_eur',
           'image_data_version'
         ]);
@@ -1929,17 +1929,34 @@ function App() {
       };
 
       const updatedData: any = sanitizePackUpdate(editFormData);
+      updatedData.publisher = (updatedData.publisher || 'Sticky').trim() || 'Sticky';
+      updatedData.publisher_email = '';
+      updatedData.publisher_user_id = '';
       updatedData.image_data_version = Date.now().toString();
+      if (updatedData.is_premium) {
+        if (!updatedData.price_try) updatedData.price_try = '69,99 TL';
+        if (!updatedData.price_usd) updatedData.price_usd = '$4.99';
+        if (!updatedData.price_eur) updatedData.price_eur = '€4.49';
+      }
 
       const oldCollection = selectedPack.is_premium ? 'premium_stickers' : 'stickers';
+      const newCollection = updatedData.is_premium ? 'premium_stickers' : 'stickers';
 
-      try {
+      if (oldCollection !== newCollection) {
+        const fullData = { ...selectedPack, ...updatedData, is_premium: newCollection === 'premium_stickers' } as StickerPack;
+        const movableData = { ...fullData } as any;
+        delete movableData.collectionId;
+        delete movableData.collectionName;
+        delete movableData.expand;
+        delete movableData.created;
+        delete movableData.updated;
+        await pb.collection(newCollection).create({ ...movableData, id: selectedPack.id });
+        await pb.collection(oldCollection).delete(selectedPack.id).catch(() => undefined);
+      } else {
         await pb.collection(oldCollection).update(selectedPack.id, updatedData);
-      } catch (pbErr) {
-        console.warn('PocketBase update failed:', pbErr);
-        throw pbErr;
       }
-      const updated = { ...selectedPack, ...updatedData } as StickerPack;
+
+      const updated = { ...selectedPack, ...updatedData, is_premium: newCollection === 'premium_stickers' } as StickerPack;
       setPacks(packs.map(p => p.id === selectedPack.id ? updated : p));
       setSelectedPack(updated);
       setShowEditPackModal(false);
@@ -2522,6 +2539,69 @@ function App() {
     }
   };
 
+  const statsPacks = useMemo<Partial<StickerPack>[]>(() => {
+    const byId = new Map<string, Partial<StickerPack>>();
+    const addPack = (pack: Partial<StickerPack>, source = pack.source) => {
+      const id = String(pack.id || '').trim();
+      if (!id) return;
+      const current = byId.get(id);
+      const merged: Partial<StickerPack> = {
+        ...current,
+        ...pack,
+        id,
+        source,
+        name: pack.name || current?.name || 'User Pack',
+        publisher: pack.publisher || current?.publisher || 'Sticky',
+        category: pack.category || current?.category || 'user',
+        is_active: pack.is_active ?? current?.is_active ?? true,
+        is_premium: pack.is_premium ?? current?.is_premium ?? false,
+        sticker_count: Number(pack.sticker_count ?? current?.sticker_count ?? pack.stickers?.length ?? 0),
+        download_count: Math.max(Number(current?.download_count || 0), Number(pack.download_count || 0)),
+        view_count: Math.max(Number(current?.view_count || 0), Number(pack.view_count || 0)),
+        favorite_count: Math.max(Number(current?.favorite_count || 0), Number(pack.favorite_count || 0)),
+        like_count: Math.max(Number(current?.like_count || 0), Number(pack.like_count || 0)),
+        comment_count: Math.max(Number(current?.comment_count || 0), Number(pack.comment_count || 0)),
+      };
+      byId.set(id, merged);
+    };
+
+    packs.forEach(pack => addPack(pack));
+    usersData.forEach(user => {
+      user.published_packs?.forEach(pack => addPack({
+        id: pack.id,
+        name: pack.name,
+        publisher: pack.publisher || user.display_name || 'Sticky',
+        publisher_user_id: user.id,
+        publisher_photo_url: user.photo_url,
+        tray_url: pack.tray_url,
+        source: 'user_submission',
+        is_active: true,
+        is_premium: false,
+        sticker_count: pack.sticker_count || pack.stickers?.length || 0,
+        download_count: pack.download_count,
+        favorite_count: pack.favorite_count,
+        like_count: pack.like_count,
+        comment_count: pack.comment_count,
+        engagement_score: pack.engagement_score,
+      }, 'user_submission'));
+      user.share_requests?.filter(submission => submission.status === 'approved' && submission.sticker_pack_id).forEach(submission => addPack({
+        id: submission.sticker_pack_id || submission.id,
+        name: submission.pack_name,
+        publisher: submission.publisher_name || submission.display_name || user.display_name || 'Sticky',
+        publisher_user_id: user.id,
+        publisher_photo_url: user.photo_url,
+        category: submission.category || 'user',
+        source: 'user_submission',
+        is_active: true,
+        is_premium: false,
+        sticker_count: submission.sticker_count || submission.stickers?.length || 0,
+        created_at: submission.approved_at || submission.processed_at || submission.created_at,
+      }, 'user_submission'));
+    });
+
+    return Array.from(byId.values());
+  }, [packs, usersData]);
+
   if (loading && !user) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -3092,7 +3172,10 @@ function App() {
                       <button
                         onClick={() => {
                           setEditFormData({
-                            ...selectedPack
+                            ...selectedPack,
+                            publisher: selectedPack.publisher || 'Sticky',
+                            publisher_email: '',
+                            publisher_user_id: ''
                           });
                           setShowEditPackModal(true);
                         }}
@@ -3399,7 +3482,7 @@ function App() {
               </div>
 
               {/* Popular Empty State */}
-              {statsFilter === 'popular' && packs.filter(p => p.is_popular === true).length === 0 && (
+              {statsFilter === 'popular' && statsPacks.filter(p => p.is_popular === true).length === 0 && (
                 <div className="glass rounded-2xl p-8 border border-yellow-500/20 text-center space-y-3">
                   <Star size={40} className="text-yellow-500/40 mx-auto" />
                   <h3 className="text-lg font-black text-white">No Popular Packs Yet</h3>
@@ -3412,7 +3495,7 @@ function App() {
               {/* Metrics Grid */}
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
                 {((): any => {
-                  const sPacks = packs.filter(p => {
+                  const sPacks = statsPacks.filter(p => {
                     if (statsFilter === 'all') return true;
                     if (statsFilter === 'popular') return p.is_popular === true;
                     if (statsFilter === 'active') return p.is_active !== false;
@@ -3528,7 +3611,7 @@ function App() {
                   <div className="h-[350px] w-full">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart
-                        data={packs
+                        data={statsPacks
                           .filter(p => {
                             if (statsFilter === 'all') return true;
                             if (statsFilter === 'popular') return p.is_popular === true;
@@ -3586,7 +3669,7 @@ function App() {
                     <p className="text-[9px] font-bold text-textSec mt-0.5">Top 5 by engagement score</p>
                   </div>
                   <div className="flex-1 p-4 space-y-2.5">
-                    {packs
+                    {statsPacks
                       .filter(p => {
                         if (statsFilter === 'all') return true;
                         if (statsFilter === 'popular') return p.is_popular === true;
@@ -3635,7 +3718,7 @@ function App() {
                 </h3>
                 <p className="text-[9px] text-textSec mb-5">What types of stickers your users love most — powered by engagement analysis</p>
                 {(() => {
-                  const activePacks = packs.filter(p => p.is_active !== false);
+                  const activePacks = statsPacks.filter(p => p.is_active !== false);
                   // Category performance analysis
                   const catMap = new Map<string, { downloads: number; views: number; favorites: number; likes: number; comments: number; score: number; packs: number; totalStickers: number }>();
                   activePacks.forEach(p => {
@@ -3703,18 +3786,20 @@ function App() {
                   </h3>
                   <div className="space-y-3">
                     {(() => {
-                      const activePacks = packs.filter(p => p.is_active !== false);
-                      const animatedPacks = packs.filter(p => p.is_animated);
-                      const premiumPacks = packs.filter(p => p.is_premium);
-                      const popularPacks = packs.filter(p => p.is_popular === true);
+                      const activePacks = statsPacks.filter(p => p.is_active !== false);
+                      const animatedPacks = statsPacks.filter(p => p.is_animated);
+                      const premiumPacks = statsPacks.filter(p => p.is_premium);
+                      const popularPacks = statsPacks.filter(p => p.is_popular === true);
                       const zeroDLPacks = activePacks.filter(p => (p.download_count || 0) === 0);
                       const avgStickersPerPack = activePacks.length > 0 ? Math.round(activePacks.reduce((a, p) => a + (p.sticker_count || 0), 0) / activePacks.length) : 0;
-                      const telegramPacks = packs.filter(p => p.batch_source === 'telegram');
-                      const giphyPacks = packs.filter(p => p.batch_source === 'giphy' || p.batch_source === 'klipy');
+                      const telegramPacks = statsPacks.filter(p => p.batch_source === 'telegram');
+                      const giphyPacks = statsPacks.filter(p => p.batch_source === 'giphy' || p.batch_source === 'klipy');
+                      const communityPacks = statsPacks.filter(p => p.source === 'user_submission' || p.publisher_user_id);
 
                       return [
-                        { label: 'Total Packs', value: packs.length, color: 'text-white' },
-                        { label: 'Active / Inactive', value: `${activePacks.length} / ${packs.length - activePacks.length}`, color: 'text-green-400' },
+                        { label: 'Total Packs', value: statsPacks.length, color: 'text-white' },
+                        { label: 'Active / Inactive', value: `${activePacks.length} / ${statsPacks.length - activePacks.length}`, color: 'text-green-400' },
+                        { label: 'User Shared Packs', value: communityPacks.length, color: 'text-cyan-400' },
                         { label: '⭐ Popular Packs', value: popularPacks.length, color: 'text-yellow-400' },
                         { label: 'Animated Packs', value: animatedPacks.length, color: 'text-cyan-400' },
                         { label: 'Premium Packs', value: premiumPacks.length, color: 'text-yellow-400' },
@@ -3740,17 +3825,17 @@ function App() {
                   <div className="space-y-3">
                     {(() => {
                       const suggestions: { icon: string; text: string; severity: 'info' | 'warn' | 'good' }[] = [];
-                      const activePacks = packs.filter(p => p.is_active !== false);
-                      const animatedRatio = packs.length > 0 ? packs.filter(p => p.is_animated).length / packs.length : 0;
+                      const activePacks = statsPacks.filter(p => p.is_active !== false);
+                      const animatedRatio = statsPacks.length > 0 ? statsPacks.filter(p => p.is_animated).length / statsPacks.length : 0;
                       const zeroDL = activePacks.filter(p => (p.download_count || 0) === 0).length;
-                      const categories = new Set(packs.map(p => p.category).filter(Boolean));
-                      const popularCount = packs.filter(p => p.is_popular).length;
+                      const categories = new Set(statsPacks.map(p => p.category).filter(Boolean));
+                      const popularCount = statsPacks.filter(p => p.is_popular).length;
                       const highCVR = activePacks.filter(p => (p.view_count || 0) > 10 && ((p.download_count || 0) / (p.view_count || 1)) > 0.15).length;
                       const avgFavPerPack = activePacks.length > 0 ? activePacks.reduce((a, p) => a + (p.favorite_count || 0), 0) / activePacks.length : 0;
 
                       // Content volume
-                      if (packs.length < 50) suggestions.push({ icon: '📦', text: `${packs.length} packs. Target 100+ for organic discovery.`, severity: 'warn' });
-                      else suggestions.push({ icon: '✅', text: `${packs.length} packs — solid content library!`, severity: 'good' });
+                      if (statsPacks.length < 50) suggestions.push({ icon: '📦', text: `${statsPacks.length} packs. Target 100+ for organic discovery.`, severity: 'warn' });
+                      else suggestions.push({ icon: '✅', text: `${statsPacks.length} packs — solid content library!`, severity: 'good' });
 
                       // Popular curation
                       if (popularCount === 0) suggestions.push({ icon: '⭐', text: `No popular packs curated. Mark top packs as Popular for home page.`, severity: 'warn' });
@@ -3815,11 +3900,13 @@ function App() {
                         <th className="px-5 py-3.5 text-[9px] font-black uppercase tracking-widest text-textSec/60 border-b border-white/5 text-center">Downloads</th>
                         <th className="hidden sm:table-cell px-5 py-3.5 text-[9px] font-black uppercase tracking-widest text-textSec/60 border-b border-white/5 text-center">Views</th>
                         <th className="hidden lg:table-cell px-5 py-3.5 text-[9px] font-black uppercase tracking-widest text-textSec/60 border-b border-white/5 text-center">Favorites</th>
+                        <th className="hidden lg:table-cell px-5 py-3.5 text-[9px] font-black uppercase tracking-widest text-textSec/60 border-b border-white/5 text-center">Likes</th>
+                        <th className="hidden xl:table-cell px-5 py-3.5 text-[9px] font-black uppercase tracking-widest text-textSec/60 border-b border-white/5 text-center">Comments</th>
                         <th className="hidden md:table-cell px-5 py-3.5 text-[9px] font-black uppercase tracking-widest text-textSec/60 border-b border-white/5 text-right w-56">CVR</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-white/[0.03]">
-                      {packs
+                      {statsPacks
                         .filter(p => {
                           if (statsFilter === 'all') return true;
                           if (statsFilter === 'popular') return p.is_popular === true;
@@ -3829,7 +3916,7 @@ function App() {
                           if (statsFilter === 'normal') return p.is_premium === false;
                           return true;
                         })
-                        .sort((a, b) => (b.download_count || 0) - (a.download_count || 0))
+                        .sort((a, b) => packEngagementScore(b) - packEngagementScore(a))
                         .map((p) => (
                           <tr key={p.id} className="hover:bg-white/[0.02] transition-all group">
                             <td className="px-5 py-3.5">
@@ -3860,6 +3947,12 @@ function App() {
                             </td>
                             <td className="hidden lg:table-cell px-5 py-3.5 text-center">
                               <span className="text-sm font-black text-yellow-400">{(p.favorite_count || 0).toLocaleString()}</span>
+                            </td>
+                            <td className="hidden lg:table-cell px-5 py-3.5 text-center">
+                              <span className="text-sm font-black text-pink-400">{(p.like_count || 0).toLocaleString()}</span>
+                            </td>
+                            <td className="hidden xl:table-cell px-5 py-3.5 text-center">
+                              <span className="text-sm font-black text-cyan-400">{(p.comment_count || 0).toLocaleString()}</span>
                             </td>
                             <td className="hidden md:table-cell px-5 py-3.5">
                               <div className="flex items-center justify-end gap-3">
@@ -6391,30 +6484,9 @@ function App() {
 
                         {/* Publisher */}
                         <Input
-                          label="Publisher"
-                          value={draftEditData.publisher || ''}
-                          onChange={(e: any) => setDraftEditData((prev: any) => ({ ...prev, publisher: e.target.value }))}
-                        />
-                        <div>
-                          <label className="text-xs font-bold text-textSec uppercase mb-2 block">Published By</label>
-                          <select
-                            className="w-full bg-hover rounded-xl px-4 py-2.5 text-sm outline-none border-none text-white cursor-pointer"
-                            value={draftEditData.publisher_user_id || ''}
-                            onChange={(e) => {
-                              const pub = publisherUsers.find(p => p.id === e.target.value);
-                              setDraftEditData((prev: any) => ({ ...prev, publisher_user_id: e.target.value, publisher: pub?.display_name || prev.publisher }));
-                            }}
-                          >
-                            <option value="">— Select Publisher —</option>
-                            {publisherUsers.filter(p => p.is_active).map(p => (
-                              <option key={p.id} value={p.id}>{p.display_name} ({p.category})</option>
-                            ))}
-                          </select>
-                        </div>
-                        <Input
-                          label="Publisher Email"
-                          value={draftEditData.publisher_email || ''}
-                          onChange={(e: any) => setDraftEditData((prev: any) => ({ ...prev, publisher_email: e.target.value }))}
+                          label="Publisher Name"
+                          value={draftEditData.publisher || 'Sticky'}
+                          onChange={(e: any) => setDraftEditData((prev: any) => ({ ...prev, publisher: e.target.value || 'Sticky', publisher_email: '', publisher_user_id: '' }))}
                         />
 
                         {/* Category */}
@@ -6448,21 +6520,8 @@ function App() {
                           </div>
                         </div>
 
-                        {/* Pack Type + Status + Popular */}
+                        {/* Status + Popular */}
                         <div className="flex items-center gap-4">
-                          <div className="flex-1">
-                            <label className="text-xs font-bold text-textSec uppercase mb-2 block">Pack Type</label>
-                            <div className="flex bg-hover rounded-xl p-1 gap-1">
-                              <button
-                                onClick={() => setDraftEditData((prev: any) => ({ ...prev, is_animated: false }))}
-                                className={cn("flex-1 py-2 rounded-lg text-[10px] font-black transition-all flex items-center justify-center gap-1", !draftEditData.is_animated ? "bg-blue-500 text-white" : "text-textSec")}
-                              >🖼️ STATIC</button>
-                              <button
-                                onClick={() => setDraftEditData((prev: any) => ({ ...prev, is_animated: true }))}
-                                className={cn("flex-1 py-2 rounded-lg text-[10px] font-black transition-all flex items-center justify-center gap-1", draftEditData.is_animated ? "bg-primary text-white" : "text-textSec")}
-                              >🎬 ANIMATED</button>
-                            </div>
-                          </div>
                           <div className="flex-1">
                             <label className="text-xs font-bold text-textSec uppercase mb-2 block">Status (Visibility)</label>
                             <div className="flex bg-hover rounded-xl p-1 gap-1">
@@ -6652,31 +6711,10 @@ function App() {
             </p>
           </div>
           <Input
-            label="Publisher"
+            label="Publisher Name"
             placeholder="Sticky"
             value={newPackData.publisher}
-            onChange={(e: any) => setNewPackData({ ...newPackData, publisher: e.target.value })}
-          />
-          <div>
-            <label className="text-xs font-bold text-textSec uppercase mb-2 block">Published By</label>
-            <select
-              className="w-full bg-hover rounded-xl px-4 py-2.5 text-sm outline-none border-none text-white cursor-pointer"
-              value={newPackData.publisher_user_id || ''}
-              onChange={(e) => {
-                const pub = publisherUsers.find(p => p.id === e.target.value);
-                setNewPackData({ ...newPackData, publisher_user_id: e.target.value, publisher: pub?.display_name || newPackData.publisher });
-              }}
-            >
-              <option value="">— Select Publisher —</option>
-              {publisherUsers.filter(p => p.is_active).map(p => (
-                <option key={p.id} value={p.id}>{p.display_name} ({p.category})</option>
-              ))}
-            </select>
-          </div>
-          <Input
-            label="Publisher Email"
-            value={newPackData.publisher_email}
-            onChange={(e: any) => setNewPackData({ ...newPackData, publisher_email: e.target.value })}
+            onChange={(e: any) => setNewPackData({ ...newPackData, publisher: e.target.value || 'Sticky', publisher_email: '', publisher_user_id: '' })}
           />
           <div>
             <label className="text-xs font-bold text-textSec uppercase mb-2 block">Category</label>
@@ -6689,28 +6727,6 @@ function App() {
                 <option key={cat.id} value={cat.id}>{cat.emoji} {cat.name}</option>
               ))}
             </select>
-          </div>
-          {/* Paket Tipi Secimi Kaldirildi */}
-
-
-
-          <div className="flex bg-hover rounded-xl p-1 gap-1">
-            <button
-              onClick={() => setNewPackData({ ...newPackData, is_animated: false })}
-              className={cn("flex-1 py-2 rounded-lg text-[10px] font-black transition-all", !newPackData.is_animated ? "bg-blue-500 text-white" : "text-textSec")}
-            >STATIC PACK</button>
-            <button
-              onClick={() => setNewPackData({ ...newPackData, is_animated: true })}
-              className={cn("flex-1 py-2 rounded-lg text-[10px] font-black transition-all", newPackData.is_animated ? "bg-purple-500 text-white" : "text-textSec")}
-            >ANIMATED PACK</button>
-          </div>
-          <div className="bg-primary/5 border border-primary/20 p-4 rounded-xl flex items-center gap-3">
-            <Info className="text-primary" size={20} />
-            <span className="text-xs text-textMain/70 uppercase font-bold">
-              {newPackData.is_animated
-                ? "Animated pack: Supports GIF, Video and Animated WebP"
-                : "Static pack: Supports PNG, JPG and Static WebP"}
-            </span>
           </div>
           <button
             onClick={handleCreatePack}
@@ -6763,30 +6779,9 @@ function App() {
               </div>
             </div>
             <Input
-              label="Publisher"
-              value={editFormData.publisher}
-              onChange={(e: any) => setEditFormData({ ...editFormData, publisher: e.target.value })}
-            />
-            <div>
-              <label className="text-xs font-bold text-textSec uppercase mb-2 block">Published By</label>
-              <select
-                className="w-full bg-hover rounded-xl px-4 py-2.5 text-sm outline-none border-none text-white cursor-pointer"
-                value={(editFormData as any).publisher_user_id || ''}
-                onChange={(e) => {
-                  const pub = publisherUsers.find(p => p.id === e.target.value);
-                  setEditFormData({ ...editFormData, publisher_user_id: e.target.value, publisher: pub?.display_name || editFormData.publisher } as any);
-                }}
-              >
-                <option value="">— Select Publisher —</option>
-                {publisherUsers.filter(p => p.is_active).map(p => (
-                  <option key={p.id} value={p.id}>{p.display_name} ({p.category})</option>
-                ))}
-              </select>
-            </div>
-            <Input
-              label="Publisher Email"
-              value={editFormData.publisher_email}
-              onChange={(e: any) => setEditFormData({ ...editFormData, publisher_email: e.target.value })}
+              label="Publisher Name"
+              value={editFormData.publisher || 'Sticky'}
+              onChange={(e: any) => setEditFormData({ ...editFormData, publisher: e.target.value || 'Sticky', publisher_email: '', publisher_user_id: '' } as any)}
             />
             <div className="flex items-center gap-4">
               <div className="flex-1">
@@ -6803,20 +6798,21 @@ function App() {
               </div>
             </div>
 
-            <div className="flex items-center gap-4">
-              <div className="flex-1">
-                <label className="text-xs font-bold text-textSec uppercase mb-2 block">Pack Type</label>
-                <div className="flex bg-hover rounded-xl p-1 gap-1">
-                  <button
-                    onClick={() => setEditFormData({ ...editFormData, is_animated: false })}
-                    className={cn("flex-1 py-2 rounded-lg text-[10px] font-black transition-all flex items-center justify-center gap-1", editFormData.is_animated !== true ? "bg-blue-500 text-white" : "text-textSec")}
-                  >🖼️ STATIC</button>
-                  <button
-                    onClick={() => setEditFormData({ ...editFormData, is_animated: true })}
-                    className={cn("flex-1 py-2 rounded-lg text-[10px] font-black transition-all flex items-center justify-center gap-1", editFormData.is_animated === true ? "bg-primary text-white" : "text-textSec")}
-                  >🎬 ANIMATED</button>
-                </div>
+            <div>
+              <label className="text-xs font-bold text-textSec uppercase mb-2 block">Premium Status</label>
+              <div className="flex bg-hover rounded-xl p-1 gap-1">
+                <button
+                  onClick={() => setEditFormData({ ...editFormData, is_premium: false })}
+                  className={cn("flex-1 py-2.5 rounded-lg text-[10px] font-black transition-all flex items-center justify-center gap-1.5", !editFormData.is_premium ? "bg-primary text-white" : "text-textSec")}
+                >FREE</button>
+                <button
+                  onClick={() => setEditFormData({ ...editFormData, is_premium: true })}
+                  className={cn("flex-1 py-2.5 rounded-lg text-[10px] font-black transition-all flex items-center justify-center gap-1.5", editFormData.is_premium ? "bg-yellow-500 text-black" : "text-textSec")}
+                >PREMIUM</button>
               </div>
+            </div>
+
+            <div className="flex items-center gap-4">
               <div className="flex-1">
                 <label className="text-xs font-bold text-textSec uppercase mb-2 block">Status (Visibility)</label>
                 <div className="flex bg-hover rounded-xl p-1 gap-1">

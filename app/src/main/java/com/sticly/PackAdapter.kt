@@ -1,7 +1,5 @@
 package com.sticly
 
-import android.content.Intent
-import android.content.res.ColorStateList
 import android.graphics.BitmapFactory
 import android.util.Log
 import android.view.LayoutInflater
@@ -38,12 +36,8 @@ import com.google.android.gms.ads.nativead.MediaView
 import android.widget.Button
 import com.google.android.material.button.MaterialButton
 
-import androidx.core.content.ContextCompat
-import androidx.lifecycle.findViewTreeLifecycleOwner
-import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.DiffUtil
 import com.bumptech.glide.RequestManager
-import kotlinx.coroutines.launch
 
 class PackAdapter(
     private var items: List<Any>,
@@ -144,7 +138,6 @@ class PackAdapter(
         val newBadge: TextView? = v.findViewById(R.id.newBadge)
         val btnFavorite: ImageButton? = v.findViewById(R.id.btnFavorite)
         val btnFavoriteNew: ImageButton? = v.findViewById(R.id.btnFavoriteNew)
-        val tvLikeCount: TextView? = v.findViewById(R.id.tvLikeCount)
         val btnDelete: ImageButton? = v.findViewById(R.id.btnDelete)
         val btnDeletePack: ImageButton? = v.findViewById(R.id.btnDeletePack)
         val downloadCount: TextView? = v.findViewById(R.id.downloadCount)
@@ -412,36 +405,24 @@ class PackAdapter(
 
         h.downloadCount?.visibility = View.GONE
 
-        // Like button
+        // Favorite button
         if (!isCustomPack) {
             h.btnFavoriteNew?.visibility = View.VISIBLE
-            h.tvLikeCount?.visibility = View.VISIBLE
-            h.tvLikeCount?.text = pack.likeCount.coerceAtLeast(0).toString()
-            h.btnFavoriteNew?.setImageResource(R.drawable.ic_heart)
-            h.btnFavoriteNew?.imageTintList = ColorStateList.valueOf(ContextCompat.getColor(context, R.color.text_secondary))
+            val isFavorite = PreferencesHelper.isPackFavorite(context, pack.id)
+            h.btnFavoriteNew?.setImageResource(if (isFavorite) R.drawable.ic_favorite_filled else R.drawable.ic_favorite_border)
             h.btnFavoriteNew?.setOnClickListener {
-                if (!SocialRepository.isSignedIn(context)) {
-                    Toast.makeText(context, R.string.profile_login_required, Toast.LENGTH_SHORT).show()
-                    context.startActivity(Intent(context, SettingsActivity::class.java))
-                    return@setOnClickListener
+                val favorite = PreferencesHelper.toggleFavorite(context, pack.id)
+                h.btnFavoriteNew?.setImageResource(if (favorite) R.drawable.ic_favorite_filled else R.drawable.ic_favorite_border)
+                if (favorite) {
+                    StickerRepository.incrementFavoriteCount(pack.id, pack.isPremium)
+                    Toast.makeText(context, R.string.added_to_favorites, Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(context, R.string.removed_from_favorites, Toast.LENGTH_SHORT).show()
                 }
-                val owner = h.itemView.findViewTreeLifecycleOwner() ?: return@setOnClickListener
-                h.btnFavoriteNew?.isEnabled = false
-                owner.lifecycleScope.launch {
-                    runCatching { SocialRepository.togglePackLike(context, pack) }
-                        .onSuccess { result ->
-                            val liked = result.optBoolean("liked", false)
-                            val likeCount = result.optInt("like_count", pack.likeCount).coerceAtLeast(0)
-                            h.tvLikeCount?.text = likeCount.toString()
-                            h.btnFavoriteNew?.imageTintList = ColorStateList.valueOf(ContextCompat.getColor(context, if (liked) R.color.danger else R.color.text_secondary))
-                        }
-                        .onFailure { Toast.makeText(context, it.message ?: context.getString(R.string.error_generic), Toast.LENGTH_SHORT).show() }
-                    h.btnFavoriteNew?.isEnabled = true
-                }
+                onFavoriteChanged?.invoke()
             }
         } else {
             h.btnFavoriteNew?.visibility = View.GONE
-            h.tvLikeCount?.visibility = View.GONE
         }
 
         // Çıkartma önizlemeleri yükle

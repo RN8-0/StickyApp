@@ -3956,11 +3956,22 @@ Rules:
     }
 
     private fun directAddToWhatsApp(pack: Pack) {
-        startActivity(Intent(this, DetailsActivity::class.java).apply {
-            putExtra("id", pack.id)
-            putExtra(DetailsActivity.EXTRA_AUTO_ADD_TO_WHATSAPP, true)
-        })
-        overridePendingTransition(0, 0)
+        if (pack.stickers.isEmpty()) {
+            Toast.makeText(this, R.string.pack_empty_error, Toast.LENGTH_LONG).show()
+            return
+        }
+
+        if (!isWhatsAppInstalled()) {
+            Toast.makeText(this, R.string.whatsapp_not_installed, Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val hasAccess = !pack.isPremium || PreferencesHelper.hasAccessToPack(this, pack.id)
+        if (!hasAccess) {
+            showRewardedAdForDirectAdd(pack)
+        } else {
+            prepareAndSendToWhatsApp(pack, skipInterstitial = false)
+        }
     }
 
     private fun showRewardedAdForDirectAdd(pack: Pack) {
