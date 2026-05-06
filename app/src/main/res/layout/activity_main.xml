@@ -497,6 +497,21 @@
                     android:layout_width="match_parent"
                     android:layout_height="match_parent" />
 
+                <!-- FAB: Scroll to top (visible when scrolled down on Explore) -->
+                <com.google.android.material.floatingactionbutton.FloatingActionButton
+                    android:id="@+id/btnScrollToTop"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="bottom|end"
+                    android:layout_marginEnd="16dp"
+                    android:layout_marginBottom="88dp"
+                    app:srcCompat="@drawable/ic_scroll_up"
+                    app:backgroundTint="@color/primary"
+                    app:fabSize="mini"
+                    app:elevation="6dp"
+                    android:contentDescription="Scroll to top"
+                    android:visibility="gone" />
+
                 <!-- FAB: Create Sticker (My Stickers tab only) -->
                 <com.google.android.material.floatingactionbutton.FloatingActionButton
                     android:id="@+id/btnCreateFab"

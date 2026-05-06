@@ -29,8 +29,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
                 android:scaleType="centerCrop"
-                android:src="@drawable/ic_person"
-                app:tint="@color/modern_primary" />
+                android:src="@drawable/ic_person" />
 
         </com.google.android.material.card.MaterialCardView>
 
@@ -96,7 +95,7 @@
                         android:id="@+id/ivLikeIcon"
                         android:layout_width="16dp"
                         android:layout_height="16dp"
-                        android:src="@drawable/ic_heart"
+                        android:src="@drawable/ic_thumb_up"
                         app:tint="@color/text_hint" />
 
                     <TextView

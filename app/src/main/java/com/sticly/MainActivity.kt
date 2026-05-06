@@ -497,6 +497,18 @@ class MainActivity : AppCompatActivity() {
             showStickerTypeChooser()
         }
 
+        // FAB: scroll-to-top
+        val btnScrollToTop = findViewById<com.google.android.material.floatingactionbutton.FloatingActionButton>(R.id.btnScrollToTop)
+        btnScrollToTop?.setOnClickListener { rv.smoothScrollToPosition(0) }
+        rv.addOnScrollListener(object : androidx.recyclerview.widget.RecyclerView.OnScrollListener() {
+            override fun onScrolled(recyclerView: androidx.recyclerview.widget.RecyclerView, dx: Int, dy: Int) {
+                val totalScrolled = (recyclerView.layoutManager as? androidx.recyclerview.widget.LinearLayoutManager)
+                    ?.findFirstVisibleItemPosition() ?: 0
+                val visible = currentFilter != FilterType.CUSTOM && currentFilter != FilterType.PROFILE && totalScrolled >= 6
+                btnScrollToTop?.visibility = if (visible) View.VISIBLE else View.GONE
+            }
+        })
+
         categoryChipGroup = findViewById(R.id.categoryChipGroup)
         
         regionalPopularContainer = findViewById(R.id.regionalPopularContainer)

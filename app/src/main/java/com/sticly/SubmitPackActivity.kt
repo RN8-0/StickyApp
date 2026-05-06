@@ -53,27 +53,40 @@ class SubmitPackActivity : AppCompatActivity() {
         sourcePackId: String,
         userId: String,
         userEmail: String,
-        deviceId: String
+        deviceId: String,
+        packName: String
     ) {
-        val records = runCatching {
-            PocketBaseHelper.listAllRecords(
-                "user_submissions",
-                filter = "source_pack_id='${escapePb(sourcePackId)}'",
-                perPage = 200
-            )
-        }.getOrElse { emptyList() }
-
+        fun esc(v: String) = v.replace("'", "\\'")
         val userKeys = listOf(userId, userEmail, deviceId).map { it.trim().lowercase() }.filter { it.isNotBlank() }
-        val matching = records.filter { record ->
-            val ownerKeys = listOf(
-                record.optString("user_id"),
-                record.optString("user_email"),
-                record.optString("device_id")
-            ).map { it.trim().lowercase() }.filter { it.isNotBlank() }
-            userKeys.any { ownerKeys.contains(it) }
+        fun ownsRecord(record: org.json.JSONObject): Boolean {
+            val ownerKeys = listOf(record.optString("user_id"), record.optString("user_email"), record.optString("device_id"))
+                .map { it.trim().lowercase() }.filter { it.isNotBlank() }
+            return userKeys.any { ownerKeys.contains(it) }
         }
 
-        if (matching.isNotEmpty()) throw IllegalStateException(getString(R.string.publish_pack_already_submitted))
+        // 1. Fast check: by source_pack_id (new submissions always have this)
+        val byPackId = runCatching {
+            PocketBaseHelper.listAllRecords("user_submissions", filter = "source_pack_id='${esc(sourcePackId)}'", perPage = 200)
+        }.getOrElse { emptyList() }
+        if (byPackId.any { ownsRecord(it) }) throw IllegalStateException(getString(R.string.publish_pack_already_submitted))
+
+        // 2. Fallback: all user submissions matched by pack_name (catches old records without source_pack_id)
+        if (packName.isNotBlank()) {
+            val ownerFilter = listOfNotNull(
+                userId.takeIf { it.isNotBlank() }?.let { "user_id='${esc(it)}'" },
+                userEmail.takeIf { it.isNotBlank() }?.let { "user_email='${esc(it)}'" },
+                deviceId.takeIf { it.isNotBlank() }?.let { "device_id='${esc(it)}'" }
+            ).joinToString(" || ")
+            if (ownerFilter.isNotBlank()) {
+                val allUserRecords = runCatching {
+                    PocketBaseHelper.listAllRecords("user_submissions", filter = ownerFilter, perPage = 200)
+                }.getOrElse { emptyList() }
+                val normalizedName = packName.trim().lowercase()
+                if (allUserRecords.any { it.optString("pack_name", it.optString("name", "")).trim().lowercase() == normalizedName }) {
+                    throw IllegalStateException(getString(R.string.publish_pack_already_submitted))
+                }
+            }
+        }
     }
 
     private val categories = listOf(
@@ -241,7 +254,7 @@ class SubmitPackActivity : AppCompatActivity() {
                         throw IllegalStateException(getString(R.string.publish_pack_count_range))
                     }
                     val sourceSignature = buildPackSignature(stickerFiles)
-                    ensurePackCanBeSubmittedAgain(packId, userId, email, deviceId)
+                    ensurePackCanBeSubmittedAgain(packId, userId, email, deviceId, packName)
 
                     val uploadFiles = stickerFiles.mapIndexed { index, file ->
                         PocketBaseHelper.UploadFile("images", "sticker_${index + 1}.webp", "image/webp", file.readBytes())

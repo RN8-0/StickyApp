@@ -1234,6 +1234,7 @@ class DetailsActivity : AppCompatActivity() {
         ivLikeIcon.setColorFilter(ContextCompat.getColor(this, likeColor))
         tvLikeCount.setTextColor(ContextCompat.getColor(this, likeColor))
 
+        ivAvatar.imageTintList = null
         if (photoUrl.isNotBlank()) {
             Glide.with(this).load(photoUrl).circleCrop().placeholder(R.drawable.ic_person).into(ivAvatar)
         }
@@ -1293,6 +1294,7 @@ class DetailsActivity : AppCompatActivity() {
         ivLikeIcon.setColorFilter(ContextCompat.getColor(this, likeColor))
         tvLikeCount.setTextColor(ContextCompat.getColor(this, likeColor))
 
+        ivAvatar.imageTintList = null
         if (replyPhoto.isNotBlank()) {
             Glide.with(this).load(replyPhoto).circleCrop().placeholder(R.drawable.ic_person).into(ivAvatar)
         }

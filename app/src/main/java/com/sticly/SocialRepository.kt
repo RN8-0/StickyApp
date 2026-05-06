@@ -92,7 +92,16 @@ object SocialRepository {
     suspend fun fetchPackSocial(context: Context, packId: String): JSONObject = withContext(Dispatchers.IO) {
         val viewer = currentUser(context)
         runCatching { getJson("/api/social/pack", mapOf("packId" to packId, "viewerId" to viewer.id, "viewerEmail" to viewer.email)) }
-            .getOrElse { JSONObject().put("liked", isLocallyLiked(context, packId)).put("like_count", 0).put("comment_count", 0) }
+            .getOrElse {
+                val liked = isLocallyLiked(context, packId)
+                val pbLikeCount = runCatching {
+                    PocketBaseHelper.listAllRecords("pack_likes", filter = "pack_id='$packId'", perPage = 500).size
+                }.getOrDefault(0)
+                val pbCommentCount = runCatching {
+                    PocketBaseHelper.listAllRecords("pack_comments", filter = "pack_id='$packId'", perPage = 500).size
+                }.getOrDefault(0)
+                JSONObject().put("liked", liked).put("like_count", pbLikeCount).put("comment_count", pbCommentCount)
+            }
     }
 
     suspend fun addComment(context: Context, pack: Pack, body: String): JSONObject = withContext(Dispatchers.IO) {
