@@ -580,7 +580,7 @@
     <string name="ai_generation_failed">Nesil başarısız oldu. Lütfen tekrar deneyin.</string>
     <string name="ai_daily_limit_title">Günlük Limite Ulaşıldı</string>
     <string name="ai_daily_limit_msg">Ücretsiz kullanıcılar günde %d çıkartma oluşturabilir. Sınırsız yaratımlar için Premium\'a yükseltin!</string>
-    <string name="ai_remaining">%d / %d günlük</string>
+    <string name="ai_remaining">%1\$d / %2\$d günlük</string>
     <string name="ai_unlimited">Sınırsız</string>
     <string name="ai_style_cartoon">Karikatür</string>
     <string name="ai_style_kawaii">kawaii</string>

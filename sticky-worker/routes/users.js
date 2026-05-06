@@ -24,7 +24,7 @@ async function pbFetch(path, opts = {}) {
   if (!pbToken) await authenticate();
   const resp = await fetch(`${PB_URL}${path}`, {
     ...opts,
-    headers: { 'Content-Type': 'application/json', ...opts.headers, Authorization: pbToken }
+    headers: { 'Content-Type': 'application/json', ...opts.headers, Authorization: 'Bearer ' + pbToken }
   });
   if (resp.status === 401) {
     await authenticate();
@@ -362,6 +362,11 @@ router.patch('/:id', async (req, res) => {
 // DELETE /api/users/all - delete ALL user_profile records (DANGEROUS — admin use only)
 router.delete('/all', async (req, res) => {
   try {
+    const adminSecret = process.env.ADMIN_SECRET;
+    const authHeader = req.headers['authorization'] || req.headers['x-admin-secret'];
+    if (adminSecret && authHeader !== `Bearer ${adminSecret}` && authHeader !== adminSecret) {
+      return res.status(403).json({ error: 'Forbidden: admin secret required' });
+    }
     const ids = [];
     let page = 1;
     while (true) {

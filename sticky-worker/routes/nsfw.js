@@ -4,10 +4,29 @@ const router = Router();
 
 const NUDENET_URL = process.env.NUDENET_URL || 'http://nudenet:8080';
 
+function isValidImageUrl(url) {
+  try {
+    const parsed = new URL(url);
+    if (!['http:', 'https:'].includes(parsed.protocol)) return false;
+    const hostname = parsed.hostname;
+    if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname.startsWith('10.') || hostname.startsWith('192.168.')) return false;
+    if (hostname.startsWith('172.')) {
+      const second = parseInt(hostname.split('.')[1], 10);
+      if (second >= 16 && second <= 31) return false;
+    }
+    if (hostname.startsWith('169.254.') || hostname.startsWith('fc00') || hostname.startsWith('fe80')) return false;
+    if (hostname.startsWith('[')) return false; // IPv6
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 router.post('/', async (req, res) => {
   try {
     const { image_url } = req.body;
     if (!image_url) return res.status(400).json({ error: 'image_url required' });
+    if (!isValidImageUrl(image_url)) return res.status(400).json({ error: 'invalid or blocked image_url' });
 
     const imgResp = await fetch(image_url);
     if (!imgResp.ok) return res.json({ safe: null, reason: 'image_download_failed' });
@@ -35,7 +54,7 @@ router.post('/', async (req, res) => {
       'ANUS_EXPOSED', 'BELLY_EXPOSED'
     ];
     const flagged = [];
-    if (result.prediction) {
+    if (Array.isArray(result.prediction)) {
       for (const pred of result.prediction) {
         if (unsafeLabels.includes(pred.class) && pred.score > 0.6) flagged.push(pred.class);
       }

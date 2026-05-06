@@ -577,7 +577,7 @@
     <string name="ai_generation_failed">Nabigo ang henerasyon. Pakisubukang muli.</string>
     <string name="ai_daily_limit_title">Naabot na ang Pang-araw-araw na Limitasyon</string>
     <string name="ai_daily_limit_msg">Ang mga libreng user ay maaaring gumawa ng %d sticker bawat araw. Mag-upgrade sa Premium para sa walang limitasyong mga likha!</string>
-    <string name="ai_remaining">%d / %d araw-araw</string>
+    <string name="ai_remaining">%1\$d / %2\$d araw-araw</string>
     <string name="ai_unlimited">Walang limitasyon</string>
     <string name="ai_style_cartoon">Cartoon</string>
     <string name="ai_style_kawaii">Kawaii</string>

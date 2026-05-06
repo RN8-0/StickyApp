@@ -577,7 +577,7 @@
     <string name="ai_generation_failed">生成に失敗しました。もう一度試してください。</string>
     <string name="ai_daily_limit_title">1 日の制限に達しました</string>
     <string name="ai_daily_limit_msg">無料ユーザーは 1 日あたり %d ステッカーを作成できます。プレミアムにアップグレードすると、無制限に作成できます!</string>
-    <string name="ai_remaining">毎日%d / %d</string>
+    <string name="ai_remaining">毎日%1\$d / %2\$d</string>
     <string name="ai_unlimited">無制限</string>
     <string name="ai_style_cartoon">漫画</string>
     <string name="ai_style_kawaii">かわいい</string>

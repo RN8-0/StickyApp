@@ -577,7 +577,7 @@
     <string name="ai_generation_failed">A geração falhou. Por favor, tente novamente.</string>
     <string name="ai_daily_limit_title">Limite diário alcançado</string>
     <string name="ai_daily_limit_msg">Usuários gratuitos podem criar %d adesivos por dia. Atualize para Premium para criações ilimitadas!</string>
-    <string name="ai_remaining">%d / %d diariamente</string>
+    <string name="ai_remaining">%1\$d / %2\$d diariamente</string>
     <string name="ai_unlimited">Ilimitado</string>
     <string name="ai_style_cartoon">Desenho animado</string>
     <string name="ai_style_kawaii">Kawaii</string>

@@ -1,1 +1,11 @@
-{}
+{
+  "name": "stickyapp",
+  "version": "1.0.0",
+  "private": true,
+  "description": "StickyApp monorepo root",
+  "workspaces": [
+    "sticker_admin_web",
+    "sticky-worker",
+    "store-screenshots"
+  ]
+}

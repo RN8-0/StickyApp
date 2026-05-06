@@ -577,7 +577,7 @@
     <string name="ai_generation_failed">पीढ़ी विफल रही. कृपया पुन: प्रयास करें।</string>
     <string name="ai_daily_limit_title">दैनिक सीमा तक पहुँच गया</string>
     <string name="ai_daily_limit_msg">निःशुल्क उपयोगकर्ता प्रतिदिन %d स्टिकर बना सकते हैं। असीमित रचनाओं के लिए प्रीमियम में अपग्रेड करें!</string>
-    <string name="ai_remaining">%d / %d प्रतिदिन</string>
+    <string name="ai_remaining">%1\$d / %2\$d प्रतिदिन</string>
     <string name="ai_unlimited">असीमित</string>
     <string name="ai_style_cartoon">कार्टून</string>
     <string name="ai_style_kawaii">प्यारा</string>

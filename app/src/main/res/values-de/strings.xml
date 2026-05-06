@@ -577,7 +577,7 @@
     <string name="ai_generation_failed">Die Generierung ist fehlgeschlagen. Bitte versuchen Sie es erneut.</string>
     <string name="ai_daily_limit_title">Tageslimit erreicht</string>
     <string name="ai_daily_limit_msg">Kostenlose Benutzer können %d Aufkleber pro Tag erstellen. Upgrade auf Premium für unbegrenzte Kreationen!</string>
-    <string name="ai_remaining">%d / %d daily</string>
+    <string name="ai_remaining">%1\$d / %2\$d daily</string>
     <string name="ai_unlimited">Unbegrenzt</string>
     <string name="ai_style_cartoon">Karikatur</string>
     <string name="ai_style_kawaii">Kawaii</string>

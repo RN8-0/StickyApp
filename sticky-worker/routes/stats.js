@@ -5,7 +5,7 @@ const router = Router();
 
 const PB_URL = process.env.PB_URL || 'https://sh3xlf9j7symlj3otlw6s8rx.46.225.95.201.sslip.io';
 const PB_ADMIN_EMAIL = process.env.PB_ADMIN_EMAIL || 'arainunger@gmail.com';
-const PB_ADMIN_PASS = process.env.PB_ADMIN_PASS || 'StickyAdmin2026!';
+const PB_ADMIN_PASS = process.env.PB_ADMIN_PASS;
 
 let pbToken = '';
 
@@ -25,7 +25,7 @@ async function pbFetch(path, opts = {}) {
   if (!pbToken) await authenticate();
   const response = await fetch(`${PB_URL}${path}`, {
     ...opts,
-    headers: { 'Content-Type': 'application/json', ...opts.headers, Authorization: pbToken },
+    headers: { 'Content-Type': 'application/json', ...opts.headers, Authorization: 'Bearer ' + pbToken },
   });
   if (response.status === 401) {
     await authenticate();

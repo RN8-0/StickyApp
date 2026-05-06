@@ -29,6 +29,9 @@ android {
         versionName "4.6.0"
 
         buildConfigField "String", "DEEPSEEK_API_KEY", "\"${localProperties.getProperty('DEEPSEEK_API_KEY', '')}\""
+        buildConfigField "String", "POCKETBASE_URL", "\"${localProperties.getProperty('POCKETBASE_URL', 'NOT_SET')}\""
+        buildConfigField "String", "WORKER_URL", "\"${localProperties.getProperty('WORKER_URL', 'NOT_SET')}\""
+        buildConfigField "String", "NTFY_URL", "\"${localProperties.getProperty('NTFY_URL', 'NOT_SET')}\""
 
         // Sadece ARM mimarileri (MediaPipe x86_64 desteklemiyor)
         ndk {
@@ -47,8 +50,8 @@ android {
 
     buildTypes {
         release {
-            minifyEnabled false
-            shrinkResources false
+            minifyEnabled true
+            shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
             signingConfig signingConfigs.release
             // Native debug symbols dahil et (Play Console için)
@@ -99,7 +102,7 @@ dependencies {
     implementation 'com.google.code.gson:gson:2.10.1'
 
     // Shimmer for skeleton loading
-
+    implementation 'com.facebook.shimmer:shimmer:0.5.0'
 
     // Firebase
     implementation platform('com.google.firebase:firebase-bom:33.7.0')

@@ -16,7 +16,9 @@ try {
     }
   }
   if (serviceAccount) {
-    admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
+    if (admin.apps.length === 0) {
+      admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
+    }
     console.log('[Firebase] initialized for project:', serviceAccount.project_id);
   } else {
     console.warn('[Firebase] No credentials found — FCM via Admin SDK disabled');

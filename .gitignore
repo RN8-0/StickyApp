@@ -52,3 +52,18 @@ stickers_convert/client_secret*.json
 .env.local
 .env.*.local
 sticker_admin_web/.env
+
+# Agent & IDE artifacts
+.agent/
+.continue/
+
+# Node modules at root
+node_modules/
+package-lock.json
+
+# Store screenshots node_modules
+store-screenshots/node_modules/
+
+# Worker secrets
+sticky-worker/firebase-sa-key.json
+

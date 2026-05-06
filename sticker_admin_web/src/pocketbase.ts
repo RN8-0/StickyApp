@@ -77,7 +77,7 @@ export function normalizePublicAssetUrl(url?: string | null): string {
 export async function isAdmin(): Promise<boolean> {
   const user = currentUser();
   if (!user) return false;
-  const email = String(user.email || '').replace(/'/g, "\\'");
+  const email = String(user.email || '').replace(/[\\'"\n\r\t]/g, '');
   if (!email) return false;
   // Try admins_list collection first
   try {

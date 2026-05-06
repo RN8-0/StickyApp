@@ -2,7 +2,7 @@ const { Router } = require('express');
 const fetch = require('node-fetch');
 const router = Router();
 
-const GIPHY_API_KEY = process.env.GIPHY_API_KEY || 'LLWhfEaYJSNyuhTXUEnSol15YU00raps';
+const GIPHY_API_KEY = process.env.GIPHY_API_KEY;
 
 router.get('/', async (req, res) => {
   try {

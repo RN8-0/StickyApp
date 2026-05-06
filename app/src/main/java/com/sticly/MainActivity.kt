@@ -2108,7 +2108,12 @@ Rules:
 
         // Ensure user profile exists on server
         lifecycleScope.launch {
-            try {
+            // Load user submissions FIRST so they always appear regardless of profile fetch errors
+            loadUserSubmissionsFromPB(deviceId, firebaseUser?.uid.orEmpty(), profileEmail, rvPublished, emptyState)
+            loadAdminNotificationsFromPB(deviceId, firebaseUser?.uid.orEmpty(), profileEmail)
+
+            // Try to fetch/create user profile — failures here should not hide submissions
+            runCatching {
                 val records = withContext(Dispatchers.IO) {
                     PocketBaseHelper.listRecords("user_profiles", filter = "device_id='$deviceId'")
                 }
@@ -2138,8 +2143,6 @@ Rules:
                     }
                 } else {
                     val published = doc.optInt("packs_published", 0)
-                    val downloads = doc.optInt("total_downloads", 0)
-                    val favorites = doc.optInt("total_favorites", 0)
                     val serverBio = doc.optString("bio", prefs.getString("user_bio", "") ?: "")
                     val showEmail = doc.optBoolean("show_email", prefs.getBoolean("user_show_email", true))
                     withContext(Dispatchers.Main) {
@@ -2156,28 +2159,25 @@ Rules:
                     }
                 }
 
-                runCatching {
+                val social = runCatching {
                     SocialRepository.fetchPublisherProfile(
                         Pack(id = "", name = "", pub = prefs.getString("user_display_name", "") ?: "", email = profileEmail, publisherUserId = firebaseUser?.uid.orEmpty()),
                         this@MainActivity
                     )
-                }.onSuccess { social ->
-                    val stats = social.optJSONObject("stats")
-                    withContext(Dispatchers.Main) {
-                        profileSocialJson = social
-                        stats?.let {
-                            findViewById<TextView>(R.id.statPublished)?.text = it.optInt("packs", 0).toString()
-                            findViewById<TextView>(R.id.statDownloads)?.text = it.optInt("followers", 0).toString()
-                            findViewById<TextView>(R.id.statFollowing)?.text = it.optInt("following", 0).toString()
-                            findViewById<TextView>(R.id.statFavorites)?.text = it.optInt("likes", 0).toString()
-                        }
+                }.getOrDefault(org.json.JSONObject())
+
+                val stats = social.optJSONObject("stats")
+                withContext(Dispatchers.Main) {
+                    profileSocialJson = social
+                    stats?.let {
+                        findViewById<TextView>(R.id.statPublished)?.text = it.optInt("packs", 0).toString()
+                        findViewById<TextView>(R.id.statDownloads)?.text = it.optInt("followers", 0).toString()
+                        findViewById<TextView>(R.id.statFollowing)?.text = it.optInt("following", 0).toString()
+                        findViewById<TextView>(R.id.statFavorites)?.text = it.optInt("likes", 0).toString()
                     }
                 }
-
-                loadUserSubmissionsFromPB(deviceId, firebaseUser?.uid.orEmpty(), profileEmail, rvPublished, emptyState)
-                loadAdminNotificationsFromPB(deviceId, firebaseUser?.uid.orEmpty(), profileEmail)
-            } catch (e: Exception) {
-                android.util.Log.e("Profile", "Error loading profile", e)
+            }.onFailure { e ->
+                android.util.Log.e("Profile", "Error loading profile metadata: ${e.message}", e)
             }
         }
     }
@@ -2648,10 +2648,10 @@ Rules:
                     "Delete \"${item.name}\"? This will also remove it from the public sticker store."
                 else
                     "Delete \"${item.name}\"? This cannot be undone."
-                android.app.AlertDialog.Builder(this@MainActivity)
-                    .setTitle("Delete Submission")
-                    .setMessage(msg)
-                    .setPositiveButton("Delete") { _, _ ->
+                showModernDeleteDialog(
+                    title = "Delete Submission",
+                    message = msg,
+                    onConfirm = {
                         lifecycleScope.launch {
                             withContext(Dispatchers.IO) {
                                 val deletedByWorker = runCatching {
@@ -2668,14 +2668,36 @@ Rules:
                             loadProfileData()
                         }
                     }
-                    .setNegativeButton("Cancel", null)
-                    .show()
+                )
             }
         }
 
         override fun getItemCount(): Int = items.size
     }
 
+
+    private fun showModernDeleteDialog(title: String, message: String, onConfirm: () -> Unit) {
+        val dialogView = layoutInflater.inflate(R.layout.dialog_delete_confirm, null)
+        val tvTitle = dialogView.findViewById<android.widget.TextView>(R.id.tvDeleteTitle)
+        val tvMessage = dialogView.findViewById<android.widget.TextView>(R.id.tvDeleteMessage)
+        val btnCancel = dialogView.findViewById<com.google.android.material.button.MaterialButton>(R.id.btnDeleteCancel)
+        val btnDelete = dialogView.findViewById<com.google.android.material.button.MaterialButton>(R.id.btnDeleteConfirm)
+
+        tvTitle.text = title
+        tvMessage.text = message
+
+        val dialog = androidx.appcompat.app.AlertDialog.Builder(this)
+            .setView(dialogView)
+            .create()
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+
+        btnCancel.setOnClickListener { dialog.dismiss() }
+        btnDelete.setOnClickListener {
+            dialog.dismiss()
+            onConfirm()
+        }
+        dialog.show()
+    }
 
     private val profileSignInLauncher = registerForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()

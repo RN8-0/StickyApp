@@ -76,6 +76,11 @@ class DetailsActivity : AppCompatActivity() {
     // Set to true immediately after a rewarded ad completes for a pack.
     // Prevents showing an interstitial right on top of a just-finished rewarded ad.
     private var rewardedJustCompleted = false
+
+    // Track current social counts for accurate UI updates without stale pack data
+    private var currentPackLikeCount = 0
+    private var currentPackCommentCount = 0
+    private var currentPackFavoriteCount = 0
     
     // Modern Activity Result API Launchers
     private val addPackLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -944,52 +949,89 @@ class DetailsActivity : AppCompatActivity() {
     }
 
     private fun setupPackSocialActions(pack: Pack) {
-        val socialRow = findViewById<View>(R.id.packSocialRow)
         val summaryView = findViewById<TextView>(R.id.tvPackSocialSummary)
+        val likeBtn = findViewById<LinearLayout>(R.id.btnPackLike)
+        val commentBtn = findViewById<LinearLayout>(R.id.btnPackComments)
+        val tvLikeCount = findViewById<TextView>(R.id.tvPackLikeCount)
+        val tvCommentCount = findViewById<TextView>(R.id.tvPackCommentCount)
+
+        // Counters under Add to WhatsApp removed as requested
+        summaryView?.visibility = View.GONE
+
         if (pack.id.startsWith("custom_")) {
-            socialRow?.visibility = View.GONE
-            summaryView?.visibility = View.GONE
+            likeBtn?.visibility = View.GONE
+            commentBtn?.visibility = View.GONE
             return
         }
-        socialRow?.visibility = View.VISIBLE
-        summaryView?.visibility = View.VISIBLE
-        val likeButton = findViewById<MaterialButton>(R.id.btnPackLike) ?: return
-        val commentsButton = findViewById<MaterialButton>(R.id.btnPackComments) ?: return
-        val summary = findViewById<TextView>(R.id.tvPackSocialSummary)
-        likeButton.text = ""
-        likeButton.contentDescription = getString(R.string.like)
-        likeButton.icon = ContextCompat.getDrawable(this, R.drawable.ic_heart)
-        likeButton.iconTint = ColorStateList.valueOf(ContextCompat.getColor(this, R.color.primary))
-        summary?.text = engagementSummary(pack.likeCount, pack.favoriteCount, pack.commentCount)
 
-        likeButton.setOnClickListener {
+        likeBtn?.visibility = View.VISIBLE
+        commentBtn?.visibility = View.VISIBLE
+
+        // Initialize tracked counts from pack data
+        currentPackLikeCount = pack.likeCount
+        currentPackCommentCount = pack.commentCount
+        currentPackFavoriteCount = pack.favoriteCount
+
+        tvLikeCount?.text = formatCompactNumber(currentPackLikeCount)
+        tvCommentCount?.text = formatCompactNumber(currentPackCommentCount)
+
+        // Like visual state
+        applyLikeVisualToLayout(likeBtn, false)
+
+        likeBtn?.setOnClickListener {
             if (!requireSocialSignIn()) return@setOnClickListener
-            likeButton.isEnabled = false
-            animateLikeButton(likeButton)
+            likeBtn.isEnabled = false
+            animateLikeButton(likeBtn)
             lifecycleScope.launch {
                 runCatching { SocialRepository.togglePackLike(this@DetailsActivity, pack) }
                     .onSuccess { result ->
-                        applyLikeVisual(likeButton, result.optBoolean("liked", false))
-                        summary?.text = engagementSummary(result.optInt("like_count", pack.likeCount), pack.favoriteCount, pack.commentCount)
+                        val liked = result.optBoolean("liked", false)
+                        applyLikeVisualToLayout(likeBtn, liked)
+                        // Use server count if available, otherwise compute from tracked count
+                        val serverCount = result.optInt("like_count", -1)
+                        if (serverCount >= 0) {
+                            currentPackLikeCount = serverCount
+                        } else {
+                            // Fallback: adjust tracked count based on toggle direction
+                            currentPackLikeCount += if (liked) 1 else -1
+                            if (currentPackLikeCount < 0) currentPackLikeCount = 0
+                        }
+                        tvLikeCount?.text = formatCompactNumber(currentPackLikeCount)
                     }
                     .onFailure { showThemedSnackbar(it.message ?: getString(R.string.error_generic)) }
-                likeButton.isEnabled = true
+                likeBtn.isEnabled = true
             }
         }
 
-        commentsButton.setOnClickListener {
+        commentBtn?.setOnClickListener {
             if (requireSocialSignIn()) showCommentsSheet(pack)
         }
+
         lifecycleScope.launch {
             runCatching { SocialRepository.fetchPackSocial(this@DetailsActivity, pack.id) }.onSuccess { social ->
-                applyLikeVisual(likeButton, social.optBoolean("liked", false))
-                summary?.text = engagementSummary(social.optInt("like_count", pack.likeCount), pack.favoriteCount, social.optInt("comment_count", pack.commentCount))
-                commentsButton.text = "${getString(R.string.comments)} (${social.optInt("comment_count", pack.commentCount)})"
-            }.onFailure {
-                runCatching { SocialRepository.fetchComments(this@DetailsActivity, pack.id) }.onSuccess { comments ->
-                    commentsButton.text = "${getString(R.string.comments)} (${comments.length()})"
-                }
+                applyLikeVisualToLayout(likeBtn, social.optBoolean("liked", false))
+                currentPackLikeCount = social.optInt("like_count", currentPackLikeCount)
+                currentPackCommentCount = social.optInt("comment_count", currentPackCommentCount)
+                tvLikeCount?.text = formatCompactNumber(currentPackLikeCount)
+                tvCommentCount?.text = formatCompactNumber(currentPackCommentCount)
             }
+        }
+    }
+
+    private fun applyLikeVisualToLayout(layout: LinearLayout?, liked: Boolean) {
+        layout ?: return
+        val icon = layout.getChildAt(0) as? ImageView
+        val text = layout.getChildAt(1) as? TextView
+        val color = ContextCompat.getColor(this, if (liked) R.color.danger else R.color.primary)
+        icon?.setColorFilter(color)
+        text?.setTextColor(color)
+    }
+
+    private fun formatCompactNumber(count: Int): String {
+        return when {
+            count >= 1000000 -> String.format("%.1fM", count / 1000000.0)
+            count >= 1000 -> String.format("%.1fK", count / 1000.0)
+            else -> count.toString()
         }
     }
 
@@ -1035,259 +1077,254 @@ class DetailsActivity : AppCompatActivity() {
     }
 
     private fun showCommentsSheet(pack: Pack) {
-        val sheet = BottomSheetDialog(this)
-        val root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(18.dp(), 10.dp(), 18.dp(), 14.dp())
-            background = ContextCompat.getDrawable(this@DetailsActivity, R.drawable.bg_bottom_sheet_rounded)
+        val sheet = BottomSheetDialog(this, R.style.TransparentBottomSheetDialog)
+        val view = layoutInflater.inflate(R.layout.sheet_comments, null)
+
+        val commentsContainer = view.findViewById<LinearLayout>(R.id.commentsContainer)
+        val loadingFrame = view.findViewById<android.widget.FrameLayout>(R.id.commentsLoadingFrame)
+        val tvCommentCount = view.findViewById<TextView>(R.id.tvCommentCount)
+        val btnClose = view.findViewById<ImageView>(R.id.btnCloseComments)
+        val replyBanner = view.findViewById<LinearLayout>(R.id.replyBanner)
+        val tvReplyingTo = view.findViewById<TextView>(R.id.tvReplyingTo)
+        val btnCancelReply = view.findViewById<ImageView>(R.id.btnCancelReply)
+        val ivInputAvatar = view.findViewById<ImageView>(R.id.ivInputAvatar)
+        val etInput = view.findViewById<android.widget.EditText>(R.id.etCommentInput)
+        val btnSend = view.findViewById<com.google.android.material.button.MaterialButton>(R.id.btnSendComment)
+
+        btnClose.setOnClickListener { sheet.dismiss() }
+
+        val currentUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+        val photoUrl = currentUser?.photoUrl?.toString()
+        if (!photoUrl.isNullOrBlank()) {
+            Glide.with(this).load(photoUrl).circleCrop().placeholder(R.drawable.ic_person).into(ivInputAvatar)
         }
-        root.addView(View(this).apply {
-            background = ContextCompat.getDrawable(this@DetailsActivity, R.drawable.bg_bottom_sheet_handle)
-        }, LinearLayout.LayoutParams(44.dp(), 5.dp()).apply { gravity = android.view.Gravity.CENTER_HORIZONTAL; bottomMargin = 14.dp() })
-        val title = TextView(this).apply {
-            text = getString(R.string.comments)
-            textSize = 20f
-            setTypeface(null, android.graphics.Typeface.BOLD)
-            setTextColor(ContextCompat.getColor(this@DetailsActivity, R.color.text_primary))
-        }
-        root.addView(title)
-        val commentsContainer = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        val scroll = ScrollView(this).apply { addView(commentsContainer) }
-        root.addView(scroll, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 390.dp()).apply { topMargin = 12.dp() })
 
         var replyToCommentId: String? = null
-        val inputRow = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = android.view.Gravity.CENTER_VERTICAL
-            setPadding(0, 10.dp(), 0, 0)
+
+        btnCancelReply.setOnClickListener {
+            replyToCommentId = null
+            etInput.hint = getString(R.string.comment_hint)
+            replyBanner.visibility = View.GONE
         }
-        val input = EditText(this).apply {
-            hint = getString(R.string.comment_hint)
-            maxLines = 3
-            background = roundedDrawable(
-                ContextCompat.getColor(this@DetailsActivity, R.color.surface),
-                22,
-                ContextCompat.getColor(this@DetailsActivity, R.color.divider)
-            )
-            setPadding(16.dp(), 10.dp(), 16.dp(), 10.dp())
-            setTextColor(ContextCompat.getColor(this@DetailsActivity, R.color.text_primary))
-            setHintTextColor(ContextCompat.getColor(this@DetailsActivity, R.color.text_secondary))
+
+        fun updateSendButton() {
+            val hasText = etInput.text.toString().trim().isNotBlank()
+            btnSend.isEnabled = hasText
+            btnSend.alpha = if (hasText) 1f else 0.5f
         }
-        val send = MaterialButton(this).apply {
-            text = getString(R.string.send)
-            isAllCaps = false
-            cornerRadius = 22.dp()
-            minWidth = 0
-            insetTop = 0
-            insetBottom = 0
-            setTextColor(ContextCompat.getColor(this@DetailsActivity, R.color.white))
-            backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this@DetailsActivity, R.color.primary))
-        }
-        inputRow.addView(input, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply { marginEnd = 10.dp() })
-        inputRow.addView(send, LinearLayout.LayoutParams(92.dp(), 46.dp()))
-        root.addView(inputRow)
+
+        etInput.addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) { updateSendButton() }
+            override fun afterTextChanged(s: android.text.Editable?) {}
+        })
 
         fun refreshComments() {
             commentsContainer.removeAllViews()
-            commentsContainer.addView(TextView(this).apply {
-                text = getString(R.string.profile_loading)
-                setTextColor(ContextCompat.getColor(this@DetailsActivity, R.color.text_secondary))
-                setPadding(0, 18.dp(), 0, 18.dp())
-            })
+            loadingFrame.visibility = View.VISIBLE
             lifecycleScope.launch {
                 runCatching { SocialRepository.fetchComments(this@DetailsActivity, pack.id) }
-                    .onSuccess { comments -> bindComments(commentsContainer, comments, pack.id) { commentId, author ->
-                        replyToCommentId = commentId
-                        input.hint = getString(R.string.reply_to_user, author)
-                        input.requestFocus()
-                    } }
-                    .onFailure { bindComments(commentsContainer, JSONArray(), pack.id) { _, _ -> } }
+                    .onSuccess { comments ->
+                        loadingFrame.visibility = View.GONE
+                        tvCommentCount.text = comments.length().toString()
+                        bindComments(commentsContainer, comments, pack.id) { commentId, author ->
+                            replyToCommentId = commentId
+                            tvReplyingTo.text = getString(R.string.reply_to_user, author)
+                            replyBanner.visibility = View.VISIBLE
+                            etInput.requestFocus()
+                        }
+                    }
+                    .onFailure {
+                        loadingFrame.visibility = View.GONE
+                        tvCommentCount.text = "0"
+                        bindComments(commentsContainer, JSONArray(), pack.id) { _, _ -> }
+                    }
             }
         }
 
-        send.setOnClickListener {
+        btnSend.setOnClickListener {
             if (!requireSocialSignIn()) return@setOnClickListener
-            val body = input.text.toString().trim()
+            val body = etInput.text.toString().trim()
             if (body.isBlank()) return@setOnClickListener
-            send.isEnabled = false
+            btnSend.isEnabled = false
+            btnSend.alpha = 0.4f
             lifecycleScope.launch {
                 runCatching {
                     val parentId = replyToCommentId
                     if (parentId == null) SocialRepository.addComment(this@DetailsActivity, pack, body)
                     else SocialRepository.addCommentReply(this@DetailsActivity, parentId, pack.id, body)
                 }.onSuccess {
-                    input.setText("")
+                    etInput.setText("")
                     replyToCommentId = null
-                    input.hint = getString(R.string.comment_hint)
+                    etInput.hint = getString(R.string.comment_hint)
+                    replyBanner.visibility = View.GONE
+                    updateSendButton()
                     refreshComments()
+                    currentPackCommentCount++
                     setupPackSocialActions(pack)
                 }.onFailure { showThemedSnackbar(it.message ?: getString(R.string.error_generic)) }
-                send.isEnabled = true
+                btnSend.isEnabled = true
+                btnSend.alpha = 1f
             }
         }
 
-        sheet.setContentView(root)
-        sheet.setOnShowListener { refreshComments() }
+        sheet.setContentView(view)
+        sheet.setOnShowListener {
+            refreshComments()
+            val bottomSheet = sheet.findViewById<android.view.View>(com.google.android.material.R.id.design_bottom_sheet)
+            bottomSheet?.let {
+                val behavior = com.google.android.material.bottomsheet.BottomSheetBehavior.from(it)
+                it.background = ContextCompat.getDrawable(this, R.drawable.bg_bottom_sheet_white_rounded)
+                behavior.peekHeight = (resources.displayMetrics.heightPixels * 0.55).toInt()
+                behavior.isFitToContents = false
+                behavior.halfExpandedRatio = 0.55f
+                behavior.skipCollapsed = false
+                behavior.state = com.google.android.material.bottomsheet.BottomSheetBehavior.STATE_HALF_EXPANDED
+            }
+        }
         sheet.show()
     }
 
     private fun bindComments(container: LinearLayout, comments: JSONArray, packId: String, onReply: (String, String) -> Unit) {
         container.removeAllViews()
         if (comments.length() == 0) {
-            container.addView(TextView(this).apply {
-                text = getString(R.string.no_comments_yet)
-                textSize = 14f
-                setTextColor(ContextCompat.getColor(this@DetailsActivity, R.color.text_secondary))
-                setPadding(0, 28.dp(), 0, 28.dp())
-                gravity = android.view.Gravity.CENTER
-            })
+            val emptyView = layoutInflater.inflate(R.layout.view_empty_comments, container, false)
+            container.addView(emptyView)
             return
         }
         for (index in 0 until comments.length()) {
             val comment = comments.optJSONObject(index) ?: continue
-            container.addView(buildCommentRow(comment, packId, onReply), LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+            val commentView = buildCommentRow(comment, packId, onReply)
+            container.addView(commentView)
         }
     }
 
     private fun buildCommentRow(comment: JSONObject, packId: String, onReply: (String, String) -> Unit): View {
-        val row = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            background = roundedDrawable(
-                ContextCompat.getColor(this@DetailsActivity, R.color.surface),
-                18,
-                ContextCompat.getColor(this@DetailsActivity, R.color.divider)
-            )
-            setPadding(16.dp(), 14.dp(), 16.dp(), 12.dp())
-        }
         val author = comment.optString("display_name").ifBlank { comment.optString("user_email", "Sticky user") }
-        row.addView(TextView(this).apply {
-            text = author
-            textSize = 13f
-            setTypeface(null, android.graphics.Typeface.BOLD)
-            setTextColor(ContextCompat.getColor(this@DetailsActivity, R.color.text_primary))
-        })
-        row.addView(TextView(this).apply {
-            text = comment.optString("body")
-            textSize = 14f
-            setTextColor(ContextCompat.getColor(this@DetailsActivity, R.color.text_primary))
-            setPadding(0, 5.dp(), 0, 6.dp())
-        })
-        val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL }
+        val photoUrl = comment.optString("photo_url").ifBlank { comment.optString("avatar_url", "") }
         val commentId = comment.optString("id")
-        val like = MaterialButton(this).apply {
-            text = comment.optInt("like_count", 0).toString()
-            icon = ContextCompat.getDrawable(this@DetailsActivity, R.drawable.ic_heart)
-            iconTint = ColorStateList.valueOf(ContextCompat.getColor(this@DetailsActivity, if (comment.optBoolean("liked", false)) R.color.danger else R.color.text_secondary))
-            backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this@DetailsActivity, R.color.background))
-            strokeColor = ColorStateList.valueOf(ContextCompat.getColor(this@DetailsActivity, R.color.divider))
-            strokeWidth = 1.dp()
-            cornerRadius = 18.dp()
-            setTextColor(ContextCompat.getColor(this@DetailsActivity, R.color.text_secondary))
-            isAllCaps = false
-            minWidth = 0
-            minHeight = 36.dp()
-            insetTop = 0
-            insetBottom = 0
-            setOnClickListener {
-                if (!requireSocialSignIn()) return@setOnClickListener
-                animateLikeButton(this)
-                lifecycleScope.launch {
-                    runCatching { SocialRepository.toggleCommentLike(this@DetailsActivity, commentId, packId) }
-                        .onSuccess { result ->
-                            text = result.optInt("like_count", comment.optInt("like_count", 0)).toString()
-                            iconTint = ColorStateList.valueOf(ContextCompat.getColor(this@DetailsActivity, if (result.optBoolean("liked", false)) R.color.danger else R.color.text_secondary))
-                        }
-                        .onFailure { showThemedSnackbar(it.message ?: getString(R.string.error_generic)) }
-                }
+        val isLiked = comment.optBoolean("liked", false)
+        var likeCount = comment.optInt("like_count", 0)
+
+        val row = layoutInflater.inflate(R.layout.item_comment, null, false)
+        val ivAvatar = row.findViewById<ImageView>(R.id.ivAvatar)
+        val tvAuthor = row.findViewById<TextView>(R.id.tvAuthor)
+        val tvBody = row.findViewById<TextView>(R.id.tvBody)
+        val tvTime = row.findViewById<TextView>(R.id.tvTime)
+        val btnLike = row.findViewById<LinearLayout>(R.id.btnLikeComment)
+        val ivLikeIcon = row.findViewById<ImageView>(R.id.ivLikeIcon)
+        val tvLikeCount = row.findViewById<TextView>(R.id.tvLikeCount)
+        val tvReply = row.findViewById<TextView>(R.id.tvReply)
+        val repliesContainer = row.findViewById<LinearLayout>(R.id.repliesContainer)
+
+        tvAuthor.text = author
+        tvBody.text = comment.optString("body")
+        tvLikeCount.text = if (likeCount > 0) likeCount.toString() else ""
+        tvTime.text = formatRelativeTime(comment.optString("created_at", comment.optString("created", "")))
+
+        val likeColor = if (isLiked) R.color.danger else R.color.text_hint
+        ivLikeIcon.setColorFilter(ContextCompat.getColor(this, likeColor))
+        tvLikeCount.setTextColor(ContextCompat.getColor(this, likeColor))
+
+        if (photoUrl.isNotBlank()) {
+            Glide.with(this).load(photoUrl).circleCrop().placeholder(R.drawable.ic_person).into(ivAvatar)
+        }
+
+        btnLike.setOnClickListener {
+            if (!requireSocialSignIn()) return@setOnClickListener
+            lifecycleScope.launch {
+                runCatching { SocialRepository.toggleCommentLike(this@DetailsActivity, commentId, packId) }
+                    .onSuccess { result ->
+                        val nowLiked = result.optBoolean("liked", false)
+                        likeCount = result.optInt("like_count", likeCount)
+                        val color = if (nowLiked) R.color.danger else R.color.text_hint
+                        ivLikeIcon.setColorFilter(ContextCompat.getColor(this@DetailsActivity, color))
+                        tvLikeCount.setTextColor(ContextCompat.getColor(this@DetailsActivity, color))
+                        tvLikeCount.text = if (likeCount > 0) likeCount.toString() else ""
+                    }
+                    .onFailure { showThemedSnackbar(it.message ?: getString(R.string.error_generic)) }
             }
         }
-        val reply = MaterialButton(this).apply {
-            text = getString(R.string.reply)
-            backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this@DetailsActivity, R.color.chip_bg))
-            setTextColor(ContextCompat.getColor(this@DetailsActivity, R.color.primary))
-            strokeColor = ColorStateList.valueOf(ContextCompat.getColor(this@DetailsActivity, R.color.primary_light))
-            strokeWidth = 1.dp()
-            cornerRadius = 18.dp()
-            isAllCaps = false
-            minWidth = 0
-            minHeight = 36.dp()
-            insetTop = 0
-            insetBottom = 0
-            setOnClickListener { onReply(commentId, author) }
-        }
-        actions.addView(like, LinearLayout.LayoutParams(82.dp(), 38.dp()).apply { marginEnd = 8.dp() })
-        actions.addView(reply, LinearLayout.LayoutParams(104.dp(), 38.dp()))
-        row.addView(actions)
+
+        tvReply.setOnClickListener { onReply(commentId, author) }
+
         val replies = comment.optJSONArray("replies") ?: JSONArray()
+        repliesContainer.removeAllViews()
         for (i in 0 until replies.length()) {
             val item = replies.optJSONObject(i) ?: continue
-            val replyAuthor = item.optString("display_name", "Sticky user")
-            val replyId = item.optString("id")
-            val replyBox = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                background = roundedDrawable(ContextCompat.getColor(this@DetailsActivity, R.color.background), 14)
-                setPadding(12.dp(), 8.dp(), 12.dp(), 8.dp())
-            }
-            replyBox.addView(TextView(this).apply {
-                text = "$replyAuthor: ${item.optString("body", "")}" 
-                textSize = 12f
-                setTextColor(ContextCompat.getColor(this@DetailsActivity, R.color.text_secondary))
-                setOnClickListener { onReply(commentId, replyAuthor) }
-            })
-            val replyActions = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = android.view.Gravity.CENTER_VERTICAL
-                setPadding(0, 6.dp(), 0, 0)
-            }
-            val replyLike = MaterialButton(this).apply {
-                text = item.optInt("like_count", 0).toString()
-                icon = ContextCompat.getDrawable(this@DetailsActivity, R.drawable.ic_heart)
-                iconTint = ColorStateList.valueOf(ContextCompat.getColor(this@DetailsActivity, if (item.optBoolean("liked", false)) R.color.danger else R.color.text_secondary))
-                backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this@DetailsActivity, R.color.surface))
-                strokeColor = ColorStateList.valueOf(ContextCompat.getColor(this@DetailsActivity, R.color.divider))
-                strokeWidth = 1.dp()
-                cornerRadius = 16.dp()
-                minWidth = 0
-                minHeight = 32.dp()
-                insetTop = 0
-                insetBottom = 0
-                isAllCaps = false
-                setTextColor(ContextCompat.getColor(this@DetailsActivity, R.color.text_secondary))
-                setOnClickListener {
-                    if (replyId.isBlank()) return@setOnClickListener
-                    if (!requireSocialSignIn()) return@setOnClickListener
-                    animateLikeButton(this)
-                    lifecycleScope.launch {
-                        runCatching { SocialRepository.toggleReplyLike(this@DetailsActivity, replyId, packId) }
-                            .onSuccess { res ->
-                                text = res.optInt("like_count", text.toString().toIntOrNull() ?: 0).toString()
-                                iconTint = ColorStateList.valueOf(ContextCompat.getColor(this@DetailsActivity, if (res.optBoolean("liked", false)) R.color.danger else R.color.text_secondary))
-                            }
+            val replyView = buildReplyRow(item, packId, commentId, onReply)
+            repliesContainer.addView(replyView)
+        }
+
+        return row
+    }
+
+    private fun buildReplyRow(item: JSONObject, packId: String, parentCommentId: String, onReply: (String, String) -> Unit): View {
+        val replyAuthor = item.optString("display_name", "Sticky user")
+        val replyId = item.optString("id")
+        val replyPhoto = item.optString("photo_url", item.optString("avatar_url", ""))
+        val replyLiked = item.optBoolean("liked", false)
+        var replyLikeCount = item.optInt("like_count", 0)
+
+        val row = layoutInflater.inflate(R.layout.item_reply, null, false)
+        val ivAvatar = row.findViewById<ImageView>(R.id.ivReplyAvatar)
+        val tvAuthor = row.findViewById<TextView>(R.id.tvReplyAuthor)
+        val tvBody = row.findViewById<TextView>(R.id.tvReplyBody)
+        val tvTime = row.findViewById<TextView>(R.id.tvReplyTime)
+        val btnLike = row.findViewById<LinearLayout>(R.id.btnLikeReply)
+        val ivLikeIcon = row.findViewById<ImageView>(R.id.ivReplyLikeIcon)
+        val tvLikeCount = row.findViewById<TextView>(R.id.tvReplyLikeCount)
+        val tvReply = row.findViewById<TextView>(R.id.tvReplyReply)
+
+        tvAuthor.text = replyAuthor
+        tvBody.text = item.optString("body", "")
+        tvLikeCount.text = if (replyLikeCount > 0) replyLikeCount.toString() else ""
+        tvTime.text = formatRelativeTime(item.optString("created_at", item.optString("created", "")))
+
+        val likeColor = if (replyLiked) R.color.danger else R.color.text_hint
+        ivLikeIcon.setColorFilter(ContextCompat.getColor(this, likeColor))
+        tvLikeCount.setTextColor(ContextCompat.getColor(this, likeColor))
+
+        if (replyPhoto.isNotBlank()) {
+            Glide.with(this).load(replyPhoto).circleCrop().placeholder(R.drawable.ic_person).into(ivAvatar)
+        }
+
+        btnLike.setOnClickListener {
+            if (!requireSocialSignIn()) return@setOnClickListener
+            lifecycleScope.launch {
+                runCatching { SocialRepository.toggleReplyLike(this@DetailsActivity, replyId, packId) }
+                    .onSuccess { res ->
+                        val nowLiked = res.optBoolean("liked", false)
+                        replyLikeCount = res.optInt("like_count", replyLikeCount)
+                        val color = if (nowLiked) R.color.danger else R.color.text_hint
+                        ivLikeIcon.setColorFilter(ContextCompat.getColor(this@DetailsActivity, color))
+                        tvLikeCount.setTextColor(ContextCompat.getColor(this@DetailsActivity, color))
+                        tvLikeCount.text = if (replyLikeCount > 0) replyLikeCount.toString() else ""
                     }
-                }
             }
-            val replyAgain = MaterialButton(this).apply {
-                text = getString(R.string.reply)
-                backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this@DetailsActivity, R.color.chip_bg))
-                setTextColor(ContextCompat.getColor(this@DetailsActivity, R.color.primary))
-                cornerRadius = 16.dp()
-                minWidth = 0
-                minHeight = 32.dp()
-                insetTop = 0
-                insetBottom = 0
-                isAllCaps = false
-                setOnClickListener { onReply(commentId, replyAuthor) }
+        }
+
+        tvReply.setOnClickListener { onReply(parentCommentId, replyAuthor) }
+
+        return row
+    }
+
+    private fun formatRelativeTime(raw: String): String {
+        if (raw.isBlank()) return ""
+        return try {
+            val sdf = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US)
+            sdf.timeZone = java.util.TimeZone.getTimeZone("UTC")
+            val date = sdf.parse(raw) ?: return ""
+            val diff = System.currentTimeMillis() - date.time
+            val mins = diff / 60000
+            when {
+                mins < 1 -> getString(R.string.just_now)
+                mins < 60 -> "${mins}m"
+                mins < 1440 -> "${mins / 60}h"
+                mins < 10080 -> "${mins / 1440}d"
+                else -> "${mins / 10080}w"
             }
-            replyActions.addView(replyLike, LinearLayout.LayoutParams(74.dp(), 34.dp()).apply { marginEnd = 6.dp() })
-            replyActions.addView(replyAgain, LinearLayout.LayoutParams(92.dp(), 34.dp()))
-            replyBox.addView(replyActions)
-            row.addView(replyBox, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = 6.dp(); marginStart = 18.dp() })
-        }
-        return LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            addView(row)
-            setPadding(0, 0, 0, 10.dp())
-        }
+        } catch (_: Exception) { "" }
     }
 
     private fun Int.dp(): Int = (this * resources.displayMetrics.density).toInt()

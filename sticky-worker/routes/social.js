@@ -9,6 +9,16 @@ const PB_ADMIN_PASS = process.env.PB_ADMIN_PASS;
 
 let pbToken = '';
 
+let socialStatePromise = null;
+let socialStateCache = null;
+let socialStateExpiresAt = 0;
+const SOCIAL_CACHE_TTL = 30_000;
+
+let profilesPromise = null;
+let profilesCache = null;
+let profilesExpiresAt = 0;
+const PROFILES_CACHE_TTL = 30_000;
+
 async function authenticate() {
   if (!PB_ADMIN_PASS) throw new Error('PB_ADMIN_PASS is required.');
   const resp = await fetch(`${PB_URL}/api/collections/_superusers/auth-with-password`, {
@@ -25,7 +35,7 @@ async function pbFetch(path, opts = {}) {
   if (!pbToken) await authenticate();
   const resp = await fetch(`${PB_URL}${path}`, {
     ...opts,
-    headers: { 'Content-Type': 'application/json', ...opts.headers, Authorization: pbToken }
+    headers: { 'Content-Type': 'application/json', ...opts.headers, Authorization: 'Bearer ' + pbToken }
   });
   if (resp.status === 401) {
     await authenticate();
@@ -55,6 +65,25 @@ async function safeFetchAll(collection) {
     console.warn(`[Social] ${collection} unavailable:`, err.message);
     return [];
   }
+}
+
+async function getAllProfiles() {
+  if (profilesCache && Date.now() < profilesExpiresAt) {
+    return profilesCache;
+  }
+  if (profilesPromise) {
+    return profilesPromise;
+  }
+  profilesPromise = safeFetchAll('user_profiles').then((profiles) => {
+    profilesCache = profiles;
+    profilesExpiresAt = Date.now() + PROFILES_CACHE_TTL;
+    profilesPromise = null;
+    return profiles;
+  }).catch((err) => {
+    profilesPromise = null;
+    throw err;
+  });
+  return profilesPromise;
 }
 
 function clean(value) {
@@ -228,15 +257,29 @@ async function commentsWithState(packId, viewerId = '', viewerEmail = '') {
 }
 
 async function loadSocialState() {
-  const [profiles, follows, likes, comments, stickerPacks, premiumPacks] = await Promise.all([
+  if (socialStateCache && Date.now() < socialStateExpiresAt) {
+    return socialStateCache;
+  }
+  if (socialStatePromise) {
+    return socialStatePromise;
+  }
+  socialStatePromise = Promise.all([
     safeFetchAll('user_profiles'),
     safeFetchAll('user_follows'),
     safeFetchAll('pack_likes'),
     safeFetchAll('pack_comments'),
     safeFetchAll('stickers'),
     safeFetchAll('premium_stickers'),
-  ]);
-  return { profiles, follows, likes, comments, stickerPacks, premiumPacks };
+  ]).then(([profiles, follows, likes, comments, stickerPacks, premiumPacks]) => {
+    socialStateCache = { profiles, follows, likes, comments, stickerPacks, premiumPacks };
+    socialStateExpiresAt = Date.now() + SOCIAL_CACHE_TTL;
+    socialStatePromise = null;
+    return socialStateCache;
+  }).catch((err) => {
+    socialStatePromise = null;
+    throw err;
+  });
+  return socialStatePromise;
 }
 
 function unique(values) {
@@ -259,7 +302,7 @@ function intersects(a, b) {
 async function expandIdentityKeys(values = []) {
   const keys = identitySet(values);
   if (keys.size === 0) return keys;
-  const profiles = await safeFetchAll('user_profiles');
+  const profiles = await getAllProfiles();
   profiles
     .filter((profile) => userMatches(profile, keys))
     .forEach((profile) => identityValues(profile).forEach((value) => keys.add(value)));
@@ -327,14 +370,14 @@ async function hasFollowNotification(followerId, followerEmail, targetKeys = [])
 
 async function profileRecipientKeys(targetId, targetEmail) {
   const identifiers = new Set([targetId, targetEmail].map(lower).filter(Boolean));
-  const profiles = await safeFetchAll('user_profiles');
+  const profiles = await getAllProfiles();
   const profile = profiles.find((item) => userMatches(item, identifiers));
   return unique([targetId, targetEmail, profile?.user_id, profile?.uid, profile?.email, profile?.device_id]);
 }
 
 async function packRecipientKeys(pack) {
   const identifiers = new Set([pack.publisher_user_id, pack.publisher_email, pack.email, pack.publisher].map(lower).filter(Boolean));
-  const profiles = await safeFetchAll('user_profiles');
+  const profiles = await getAllProfiles();
   const profile = profiles.find((item) => userMatches(item, identifiers));
   return unique([pack.publisher_user_id, pack.publisher_email, pack.email, pack.user_id, pack.user_email, pack.device_id, profile?.user_id, profile?.uid, profile?.email, profile?.device_id]);
 }
@@ -638,7 +681,8 @@ router.post('/pack/delete', async (req, res) => {
     }
 
     const actorIdentifiers = new Set([userId, userEmail].map(lower).filter(Boolean));
-    if (packRecord && actorIdentifiers.size && !userMatches(packRecord, actorIdentifiers) && req.body.admin !== true) {
+    const isAdmin = req.body.admin === true || req.body.admin === 'true';
+    if (packRecord && actorIdentifiers.size && !userMatches(packRecord, actorIdentifiers) && !isAdmin) {
       return res.status(403).json({ error: 'You can only delete your own pack.' });
     }
 

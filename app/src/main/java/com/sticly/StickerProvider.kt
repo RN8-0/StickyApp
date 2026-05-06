@@ -70,7 +70,8 @@ class StickerProvider : ContentProvider() {
     private var cachedPacksTimestamp = 0L
 
     override fun onCreate(): Boolean {
-        authority = "${context!!.packageName}.stickers"
+        val ctx = context ?: return false
+        authority = "${ctx.packageName}.stickers"
 
         uriMatcher.addURI(authority, METADATA, METADATA_CODE)
         uriMatcher.addURI(authority, "$METADATA/*", METADATA_CODE_FOR_SINGLE_PACK)
@@ -81,6 +82,7 @@ class StickerProvider : ContentProvider() {
     }
 
     private fun getAllPacks(): List<Pack> {
+        val ctx = context ?: return emptyList()
         // Return cached result if fresh (within 5 seconds)
         val now = System.currentTimeMillis()
         cachedPacks?.let {
@@ -91,7 +93,7 @@ class StickerProvider : ContentProvider() {
 
         // 1. Statik Cache ve Disk Cache Senkronizasyonu
         if (StickerRepository.allPacksCache.isEmpty()) {
-            val diskCache = StickerRepository.loadCacheFromDisk(context!!)
+            val diskCache = StickerRepository.loadCacheFromDisk(ctx)
             if (diskCache.isNotEmpty()) {
                 StickerRepository.allPacksCache = diskCache
             }
@@ -101,14 +103,14 @@ class StickerProvider : ContentProvider() {
         StickerRepository.allPacksCache.forEach { allPacks[it.id] = it }
 
         // 2. Lokal Assets (Lokal paketler her zaman öncelikli ve güvenli)
-        Loader.load(context!!).forEach { allPacks[it.id] = it }
+        Loader.load(ctx).forEach { allPacks[it.id] = it }
 
         // 3. Custom Paketler (Kullanıcının kendi yaptıkları)
-        val customDir = File(context!!.filesDir, "custom_stickers")
+        val customDir = File(ctx.filesDir, "custom_stickers")
         if (customDir.exists() && customDir.isDirectory) {
             customDir.listFiles()?.forEach { packDir ->
                 if (packDir.isDirectory && packDir.name.startsWith("custom_")) {
-                    CustomStickerManager.toWhatsAppPack(context!!, packDir.name)?.let {
+                    CustomStickerManager.toWhatsAppPack(ctx, packDir.name)?.let {
                         allPacks[packDir.name] = it
                     }
                 }
@@ -116,7 +118,7 @@ class StickerProvider : ContentProvider() {
         }
 
         // 4. Fallback: Cache Dizini Taraması (Firebase paketleri için son çare)
-        val cacheDir = File(context!!.cacheDir, CACHE_DIR)
+        val cacheDir = File(ctx.cacheDir, CACHE_DIR)
         if (cacheDir.exists() && cacheDir.isDirectory) {
             cacheDir.listFiles()?.forEach { packDir ->
                 if (packDir.isDirectory && !packDir.name.startsWith("custom_") && !allPacks.containsKey(packDir.name)) {
@@ -131,16 +133,19 @@ class StickerProvider : ContentProvider() {
                             ?: emptyList()
 
                         if (stickers.isNotEmpty()) {
-                            val isAnimated = File(packDir, ".animated").exists()
-                            allPacks[packId] = Pack(
-                                id = packId,
-                                name = packId.replace("_", " ").replaceFirstChar { it.uppercase() },
-                                pub = "Sticky",
-                                tray = "tray.webp",
-                                stickers = stickers,
-                                isPremium = false,
-                                isAnimated = isAnimated 
-                            )
+                            val hasMarker = File(packDir, ".animated").exists()
+            val isAnimated = hasMarker || stickers.firstOrNull()?.let {
+                isAnimatedWebP(File(packDir, it.file))
+            } == true
+            allPacks[packId] = Pack(
+                id = packId,
+                name = packId.replace("_", " ").replaceFirstChar { it.uppercase() },
+                pub = "Sticky",
+                tray = "tray.webp",
+                stickers = stickers,
+                isPremium = false,
+                isAnimated = isAnimated
+            )
                         }
                     }
                 }
@@ -153,8 +158,69 @@ class StickerProvider : ContentProvider() {
         return result
     }
 
+    /**
+     * Detects if a WebP file is animated by checking the VP8X chunk animation flag.
+     */
+    private fun isAnimatedWebP(file: File): Boolean {
+        if (!file.exists() || file.length() < 12) return false
+        return try {
+            file.inputStream().use { stream ->
+                val header = ByteArray(12)
+                if (stream.read(header) < 12) return false
+                val riff = String(header, 0, 4)
+                val webp = String(header, 8, 4)
+                if (riff != "RIFF" || webp != "WEBP") return false
+                val chunkHeader = ByteArray(8)
+                if (stream.read(chunkHeader) < 8) return false
+                val fourCC = String(chunkHeader, 0, 4)
+                if (fourCC == "VP8X") {
+                    val flags = stream.read()
+                    return (flags and 0x02) != 0
+                }
+                false
+            }
+        } catch (_: Exception) { false }
+    }
+
     private fun getPack(identifier: String): Pack? {
-        return getAllPacks().find { it.id == identifier }
+        val pack = getAllPacks().find { it.id == identifier } ?: return null
+        // Validate isAnimated against actual files to prevent WhatsApp mixed-pack errors
+        val ctx = context ?: return pack
+        val cacheDir = File(ctx.cacheDir, "$CACHE_DIR/$identifier")
+        val customDir = File(ctx.filesDir, "custom_stickers/$identifier")
+        val packDir = when {
+            cacheDir.exists() -> cacheDir
+            customDir.exists() -> customDir
+            else -> return pack
+        }
+        val stickerFiles = packDir.listFiles { _, name -> name.endsWith(".webp") && !name.startsWith("tray") }
+            ?.sortedBy { it.name }
+            ?: return pack
+        if (stickerFiles.isEmpty()) return pack
+
+        val actualAnimated = stickerFiles.map { isAnimatedWebP(it) }
+        val animatedCount = actualAnimated.count { it }
+        val staticCount = actualAnimated.size - animatedCount
+
+        // Mixed pack: determine by majority and filter out minority type
+        val correctedIsAnimated = when {
+            animatedCount > 0 && staticCount > 0 -> animatedCount >= staticCount
+            animatedCount > 0 -> true
+            else -> false
+        }
+
+        // If mixed, keep only stickers matching the majority type
+        val filteredStickers = if (animatedCount > 0 && staticCount > 0) {
+            pack.stickers.filter { sticker ->
+                val file = File(packDir, sticker.file)
+                if (!file.exists()) return@filter true
+                isAnimatedWebP(file) == correctedIsAnimated
+            }
+        } else pack.stickers
+
+        return if (pack.isAnimated != correctedIsAnimated || filteredStickers.size != pack.stickers.size) {
+            pack.copy(isAnimated = correctedIsAnimated, stickers = filteredStickers)
+        } else pack
     }
 
     override fun query(uri: Uri, projection: Array<String>?, selection: String?,
@@ -164,8 +230,8 @@ class StickerProvider : ContentProvider() {
         cachedPacksTimestamp = 0L
         return when (uriMatcher.match(uri)) {
             METADATA_CODE -> getAllStickerPacks()
-            METADATA_CODE_FOR_SINGLE_PACK -> getSingleStickerPack(uri.lastPathSegment!!)
-            STICKERS_CODE -> getStickersForPack(uri.lastPathSegment!!)
+            METADATA_CODE_FOR_SINGLE_PACK -> getSingleStickerPack(uri.lastPathSegment ?: return null)
+            STICKERS_CODE -> getStickersForPack(uri.lastPathSegment ?: return null)
             else -> null
         }
     }
@@ -275,9 +341,11 @@ class StickerProvider : ContentProvider() {
             }
         }
 
+        val ctx = context ?: return null
+
         // 1. Custom paketler için filesDir/custom_stickers kontrol et (KALICI DEPOLAMA)
         if (identifier.startsWith("custom_")) {
-            val customFile = File(context!!.filesDir, "custom_stickers/$identifier/$fileName")
+            val customFile = File(ctx.filesDir, "custom_stickers/$identifier/$fileName")
             if (customFile.exists()) {
                 val optimized = ensureStickerWithinLimit(identifier, customFile)
                 val pfd = ParcelFileDescriptor.open(optimized, ParcelFileDescriptor.MODE_READ_ONLY)
@@ -286,7 +354,7 @@ class StickerProvider : ContentProvider() {
         }
 
         // 2. Cache klasöründe ara (Firebase stickerleri veya senkronize edilmiş custom paketler)
-        val cacheFile = File(context!!.cacheDir, "$CACHE_DIR/$identifier/$fileName")
+        val cacheFile = File(ctx.cacheDir, "$CACHE_DIR/$identifier/$fileName")
         if (cacheFile.exists()) {
             // Check for pre-optimized file first (created by preOptimizePackForWhatsApp)
             val preOpt = File(cacheFile.parent, "${cacheFile.nameWithoutExtension}_opt.webp")
@@ -302,7 +370,7 @@ class StickerProvider : ContentProvider() {
 
         // 3. Assets klasöründe ara (lokal stickerleri)
         return try {
-            context!!.assets.openFd("$identifier/$fileName")
+            ctx.assets.openFd("$identifier/$fileName")
         } catch (e: Exception) {
             null
         }
@@ -317,8 +385,10 @@ class StickerProvider : ContentProvider() {
         return try {
             android.util.Log.d("StickerProvider", "getTrayAsPngForWhatsApp: $identifier / $originalFileName")
 
+            val ctx = context ?: return null
+
             // Standart PNG çıktı dosyası (cached)
-            val outputPngFile = File(context!!.cacheDir, "$CACHE_DIR/$identifier/tray_whatsapp.png")
+            val outputPngFile = File(ctx.cacheDir, "$CACHE_DIR/$identifier/tray_whatsapp.png")
             if (outputPngFile.exists() && outputPngFile.length() > 0) {
                 android.util.Log.d("StickerProvider", "Cached PNG exists: ${outputPngFile.absolutePath}")
                 return outputPngFile
@@ -328,7 +398,7 @@ class StickerProvider : ContentProvider() {
             var sourceFile: File? = null
 
             // 1. Önce orijinal dosya adıyla dene (admin panelinden gelen)
-            val cacheDir = File(context!!.cacheDir, "$CACHE_DIR/$identifier")
+            val cacheDir = File(ctx.cacheDir, "$CACHE_DIR/$identifier")
             val originalFile = File(cacheDir, originalFileName)
             if (originalFile.exists() && originalFile.length() > 0) {
                 sourceFile = originalFile
@@ -347,7 +417,7 @@ class StickerProvider : ContentProvider() {
 
             // 3. Custom paketler için filesDir'da ara
             if (sourceFile == null && identifier.startsWith("custom_")) {
-                val customDir = File(context!!.filesDir, "custom_stickers/$identifier")
+                val customDir = File(ctx.filesDir, "custom_stickers/$identifier")
                 if (customDir.exists()) {
                     sourceFile = customDir.listFiles()?.find {
                         it.name.startsWith("tray") && (it.name.endsWith(".png") || it.name.endsWith(".webp"))
@@ -405,7 +475,7 @@ class StickerProvider : ContentProvider() {
     private fun ensureStickerWithinLimit(identifier: String, file: File): File {
         try {
             val pack = getPack(identifier)
-            val isAnimated = pack?.isAnimated ?: false
+            val isAnimated = (pack?.isAnimated ?: false) && isAnimatedWebP(file)
             val maxSize = if (isAnimated) 500L * 1024 else 100L * 1024
             
             // Check if we need to process (wrong dimensions or oversized)
@@ -479,20 +549,21 @@ class StickerProvider : ContentProvider() {
      * Ham tray dosyasını cache veya assets'ten bulur
      */
     private fun findRawTrayFile(identifier: String, fileName: String): File? {
+        val ctx = context ?: return null
         // Cache'de ara
-        val cacheFile = File(context!!.cacheDir, "$CACHE_DIR/$identifier/$fileName")
+        val cacheFile = File(ctx.cacheDir, "$CACHE_DIR/$identifier/$fileName")
         if (cacheFile.exists() && cacheFile.length() > 0) return cacheFile
         // tray.webp olarak dene
-        val webpFile = File(context!!.cacheDir, "$CACHE_DIR/$identifier/tray.webp")
+        val webpFile = File(ctx.cacheDir, "$CACHE_DIR/$identifier/tray.webp")
         if (webpFile.exists() && webpFile.length() > 0) return webpFile
         // tray.png olarak dene
-        val pngFile = File(context!!.cacheDir, "$CACHE_DIR/$identifier/tray.png")
+        val pngFile = File(ctx.cacheDir, "$CACHE_DIR/$identifier/tray.png")
         if (pngFile.exists() && pngFile.length() > 0) return pngFile
         // Assets'ten kopyala
         return try {
-            val tempFile = File(context!!.cacheDir, "$CACHE_DIR/$identifier/tray_temp")
+            val tempFile = File(ctx.cacheDir, "$CACHE_DIR/$identifier/tray_temp")
             tempFile.parentFile?.mkdirs()
-            context!!.assets.open("$identifier/$fileName").use { input ->
+            ctx.assets.open("$identifier/$fileName").use { input ->
                 tempFile.outputStream().use { output -> input.copyTo(output) }
             }
             if (tempFile.exists() && tempFile.length() > 0) tempFile else null
@@ -504,7 +575,8 @@ class StickerProvider : ContentProvider() {
      */
     private fun convertToPng96(identifier: String, source: File): File? {
         return try {
-            val outputPng = File(context!!.cacheDir, "$CACHE_DIR/$identifier/tray_whatsapp.png")
+            val ctx = context ?: return null
+            val outputPng = File(ctx.cacheDir, "$CACHE_DIR/$identifier/tray_whatsapp.png")
             outputPng.parentFile?.mkdirs()
             val bitmap = BitmapFactory.decodeFile(source.absolutePath) ?: return null
             val scaled = Bitmap.createScaledBitmap(bitmap, 96, 96, true)

@@ -4,7 +4,7 @@ const admin = require('firebase-admin');
 
 const PB_URL = process.env.PB_URL || 'https://sh3xlf9j7symlj3otlw6s8rx.46.225.95.201.sslip.io';
 const PB_ADMIN_EMAIL = process.env.PB_ADMIN_EMAIL || 'arainunger@gmail.com';
-const PB_ADMIN_PASS = process.env.PB_ADMIN_PASS || 'StickyAdmin2026!';
+const PB_ADMIN_PASS = process.env.PB_ADMIN_PASS;
 const NTFY_URL = process.env.NTFY_URL || 'http://ntfy:80';
 const NTFY_TOPIC = process.env.NTFY_TOPIC || 'sticky-stickers';
 
@@ -44,7 +44,7 @@ async function pbFetch(path, opts = {}) {
   if (!authToken) await authenticate();
   const resp = await fetch(`${PB_URL}${path}`, {
     ...opts,
-    headers: { ...opts.headers, 'Authorization': authToken, 'Content-Type': 'application/json' }
+    headers: { ...opts.headers, 'Authorization': 'Bearer ' + authToken, 'Content-Type': 'application/json' }
   });
   if (resp.status === 401) {
     await authenticate();
@@ -125,6 +125,9 @@ async function sendFcmNotification(record, title, body) {
   }
 }
 
+// Track recently translated records to prevent infinite loops
+const recentlyTranslated = new Set();
+
 // Translate pack name to all supported languages
 const TARGET_LANGUAGES = ['tr','de','fr','es','pt','it','ru','ar','hi','ja','ko','zh','th','vi','id','fil'];
 
@@ -133,12 +136,14 @@ async function translateText(text, targetLang) {
   const lang = targetLang === 'fil' ? 'tl' : targetLang;
   const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=${lang}&dt=t&q=${encodeURIComponent(text)}`;
   const resp = await fetch(url);
+  if (!resp.ok) throw new Error(`Translate API error: ${resp.status}`);
   const data = await resp.json();
   return data?.[0]?.[0]?.[0] || text;
 }
 
 async function autoTranslate(record, collection) {
   if (!record.name) return;
+  if (recentlyTranslated.has(record.id)) return;
   // Only translate if name changed or translations missing
   if (record.name_tr && record.name_es && record.name_fr) return;
 
@@ -150,10 +155,12 @@ async function autoTranslate(record, collection) {
     } catch (e) { /* skip */ }
   }));
 
+  recentlyTranslated.add(record.id);
   await pbFetch(`/api/collections/${collection}/records/${record.id}`, {
     method: 'PATCH',
     body: JSON.stringify(translations)
   });
+  setTimeout(() => recentlyTranslated.delete(record.id), 30000);
   console.log(`[Hook] Translated to ${Object.keys(translations).length} languages`);
 }
 

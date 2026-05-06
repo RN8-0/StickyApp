@@ -111,20 +111,23 @@
 
     </LinearLayout>
 
+    <!-- Publisher Strip: Shared by + Like/Comment buttons -->
     <LinearLayout
         android:id="@+id/publisherStrip"
         android:layout_width="match_parent"
-        android:layout_height="56dp"
+        android:layout_height="wrap_content"
+        android:minHeight="48dp"
         android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:paddingHorizontal="16dp"
+        android:paddingHorizontal="12dp"
+        android:paddingVertical="6dp"
         android:background="@color/surface"
         android:visibility="gone">
 
         <ImageView
             android:id="@+id/publisherAvatar"
-            android:layout_width="36dp"
-            android:layout_height="36dp"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
             android:src="@drawable/ic_person"
             android:scaleType="centerCrop"
             android:background="@drawable/circle_avatar_bg" />
@@ -154,15 +157,78 @@
 
         </LinearLayout>
 
+        <!-- Like button with count -->
+        <LinearLayout
+            android:id="@+id/btnPackLike"
+            android:layout_width="wrap_content"
+            android:layout_height="32dp"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:background="@drawable/bg_button_outline_rounded"
+            android:paddingHorizontal="10dp"
+            android:layout_marginEnd="8dp"
+            android:clickable="true"
+            android:focusable="true"
+            android:foreground="?selectableItemBackground">
+
+            <ImageView
+                android:layout_width="16dp"
+                android:layout_height="16dp"
+                android:src="@drawable/ic_thumb_up"
+                app:tint="@color/primary" />
+
+            <TextView
+                android:id="@+id/tvPackLikeCount"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="4dp"
+                android:textSize="12sp"
+                android:textColor="@color/primary"
+                android:textStyle="bold" />
+
+        </LinearLayout>
+
+        <!-- Comment button -->
+        <LinearLayout
+            android:id="@+id/btnPackComments"
+            android:layout_width="wrap_content"
+            android:layout_height="32dp"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:background="@drawable/bg_button_outline_rounded"
+            android:paddingHorizontal="10dp"
+            android:clickable="true"
+            android:focusable="true"
+            android:foreground="?selectableItemBackground">
+
+            <ImageView
+                android:layout_width="16dp"
+                android:layout_height="16dp"
+                android:src="@drawable/ic_comment"
+                app:tint="@color/primary" />
+
+            <TextView
+                android:id="@+id/tvPackCommentCount"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="4dp"
+                android:textSize="12sp"
+                android:textColor="@color/primary"
+                android:textStyle="bold" />
+
+        </LinearLayout>
+
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnFollowPublisher"
             android:layout_width="wrap_content"
-            android:layout_height="36dp"
-            android:minWidth="84dp"
+            android:layout_height="32dp"
+            android:minWidth="72dp"
             android:text="Follow"
             android:textAllCaps="false"
-            android:textSize="12sp"
-            app:cornerRadius="18dp" />
+            android:textSize="11sp"
+            app:cornerRadius="16dp"
+            android:layout_marginStart="8dp"
+            android:visibility="gone" />
 
     </LinearLayout>
 
@@ -195,7 +261,9 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:padding="16dp"
+                android:paddingHorizontal="16dp"
+                android:paddingTop="12dp"
+                android:paddingBottom="8dp"
                 android:background="?android:colorBackground">
 
                 <!-- Action Button (Add to WhatsApp / Share) -->
@@ -215,52 +283,12 @@
                     app:iconSize="20dp"
                     app:iconPadding="8dp" />
 
-                <LinearLayout
-                    android:id="@+id/packSocialRow"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="10dp"
-                    android:orientation="horizontal">
-
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btnPackLike"
-                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                        android:layout_width="56dp"
-                        android:layout_height="44dp"
-                        android:layout_marginEnd="8dp"
-                        android:minWidth="56dp"
-                        android:text=""
-                        android:textAllCaps="false"
-                        android:textColor="@color/primary"
-                        app:icon="@drawable/ic_heart"
-                        app:iconGravity="textStart"
-                        app:iconPadding="0dp"
-                        app:iconSize="22dp"
-                        app:iconTint="@color/primary"
-                        app:cornerRadius="12dp"
-                        app:strokeColor="@color/primary"
-                        app:strokeWidth="1dp" />
-
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btnPackComments"
-                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                        android:layout_width="0dp"
-                        android:layout_height="44dp"
-                        android:layout_weight="1"
-                        android:text="@string/comments"
-                        android:textAllCaps="false"
-                        android:textColor="@color/primary"
-                        app:cornerRadius="12dp"
-                        app:strokeColor="@color/primary"
-                        app:strokeWidth="1dp" />
-
-                </LinearLayout>
-
+                <!-- Social summary text -->
                 <TextView
                     android:id="@+id/tvPackSocialSummary"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="6dp"
+                    android:layout_marginTop="8dp"
                     android:gravity="center"
                     android:textColor="@color/text_secondary"
                     android:textSize="12sp" />
@@ -311,8 +339,6 @@
                 </LinearLayout>
 
             </LinearLayout>
-
-
 
             <!-- Related Packs Section -->
             <LinearLayout

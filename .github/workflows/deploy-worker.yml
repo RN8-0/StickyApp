@@ -36,7 +36,7 @@ jobs:
           ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
 
           # Copy updated source files
-          scp -i ~/.ssh/deploy_key -r sticky-worker/routes sticky-worker/server.js sticky-worker/hooks.js sticky-worker/package*.json \
+          scp -i ~/.ssh/deploy_key -r sticky-worker/routes sticky-worker/server.js sticky-worker/hooks.js sticky-worker/package*.json sticky-worker/Dockerfile \
             ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/opt/sticky-worker/
 
           ssh -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
@@ -58,7 +58,7 @@ jobs:
               -e GOOGLE_APPLICATION_CREDENTIALS=/app/firebase-service-account.json \
               -e PB_URL=https://sh3xlf9j7symlj3otlw6s8rx.46.225.95.201.sslip.io \
               -e PB_ADMIN_EMAIL=arainunger@gmail.com \
-              -e PB_ADMIN_PASS=StickyAdmin2026! \
+              -e PB_ADMIN_PASS=${{ secrets.PB_ADMIN_PASS }} \
               -e NTFY_URL=http://sticky-ntfy:80 \
               -v /opt/sticky-worker/firebase-service-account.json:/app/firebase-service-account.json:ro \
               sticky-worker:latest

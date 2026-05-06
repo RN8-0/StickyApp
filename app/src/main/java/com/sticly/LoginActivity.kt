@@ -30,7 +30,11 @@ class LoginActivity : AppCompatActivity() {
         setLoading(false)
         val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
         try {
-            val account = task.getResult(ApiException::class.java)!!
+            val account = task.getResult(ApiException::class.java)
+            if (account == null) {
+                Toast.makeText(this, "Google Error: Account is null", Toast.LENGTH_LONG).show()
+                return@registerForActivityResult
+            }
             val idToken = account.idToken
             if (idToken != null) {
                 firebaseAuthWithGoogle(idToken)

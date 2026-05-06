@@ -577,7 +577,7 @@
     <string name="ai_generation_failed">Generasi gagal. Silakan coba lagi.</string>
     <string name="ai_daily_limit_title">Batas Harian Tercapai</string>
     <string name="ai_daily_limit_msg">Pengguna gratis dapat membuat %d stiker per hari. Tingkatkan ke Premium untuk kreasi tanpa batas!</string>
-    <string name="ai_remaining">%d / %d setiap hari</string>
+    <string name="ai_remaining">%1\$d / %2\$d setiap hari</string>
     <string name="ai_unlimited">Tak terbatas</string>
     <string name="ai_style_cartoon">Kartun</string>
     <string name="ai_style_kawaii">Kawaii</string>

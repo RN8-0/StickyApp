@@ -21,3 +21,11 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Build outputs
+dist/
+dist-ssr
+dist.tar.gz
+build_log.txt
+.firebase/
+

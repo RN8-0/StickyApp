@@ -8,7 +8,5 @@ export default defineConfig({
   build: {
     assetsDir: 'static',
   },
-  server: {
-    headers: {},
-  },
+  server: {},
 })

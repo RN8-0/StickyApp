@@ -114,3 +114,26 @@
 # Unity Ads
 -keep class com.unity3d.ads.** { *; }
 -dontwarn com.unity3d.ads.**
+
+# Shimmer
+-keep class com.facebook.shimmer.** { *; }
+-dontwarn com.facebook.shimmer.**
+
+# BuildConfig (PocketBase URL'leri için)
+-keep class com.sticly.BuildConfig { *; }
+
+# PocketBase / JSON (reflection)
+-keepclassmembers class org.json.** { *; }
+-keep class org.json.** { *; }
+
+# Lottie
+-keep class com.airbnb.lottie.** { *; }
+-dontwarn com.airbnb.lottie.**
+
+# uCrop
+-keep class com.yalantis.ucrop.** { *; }
+-dontwarn com.yalantis.ucrop.**
+
+# PhotoEditor
+-keep class com.burhanrashid52.photoeditor.** { *; }
+-dontwarn com.burhanrashid52.photoeditor.**

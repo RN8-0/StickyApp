@@ -282,7 +282,7 @@ class VideoTrimmerActivity : AppCompatActivity() {
                 "content" -> {
                     // Copy content URI to a temp file for reliable FFmpeg access
                     if (tempInputFile?.exists() == true) {
-                        return tempInputFile!!.absolutePath
+                        return tempInputFile?.absolutePath ?: ""
                     }
                     val tempFile = File(cacheDir, "temp_input.mp4")
                     Log.d(TAG, "Copying content URI to temp file...")

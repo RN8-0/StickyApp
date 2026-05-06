@@ -577,7 +577,7 @@
     <string name="ai_generation_failed">Генерация не удалась. Пожалуйста, попробуйте еще раз.</string>
     <string name="ai_daily_limit_title">Дневной лимит достигнут</string>
     <string name="ai_daily_limit_msg">Пользователи бесплатной версии могут создавать стикеры %d в день. Перейдите на Премиум и получите неограниченное количество творений!</string>
-    <string name="ai_remaining">%d / %d ежедневно</string>
+    <string name="ai_remaining">%1\$d / %2\$d ежедневно</string>
     <string name="ai_unlimited">Безлимитный</string>
     <string name="ai_style_cartoon">мультфильм</string>
     <string name="ai_style_kawaii">Кавайи</string>

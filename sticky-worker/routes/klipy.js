@@ -2,7 +2,7 @@ const { Router } = require('express');
 const fetch = require('node-fetch');
 const router = Router();
 
-const KLIPY_API_KEY = process.env.KLIPY_API_KEY || 'YRtbKLSbrPqeEcPPpIpdoCqlLqZ9LlfbwQhXefbv3FQucQTjREFmkVLExf9JnI8k';
+const KLIPY_API_KEY = process.env.KLIPY_API_KEY;
 
 router.get('/', async (req, res) => {
   try {

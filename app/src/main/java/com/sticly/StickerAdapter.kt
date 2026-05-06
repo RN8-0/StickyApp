@@ -147,17 +147,6 @@ class StickerAdapter(
                     h.img.setImageResource(R.drawable.sticker_placeholder)
                 }
             }
-            // Animated packs must prefer the current remote file over an old static cache.
-            isAnimated && sticker.url.isNotEmpty() -> {
-                glideManager.asDrawable()
-                    .load(sticker.url)
-                    .thumbnail(0.25f)
-                    .placeholder(R.drawable.sticker_placeholder)
-                    .error(R.drawable.sticker_placeholder)
-                    .diskCacheStrategy(DiskCacheStrategy.DATA)
-                    .listener(clearBgListener)
-                    .into(h.img)
-            }
             // 1. Cache'de varsa oradan yükle
             cachedFile.exists() && cachedFile.length() > 0 -> {
                 glideManager.asDrawable()

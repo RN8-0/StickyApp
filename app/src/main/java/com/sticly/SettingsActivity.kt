@@ -212,7 +212,12 @@ class SettingsActivity : AppCompatActivity() {
         if (result.resultCode == RESULT_OK) {
             val task = com.google.android.gms.auth.api.signin.GoogleSignIn.getSignedInAccountFromIntent(result.data)
             try {
-                val account = task.getResult(com.google.android.gms.common.api.ApiException::class.java)!!
+                val account = task.getResult(com.google.android.gms.common.api.ApiException::class.java)
+                if (account == null) {
+                    findViewById<androidx.appcompat.widget.SwitchCompat>(R.id.switchGoogle).isChecked = false
+                    updateLoginSwitches()
+                    return@registerForActivityResult
+                }
                 authWithPocketBase(account)
             } catch (e: com.google.android.gms.common.api.ApiException) {
                 val msg = when (e.statusCode) {

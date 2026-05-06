@@ -577,7 +577,7 @@
     <string name="ai_generation_failed">Thế hệ thất bại. Vui lòng thử lại.</string>
     <string name="ai_daily_limit_title">Đã đạt đến giới hạn hàng ngày</string>
     <string name="ai_daily_limit_msg">Người dùng miễn phí có thể tạo nhãn dán %d mỗi ngày. Nâng cấp lên Premium để sáng tạo không giới hạn!</string>
-    <string name="ai_remaining">%d / %d hàng ngày</string>
+    <string name="ai_remaining">%1\$d / %2\$d hàng ngày</string>
     <string name="ai_unlimited">Không giới hạn</string>
     <string name="ai_style_cartoon">Hoạt hình</string>
     <string name="ai_style_kawaii">dễ thương</string>

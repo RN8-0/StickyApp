@@ -15,9 +15,31 @@ import java.net.URL
 object PocketBaseHelper {
 
     private const val TAG = "PocketBase"
-    const val PB_URL = "https://sh3xlf9j7symlj3otlw6s8rx.46.225.95.201.sslip.io"
-    const val WORKER_URL = "https://sticky-worker.46.225.95.201.sslip.io"
-    const val NTFY_URL = "https://sticky-ntfy.46.225.95.201.sslip.io"
+    
+    /**
+     * URL'ler BuildConfig'ten alınır, yoksa varsayılan kullanılır.
+     * Production'da local.properties veya CI ortam değişkenleri ile override edin.
+     */
+    val PB_URL: String
+        get() {
+            val url = BuildConfig.POCKETBASE_URL
+            return if (url.isNotBlank() && url != "NOT_SET") url 
+                   else "https://sh3xlf9j7symlj3otlw6s8rx.46.225.95.201.sslip.io"
+        }
+    
+    val WORKER_URL: String
+        get() {
+            val url = BuildConfig.WORKER_URL
+            return if (url.isNotBlank() && url != "NOT_SET") url
+                   else "https://sticky-worker.46.225.95.201.sslip.io"
+        }
+    
+    val NTFY_URL: String
+        get() {
+            val url = BuildConfig.NTFY_URL
+            return if (url.isNotBlank() && url != "NOT_SET") url
+                   else "https://sticky-ntfy.46.225.95.201.sslip.io"
+        }
 
     private var authToken: String? = null
     private var authRecordId: String? = null

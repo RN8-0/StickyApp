@@ -512,11 +512,13 @@ class AnimatedStickerActivity : AppCompatActivity() {
             outputFile?.delete()
             val vf = "${cropFilter}scale=$STICKER_SIZE:$STICKER_SIZE:force_original_aspect_ratio=decrease,pad=$STICKER_SIZE:$STICKER_SIZE:-1:-1:color=0x00000000@0x00,fps=$TARGET_FPS${circleAlpha}"
             // Compression level 2 is much faster than 4 or 6
-            val cmd = "-y -i \"${inputFile.absolutePath}\" -vf \"$vf\" -vcodec libwebp -lossless 0 -compression_level 2 -quality $q -loop 0 -preset default -an -pix_fmt yuva420p \"${outputFile!!.absolutePath}\""
+            val outPath = outputFile?.absolutePath ?: return false
+            val cmd = "-y -i \"${inputFile.absolutePath}\" -vf \"$vf\" -vcodec libwebp -lossless 0 -compression_level 2 -quality $q -loop 0 -preset default -an -pix_fmt yuva420p \"$outPath\""
             Log.d(TAG, "FFmpeg cmd: $cmd")
             val session = FFmpegKit.execute(cmd)
             if (ReturnCode.isSuccess(session.returnCode)) {
-                val kb = outputFile!!.length() / 1024
+                val outFile = outputFile ?: return false
+                val kb = outFile.length() / 1024
                 Log.d(TAG, "Output size: ${kb}KB at q=$q")
                 if (kb <= MAX_FILE_SIZE_KB) ok = true else q -= 25
             } else {
@@ -525,10 +527,12 @@ class AnimatedStickerActivity : AppCompatActivity() {
             }
         }
 
-        if (!ok && outputFile?.exists() == true && outputFile!!.length() / 1024 > MAX_FILE_SIZE_KB) {
-            outputFile?.delete()
+        val outFile = outputFile
+        if (!ok && outFile?.exists() == true && outFile.length() / 1024 > MAX_FILE_SIZE_KB) {
+            outFile.delete()
             val vf = "${cropFilter}scale=$STICKER_SIZE:$STICKER_SIZE:force_original_aspect_ratio=decrease,pad=$STICKER_SIZE:$STICKER_SIZE:-1:-1:color=0x00000000@0x00,fps=10${circleAlpha}"
-            val cmd = "-y -i \"${inputFile.absolutePath}\" -vf \"$vf\" -vcodec libwebp -lossless 0 -compression_level 6 -quality 20 -loop 0 -preset default -an -pix_fmt yuva420p \"${outputFile!!.absolutePath}\""
+            val fallbackPath = outputFile?.absolutePath ?: return false
+            val cmd = "-y -i \"${inputFile.absolutePath}\" -vf \"$vf\" -vcodec libwebp -lossless 0 -compression_level 6 -quality 20 -loop 0 -preset default -an -pix_fmt yuva420p \"$fallbackPath\""
             ok = ReturnCode.isSuccess(FFmpegKit.execute(cmd).returnCode)
         }
         return ok && outputFile?.exists() == true

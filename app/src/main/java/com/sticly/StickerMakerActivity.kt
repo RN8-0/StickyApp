@@ -480,7 +480,7 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
     private fun launchCamera() {
         val photoFile = File(cacheDir, "camera_${System.currentTimeMillis()}.jpg")
         cameraImageUri = FileProvider.getUriForFile(this, "$packageName.provider", photoFile)
-        cameraLauncher.launch(cameraImageUri!!)
+        cameraImageUri?.let { cameraLauncher.launch(it) } ?: return
     }
 
     private fun startCropFromUri(uri: Uri) {
@@ -576,7 +576,7 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
         try {
             val bitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                 val source = if (uri.scheme == "file") {
-                    ImageDecoder.createSource(java.io.File(uri.path!!))
+                    ImageDecoder.createSource(java.io.File(uri.path ?: return))
                 } else {
                     ImageDecoder.createSource(contentResolver, uri)
                 }

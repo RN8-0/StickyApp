@@ -577,7 +577,7 @@
     <string name="ai_generation_failed">一代失败。请再试一次。</string>
     <string name="ai_daily_limit_title">已达到每日限额</string>
     <string name="ai_daily_limit_msg">免费用户每天可以创建 %d 贴纸。升级到高级版即可无限创作！</string>
-    <string name="ai_remaining">每天 %d / %d</string>
+    <string name="ai_remaining">每天 %1\$d / %2\$d</string>
     <string name="ai_unlimited">无限</string>
     <string name="ai_style_cartoon">卡通片</string>
     <string name="ai_style_kawaii">卡哇伊</string>

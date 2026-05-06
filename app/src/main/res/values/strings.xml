@@ -18,6 +18,7 @@
     <string name="faq_content">How to add stickers?\nSelect a pack and click the \"Add to WhatsApp\" button.\n\nWhy aren\'t stickers being added?\nMake sure WhatsApp is up to date.\n\nHow many stickers can I add?\nYou can add as many packs as you want.</string>
     <string name="ok">OK</string>
     <string name="cancel">Cancel</string>
+    <string name="delete">Delete</string>
 
     <!-- Drawer Menu -->
     <string name="contact_us">Contact Us</string>
@@ -749,6 +750,8 @@
     <string name="likes_short">likes</string>
     <string name="reply">Reply</string>
     <string name="reply_to_user">Reply to %1$s</string>
+    <string name="just_now">Just now</string>
+    <string name="be_first_to_comment">Be the first to comment</string>
     <string name="profile_share_pack">Share pack in app</string>
     <string name="profile_my_published_packs">My Published Packs</string>
     <string name="profile_no_packs">You haven\'t published any packs yet.\nTap \"Share pack in app\" to publish your first pack!</string>
@@ -759,7 +762,7 @@
     <string name="profile_loading">Loading profile…</string>
 
     <!-- Submit Pack -->
-    <string name="submit_pack_title">Share pack in app</string>
+    <string name="submit_pack_title">Share pack in Sticky</string>
     <string name="submit_pack_name_hint">Pack Name</string>
     <string name="submit_category_label">Category</string>
     <string name="submit_category_hint">Choose where this pack should appear in the app.</string>

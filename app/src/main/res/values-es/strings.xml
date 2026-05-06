@@ -577,7 +577,7 @@
     <string name="ai_generation_failed">La generación fracasó. Por favor inténtalo de nuevo.</string>
     <string name="ai_daily_limit_title">Límite diario alcanzado</string>
     <string name="ai_daily_limit_msg">Los usuarios gratuitos pueden crear %d stickers por día. ¡Actualiza a Premium para creaciones ilimitadas!</string>
-    <string name="ai_remaining">%d / %d diario</string>
+    <string name="ai_remaining">%1\$d / %2\$d diario</string>
     <string name="ai_unlimited">Ilimitado</string>
     <string name="ai_style_cartoon">Dibujos animados</string>
     <string name="ai_style_kawaii">kawaii</string>

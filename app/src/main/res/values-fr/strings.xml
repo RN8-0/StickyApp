@@ -577,7 +577,7 @@
     <string name="ai_generation_failed">La génération a échoué. Veuillez réessayer.</string>
     <string name="ai_daily_limit_title">Limite quotidienne atteinte</string>
     <string name="ai_daily_limit_msg">Les utilisateurs gratuits peuvent créer %d autocollants par jour. Passez à Premium pour des créations illimitées !</string>
-    <string name="ai_remaining">%d / %d quotidiennement</string>
+    <string name="ai_remaining">%1\$d / %2\$d quotidiennement</string>
     <string name="ai_unlimited">Illimité</string>
     <string name="ai_style_cartoon">Dessin animé</string>
     <string name="ai_style_kawaii">Kawaii</string>

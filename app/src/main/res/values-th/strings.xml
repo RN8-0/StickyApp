@@ -577,7 +577,7 @@
     <string name="ai_generation_failed">การสร้างล้มเหลว โปรดลองอีกครั้ง</string>
     <string name="ai_daily_limit_title">ถึงขีดจำกัดรายวันแล้ว</string>
     <string name="ai_daily_limit_msg">ผู้ใช้ฟรีสามารถสร้างสติกเกอร์ %d ต่อวัน อัปเกรดเป็นพรีเมียมเพื่อการสร้างสรรค์ไม่จำกัด!</string>
-    <string name="ai_remaining">%d / %d ทุกวัน</string>
+    <string name="ai_remaining">%1\$d / %2\$d ทุกวัน</string>
     <string name="ai_unlimited">ไม่จำกัด</string>
     <string name="ai_style_cartoon">การ์ตูน</string>
     <string name="ai_style_kawaii">คาวาอิ</string>

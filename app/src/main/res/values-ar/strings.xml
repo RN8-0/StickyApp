@@ -577,7 +577,7 @@
     <string name="ai_generation_failed">فشل الجيل. يرجى المحاولة مرة أخرى.</string>
     <string name="ai_daily_limit_title">تم الوصول إلى الحد اليومي</string>
     <string name="ai_daily_limit_msg">يمكن للمستخدمين المجانيين إنشاء ملصقات %d يوميًا. قم بالترقية إلى Premium للحصول على إبداعات غير محدودة!</string>
-    <string name="ai_remaining">%d / %d يوميًا</string>
+    <string name="ai_remaining">%1\$d / %2\$d يوميًا</string>
     <string name="ai_unlimited">غير محدود</string>
     <string name="ai_style_cartoon">كارتون</string>
     <string name="ai_style_kawaii">كاواي</string>

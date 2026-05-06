@@ -297,13 +297,19 @@ class PackAdapter(
 
         h.name?.text = pack.localizedName
 
-        // Yayıncı + çıkartma sayısı + indirme sayısı tek satırda
+        // Yayıncı + çıkartma sayısı + indirme sayısı + like + view tek satırda
         val stickerCount = pack.stickers.size
-        val pubText = StringBuilder(pack.pub.length + 40)
+        val pubText = StringBuilder(pack.pub.length + 60)
         pubText.append(pack.pub)
         pubText.append(" • ").append(stickerCount).append(" stickers")
         if (pack.downloadCount > 0) {
             pubText.append(" • ").append(formatDownloadCount(pack.downloadCount)).append(" downloads")
+        }
+        if (pack.likeCount > 0) {
+            pubText.append(" • ").append(formatCompactNumber(pack.likeCount)).append(" likes")
+        }
+        if (pack.viewCount > 0) {
+            pubText.append(" • ").append(formatCompactNumber(pack.viewCount)).append(" views")
         }
         h.pub?.text = pubText
 
@@ -603,6 +609,14 @@ class PackAdapter(
     }
 
     private fun formatDownloadCount(count: Int): String {
+        return when {
+            count >= 1000000 -> String.format("%.1fM", count / 1000000.0)
+            count >= 1000 -> String.format("%.1fK", count / 1000.0)
+            else -> count.toString()
+        }
+    }
+
+    private fun formatCompactNumber(count: Int): String {
         return when {
             count >= 1000000 -> String.format("%.1fM", count / 1000000.0)
             count >= 1000 -> String.format("%.1fK", count / 1000.0)
