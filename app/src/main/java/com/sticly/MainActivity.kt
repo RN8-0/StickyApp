@@ -776,7 +776,7 @@ class MainActivity : AppCompatActivity() {
                 toolbarSubtitle.visibility = View.GONE
                 categoryChipGroup.visibility = View.VISIBLE
                 showHomeSections()
-                (mainContent.getChildAt(0) as? com.google.android.material.appbar.AppBarLayout)?.setExpanded(true, false)
+                ((mainContent as? android.view.ViewGroup)?.getChildAt(0) as? com.google.android.material.appbar.AppBarLayout)?.setExpanded(true, false)
             }
             FilterType.FAVORITES -> {
                 searchBarLayoutCached?.visibility = View.VISIBLE
@@ -812,7 +812,7 @@ class MainActivity : AppCompatActivity() {
                 toolbarSubtitle.text = getString(R.string.your_stickers)
                 categoryChipGroup.visibility = View.GONE
                 hideHomeSections()
-                (mainContent.getChildAt(0) as? com.google.android.material.appbar.AppBarLayout)?.setExpanded(false, false)
+                ((mainContent as? android.view.ViewGroup)?.getChildAt(0) as? com.google.android.material.appbar.AppBarLayout)?.setExpanded(false, false)
             }
             else -> {
                 searchBarLayoutCached?.visibility = View.VISIBLE

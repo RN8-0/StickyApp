@@ -53,9 +53,7 @@ class SubmitPackActivity : AppCompatActivity() {
         sourcePackId: String,
         userId: String,
         userEmail: String,
-        deviceId: String,
-        signature: String,
-        stickerCount: Int
+        deviceId: String
     ) {
         val records = runCatching {
             PocketBaseHelper.listAllRecords(
@@ -243,7 +241,7 @@ class SubmitPackActivity : AppCompatActivity() {
                         throw IllegalStateException(getString(R.string.publish_pack_count_range))
                     }
                     val sourceSignature = buildPackSignature(stickerFiles)
-                    ensurePackCanBeSubmittedAgain(packId, userId, email, deviceId, sourceSignature, stickerFiles.size)
+                    ensurePackCanBeSubmittedAgain(packId, userId, email, deviceId)
 
                     val uploadFiles = stickerFiles.mapIndexed { index, file ->
                         PocketBaseHelper.UploadFile("images", "sticker_${index + 1}.webp", "image/webp", file.readBytes())
