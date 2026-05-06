@@ -158,11 +158,14 @@ class SubmitPackActivity : AppCompatActivity() {
                 text = getString(stringRes)
                 isCheckable = true
                 isCheckedIconVisible = false
-                minHeight = resources.getDimensionPixelSize(R.dimen.chip_min_height)
-                chipCornerRadius = 22.dp().toFloat()
-                chipStartPadding = 12.dp().toFloat()
-                chipEndPadding = 12.dp().toFloat()
-                textSize = 13f
+                minHeight = 32.dp()
+                chipMinHeight = 32.dp().toFloat()
+                chipCornerRadius = 16.dp().toFloat()
+                chipStartPadding = 8.dp().toFloat()
+                chipEndPadding = 8.dp().toFloat()
+                textStartPadding = 0f
+                textEndPadding = 0f
+                textSize = 11.5f
                 tag = category
                 setOnCheckedChangeListener { _, checked -> styleCategoryChip(this, checked) }
             }
