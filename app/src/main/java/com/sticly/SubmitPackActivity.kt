@@ -13,8 +13,9 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.lifecycleScope
-import androidx.recyclerview.widget.LinearLayoutManager
-import androidx.recyclerview.widget.RecyclerView
+import android.widget.ArrayAdapter
+import android.widget.AdapterView
+import android.widget.Spinner
 import com.bumptech.glide.Glide
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.card.MaterialCardView
@@ -36,11 +37,10 @@ class SubmitPackActivity : AppCompatActivity() {
 
     private lateinit var etPackName: TextInputEditText
     private lateinit var chipGroupCategory: ChipGroup
-    private lateinit var rvStickerUpload: RecyclerView
+    private lateinit var spinnerPack: Spinner
     private lateinit var btnSubmitPack: MaterialButton
 
     private var selectedPackId: String? = null
-    private var packAdapter: SelectablePackAdapter? = null
     private var isSubmitting = false
     private val minStoreStickerCount = 9
     private val maxStoreStickerCount = 30
@@ -141,14 +141,14 @@ class SubmitPackActivity : AppCompatActivity() {
     private fun initViews() {
         etPackName = findViewById(R.id.etPackName)
         chipGroupCategory = findViewById(R.id.chipGroupCategory)
-        rvStickerUpload = findViewById(R.id.rvStickerUpload)
+        spinnerPack = findViewById(R.id.spinnerPack)
         btnSubmitPack = findViewById(R.id.btnSubmitPack)
 
         findViewById<View>(R.id.btnBack).setOnClickListener { finish() }
 
         window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS)
         window.addFlags(android.view.WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
-        window.statusBarColor = androidx.core.content.ContextCompat.getColor(this, R.color.toolbar_bg)
+        window.statusBarColor = androidx.core.content.ContextCompat.getColor(this, R.color.white)
     }
 
     private fun setupCategories() {
@@ -187,20 +187,29 @@ class SubmitPackActivity : AppCompatActivity() {
 
     private fun loadMyPacks() {
         val packs = CustomStickerManager.getCustomPacks(this)
-        packAdapter = SelectablePackAdapter(packs) { pack ->
-            selectedPackId = pack.id
-            etPackName.setText(pack.name)
+        val packNames = packs.map { it.name }
+        val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, packNames)
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        spinnerPack.adapter = adapter
+
+        spinnerPack.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>, view: View?, position: Int, id: Long) {
+                val pack = packs[position]
+                selectedPackId = pack.id
+                etPackName.setText(pack.name)
+            }
+            override fun onNothingSelected(parent: AdapterView<*>) {}
         }
-        rvStickerUpload.layoutManager = LinearLayoutManager(this)
-        rvStickerUpload.adapter = packAdapter
 
         // Pre-select pack if launched from DetailsActivity
         val preselectedPackId = intent.getStringExtra("packId")
         if (preselectedPackId != null) {
-            selectedPackId = preselectedPackId
-            packAdapter?.selectPack(preselectedPackId)
-            val pack = packs.firstOrNull { it.id == preselectedPackId }
-            if (pack != null) etPackName.setText(pack.name)
+            val index = packs.indexOfFirst { it.id == preselectedPackId }
+            if (index >= 0) {
+                spinnerPack.setSelection(index)
+                selectedPackId = preselectedPackId
+                etPackName.setText(packs[index].name)
+            }
         }
     }
 
@@ -316,60 +325,8 @@ class SubmitPackActivity : AppCompatActivity() {
                 ).show()
                 isSubmitting = false
                 btnSubmitPack.isEnabled = true
-                btnSubmitPack.text = getString(R.string.submit_pack_button)
+                btnSubmitPack.text = "Share pack in Sticky"
             }
         }
-    }
-
-    inner class SelectablePackAdapter(
-        private val packs: List<CustomStickerManager.CustomPack>,
-        private val onSelect: (CustomStickerManager.CustomPack) -> Unit
-    ) : RecyclerView.Adapter<SelectablePackAdapter.VH>() {
-
-        private var selectedId: String? = null
-
-        fun selectPack(packId: String) {
-            selectedId = packId
-            notifyDataSetChanged()
-        }
-
-        inner class VH(view: View) : RecyclerView.ViewHolder(view) {
-            val card: MaterialCardView = view.findViewById(R.id.packSelectionCard)
-            val cover: ImageView = view.findViewById(R.id.ivPackCover)
-            val name: TextView = view.findViewById(R.id.tvPackName)
-            val meta: TextView = view.findViewById(R.id.tvPackMeta)
-            val checkmark: ImageView = view.findViewById(R.id.ivSelected)
-        }
-
-        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
-            val view = LayoutInflater.from(parent.context)
-                .inflate(R.layout.item_selectable_pack, parent, false)
-            return VH(view)
-        }
-
-        override fun onBindViewHolder(holder: VH, position: Int) {
-            val pack = packs[position]
-            val isSelected = pack.id == selectedId
-
-            holder.name.text = pack.name
-            holder.meta.text = "${pack.stickerCount} stickers"
-
-            val trayFile = File(filesDir, "custom_stickers/${pack.id}/tray.webp")
-            if (trayFile.exists()) {
-                Glide.with(holder.cover.context).load(trayFile).centerCrop().into(holder.cover)
-            } else {
-                holder.cover.setImageResource(R.drawable.ic_sticker)
-            }
-
-            holder.checkmark.visibility = if (isSelected) View.VISIBLE else View.GONE
-            holder.card.strokeWidth = if (isSelected) 3 else 0
-            holder.card.setOnClickListener {
-                selectedId = pack.id
-                notifyDataSetChanged()
-                onSelect(pack)
-            }
-        }
-
-        override fun getItemCount(): Int = packs.size
     }
 }
