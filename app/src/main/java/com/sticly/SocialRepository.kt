@@ -107,6 +107,8 @@ object SocialRepository {
         }
         runCatching { postJson("/api/social/comments", payload) }.getOrElse {
             val created = PocketBaseHelper.createRecord("pack_comments", JSONObject(payload.toString()).apply {
+                put("packId", pack.id)
+                put("storage_path", pack.storagePath)
                 put("like_count", 0)
                 put("created_at", java.time.Instant.now().toString())
             })
@@ -127,7 +129,7 @@ object SocialRepository {
             put("photo_url", viewer.photoUrl)
         }) }.getOrElse {
             val liked = toggleLocalLike(context, pack.id)
-            JSONObject().put("liked", liked).put("like_count", pack.likeCount + if (liked) 1 else -1)
+            JSONObject().put("liked", liked)
         }
     }
 
@@ -146,7 +148,7 @@ object SocialRepository {
     suspend fun addCommentReply(context: Context, commentId: String, packId: String, body: String): JSONObject = withContext(Dispatchers.IO) {
         requireSignedIn(context)
         val viewer = currentUser(context)
-        postJson("/api/social/comments/reply", JSONObject().apply {
+        val payload = JSONObject().apply {
             put("comment_id", commentId)
             put("pack_id", packId)
             put("user_id", viewer.id)
@@ -154,7 +156,15 @@ object SocialRepository {
             put("display_name", viewer.name.ifBlank { viewer.email })
             put("photo_url", viewer.photoUrl)
             put("body", body)
-        })
+        }
+        runCatching { postJson("/api/social/comments/reply", payload) }.getOrElse {
+            val created = PocketBaseHelper.createRecord("comment_replies", JSONObject(payload.toString()).apply {
+                put("packId", packId)
+                put("like_count", 0)
+                put("created_at", java.time.Instant.now().toString())
+            })
+            JSONObject().put("reply", created)
+        }
     }
 
     suspend fun toggleReplyLike(context: Context, replyId: String, packId: String): JSONObject = withContext(Dispatchers.IO) {

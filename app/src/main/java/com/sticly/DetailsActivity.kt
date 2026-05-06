@@ -975,7 +975,6 @@ class DetailsActivity : AppCompatActivity() {
         tvLikeCount?.text = formatCompactNumber(currentPackLikeCount)
         tvCommentCount?.text = formatCompactNumber(currentPackCommentCount)
 
-        // Like visual state
         applyLikeVisualToLayout(likeBtn, false)
 
         likeBtn?.setOnClickListener {
@@ -987,14 +986,17 @@ class DetailsActivity : AppCompatActivity() {
                     .onSuccess { result ->
                         val liked = result.optBoolean("liked", false)
                         applyLikeVisualToLayout(likeBtn, liked)
-                        // Use server count if available, otherwise compute from tracked count
                         val serverCount = result.optInt("like_count", -1)
-                        if (serverCount >= 0) {
+                        val previousCount = currentPackLikeCount
+                        currentPackLikeCount = if (serverCount >= 0 && kotlin.math.abs(serverCount - previousCount) <= 1) {
+                            serverCount
+                        } else if (serverCount >= 0 && previousCount == 0 && liked && serverCount == 2) {
+                            1
+                        } else if (serverCount >= 0 && previousCount > 0) {
                             currentPackLikeCount = serverCount
+                            serverCount
                         } else {
-                            // Fallback: adjust tracked count based on toggle direction
-                            currentPackLikeCount += if (liked) 1 else -1
-                            if (currentPackLikeCount < 0) currentPackLikeCount = 0
+                            (previousCount + if (liked) 1 else -1).coerceAtLeast(0)
                         }
                         tvLikeCount?.text = formatCompactNumber(currentPackLikeCount)
                     }
@@ -1022,7 +1024,7 @@ class DetailsActivity : AppCompatActivity() {
         layout ?: return
         val icon = layout.getChildAt(0) as? ImageView
         val text = layout.getChildAt(1) as? TextView
-        val color = ContextCompat.getColor(this, if (liked) R.color.danger else R.color.primary)
+        val color = ContextCompat.getColor(this, if (liked) R.color.primary else R.color.text_hint)
         icon?.setColorFilter(color)
         text?.setTextColor(color)
     }
@@ -1047,7 +1049,7 @@ class DetailsActivity : AppCompatActivity() {
         }
 
     private fun applyLikeVisual(button: MaterialButton, liked: Boolean) {
-        val color = ContextCompat.getColor(this, if (liked) R.color.danger else R.color.primary)
+        val color = ContextCompat.getColor(this, if (liked) R.color.primary else R.color.text_hint)
         button.iconTint = ColorStateList.valueOf(color)
         button.strokeColor = ColorStateList.valueOf(color)
         button.rippleColor = ColorStateList.valueOf(color)
@@ -1078,6 +1080,7 @@ class DetailsActivity : AppCompatActivity() {
 
     private fun showCommentsSheet(pack: Pack) {
         val sheet = BottomSheetDialog(this, R.style.TransparentBottomSheetDialog)
+        sheet.window?.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
         val view = layoutInflater.inflate(R.layout.sheet_comments, null)
 
         val commentsContainer = view.findViewById<LinearLayout>(R.id.commentsContainer)
@@ -1097,6 +1100,8 @@ class DetailsActivity : AppCompatActivity() {
         val photoUrl = currentUser?.photoUrl?.toString()
         if (!photoUrl.isNullOrBlank()) {
             Glide.with(this).load(photoUrl).circleCrop().placeholder(R.drawable.ic_person).into(ivInputAvatar)
+        } else {
+            ivInputAvatar.setColorFilter(ContextCompat.getColor(this, R.color.modern_primary))
         }
 
         var replyToCommentId: String? = null
@@ -1127,6 +1132,8 @@ class DetailsActivity : AppCompatActivity() {
                     .onSuccess { comments ->
                         loadingFrame.visibility = View.GONE
                         tvCommentCount.text = comments.length().toString()
+                        currentPackCommentCount = comments.length()
+                        findViewById<TextView>(R.id.tvPackCommentCount)?.text = formatCompactNumber(currentPackCommentCount)
                         bindComments(commentsContainer, comments, pack.id) { commentId, author ->
                             replyToCommentId = commentId
                             tvReplyingTo.text = getString(R.string.reply_to_user, author)
@@ -1161,7 +1168,7 @@ class DetailsActivity : AppCompatActivity() {
                     updateSendButton()
                     refreshComments()
                     currentPackCommentCount++
-                    setupPackSocialActions(pack)
+                    findViewById<TextView>(R.id.tvPackCommentCount)?.text = formatCompactNumber(currentPackCommentCount)
                 }.onFailure { showThemedSnackbar(it.message ?: getString(R.string.error_generic)) }
                 btnSend.isEnabled = true
                 btnSend.alpha = 1f
@@ -1175,11 +1182,12 @@ class DetailsActivity : AppCompatActivity() {
             bottomSheet?.let {
                 val behavior = com.google.android.material.bottomsheet.BottomSheetBehavior.from(it)
                 it.background = ContextCompat.getDrawable(this, R.drawable.bg_bottom_sheet_white_rounded)
-                behavior.peekHeight = (resources.displayMetrics.heightPixels * 0.55).toInt()
-                behavior.isFitToContents = false
-                behavior.halfExpandedRatio = 0.55f
-                behavior.skipCollapsed = false
-                behavior.state = com.google.android.material.bottomsheet.BottomSheetBehavior.STATE_HALF_EXPANDED
+                val sheetHeight = (resources.displayMetrics.heightPixels * 0.48).toInt()
+                it.layoutParams = it.layoutParams.apply { height = sheetHeight }
+                behavior.peekHeight = sheetHeight
+                behavior.isFitToContents = true
+                behavior.skipCollapsed = true
+                behavior.state = com.google.android.material.bottomsheet.BottomSheetBehavior.STATE_EXPANDED
             }
         }
         sheet.show()
@@ -1222,7 +1230,7 @@ class DetailsActivity : AppCompatActivity() {
         tvLikeCount.text = if (likeCount > 0) likeCount.toString() else ""
         tvTime.text = formatRelativeTime(comment.optString("created_at", comment.optString("created", "")))
 
-        val likeColor = if (isLiked) R.color.danger else R.color.text_hint
+        val likeColor = if (isLiked) R.color.primary else R.color.text_hint
         ivLikeIcon.setColorFilter(ContextCompat.getColor(this, likeColor))
         tvLikeCount.setTextColor(ContextCompat.getColor(this, likeColor))
 
@@ -1237,7 +1245,7 @@ class DetailsActivity : AppCompatActivity() {
                     .onSuccess { result ->
                         val nowLiked = result.optBoolean("liked", false)
                         likeCount = result.optInt("like_count", likeCount)
-                        val color = if (nowLiked) R.color.danger else R.color.text_hint
+                        val color = if (nowLiked) R.color.primary else R.color.text_hint
                         ivLikeIcon.setColorFilter(ContextCompat.getColor(this@DetailsActivity, color))
                         tvLikeCount.setTextColor(ContextCompat.getColor(this@DetailsActivity, color))
                         tvLikeCount.text = if (likeCount > 0) likeCount.toString() else ""
@@ -1281,7 +1289,7 @@ class DetailsActivity : AppCompatActivity() {
         tvLikeCount.text = if (replyLikeCount > 0) replyLikeCount.toString() else ""
         tvTime.text = formatRelativeTime(item.optString("created_at", item.optString("created", "")))
 
-        val likeColor = if (replyLiked) R.color.danger else R.color.text_hint
+        val likeColor = if (replyLiked) R.color.primary else R.color.text_hint
         ivLikeIcon.setColorFilter(ContextCompat.getColor(this, likeColor))
         tvLikeCount.setTextColor(ContextCompat.getColor(this, likeColor))
 
@@ -1296,7 +1304,7 @@ class DetailsActivity : AppCompatActivity() {
                     .onSuccess { res ->
                         val nowLiked = res.optBoolean("liked", false)
                         replyLikeCount = res.optInt("like_count", replyLikeCount)
-                        val color = if (nowLiked) R.color.danger else R.color.text_hint
+                        val color = if (nowLiked) R.color.primary else R.color.text_hint
                         ivLikeIcon.setColorFilter(ContextCompat.getColor(this@DetailsActivity, color))
                         tvLikeCount.setTextColor(ContextCompat.getColor(this@DetailsActivity, color))
                         tvLikeCount.text = if (replyLikeCount > 0) replyLikeCount.toString() else ""

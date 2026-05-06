@@ -141,7 +141,6 @@ class SubmitPackActivity : AppCompatActivity() {
     private fun initViews() {
         etPackName = findViewById(R.id.etPackName)
         chipGroupCategory = findViewById(R.id.chipGroupCategory)
-        spinnerPack = findViewById(R.id.spinnerPack)
         btnSubmitPack = findViewById(R.id.btnSubmitPack)
 
         findViewById<View>(R.id.btnBack).setOnClickListener { finish() }
