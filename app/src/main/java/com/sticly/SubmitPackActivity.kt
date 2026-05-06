@@ -75,13 +75,7 @@ class SubmitPackActivity : AppCompatActivity() {
             userKeys.any { ownerKeys.contains(it) }
         }
 
-        val unchanged = matching.any { record ->
-            val previousSignature = record.optString("note").substringAfter("source_signature=", "")
-            val previousCount = record.optInt("sticker_count", 0)
-            previousSignature == signature || (previousSignature.isBlank() && previousCount == stickerCount)
-        }
-
-        if (unchanged) throw IllegalStateException(getString(R.string.publish_pack_already_submitted))
+        if (matching.isNotEmpty()) throw IllegalStateException(getString(R.string.publish_pack_already_submitted))
     }
 
     private val categories = listOf(

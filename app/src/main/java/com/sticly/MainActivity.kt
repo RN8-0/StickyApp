@@ -776,6 +776,7 @@ class MainActivity : AppCompatActivity() {
                 toolbarSubtitle.visibility = View.GONE
                 categoryChipGroup.visibility = View.VISIBLE
                 showHomeSections()
+                (mainContent.getChildAt(0) as? com.google.android.material.appbar.AppBarLayout)?.setExpanded(true, false)
             }
             FilterType.FAVORITES -> {
                 searchBarLayoutCached?.visibility = View.VISIBLE
@@ -811,6 +812,7 @@ class MainActivity : AppCompatActivity() {
                 toolbarSubtitle.text = getString(R.string.your_stickers)
                 categoryChipGroup.visibility = View.GONE
                 hideHomeSections()
+                (mainContent.getChildAt(0) as? com.google.android.material.appbar.AppBarLayout)?.setExpanded(false, false)
             }
             else -> {
                 searchBarLayoutCached?.visibility = View.VISIBLE
@@ -2168,7 +2170,7 @@ Rules:
 
                 val stats = social.optJSONObject("stats")
                 withContext(Dispatchers.Main) {
-                    profileSocialJson = social
+                    if (social.length() > 0) profileSocialJson = social
                     stats?.let {
                         findViewById<TextView>(R.id.statPublished)?.text = it.optInt("packs", 0).toString()
                         findViewById<TextView>(R.id.statDownloads)?.text = it.optInt("followers", 0).toString()
@@ -2246,6 +2248,7 @@ Rules:
                 val approvedCount = items.count { it.status == "approved" }
                 val stats = social.optJSONObject("stats")
                 withContext(Dispatchers.Main) {
+                    if (social.length() > 0 && profileSocialJson == null) profileSocialJson = social
                     if (items.isEmpty()) {
                         rv?.visibility = View.GONE
                         emptyState?.visibility = View.VISIBLE

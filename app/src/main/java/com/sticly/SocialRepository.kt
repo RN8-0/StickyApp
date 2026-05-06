@@ -82,9 +82,11 @@ object SocialRepository {
 
     suspend fun fetchComments(context: Context, packId: String): JSONArray = withContext(Dispatchers.IO) {
         val viewer = currentUser(context)
-        runCatching {
+        val workerResult = runCatching {
             getJson("/api/social/comments", mapOf("packId" to packId, "viewerId" to viewer.id, "viewerEmail" to viewer.email)).optJSONArray("comments") ?: JSONArray()
-        }.getOrElse { fetchCommentsFromPocketBase(packId, viewer) }
+        }.getOrNull()
+        if (workerResult != null && workerResult.length() > 0) workerResult
+        else runCatching { fetchCommentsFromPocketBase(packId, viewer) }.getOrDefault(workerResult ?: JSONArray())
     }
 
     suspend fun fetchPackSocial(context: Context, packId: String): JSONObject = withContext(Dispatchers.IO) {
