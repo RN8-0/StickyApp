@@ -13,9 +13,6 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.lifecycleScope
-import android.widget.ArrayAdapter
-import android.widget.AdapterView
-import android.widget.Spinner
 import com.bumptech.glide.Glide
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.card.MaterialCardView
@@ -37,7 +34,6 @@ class SubmitPackActivity : AppCompatActivity() {
 
     private lateinit var etPackName: TextInputEditText
     private lateinit var chipGroupCategory: ChipGroup
-    private lateinit var spinnerPack: Spinner
     private lateinit var btnSubmitPack: MaterialButton
 
     private var selectedPackId: String? = null
@@ -121,8 +117,8 @@ class SubmitPackActivity : AppCompatActivity() {
 
         setupEdgeToEdge()
         initViews()
+        loadSelectedPack()
         setupCategories()
-        loadMyPacks()
         setupButtons()
     }
 
@@ -187,32 +183,17 @@ class SubmitPackActivity : AppCompatActivity() {
 
     private fun Int.dp(): Int = (this * resources.displayMetrics.density).toInt()
 
-    private fun loadMyPacks() {
+    private fun loadSelectedPack() {
         val packs = CustomStickerManager.getCustomPacks(this)
-        val packNames = packs.map { it.name }
-        val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, packNames)
-        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-        spinnerPack.adapter = adapter
-
-        spinnerPack.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(parent: AdapterView<*>, view: View?, position: Int, id: Long) {
-                val pack = packs[position]
-                selectedPackId = pack.id
-                etPackName.setText(pack.name)
-            }
-            override fun onNothingSelected(parent: AdapterView<*>) {}
-        }
-
-        // Pre-select pack if launched from DetailsActivity
         val preselectedPackId = intent.getStringExtra("packId")
-        if (preselectedPackId != null) {
-            val index = packs.indexOfFirst { it.id == preselectedPackId }
-            if (index >= 0) {
-                spinnerPack.setSelection(index)
-                selectedPackId = preselectedPackId
-                etPackName.setText(packs[index].name)
-            }
+        val pack = packs.firstOrNull { it.id == preselectedPackId }
+        if (pack == null) {
+            Toast.makeText(this, getString(R.string.submit_select_pack_required), Toast.LENGTH_SHORT).show()
+            finish()
+            return
         }
+        selectedPackId = pack.id
+        etPackName.setText(pack.name)
     }
 
     private fun setupButtons() {

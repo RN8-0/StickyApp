@@ -98,17 +98,18 @@ object SocialRepository {
         val viewer = currentUser(context)
         val payload = JSONObject().apply {
             put("pack_id", pack.id)
+            put("packId", pack.id)
             put("collection", pack.storagePath)
+            put("storage_path", pack.storagePath)
             put("user_id", viewer.id)
             put("user_email", viewer.email)
             put("display_name", viewer.name.ifBlank { viewer.email })
             put("photo_url", viewer.photoUrl)
             put("body", body)
         }
-        runCatching { postJson("/api/social/comments", payload) }.getOrElse {
+        runCatching { postJson("/api/social/comments", payload) }.getOrElse { workerError ->
+            android.util.Log.w("SocialRepository", "Worker comment create failed, using PocketBase fallback: ${workerError.message}")
             val created = PocketBaseHelper.createRecord("pack_comments", JSONObject(payload.toString()).apply {
-                put("packId", pack.id)
-                put("storage_path", pack.storagePath)
                 put("like_count", 0)
                 put("created_at", java.time.Instant.now().toString())
             })
@@ -151,15 +152,16 @@ object SocialRepository {
         val payload = JSONObject().apply {
             put("comment_id", commentId)
             put("pack_id", packId)
+            put("packId", packId)
             put("user_id", viewer.id)
             put("user_email", viewer.email)
             put("display_name", viewer.name.ifBlank { viewer.email })
             put("photo_url", viewer.photoUrl)
             put("body", body)
         }
-        runCatching { postJson("/api/social/comments/reply", payload) }.getOrElse {
+        runCatching { postJson("/api/social/comments/reply", payload) }.getOrElse { workerError ->
+            android.util.Log.w("SocialRepository", "Worker reply create failed, using PocketBase fallback: ${workerError.message}")
             val created = PocketBaseHelper.createRecord("comment_replies", JSONObject(payload.toString()).apply {
-                put("packId", packId)
                 put("like_count", 0)
                 put("created_at", java.time.Instant.now().toString())
             })
