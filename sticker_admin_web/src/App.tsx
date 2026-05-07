@@ -1467,6 +1467,7 @@ function App() {
     setSingleDeleteProgress({ step: 'Removing from database...' });
     try {
       await pb.collection('draft_stickers').delete(draft.id);
+      logAdminAction('delete_draft', `Deleted draft "${draft.name}"`, draft.id);
       setDraftPacks(prev => prev.filter(p => p.id !== draft.id));
       if (selectedDraft?.id === draft.id) setSelectedDraft(null);
     } catch (error: any) {
@@ -1912,6 +1913,10 @@ function App() {
         is_animated: true,
 
       });
+      if (created?.id) {
+        logAdminAction('create_pack', `Created "${newPackData.name}" in ${collectionName}`, created.id);
+        setNewPackData(emptyPack());
+      }
       alert(newPackData.is_animated ? "New animated pack created. You can now add video/gif files." : "New static pack created. You can now add WebP/PNG files.");
     } catch (e) {
       alert("Error: " + e);
@@ -2277,7 +2282,8 @@ function App() {
 
 
   const deletePack = async (pack: StickerPack) => {
-    if (!window.confirm(`Are you sure you want to PERMANENTLY delete "${pack.name}"?\n\nThis action cannot be undone and all files will be deleted!`)) return;
+    const packName = pack.name || 'Unnamed';
+    if (!window.confirm(`⚠️ PERMANENTLY DELETE "${packName}"?\n\nThis action CANNOT be undone!\nPack ID: ${pack.id}\nStickers: ${pack.sticker_count || pack.stickers?.length || '?'}`)) return;
 
     try {
       setDeleteProgress({ deleting: true, message: 'Deleting from database...', current: 0, total: 1 });
@@ -2289,6 +2295,7 @@ function App() {
       }).catch(() => null);
       if (!cascade?.ok) await pb.collection(collectionName).delete(pack.id);
 
+      logAdminAction('delete_pack', `Deleted "${packName}" from ${collectionName}`, pack.id);
       setPacks(packs.filter(p => p.id !== pack.id));
       if (selectedPack?.id === pack.id) setSelectedPack(null);
       setDeleteProgress(null);

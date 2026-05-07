@@ -1,47 +1,27 @@
-// DeepSeek AI Service - Akıllı isimlendirme, çeviri ve tema üretimi
+// DeepSeek AI Service - Worker proxy üzerinden (API key client'ta görünmez)
+import { WORKER_URL } from '../pocketbase';
 
-const DEEPSEEK_API_KEY = import.meta.env.VITE_DEEPSEEK_API_KEY || '';
-const DEEPSEEK_API_URL = 'https://api.deepseek.com/chat/completions';
+const AI_PROXY_URL = `${WORKER_URL.replace(/\/$/, '')}/api/ai`;
 
 interface DeepSeekMessage {
     role: 'system' | 'user' | 'assistant';
     content: string;
 }
 
-interface DeepSeekResponse {
-    choices: Array<{
-        message: {
-            content: string;
-        };
-    }>;
-}
-
 async function callDeepSeek(messages: DeepSeekMessage[], temperature: number = 0.8): Promise<string> {
-    if (!DEEPSEEK_API_KEY) {
-        throw new Error('DeepSeek API key bulunamadı. .env dosyasını kontrol edin.');
-    }
-
-    const response = await fetch(DEEPSEEK_API_URL, {
+    const response = await fetch(AI_PROXY_URL, {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${DEEPSEEK_API_KEY}`
-        },
-        body: JSON.stringify({
-            model: 'deepseek-chat',
-            messages,
-            temperature,
-            max_tokens: 4096
-        })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages, temperature, max_tokens: 4096 })
     });
 
     if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`DeepSeek API hatası (${response.status}): ${errorText}`);
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `AI API hatası (${response.status})`);
     }
 
-    const data: DeepSeekResponse = await response.json();
-    return data.choices[0]?.message?.content || '';
+    const data = await response.json();
+    return data.content || '';
 }
 
 // ========== 1. AKILLI PAKET İSİMLENDİRME ==========
@@ -393,5 +373,5 @@ export const deepseekService = {
     generateSearchTerms,
     autoDetectCategory,
     generateFullPackInfo,
-    isConfigured: () => !!DEEPSEEK_API_KEY
+    isConfigured: () => true // API key artık worker'da, her zaman dene
 };

@@ -36,6 +36,7 @@ const notificationsRouter = require('./routes/notifications');
 const usersRouter = require('./routes/users');
 const statsRouter = require('./routes/stats');
 const socialRouter = require('./routes/social');
+const aiRouter = require('./routes/ai');
 
 const app = express();
 app.use(express.json());
@@ -124,6 +125,7 @@ app.use('/api/notifications', rateLimit, adminAuth, notificationsRouter);
 app.use('/api/users', rateLimit, adminAuth, usersRouter);
 app.use('/api/stats', rateLimit, statsRouter);
 app.use('/api/social', rateLimit, socialRouter);
+app.use('/api/ai', rateLimit, adminAuth, aiRouter);
 
 app.get('/health', (_, res) => res.json({ status: 'ok', ts: Date.now() }));
 

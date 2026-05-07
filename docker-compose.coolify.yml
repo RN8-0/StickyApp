@@ -40,6 +40,7 @@ services:
       NTFY_URL: https://sticky-ntfy.46.225.95.201.sslip.io
       NTFY_TOPIC: sticky-stickers
       FIREBASE_SERVICE_ACCOUNT_JSON: ${FIREBASE_SERVICE_ACCOUNT_JSON:-}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY}
     labels:
       - traefik.enable=true
       - traefik.http.routers.sticky-worker.rule=Host(`sticky-worker.46.225.95.201.sslip.io`)
