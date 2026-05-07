@@ -4173,6 +4173,54 @@ Rules:
         }
     }
 
+    private fun deletePackAndPocketBase(packId: String) {
+        lifecycleScope.launch {
+            // 1. PocketBase'deki user_submissions kaydını bul ve sil
+            withContext(Dispatchers.IO) {
+                try {
+                    val escapedId = packId.replace("'", "\\'")
+                    val submissions = PocketBaseHelper.listAllRecords(
+                        "user_submissions",
+                        filter = "source_pack_id='$escapedId'"
+                    )
+                    for (sub in submissions) {
+                        val subId = sub.optString("id")
+                        val storePackId = sub.optString("sticker_pack_id", "")
+                        val subStatus = sub.optString("status", "")
+
+                        // Onaylanmışsa stickers/premium_stickers koleksiyonundan da sil
+                        if (subStatus == "approved" && storePackId.isNotBlank()) {
+                            runCatching {
+                                PocketBaseHelper.deleteRecord("stickers", storePackId)
+                            }
+                            runCatching {
+                                PocketBaseHelper.deleteRecord("premium_stickers", storePackId)
+                            }
+                        }
+
+                        // user_submissions kaydını sil
+                        runCatching {
+                            PocketBaseHelper.deleteRecord("user_submissions", subId)
+                        }
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.w("DeletePack", "PB deletion skipped: ${e.message}")
+                }
+            }
+
+            // 2. Worker üzerinden cascade sil dene (sosyal veriler için)
+            withContext(Dispatchers.IO) {
+                runCatching {
+                    SocialRepository.deleteSharedPack(
+                        this@MainActivity,
+                        null,
+                        packId
+                    )
+                }
+            }
+        }
+    }
+
     private fun confirmAndDirectDelete(pack: Pack) {
         val dialog = android.app.Dialog(this)
         dialog.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE)
@@ -4190,6 +4238,7 @@ Rules:
             dialog.dismiss()
             if (CustomStickerManager.deletePack(this, pack.id)) {
                 PreferencesHelper.removeInstalledPack(this, pack.id)
+                deletePackAndPocketBase(pack.id)
                 Toast.makeText(this, R.string.pack_deleted_success, Toast.LENGTH_SHORT).show()
                 refreshPacks()
             }
@@ -4238,6 +4287,7 @@ Rules:
                 if (wasInWhatsApp && !isStillInWhatsApp) {
                     if (CustomStickerManager.deletePack(this@MainActivity, packId)) {
                         PreferencesHelper.removeInstalledPack(this@MainActivity, packId)
+                        deletePackAndPocketBase(packId)
                         Toast.makeText(this@MainActivity, R.string.pack_deleted_success, Toast.LENGTH_SHORT).show()
                         refreshPacks()
                     }

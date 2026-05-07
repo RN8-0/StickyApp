@@ -46,7 +46,7 @@ class SubmitPackActivity : AppCompatActivity() {
     private fun buildPackSignature(stickerFiles: List<File>): String {
         return stickerFiles
             .sortedBy { it.name }
-            .joinToString("|") { file -> "${file.name}:${file.length()}:${file.lastModified()}" }
+            .joinToString("|") { file -> "${file.name}:${file.length()}" }
     }
 
     private suspend fun ensurePackCanBeSubmittedAgain(
@@ -54,7 +54,8 @@ class SubmitPackActivity : AppCompatActivity() {
         userId: String,
         userEmail: String,
         deviceId: String,
-        packName: String
+        packName: String,
+        sourceSignature: String = ""
     ) {
         fun esc(v: String) = v.replace("'", "\\'")
         val userKeys = listOf(userId, userEmail, deviceId).map { it.trim().lowercase() }.filter { it.isNotBlank() }
@@ -70,7 +71,26 @@ class SubmitPackActivity : AppCompatActivity() {
         }.getOrElse { emptyList() }
         if (byPackId.any { ownsRecord(it) }) throw IllegalStateException(getString(R.string.publish_pack_already_submitted))
 
-        // 2. Fallback: all user submissions matched by pack_name (catches old records without source_pack_id)
+        // 2. Check by source_signature (stored in note field) — catches same content even after local re-creation
+        if (sourceSignature.isNotBlank()) {
+            val allOwnerRecords = runCatching {
+                val ownerFilter = listOfNotNull(
+                    userId.takeIf { it.isNotBlank() }?.let { "user_id='${esc(it)}'" },
+                    userEmail.takeIf { it.isNotBlank() }?.let { "user_email='${esc(it)}'" },
+                    deviceId.takeIf { it.isNotBlank() }?.let { "device_id='${esc(it)}'" }
+                ).joinToString(" || ")
+                if (ownerFilter.isBlank()) emptyList()
+                else PocketBaseHelper.listAllRecords("user_submissions", filter = ownerFilter, perPage = 200)
+            }.getOrElse { emptyList() }
+            if (allOwnerRecords.any { record ->
+                    val note = record.optString("note", "")
+                    note.contains("source_signature=$sourceSignature")
+                }) {
+                throw IllegalStateException(getString(R.string.publish_pack_already_submitted))
+            }
+        }
+
+        // 3. Fallback: all user submissions matched by pack_name (catches old records without source_pack_id)
         if (packName.isNotBlank()) {
             val ownerFilter = listOfNotNull(
                 userId.takeIf { it.isNotBlank() }?.let { "user_id='${esc(it)}'" },
@@ -254,7 +274,7 @@ class SubmitPackActivity : AppCompatActivity() {
                         throw IllegalStateException(getString(R.string.publish_pack_count_range))
                     }
                     val sourceSignature = buildPackSignature(stickerFiles)
-                    ensurePackCanBeSubmittedAgain(packId, userId, email, deviceId, packName)
+                    ensurePackCanBeSubmittedAgain(packId, userId, email, deviceId, packName, sourceSignature)
 
                     val uploadFiles = stickerFiles.mapIndexed { index, file ->
                         PocketBaseHelper.UploadFile("images", "sticker_${index + 1}.webp", "image/webp", file.readBytes())
