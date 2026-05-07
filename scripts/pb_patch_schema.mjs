@@ -190,6 +190,13 @@ const PATCHES = {
     { name:'custom_packs_count',    type:'number' },
     { name:'packs_published',       type:'number' },
   ],
+  admin_logs: [
+    { name:'admin_email', type:'email'  },
+    { name:'action',      type:'text'   },
+    { name:'detail',      type:'text'   },
+    { name:'pack_id',     type:'text'   },
+    { name:'timestamp',   type:'text'   },
+  ],
 };
 
 async function patchCollection(token, name, wantedFields) {

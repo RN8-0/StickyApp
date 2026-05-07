@@ -36,11 +36,14 @@ export const TARGET_LANGUAGES = [
     { code: 'tl', name: 'Filipino', flag: '🇵🇭' }
 ];
 
-// Google Translate API (ücretsiz, resmi olmayan endpoint)
-const translateSingle = async (text: string, targetLang: string): Promise<string> => {
+// Google Translate API (ücretsiz, resmi olmayan endpoint) — retry ile
+const translateSingle = async (text: string, targetLang: string, attempt: number = 1): Promise<string> => {
     try {
         const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=${targetLang}&dt=t&q=${encodeURIComponent(text)}`;
-        const response = await fetch(url);
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 8000);
+        const response = await fetch(url, { signal: controller.signal });
+        clearTimeout(timeout);
         const data = await response.json();
 
         // Google Translate yanıt formatı: [[["çeviri","original",...]]]
@@ -49,7 +52,12 @@ const translateSingle = async (text: string, targetLang: string): Promise<string
         }
         return text;
     } catch (error) {
-        console.error(`Çeviri hatası (${targetLang}):`, error);
+        if (attempt < 2) {
+            // Bir kere daha dene
+            await new Promise(r => setTimeout(r, 1000));
+            return translateSingle(text, targetLang, attempt + 1);
+        }
+        console.warn(`Çeviri hatası (${targetLang}):`, (error as any)?.message);
         return text;
     }
 };

@@ -84,6 +84,29 @@ function createRateLimit(maxRequests, bucket = 'default') {
 const rateLimit = createRateLimit(RATE_LIMIT_MAX);
 const telegramRateLimit = createRateLimit(TELEGRAM_RATE_LIMIT_MAX, 'telegram');
 
+// Simple admin auth middleware — validates PocketBase admin/superuser token
+async function adminAuth(req, res, next) {
+  const authHeader = req.headers.authorization || '';
+  const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+  if (!token) {
+    return res.status(401).json({ error: 'Missing authorization token' });
+  }
+  try {
+    // Verify token against PocketBase
+    const pbUrl = process.env.PB_URL || 'https://sh3xlf9j7symlj3otlw6s8rx.46.225.95.201.sslip.io';
+    const resp = await fetch(`${pbUrl}/api/collections/users/auth-refresh`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
+    });
+    if (!resp.ok) throw new Error('Token invalid');
+    const data = await resp.json();
+    req.adminUser = data.record || data;
+    next();
+  } catch {
+    return res.status(401).json({ error: 'Invalid or expired token' });
+  }
+}
+
 setInterval(() => {
   const now = Date.now();
   for (const [k, v] of rateLimitMap) {
@@ -96,9 +119,9 @@ app.use('/api/klipy', rateLimit, klipyRouter);
 app.use('/api/telegram', telegramRateLimit, telegramRouter);
 app.use('/api/translate', rateLimit, translateRouter);
 app.use('/api/nsfw', rateLimit, nsfwRouter);
-app.use('/api/notify', notifyRouter);
-app.use('/api/notifications', notificationsRouter);
-app.use('/api/users', usersRouter);
+app.use('/api/notify', rateLimit, adminAuth, notifyRouter);
+app.use('/api/notifications', rateLimit, adminAuth, notificationsRouter);
+app.use('/api/users', rateLimit, adminAuth, usersRouter);
 app.use('/api/stats', rateLimit, statsRouter);
 app.use('/api/social', rateLimit, socialRouter);
 

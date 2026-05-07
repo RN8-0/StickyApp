@@ -72,6 +72,20 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+// Simple admin audit log
+async function logAdminAction(action: string, detail?: string, packId?: string) {
+  try {
+    const user = pb.authStore.record;
+    await pb.collection('admin_logs').create({
+      admin_email: user?.email || 'unknown',
+      action,
+      detail: detail || '',
+      pack_id: packId || '',
+      timestamp: new Date().toISOString(),
+    }).catch(() => { /* collection may not exist */ });
+  } catch { /* silent */ }
+}
+
 function packEngagementScore(pack: Partial<StickerPack>) {
   const downloads = Number(pack.download_count || 0);
   const favorites = Number(pack.favorite_count || 0);
@@ -1365,6 +1379,7 @@ function App() {
 
       setSinglePublishProgress({ step: 'Refreshing pack list...', percent: 90 });
       await fetchPacks();
+      logAdminAction('publish', `Published "${currentName}" (${stickerCount} stickers)`, draft.id);
       alert(`✅ "${currentName}" published successfully! (${stickerCount} stickers)`);
     } catch (error: any) {
       console.error('Publish error:', error);
