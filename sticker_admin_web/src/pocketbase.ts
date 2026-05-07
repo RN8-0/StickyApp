@@ -77,16 +77,20 @@ export function normalizePublicAssetUrl(url?: string | null): string {
 export async function isAdmin(): Promise<boolean> {
   const user = currentUser();
   if (!user) return false;
-  const email = String(user.email || '').replace(/'/g, "\\'");
+  const email = String(user.email || '');
   if (!email) return false;
   // Try admins_list collection first
   try {
-    const admins = await pb.collection('admins_list').getFullList({ filter: `email='${email}'` });
+    const admins = await pb.collection('admins_list').getFullList({
+      filter: pb.filter('email = {:email}', { email })
+    });
     if (admins.length > 0) return true;
   } catch { /* collection may not exist */ }
   // Fallback: check admins collection
   try {
-    const admins = await pb.collection('admins').getFullList({ filter: `id='${email}'` });
+    const admins = await pb.collection('admins').getFullList({
+      filter: pb.filter('id = {:id}', { id: email })
+    });
     if (admins.length > 0) return true;
   } catch { /* collection may not exist */ }
   return false;

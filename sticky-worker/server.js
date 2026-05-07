@@ -40,9 +40,17 @@ const socialRouter = require('./routes/social');
 const app = express();
 app.use(express.json());
 
-// CORS
+// CORS — restrict to known origins
+const ALLOWED_ORIGINS = [
+  'https://sticky-admin.46.225.95.201.sslip.io',
+  'http://localhost:5173',
+  'http://localhost:4173',
+];
 app.use((req, res, next) => {
-  res.set('Access-Control-Allow-Origin', '*');
+  const origin = req.headers.origin;
+  if (origin && ALLOWED_ORIGINS.some(o => origin.startsWith(o))) {
+    res.set('Access-Control-Allow-Origin', origin);
+  }
   res.set('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
   res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   if (req.method === 'OPTIONS') return res.status(204).end();

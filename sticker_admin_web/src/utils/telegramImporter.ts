@@ -59,32 +59,45 @@ function normalizeBotToken(token: string): string {
         .replace(/[\u200B-\u200D\uFEFF\s]/g, '');
 }
 
-async function getStickerSet(botToken: string, setName: string): Promise<TelegramStickerSet> {
+async function telegramApiPost(botToken: string, method: string, params: Record<string, string> = {}): Promise<any> {
     const cleanToken = normalizeBotToken(botToken);
-    const url = `${TELEGRAM_PROXY}?token=${encodeURIComponent(cleanToken)}&method=getStickerSet&name=${encodeURIComponent(setName)}`;
-    const response = await fetch(url);
+    const response = await fetch(TELEGRAM_PROXY, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: cleanToken, method, params }),
+    });
     if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.description || `Telegram API error: ${response.status}`);
+        throw new Error(errorData.description || errorData.message || `Telegram API error: ${response.status}`);
     }
     const data = await response.json();
     if (!data.ok) throw new Error(data.description || 'Failed to get sticker set');
+    return data;
+}
+
+async function telegramFilePost(botToken: string, filePath: string): Promise<Blob> {
+    const cleanToken = normalizeBotToken(botToken);
+    const response = await fetch(TELEGRAM_PROXY, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: cleanToken, file_path: filePath }),
+    });
+    if (!response.ok) throw new Error(`Telegram file download error: ${response.status}`);
+    return await response.blob();
+}
+
+async function getStickerSet(botToken: string, setName: string): Promise<TelegramStickerSet> {
+    const data = await telegramApiPost(botToken, 'getStickerSet', { name: setName });
     return data.result;
 }
 
 async function getFile(botToken: string, fileId: string): Promise<string> {
-    const cleanToken = normalizeBotToken(botToken);
-    const url = `${TELEGRAM_PROXY}?token=${encodeURIComponent(cleanToken)}&method=getFile&file_id=${encodeURIComponent(fileId)}`;
-    const response = await fetch(url);
-    if (!response.ok) throw new Error(`getFile error: ${response.status}`);
-    const data = await response.json();
-    if (!data.ok) throw new Error(data.description || 'Failed to get file');
+    const data = await telegramApiPost(botToken, 'getFile', { file_id: fileId });
     return data.result.file_path;
 }
 
 async function downloadTelegramFile(botToken: string, filePath: string): Promise<Blob> {
-    const cleanToken = normalizeBotToken(botToken);
-    const url = `${TELEGRAM_PROXY}?token=${encodeURIComponent(cleanToken)}&file_path=${encodeURIComponent(filePath)}`;
+    return await telegramFilePost(botToken, filePath);
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 30000);
     try {

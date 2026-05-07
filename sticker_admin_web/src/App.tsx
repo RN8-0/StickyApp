@@ -276,7 +276,7 @@ const Input = ({ label, value, onChange, placeholder, type = "text", helpText }:
 
 function App() {
   const [user, setUser] = useState<AdminUser | null>(null);
-  console.log("STICKY ADMIN V3 LOADING...");
+  console.info('[App] Initialized');
 
   const [packs, setPacks] = useState<StickerPack[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1088,9 +1088,7 @@ function App() {
         ...normalRecords.map(r => mapPbRecord(r, false)),
         ...premiumRecords.map(r => mapPbRecord(r, true)),
       ];
-      console.log(`PocketBase: ${allPacks.length} paket yüklendi`);
-
-      console.table(allPacks.slice(0, 10).map(p => ({ name: p.name, dl: p.download_count })));
+      console.info(`[Packs] ${allPacks.length} packs loaded`);
       setPacks(allPacks.sort((a, b) => (a.name || '').localeCompare(b.name || '')));
     } catch (error: any) {
       console.error("Fetch error:", error);
@@ -1230,14 +1228,49 @@ function App() {
       image_data_version: Date.now().toString(),
     };
 
+    // Strip fields that may not exist in the target collection schema
+    const safePackData = { ...initialData };
+    const draftOnlyFields = ['status', 'draft_data', 'batch_generated', 'batch_source', 'batch_search_term',
+      'telegram_part', 'telegram_total_parts', 'telegram_set_name', 'telegram_set_title', 'source',
+      'collectionId', 'collectionName', 'expand', 'created', 'updated'];
+    draftOnlyFields.forEach(key => delete safePackData[key]);
+
     try {
+      // Attempt 1: create with custom ID (draft.id)
       try {
-        targetRecord = await pb.collection(targetCollection).create({ id: draft.id, ...initialData });
-      } catch (pbErr: any) {
-        if (pbErr?.status === 400 || pbErr?.message?.toLowerCase?.().includes('id')) {
-          targetRecord = await pb.collection(targetCollection).create(initialData);
+        targetRecord = await pb.collection(targetCollection).create({ id: draft.id, ...safePackData });
+      } catch (pbErr1: any) {
+        const msg1 = (pbErr1?.message || '').toLowerCase();
+        const status1 = pbErr1?.status || 0;
+        // Retry without custom ID if: 400 (invalid id), 404 (collection context), or message mentions 'id'
+        if (status1 === 400 || status1 === 404 || msg1.includes('id')) {
+          // Attempt 2: create without custom ID
+          try {
+            targetRecord = await pb.collection(targetCollection).create(safePackData);
+          } catch (pbErr2: any) {
+            const msg2 = (pbErr2?.message || '').toLowerCase();
+            const status2 = pbErr2?.status || 0;
+            // If still 404, try with even more stripped data (only core fields)
+            if (status2 === 404 && msg2.includes('collection context')) {
+              const coreData: any = {
+                name: safePackData.name,
+                name_en: safePackData.name_en || safePackData.name,
+                publisher: safePackData.publisher || 'Sticky',
+                category: safePackData.category || 'other',
+                is_premium: safePackData.is_premium ?? false,
+                is_animated: safePackData.is_animated ?? false,
+                sticker_count: 0,
+                stickers: [],
+                is_active: true,
+                image_data_version: Date.now().toString(),
+              };
+              targetRecord = await pb.collection(targetCollection).create(coreData);
+            } else {
+              throw pbErr2;
+            }
+          }
         } else {
-          throw pbErr;
+          throw pbErr1;
         }
       }
 
@@ -1291,6 +1324,15 @@ function App() {
       if (targetRecord?.id) {
         await pb.collection(targetCollection).delete(targetRecord.id).catch(() => {});
       }
+      // Log diagnostic info for collection context errors
+      const msg = (error as any)?.message || '';
+      if (msg.includes('collection context') || msg.includes('Missing or invalid collection')) {
+        console.error('[PUBLISH_RECORD] Collection context error — possible causes:');
+        console.error('  1. Target collection "' + targetCollection + '" does not exist in PocketBase');
+        console.error('  2. The admin user lacks create permission on "' + targetCollection + '"');
+        console.error('  3. The "admins_list" collection is missing or admin email not registered');
+        console.error('  4. PocketBase server cache is stale — try restarting PocketBase');
+      }
       throw error;
     }
   };
@@ -1326,7 +1368,21 @@ function App() {
       alert(`✅ "${currentName}" published successfully! (${stickerCount} stickers)`);
     } catch (error: any) {
       console.error('Publish error:', error);
-      alert(`Publish error: ${error.message}`);
+      const msg = error?.message || '';
+      let hint = '';
+      if (msg.includes('collection context') || msg.includes('Missing or invalid collection')) {
+        hint = '\n\n⚠️ PocketBase cannot find the target collection.\n' +
+          'Possible fixes:\n' +
+          '• Run schema setup scripts (pb_patch_schema.mjs) on the server\n' +
+          '• Restart PocketBase server to refresh its cache\n' +
+          '• Verify "stickers" and "premium_stickers" collections exist\n' +
+          '• Check that your admin email is in the "admins_list" collection';
+      } else if (msg.includes('permission') || msg.includes('403') || msg.includes('no permission')) {
+        hint = '\n\n⚠️ Permission denied. Make sure:\n' +
+          '• Your admin email is in the "admins_list" collection\n' +
+          '• Your auth session hasn\'t expired (try refreshing the page)';
+      }
+      alert(`Publish error: ${msg}${hint}`);
     } finally {
       setDraftPublishing(null);
       setSinglePublishProgress(null);
