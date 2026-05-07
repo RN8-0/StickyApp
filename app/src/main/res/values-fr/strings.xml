@@ -687,4 +687,9 @@
     <string name="submit_my_stickers_hint">Sélectionnez un pack d\'autocollants de votre collection à soumettre.</string>
     <string name="submit_select_pack_required">Veuillez sélectionner un pack d\'autocollants à soumettre</string>
     <string name="uploading_stickers">Envoi des autocollants…</string>
+
+    <!-- Comment Translation -->
+    <string name="translate">Traduire</string>
+    <string name="show_original">Afficher l'original</string>
+    <string name="translating">Traduction…</string>
 </resources>

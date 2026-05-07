@@ -687,4 +687,9 @@
     <string name="submit_my_stickers_hint">从您的收藏中选择一个贴纸包进行提交。</string>
     <string name="submit_select_pack_required">请选择一个贴纸包进行提交</string>
     <string name="uploading_stickers">正在上传贴纸…</string>
+
+    <!-- Comment Translation -->
+    <string name="translate">翻译</string>
+    <string name="show_original">显示原文</string>
+    <string name="translating">翻译中…</string>
 </resources>

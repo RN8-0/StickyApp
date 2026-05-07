@@ -687,4 +687,9 @@
     <string name="submit_my_stickers_hint">コレクションからステッカーパックを選択して提出してください。</string>
     <string name="submit_select_pack_required">提出するステッカーパックを選択してください</string>
     <string name="uploading_stickers">ステッカーをアップロード中…</string>
+
+    <!-- Comment Translation -->
+    <string name="translate">翻訳</string>
+    <string name="show_original">原文を表示</string>
+    <string name="translating">翻訳中…</string>
 </resources>

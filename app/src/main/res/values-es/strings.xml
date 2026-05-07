@@ -687,4 +687,9 @@
     <string name="submit_my_stickers_hint">Selecciona un paquete de pegatinas de tu colección para enviarlo.</string>
     <string name="submit_select_pack_required">Por favor selecciona un paquete de pegatinas para enviar</string>
     <string name="uploading_stickers">Subiendo pegatinas…</string>
+
+    <!-- Comment Translation -->
+    <string name="translate">Traducir</string>
+    <string name="show_original">Ver original</string>
+    <string name="translating">Traduciendo…</string>
 </resources>

@@ -657,4 +657,9 @@
     <string name="report_submitted">Laporan diserahkan. Terima kasih!</string>
     <string name="report_failed">Tidak dapat mengirimkan laporan. Silakan coba lagi.</string>
     <string name="report_select_reason">Silakan pilih alasannya</string>
+
+    <!-- Comment Translation -->
+    <string name="translate">Terjemahkan</string>
+    <string name="show_original">Tampilkan asli</string>
+    <string name="translating">Menerjemahkan…</string>
 </resources>

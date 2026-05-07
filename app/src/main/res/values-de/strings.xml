@@ -687,4 +687,9 @@
     <string name="submit_my_stickers_hint">Wählen Sie ein Aufkleberpaket aus Ihrer Sammlung zum Einreichen aus.</string>
     <string name="submit_select_pack_required">Bitte wählen Sie ein Aufkleberpaket zum Einreichen aus</string>
     <string name="uploading_stickers">Aufkleber werden hochgeladen…</string>
+
+    <!-- Comment Translation -->
+    <string name="translate">Übersetzen</string>
+    <string name="show_original">Original anzeigen</string>
+    <string name="translating">Übersetze…</string>
 </resources>

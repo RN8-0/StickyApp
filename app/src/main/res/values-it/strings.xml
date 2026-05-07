@@ -657,4 +657,9 @@
     <string name="report_submitted">Rapporto inviato. Grazie!</string>
     <string name="report_failed">Impossibile inviare il rapporto. Per favore riprova.</string>
     <string name="report_select_reason">Seleziona un motivo</string>
+
+    <!-- Comment Translation -->
+    <string name="translate">Traduci</string>
+    <string name="show_original">Mostra originale</string>
+    <string name="translating">Traduzione…</string>
 </resources>

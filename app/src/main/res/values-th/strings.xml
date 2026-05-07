@@ -657,4 +657,9 @@
     <string name="report_submitted">ส่งรายงานแล้ว ขอบคุณ!</string>
     <string name="report_failed">ไม่สามารถส่งรายงานได้ โปรดลองอีกครั้ง</string>
     <string name="report_select_reason">โปรดเลือกเหตุผล</string>
+
+    <!-- Comment Translation -->
+    <string name="translate">แปลภาษา</string>
+    <string name="show_original">แสดงต้นฉบับ</string>
+    <string name="translating">กำลังแปล…</string>
 </resources>

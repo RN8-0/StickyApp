@@ -657,4 +657,9 @@
     <string name="report_submitted">Đã gửi báo cáo. Cảm ơn!</string>
     <string name="report_failed">Không thể gửi báo cáo. Vui lòng thử lại.</string>
     <string name="report_select_reason">Vui lòng chọn một lý do</string>
+
+    <!-- Comment Translation -->
+    <string name="translate">Dịch</string>
+    <string name="show_original">Hiển thị gốc</string>
+    <string name="translating">Đang dịch…</string>
 </resources>

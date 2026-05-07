@@ -239,7 +239,7 @@ async function commentsWithState(packId, viewerId = '', viewerEmail = '') {
       const likes = commentLikes.filter((like) => clean(like.comment_id) === clean(comment.id));
       return {
         ...comment,
-        like_count: Number(comment.like_count || likes.length || 0),
+        like_count: likes.length,
         liked: likes.some((like) => viewerMatches(like, viewerId, viewerEmail)),
         replies: replies
           .filter((reply) => clean(reply.comment_id) === clean(comment.id))
@@ -749,13 +749,16 @@ router.post('/comments/like', async (req, res) => {
             method: 'POST',
             body: JSON.stringify({
               user_id: authorId,
+              user_email: clean(comment.user_email),
               title: 'Sticky',
               body: `${actorName} liked your comment.`,
               message: `${actorName} liked your comment.`,
+              topic: 'comment_like',
               type: 'comment_like',
               from: userId || userEmail,
               pack_id: packId,
               read: false,
+              sent: false,
               timestamp: new Date().toISOString()
             })
           }).catch(() => {});
@@ -802,13 +805,16 @@ router.post('/comments/reply', async (req, res) => {
           method: 'POST',
           body: JSON.stringify({
             user_id: authorId,
+            user_email: clean(comment.user_email),
             title: 'Sticky',
             body: `${actorName} replied to your comment: "${body.slice(0, 60)}${body.length > 60 ? '…' : ''}"`,
             message: `${actorName} replied to your comment.`,
+            topic: 'comment_reply',
             type: 'comment_reply',
             from: actorId || actorEmail,
             pack_id: packId,
             read: false,
+            sent: false,
             timestamp: new Date().toISOString()
           })
         }).catch(() => {});

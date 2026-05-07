@@ -687,4 +687,9 @@
     <string name="submit_my_stickers_hint">컬렉션에서 제출할 스티커 팩을 선택하세요.</string>
     <string name="submit_select_pack_required">제출할 스티커 팩을 선택해 주세요</string>
     <string name="uploading_stickers">스티커 업로드 중…</string>
+
+    <!-- Comment Translation -->
+    <string name="translate">번역</string>
+    <string name="show_original">원문 보기</string>
+    <string name="translating">번역 중…</string>
 </resources>

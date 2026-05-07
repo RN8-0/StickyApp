@@ -827,4 +827,9 @@
     <string name="publisher_subtitle_count">%1$d sticker pack(s) published</string>
     <string name="publisher_pack_downloads">%1$d downloads</string>
     <string name="publisher_empty">This user has not published any packs yet.</string>
+
+    <!-- Comment Translation -->
+    <string name="translate">Translate</string>
+    <string name="show_original">Show original</string>
+    <string name="translating">Translating…</string>
 </resources>

@@ -657,4 +657,9 @@
     <string name="report_submitted">Отчет отправлен. Спасибо!</string>
     <string name="report_failed">Не удалось отправить отчет. Пожалуйста, попробуйте еще раз.</string>
     <string name="report_select_reason">Пожалуйста, выберите причину</string>
+
+    <!-- Comment Translation -->
+    <string name="translate">Перевести</string>
+    <string name="show_original">Показать оригинал</string>
+    <string name="translating">Перевод…</string>
 </resources>

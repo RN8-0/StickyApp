@@ -687,4 +687,9 @@
     <string name="submit_my_stickers_hint">اختر حزمة ملصقات من مجموعتك لإرسالها.</string>
     <string name="submit_select_pack_required">يرجى اختيار حزمة ملصقات للإرسال</string>
     <string name="uploading_stickers">جارٍ رفع الملصقات…</string>
+
+    <!-- Comment Translation -->
+    <string name="translate">ترجمة</string>
+    <string name="show_original">إظهار الأصلي</string>
+    <string name="translating">جاري الترجمة…</string>
 </resources>

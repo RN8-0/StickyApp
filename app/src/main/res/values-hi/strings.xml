@@ -687,4 +687,9 @@
     <string name="submit_my_stickers_hint">सबमिट करने के लिए अपने संग्रह से एक स्टिकर पैक चुनें।</string>
     <string name="submit_select_pack_required">सबमिट करने के लिए कृपया एक स्टिकर पैक चुनें</string>
     <string name="uploading_stickers">स्टिकर अपलोड हो रहे हैं…</string>
+
+    <!-- Comment Translation -->
+    <string name="translate">अनुवाद करें</string>
+    <string name="show_original">मूल दिखाएं</string>
+    <string name="translating">अनुवाद हो रहा है…</string>
 </resources>

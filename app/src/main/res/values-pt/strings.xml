@@ -687,4 +687,9 @@
     <string name="submit_my_stickers_hint">Selecione um pacote de figurinhas da sua coleção para enviar.</string>
     <string name="submit_select_pack_required">Por favor, selecione um pacote de figurinhas para enviar</string>
     <string name="uploading_stickers">Enviando figurinhas…</string>
+
+    <!-- Comment Translation -->
+    <string name="translate">Traduzir</string>
+    <string name="show_original">Ver original</string>
+    <string name="translating">Traduzindo…</string>
 </resources>

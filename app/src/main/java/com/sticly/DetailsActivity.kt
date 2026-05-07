@@ -937,18 +937,15 @@ class DetailsActivity : AppCompatActivity() {
                 filter = "source_pack_id='${escapePb(sourcePackId)}'",
                 perPage = 200
             )
-        }.getOrElse { emptyList() }
+        }.getOrElse { throw IllegalStateException(getString(R.string.publish_pack_already_submitted)) }
         val userKeys = listOf(userId, userEmail, deviceId).map { it.trim().lowercase() }.filter { it.isNotBlank() }
-        val unchanged = records.any { record ->
+        val alreadySubmitted = records.any { record ->
             val ownerKeys = listOf(record.optString("user_id"), record.optString("user_email"), record.optString("device_id"))
                 .map { it.trim().lowercase() }
                 .filter { it.isNotBlank() }
-            if (userKeys.none { ownerKeys.contains(it) }) return@any false
-            val previousSignature = record.optString("note").substringAfter("source_signature=", "")
-            val previousCount = record.optInt("sticker_count", 0)
-            previousSignature == signature || (previousSignature.isBlank() && previousCount == stickerCount)
+            userKeys.any { ownerKeys.contains(it) }
         }
-        if (unchanged) throw IllegalStateException(getString(R.string.publish_pack_already_submitted))
+        if (alreadySubmitted) throw IllegalStateException(getString(R.string.publish_pack_already_submitted))
     }
 
     private fun setupPackSocialActions(pack: Pack) {
@@ -1009,7 +1006,7 @@ class DetailsActivity : AppCompatActivity() {
         }
 
         commentBtn?.setOnClickListener {
-            if (requireSocialSignIn()) showCommentsSheet(pack)
+            showCommentsSheet(pack)
         }
 
         lifecycleScope.launch {
@@ -1305,6 +1302,33 @@ class DetailsActivity : AppCompatActivity() {
             }
         }
 
+        val tvTranslatedBody = row.findViewById<TextView>(R.id.tvTranslatedBody)
+        val tvTranslate = row.findViewById<TextView>(R.id.tvTranslate)
+        var translatedText: String? = null
+        tvTranslate.setOnClickListener {
+            if (translatedText != null) {
+                if (tvTranslatedBody.visibility == View.VISIBLE) {
+                    tvTranslatedBody.visibility = View.GONE
+                    tvTranslate.text = getString(R.string.translate)
+                } else {
+                    tvTranslatedBody.visibility = View.VISIBLE
+                    tvTranslate.text = getString(R.string.show_original)
+                }
+                return@setOnClickListener
+            }
+            tvTranslate.text = getString(R.string.translating)
+            tvTranslate.isEnabled = false
+            lifecycleScope.launch {
+                val lang = PreferencesHelper.getLanguage(this@DetailsActivity)
+                val result = SocialRepository.translateText(comment.optString("body"), lang)
+                translatedText = result
+                tvTranslatedBody.text = result
+                tvTranslatedBody.visibility = View.VISIBLE
+                tvTranslate.text = getString(R.string.show_original)
+                tvTranslate.isEnabled = true
+            }
+        }
+
         row.tag = commentId
         tvReply.setOnClickListener { onReply(commentId, author) }
 
@@ -1375,6 +1399,33 @@ class DetailsActivity : AppCompatActivity() {
                         tvLikeCount.text = if (replyLikeCount > 0) replyLikeCount.toString() else ""
                     }
                     .onFailure { showThemedSnackbar(it.message ?: getString(R.string.error_generic)) }
+            }
+        }
+
+        val tvReplyTranslatedBody = row.findViewById<TextView>(R.id.tvReplyTranslatedBody)
+        val tvReplyTranslate = row.findViewById<TextView>(R.id.tvReplyTranslate)
+        var replyTranslated: String? = null
+        tvReplyTranslate.setOnClickListener {
+            if (replyTranslated != null) {
+                if (tvReplyTranslatedBody.visibility == View.VISIBLE) {
+                    tvReplyTranslatedBody.visibility = View.GONE
+                    tvReplyTranslate.text = getString(R.string.translate)
+                } else {
+                    tvReplyTranslatedBody.visibility = View.VISIBLE
+                    tvReplyTranslate.text = getString(R.string.show_original)
+                }
+                return@setOnClickListener
+            }
+            tvReplyTranslate.text = getString(R.string.translating)
+            tvReplyTranslate.isEnabled = false
+            lifecycleScope.launch {
+                val lang = PreferencesHelper.getLanguage(this@DetailsActivity)
+                val result = SocialRepository.translateText(item.optString("body"), lang)
+                replyTranslated = result
+                tvReplyTranslatedBody.text = result
+                tvReplyTranslatedBody.visibility = View.VISIBLE
+                tvReplyTranslate.text = getString(R.string.show_original)
+                tvReplyTranslate.isEnabled = true
             }
         }
 

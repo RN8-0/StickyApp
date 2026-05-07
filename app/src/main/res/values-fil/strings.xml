@@ -653,4 +653,9 @@
     <string name="report_submitted">Naisumite ang ulat. salamat po!</string>
     <string name="report_failed">Hindi makapagsumite ng ulat. Pakisubukang muli.</string>
     <string name="report_select_reason">Mangyaring pumili ng dahilan</string>
+
+    <!-- Comment Translation -->
+    <string name="translate">I-translate</string>
+    <string name="show_original">Ipakita ang orihinal</string>
+    <string name="translating">Isinasalin…</string>
 </resources>

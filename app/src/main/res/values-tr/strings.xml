@@ -715,4 +715,9 @@
     <string name="reply">Yanıtla</string>
     <string name="reply_to_user">%1$s adlı kullanıcıya yanıt yaz</string>
     <string name="uploading_stickers">Sticker\'lar yükleniyor…</string>
+
+    <!-- Comment Translation -->
+    <string name="translate">Çevir</string>
+    <string name="show_original">Orijinali göster</string>
+    <string name="translating">Çevriliyor…</string>
 </resources>

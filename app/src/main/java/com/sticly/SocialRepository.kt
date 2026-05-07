@@ -230,6 +230,17 @@ object SocialRepository {
         }
     }
 
+    suspend fun translateText(text: String, targetLang: String): String = withContext(Dispatchers.IO) {
+        runCatching {
+            val body = JSONObject().apply {
+                put("text", text)
+                put("targets", org.json.JSONArray().put(targetLang))
+            }
+            val result = postJson("/api/translate", body)
+            result.optString("name_$targetLang").ifBlank { text }
+        }.getOrDefault(text)
+    }
+
     suspend fun updateProfile(context: Context, displayName: String, bio: String, showEmail: Boolean, photoUrl: String): JSONObject = withContext(Dispatchers.IO) {
         val viewer = currentUser(context)
         postPatchJson("/api/social/profile", JSONObject().apply {

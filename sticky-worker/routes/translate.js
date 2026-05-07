@@ -7,7 +7,7 @@ const TARGET_LANGUAGES = ['tr','de','fr','es','pt','it','ru','ar','hi','ja','ko'
 async function translateText(text, targetLang) {
   if (!text || !text.trim()) return text;
   const lang = targetLang === 'fil' ? 'tl' : targetLang;
-  const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=${lang}&dt=t&q=${encodeURIComponent(text)}`;
+  const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${lang}&dt=t&q=${encodeURIComponent(text)}`;
   const resp = await fetch(url);
   const data = await resp.json();
   return data?.[0]?.[0]?.[0] || text;
