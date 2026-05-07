@@ -489,16 +489,37 @@ function App() {
   };
 
   useEffect(() => {
-    try {
-      if (pb.authStore.isValid && pb.authStore.record?.email) {
-        setUser({ email: pb.authStore.record.email });
-        fetchPacks();
-        return;
+    // Initial check
+    const checkAuth = () => {
+      try {
+        if (pb.authStore.isValid && pb.authStore.record?.email) {
+          setUser({ email: pb.authStore.record.email });
+          fetchPacks();
+          return true;
+        }
+      } catch (e) {
+        console.warn('[Auth] init error:', e);
       }
-    } catch (e) {
-      console.warn('[Auth] init error:', e);
+      return false;
+    };
+
+    if (!checkAuth()) {
+      setLoading(false);
     }
-    setLoading(false);
+
+    // Listen for auth changes (e.g., OAuth popup completes)
+    const unsubscribe = pb.authStore.onChange((token, record) => {
+      if (token && record?.email) {
+        setUser({ email: record.email });
+        setLoading(false);
+        fetchPacks();
+      } else {
+        setUser(null);
+        setLoading(false);
+      }
+    });
+
+    return () => unsubscribe();
   }, []);
 
   useEffect(() => {
@@ -1123,6 +1144,7 @@ function App() {
     setDraftLoading(true);
     try {
       const records = await pb.collection('draft_stickers').getFullList({ sort: '-created_at' });
+      const DRAFT_COLL = 'draft_stickers';
       const drafts: StickerPack[] = (records as any[]).map(r => ({
         id: r.id,
         ...r,
@@ -1133,7 +1155,6 @@ function App() {
         view_count: 0,
         favorite_count: 0,
       } as StickerPack)).map((draft: any) => {
-        const collId = draft.collectionId || 'draft_stickers';
         const parseField = (raw: any): any[] => {
           if (Array.isArray(raw) && raw.length > 0) return raw;
           if (typeof raw === 'string' && raw.length > 2) {
@@ -1142,32 +1163,41 @@ function App() {
           return [];
         };
         const images = Array.isArray(draft.images) ? draft.images : (typeof draft.images === 'string' && draft.images ? [draft.images] : []);
-        const fileStickers = images.map((filename: string, index: number) => ({
-          name: `sticker_${index + 1}`,
-          image_file: filename,
-          image_url: getFileUrl(collId, draft.id, filename),
-          url: getFileUrl(collId, draft.id, filename),
-          emojis: ['⭐'],
-        }));
         const imageNames = new Set(images);
-        const jsonStickers = parseField(draft.stickers).map((sticker: any, index: number) => {
-          const jsonFile = sticker.image_file || sticker.name || '';
-          const fileFromImages = imageNames.has(jsonFile) ? jsonFile : images[index];
-          const imageFile = fileFromImages || jsonFile;
-          const pbUrl = imageFile ? getFileUrl(collId, draft.id, imageFile) : '';
-          return {
-            ...sticker,
-            name: sticker.name || `sticker_${index + 1}`,
-            image_file: imageFile,
-            image_url: pbUrl || sticker.image_url || sticker.url || '',
-            url: pbUrl || sticker.url || sticker.image_url || '',
-            emojis: Array.isArray(sticker.emojis) && sticker.emojis.length > 0 ? sticker.emojis : ['⭐'],
-          };
-        });
-        const stickers = jsonStickers.length > 0
-          ? [...jsonStickers, ...fileStickers.slice(jsonStickers.length)]
-          : fileStickers;
-        const trayFallback = draft.tray_url || stickers[0]?.url || '';
+
+        // Parse JSON stickers — primary source
+        const parsedStickers: any[] = parseField(draft.stickers);
+        const jsonStickers = parsedStickers.length > 0
+          ? parsedStickers.map((sticker: any, index: number) => {
+              const jsonFile = sticker.image_file || sticker.name || '';
+              const matchedFile = imageNames.has(jsonFile) ? jsonFile : (images[index] || jsonFile);
+              // Preserve original url if it already exists and is valid
+              const existingUrl = sticker.url || sticker.image_url || '';
+              const pbUrl = matchedFile ? getFileUrl(DRAFT_COLL, draft.id, matchedFile) : '';
+              return {
+                name: sticker.name || `sticker_${index + 1}`,
+                image_file: matchedFile,
+                image_url: pbUrl || existingUrl,
+                url: pbUrl || existingUrl,
+                emojis: Array.isArray(sticker.emojis) && sticker.emojis.length > 0 ? sticker.emojis : ['⭐'],
+              };
+            })
+          : [];
+        // File field stickers — fallback if no JSON stickers
+        const fileStickers = jsonStickers.length === 0 && images.length > 0
+          ? images.map((filename: string, index: number) => ({
+              name: `sticker_${index + 1}`,
+              image_file: filename,
+              image_url: getFileUrl(DRAFT_COLL, draft.id, filename),
+              url: getFileUrl(DRAFT_COLL, draft.id, filename),
+              emojis: ['⭐'],
+            }))
+          : [];
+
+        const stickers = jsonStickers.length > 0 ? jsonStickers : fileStickers;
+        const trayFallback = (draft.tray_url && draft.tray_url.startsWith('http'))
+          ? draft.tray_url
+          : (stickers[0]?.url || '');
         return {
           ...draft,
           status: draft.status === 'processing' && stickers.length > 0 ? 'draft' : (draft.status || 'draft'),

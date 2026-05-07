@@ -41,11 +41,16 @@ export class ErrorBoundary extends Component<Props, State> {
             style={{
               padding: '0.625rem 1.5rem', borderRadius: '0.75rem', border: 'none',
               background: '#7c3aed', color: '#fff', fontWeight: 600, cursor: 'pointer',
-              fontSize: '0.875rem',
+              fontSize: '0.875rem', marginBottom: '0.5rem',
             }}
           >
             Reload Page
           </button>
+          {this.state.error?.message?.includes('Pop-up') && (
+            <p style={{ fontSize: '0.75rem', color: '#f59e0b', marginTop: '0.5rem' }}>
+              💡 Please allow pop-ups in your browser settings, then reload.
+            </p>
+          )}
           {import.meta.env.DEV && this.state.error && (
             <pre style={{ marginTop: '2rem', fontSize: '0.75rem', color: '#64748b', textAlign: 'left', maxWidth: '100%', overflow: 'auto' }}>
               {this.state.error.stack}

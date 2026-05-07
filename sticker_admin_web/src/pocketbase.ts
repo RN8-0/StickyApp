@@ -25,8 +25,7 @@ function openOAuthWindow(url: string): void {
   const popup = window.open(url, 'sticky-admin-oauth', features);
 
   if (!popup) {
-    window.location.assign(url);
-    return;
+    throw new Error('Pop-up blocked. Please allow pop-ups for this site and try again.');
   }
 
   popup.focus();
