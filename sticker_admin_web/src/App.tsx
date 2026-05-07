@@ -1913,9 +1913,8 @@ function App() {
         is_animated: true,
 
       });
-      if (created?.id) {
-        logAdminAction('create_pack', `Created "${newPackData.name}" in ${collectionName}`, created.id);
-        setNewPackData(emptyPack());
+      if (createdId) {
+        logAdminAction('create_pack', `Created "${newPackData.name}" in ${collectionName}`, createdId);
       }
       alert(newPackData.is_animated ? "New animated pack created. You can now add video/gif files." : "New static pack created. You can now add WebP/PNG files.");
     } catch (e) {

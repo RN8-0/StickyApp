@@ -46,7 +46,7 @@ export class ErrorBoundary extends Component<Props, State> {
           >
             Reload Page
           </button>
-          {process.env.NODE_ENV === 'development' && this.state.error && (
+          {import.meta.env.DEV && this.state.error && (
             <pre style={{ marginTop: '2rem', fontSize: '0.75rem', color: '#64748b', textAlign: 'left', maxWidth: '100%', overflow: 'auto' }}>
               {this.state.error.stack}
             </pre>

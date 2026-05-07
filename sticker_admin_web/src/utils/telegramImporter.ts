@@ -98,18 +98,6 @@ async function getFile(botToken: string, fileId: string): Promise<string> {
 
 async function downloadTelegramFile(botToken: string, filePath: string): Promise<Blob> {
     return await telegramFilePost(botToken, filePath);
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 30000);
-    try {
-        const response = await fetch(url, { signal: controller.signal });
-        clearTimeout(timeout);
-        if (!response.ok) throw new Error(`Download error: ${response.status}`);
-        return await response.blob();
-    } catch (e: any) {
-        clearTimeout(timeout);
-        if (e.name === 'AbortError') throw new Error('File download timeout (30s)');
-        throw e;
-    }
 }
 
 // ========== PACK NAME EXTRACTION ==========
