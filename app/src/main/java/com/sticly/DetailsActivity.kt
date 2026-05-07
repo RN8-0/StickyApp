@@ -826,7 +826,7 @@ class DetailsActivity : AppCompatActivity() {
                 startActivity(Intent(this, DetailsActivity::class.java).putExtra("id", pack.id))
             },
             onAddClick = { pack ->
-                startActivity(Intent(this, DetailsActivity::class.java).putExtra("id", pack.id))
+                addToWhatsApp(pack)
             }
         )
         rvRelated.adapter = relatedAdapter
