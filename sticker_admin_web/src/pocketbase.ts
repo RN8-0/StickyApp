@@ -107,7 +107,9 @@ export async function uploadFile(
 ): Promise<string> {
   const formData = new FormData();
   const f = file instanceof File ? file : new File([file], filename || 'file.webp');
-  formData.append(fieldName, f);
+  // Use fieldName+ to APPEND (not replace) when uploading multiple files to a multi-file field
+  const uploadFieldName = ['images', 'tray_image'].includes(fieldName) ? `${fieldName}+` : fieldName;
+  formData.append(uploadFieldName, f);
 
   const record = await pb.collection(collectionName).update(recordId, formData);
   const uploadedFilename = record[fieldName];
