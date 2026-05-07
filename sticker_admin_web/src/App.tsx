@@ -503,12 +503,21 @@ function App() {
       return false;
     };
 
-    if (!checkAuth()) {
+    const authReady = checkAuth();
+
+    // Force loading timeout — after 8s show login even if auth is stuck
+    const loadingTimeout = setTimeout(() => {
       setLoading(false);
+    }, 8000);
+
+    if (!authReady) {
+      setLoading(false);
+      clearTimeout(loadingTimeout);
     }
 
     // Listen for auth changes (e.g., OAuth popup completes)
     const unsubscribe = pb.authStore.onChange((token, record) => {
+      clearTimeout(loadingTimeout);
       if (token && record?.email) {
         setUser({ email: record.email });
         setLoading(false);
@@ -519,7 +528,7 @@ function App() {
       }
     });
 
-    return () => unsubscribe();
+    return () => { unsubscribe(); clearTimeout(loadingTimeout); };
   }, []);
 
   useEffect(() => {
@@ -1169,16 +1178,15 @@ function App() {
         const parsedStickers: any[] = parseField(draft.stickers);
         const jsonStickers = parsedStickers.length > 0
           ? parsedStickers.map((sticker: any, index: number) => {
-              const jsonFile = sticker.image_file || sticker.name || '';
-              const matchedFile = imageNames.has(jsonFile) ? jsonFile : (images[index] || jsonFile);
-              // Preserve original url if it already exists and is valid
+              // Preserve EXISTING url — do NOT reconstruct unless it's missing
               const existingUrl = sticker.url || sticker.image_url || '';
-              const pbUrl = matchedFile ? getFileUrl(DRAFT_COLL, draft.id, matchedFile) : '';
+              const existingFile = sticker.image_file || sticker.name || '';
+              const validUrl = existingUrl && existingUrl.startsWith('http');
               return {
                 name: sticker.name || `sticker_${index + 1}`,
-                image_file: matchedFile,
-                image_url: pbUrl || existingUrl,
-                url: pbUrl || existingUrl,
+                image_file: existingFile,
+                image_url: validUrl ? existingUrl : (existingFile ? getFileUrl(DRAFT_COLL, draft.id, existingFile) : ''),
+                url: validUrl ? existingUrl : (existingFile ? getFileUrl(DRAFT_COLL, draft.id, existingFile) : ''),
                 emojis: Array.isArray(sticker.emojis) && sticker.emojis.length > 0 ? sticker.emojis : ['⭐'],
               };
             })
@@ -2690,10 +2698,10 @@ function App() {
   if (!user) {
     if (loading) {
       return (
-        <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center">
           <div className="flex flex-col items-center gap-4">
-            <div className="w-10 h-10 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-            <p className="text-textSec text-sm">Loading...</p>
+            <div className="w-10 h-10 border-2 border-[#7c3aed] border-t-transparent rounded-full animate-spin" />
+            <p className="text-[#94a3b8] text-sm">Loading...</p>
           </div>
         </div>
       );
@@ -6375,7 +6383,7 @@ function App() {
                                       is_premium: draft.is_premium,
                                       is_animated: draft.is_animated,
                                       is_active: draft.is_active,
-                                      publisher: (draft as any).publisher || 'Sticky Telegram',
+                                      publisher: (draft as any).publisher || 'Sticky',
                                       publisher_email: (draft as any).publisher_email || '',
                                       privacy_policy_website: (draft as any).privacy_policy_website || '',
                                       license_agreement_website: (draft as any).license_agreement_website || '',
