@@ -28,21 +28,23 @@ export async function renderLottieFrames(
     wrapper.style.cssText = `position:fixed;left:-9999px;top:-9999px;width:${size}px;height:${size}px;overflow:hidden;`;
     document.body.appendChild(wrapper);
 
-    const anim = lottie.loadAnimation({
-        container: wrapper,
-        renderer: 'canvas',
-        loop: false,
-        autoplay: false,
-        animationData: lottieData,
-    });
+    let anim: any = null;
+    try {
+        anim = lottie.loadAnimation({
+            container: wrapper,
+            renderer: 'canvas',
+            loop: false,
+            autoplay: false,
+            animationData: lottieData,
+        });
 
-    await new Promise<void>((resolve) => {
-        anim.addEventListener('DOMLoaded', () => resolve());
-    });
+        await new Promise<void>((resolve) => {
+            anim.addEventListener('DOMLoaded', () => resolve());
+        });
 
-    // Use lottie's own canvas
-    const lottieCanvas = wrapper.querySelector('canvas') as HTMLCanvasElement;
-    if (!lottieCanvas) throw new Error('Lottie did not create canvas');
+        // Use lottie's own canvas
+        const lottieCanvas = wrapper.querySelector('canvas') as HTMLCanvasElement;
+        if (!lottieCanvas) throw new Error('Lottie did not create canvas');
 
     const totalFrames = anim.totalFrames;
     const originalFps = anim.frameRate || 30;
@@ -77,10 +79,11 @@ export async function renderLottieFrames(
         frames.push(await blob.arrayBuffer());
     }
 
-    anim.destroy();
-    document.body.removeChild(wrapper);
-
     return frames;
+  } finally {
+    if (anim) { try { anim.destroy(); } catch {} }
+    if (wrapper.parentNode) { try { document.body.removeChild(wrapper); } catch {} }
+  }
 }
 
 // ========== VIDEO FRAME RENDERING ==========
@@ -114,30 +117,34 @@ export async function renderVideoFrames(
 
     const frames: ArrayBuffer[] = [];
 
-    for (let i = 0; i < frameCount; i++) {
-        const time = i / fps;
-        if (time > duration) break;
+    try {
+      for (let i = 0; i < frameCount; i++) {
+          const time = i / fps;
+          if (time > duration) break;
 
-        video.currentTime = time;
-        await new Promise<void>(resolve => { video.onseeked = () => resolve(); });
+          video.currentTime = time;
+          await new Promise<void>(resolve => { video.onseeked = () => resolve(); });
 
-        ctx.clearRect(0, 0, size, size);
-        const scale = Math.min(size / video.videoWidth, size / video.videoHeight);
-        const w = video.videoWidth * scale;
-        const h = video.videoHeight * scale;
-        ctx.drawImage(video, (size - w) / 2, (size - h) / 2, w, h);
+          ctx.clearRect(0, 0, size, size);
+          const scale = Math.min(size / video.videoWidth, size / video.videoHeight);
+          const w = video.videoWidth * scale;
+          const h = video.videoHeight * scale;
+          ctx.drawImage(video, (size - w) / 2, (size - h) / 2, w, h);
 
-        const blob = await new Promise<Blob>((resolve, reject) => {
-            canvas.toBlob(
-                (b) => b ? resolve(b) : reject(new Error('toBlob failed')),
-                'image/webp',
-                quality
-            );
-        });
-        frames.push(await blob.arrayBuffer());
+          const blob = await new Promise<Blob>((resolve, reject) => {
+              canvas.toBlob(
+                  (b) => b ? resolve(b) : reject(new Error('toBlob failed')),
+                  'image/webp',
+                  quality
+              );
+          });
+          frames.push(await blob.arrayBuffer());
+      }
+    } finally {
+      URL.revokeObjectURL(url);
+      video.remove();
     }
 
-    URL.revokeObjectURL(url);
     return frames;
 }
 
