@@ -125,8 +125,8 @@ async function sendFcmNotification(record, title, body) {
   }
 }
 
-// Track recently translated records to prevent infinite loops
-const recentlyTranslated = new Set();
+// Track recently translated records to prevent infinite loops (auto-cleanup after 30s)
+const recentlyTranslated = new Map();
 
 // Translate pack name to all supported languages
 const TARGET_LANGUAGES = ['tr','de','fr','es','pt','it','ru','ar','hi','ja','ko','zh','th','vi','id','fil'];
@@ -143,25 +143,37 @@ async function translateText(text, targetLang) {
 
 async function autoTranslate(record, collection) {
   if (!record.name) return;
-  if (recentlyTranslated.has(record.id)) return;
+  // Check cooldown (Map instead of Set so we can track timestamps)
+  const lastTime = recentlyTranslated.get(record.id);
+  if (lastTime && Date.now() - lastTime < 30000) return;
   // Only translate if name changed or translations missing
   if (record.name_tr && record.name_es && record.name_fr) return;
 
+  // Mark immediately to prevent parallel re-translation
+  recentlyTranslated.set(record.id, Date.now());
+  setTimeout(() => {
+    if (recentlyTranslated.get(record.id) && Date.now() - recentlyTranslated.get(record.id) >= 30000) {
+      recentlyTranslated.delete(record.id);
+    }
+  }, 31000);
   console.log(`[Hook] Translating "${record.name}" for ${collection}/${record.id}`);
-  const translations = { name_en: record.name };
-  await Promise.all(TARGET_LANGUAGES.map(async (lang) => {
-    try {
-      translations[`name_${lang}`] = await translateText(record.name, lang);
-    } catch (e) { /* skip */ }
-  }));
 
-  recentlyTranslated.add(record.id);
-  await pbFetch(`/api/collections/${collection}/records/${record.id}`, {
-    method: 'PATCH',
-    body: JSON.stringify(translations)
-  });
-  setTimeout(() => recentlyTranslated.delete(record.id), 30000);
-  console.log(`[Hook] Translated to ${Object.keys(translations).length} languages`);
+  try {
+    const translations = { name_en: record.name };
+    await Promise.all(TARGET_LANGUAGES.map(async (lang) => {
+      try {
+        translations[`name_${lang}`] = await translateText(record.name, lang);
+      } catch (e) { /* skip */ }
+    }));
+
+    await pbFetch(`/api/collections/${collection}/records/${record.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(translations)
+    });
+    console.log(`[Hook] Translated to ${Object.keys(translations).length} languages`);
+  } catch (err) {
+    console.error(`[Hook] Translation failed for ${record.id}:`, err.message);
+  }
 }
 
 // Handle new notification → send to ntfy

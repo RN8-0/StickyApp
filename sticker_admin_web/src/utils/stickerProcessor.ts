@@ -75,17 +75,35 @@ class StickerProcessor {
         this.isLoading = true;
         this.loadPromise = (async () => {
             this.ffmpeg = new FFmpeg();
-            const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm';
-            const loadWithTimeout = Promise.race([
-                this.ffmpeg.load({
-                    coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
-                    wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
-                }),
-                new Promise<never>((_, reject) => setTimeout(() => reject(new Error('FFmpeg load timeout (30s)')), 30000))
-            ]);
-            await loadWithTimeout;
-            this.isLoaded = true;
+
+            const cdnSources = [
+                'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm',
+                'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/esm',
+            ];
+
+            let lastError: Error | null = null;
+            for (const baseURL of cdnSources) {
+                try {
+                    const loadPromise = this.ffmpeg.load({
+                        coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
+                        wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+                    });
+                    const timeout = new Promise<never>((_, reject) =>
+                        setTimeout(() => reject(new Error(`FFmpeg load timeout from ${baseURL}`)), 30000)
+                    );
+                    await Promise.race([loadPromise, timeout]);
+                    this.isLoaded = true;
+                    this.isLoading = false;
+                    return;
+                } catch (err) {
+                    lastError = err instanceof Error ? err : new Error(String(err));
+                    console.warn(`[FFmpeg] Failed to load from ${baseURL}:`, lastError.message);
+                    // Retry next source
+                }
+            }
+
             this.isLoading = false;
+            throw lastError || new Error('FFmpeg failed to load from all CDN sources');
         })();
 
         return this.loadPromise;

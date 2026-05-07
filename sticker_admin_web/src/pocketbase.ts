@@ -68,9 +68,9 @@ export async function logout() {
 
 export function normalizePublicAssetUrl(url?: string | null): string {
   if (!url) return '';
+  // Replace old direct IP references with configured proxy URL
   return url
-    .replace(/^http:\/\/46\.225\.95\.201:8086/, IMAGE_PROXY_URL)
-    .replace(/^https:\/\/46\.225\.95\.201:8086/, IMAGE_PROXY_URL);
+    .replace(/^https?:\/\/46\.225\.95\.201:8086/, IMAGE_PROXY_URL);
 }
 
 // Check if current user is admin
