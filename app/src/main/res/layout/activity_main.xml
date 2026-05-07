@@ -504,8 +504,9 @@
                     android:layout_height="wrap_content"
                     android:layout_gravity="bottom|end"
                     android:layout_marginEnd="16dp"
-                    android:layout_marginBottom="70dp"
+                    android:layout_marginBottom="62dp"
                     app:srcCompat="@drawable/ic_scroll_up"
+                    app:tint="@color/white"
                     app:backgroundTint="@color/primary"
                     app:fabSize="mini"
                     app:elevation="6dp"
@@ -638,7 +639,8 @@
                         android:layout_marginTop="3dp"
                         android:maxLines="1"
                         android:ellipsize="end"
-                        android:gravity="center" />
+                        android:gravity="center"
+                        android:visibility="gone" />
                 </LinearLayout>
 
                 <!-- Tab: My Stickers -->
