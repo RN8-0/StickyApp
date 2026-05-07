@@ -761,12 +761,16 @@ function App() {
       };
       const created = await pb.collection('stickers').create(packData);
 
+      // Get file token to access user_submissions protected files
+      const fileToken = await pb.files.getToken().catch(() => null);
+
       const copiedStickers: Sticker[] = [];
       try {
         for (let index = 0; index < sourceStickerRefs.length; index++) {
           const sticker = sourceStickerRefs[index];
           const requestedName = normalizeFileName(sticker.image_file || `sticker_${index + 1}.webp`, `sticker_${index + 1}.webp`);
-          const file = await fetchAsFile(sticker.url, requestedName);
+          const srcUrl = fileToken ? `${sticker.url}${sticker.url.includes('?') ? '&' : '?'}token=${encodeURIComponent(fileToken)}` : sticker.url;
+          const file = await fetchAsFile(srcUrl, requestedName);
           const uploadedUrl = await uploadFile('stickers', created.id, 'images', file, requestedName);
           const uploadedName = filenameFromUrl(uploadedUrl, requestedName);
 
@@ -1281,6 +1285,9 @@ function App() {
         }
       }
 
+      // Get file token for protected draft files
+      const draftFileToken = await pb.files.getToken().catch(() => null);
+
       const copiedStickers: Sticker[] = [];
       for (let index = 0; index < sourceStickers.length; index++) {
         const sticker: any = sourceStickers[index];
@@ -1289,7 +1296,8 @@ function App() {
 
         onStep?.(`Copying sticker ${index + 1}/${sourceStickers.length}...`, 55 + Math.round((index / sourceStickers.length) * 25));
         const requestedName = normalizeFileName(sticker.image_file || sticker.name || `sticker_${index + 1}.webp`, `sticker_${index + 1}.webp`);
-        const file = await fetchAsFile(sourceUrl, requestedName);
+        const srcUrl = draftFileToken ? `${sourceUrl}${sourceUrl.includes('?') ? '&' : '?'}token=${encodeURIComponent(draftFileToken)}` : sourceUrl;
+        const file = await fetchAsFile(srcUrl, requestedName);
         const uploadedUrl = await uploadFile(targetCollection, targetRecord.id, 'images', file, requestedName);
         const uploadedName = filenameFromUrl(uploadedUrl, requestedName);
 
