@@ -734,14 +734,13 @@ function App() {
         return;
       }
 
-      // 2. Create the public pack first, then copy submission files into that record.
+      // 2. Create the pack with existing submission sticker URLs (no re-upload needed)
       const packData: any = {
         name: submission.pack_name,
         publisher: submission.publisher_name || submission.display_name || 'Community Artist',
         publisher_email: submission.user_email || '',
         publisher_user_id: submission.user_id || submission.user_email || '',
         publisher_photo_url: (submission as any).photo_url || (submission as any).user_photo_url || '',
-        source: 'user_submission',
         category: submission.category || 'other',
         is_premium: false,
         is_animated: false,
@@ -751,57 +750,14 @@ function App() {
         like_count: 0,
         comment_count: 0,
         engagement_score: 0,
-        sticker_count: 0,
+        sticker_count: sourceStickerRefs.length,
         image_data_version: '1',
         is_active: true,
-        stickers: [],
-        tray_url: '',
-        tray_image_file: '',
+        stickers: sourceStickerRefs,
+        tray_url: sourceStickerRefs[0]?.url || '',
         created_at: new Date().toISOString(),
       };
       const created = await pb.collection('stickers').create(packData);
-
-      // Get file token to access user_submissions protected files
-      const fileToken = await pb.files.getToken().catch(() => null);
-
-      const copiedStickers: Sticker[] = [];
-      try {
-        for (let index = 0; index < sourceStickerRefs.length; index++) {
-          const sticker = sourceStickerRefs[index];
-          const requestedName = normalizeFileName(sticker.image_file || `sticker_${index + 1}.webp`, `sticker_${index + 1}.webp`);
-          const srcUrl = fileToken ? `${sticker.url}${sticker.url.includes('?') ? '&' : '?'}token=${encodeURIComponent(fileToken)}` : sticker.url;
-          const file = await fetchAsFile(srcUrl, requestedName);
-          const uploadedUrl = await uploadFile('stickers', created.id, 'images', file, requestedName);
-          const uploadedName = filenameFromUrl(uploadedUrl, requestedName);
-
-          copiedStickers.push({
-            image_file: uploadedName,
-            url: uploadedUrl,
-            emojis: Array.isArray(sticker.emojis) && sticker.emojis.length > 0 ? sticker.emojis : ['⭐'],
-          });
-        }
-
-        let trayUrl = '';
-        let trayFile = '';
-        if (sourceStickerRefs[0]?.url) {
-          const requestedTrayName = normalizeFileName(sourceStickerRefs[0].image_file || 'tray.png', 'tray.png');
-          const trayFileObject = await fetchAsFile(sourceStickerRefs[0].url, requestedTrayName);
-          trayUrl = await uploadFile('stickers', created.id, 'tray_image', trayFileObject, requestedTrayName);
-          trayFile = filenameFromUrl(trayUrl, requestedTrayName);
-        }
-
-        await pb.collection('stickers').update(created.id, {
-          stickers: copiedStickers,
-          sticker_count: copiedStickers.length,
-          tray_url: trayUrl || copiedStickers[0]?.url || '',
-          tray_image_file: trayFile,
-          image_data_version: Date.now().toString(),
-          engagement_score: packEngagementScore({ ...packData, sticker_count: copiedStickers.length }),
-        });
-      } catch (copyError) {
-        await pb.collection('stickers').delete(created.id).catch(() => {});
-        throw copyError;
-      }
 
       // 3. Update submission status
       await pb.collection('user_submissions').update(submission.id, {
@@ -2694,10 +2650,7 @@ function App() {
     // Kategori Filtresi
     if (categoryFilter !== 'all' && p.category !== categoryFilter) return false;
 
-    if (statusFilter === 'all') {
-      const approvedPackIds = new Set(userSubmissions.filter(s => s.status === 'approved' && s.sticker_pack_id).map(s => s.sticker_pack_id));
-      return p.source !== 'user_submission' && !approvedPackIds.has(p.id);
-    }
+    if (statusFilter === 'all') return true;
     if (statusFilter === 'active') return p.is_active !== false;
     if (statusFilter === 'passive') return p.is_active === false;
 
