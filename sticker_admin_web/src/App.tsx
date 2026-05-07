@@ -489,12 +489,16 @@ function App() {
   };
 
   useEffect(() => {
-    if (pb.authStore.isValid && pb.authStore.record?.email) {
-      setUser({ email: pb.authStore.record.email });
-      fetchPacks();
-    } else {
-      setLoading(false);
+    try {
+      if (pb.authStore.isValid && pb.authStore.record?.email) {
+        setUser({ email: pb.authStore.record.email });
+        fetchPacks();
+        return;
+      }
+    } catch (e) {
+      console.warn('[Auth] init error:', e);
     }
+    setLoading(false);
   }, []);
 
   useEffect(() => {
@@ -1015,8 +1019,9 @@ function App() {
       // Admin kontrolü
       let isAdminUser = false;
       try {
-        const escaped = email.replace(/'/g, "\\'");
-        const admins = await pb.collection('admins_list').getFullList({ filter: `email='${escaped}'` });
+        const admins = await pb.collection('admins_list').getFullList({
+          filter: pb.filter('email = {:email}', { email })
+        });
         if (admins.length > 0) isAdminUser = true;
       } catch (_) {}
       if (!isAdminUser) {
@@ -1044,8 +1049,9 @@ function App() {
 
       let isAdminUser = false;
       try {
-        const escaped = userEmail.replace(/'/g, "\\'");
-        const admins = await pb.collection('admins_list').getFullList({ filter: `email='${escaped}'` });
+        const admins = await pb.collection('admins_list').getFullList({
+          filter: pb.filter('email = {:email}', { email: userEmail })
+        });
         if (admins.length > 0) isAdminUser = true;
       } catch (_) {}
       if (!isAdminUser) {
@@ -1600,7 +1606,10 @@ function App() {
   const fetchUsers = async () => {
     setUsersLoading(true);
     try {
-      const resp = await fetch(`${WORKER_URL}/api/users`);
+      const token = pb.authStore.token;
+      const resp = await fetch(`${WORKER_URL}/api/users`, {
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+      });
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       const { users } = await resp.json();
       const usersList: UserData[] = (users || []).map((data: any) => ({
@@ -1734,7 +1743,7 @@ function App() {
 
       const resp = await fetch(`${WORKER_URL}/api/users/${userId}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${pb.authStore.token}` },
         body: JSON.stringify({
           is_premium: isPremium,
           premium_type: type,
@@ -1788,7 +1797,7 @@ function App() {
 
       const resp = await fetch(`${WORKER_URL}/api/users/${userId}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${pb.authStore.token}` },
         body: JSON.stringify({
           is_premium: false,
           premium_type: 'none',
@@ -2649,6 +2658,16 @@ function App() {
   }
 
   if (!user) {
+    if (loading) {
+      return (
+        <div className="min-h-screen bg-background flex items-center justify-center">
+          <div className="flex flex-col items-center gap-4">
+            <div className="w-10 h-10 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+            <p className="text-textSec text-sm">Loading...</p>
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
         <div className="glass w-full max-w-md p-8 rounded-3xl space-y-6 animate-in fade-in zoom-in duration-300">
