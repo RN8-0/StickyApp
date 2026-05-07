@@ -1113,20 +1113,22 @@ function App() {
     try {
       let allPacks: StickerPack[] = [];
 
-      // 1. PocketBase'den oku (birincil kaynak)
-      try {
-        const [normalRecords, premiumRecords] = await Promise.all([
-          pb.collection('stickers').getFullList({ perPage: 500 }),
-          pb.collection('premium_stickers').getFullList({ perPage: 500 }),
-        ]);
-        allPacks = [
-          ...normalRecords.map(r => mapPbRecord(r, false)),
-          ...premiumRecords.map(r => mapPbRecord(r, true)),
-        ];
-        console.log(`PocketBase: ${allPacks.length} paket yüklendi`);
-      } catch (pbError) {
-        console.warn('PocketBase fetch başarısız:', pbError);
-      }
+      // 1. PocketBase'den oku (birincil kaynak) - her koleksiyon bağımsız fetch edilir
+      const [normalRecords, premiumRecords] = await Promise.all([
+        pb.collection('stickers').getFullList({ perPage: 500 }).catch(e => {
+          console.warn('stickers fetch failed:', e);
+          return [];
+        }),
+        pb.collection('premium_stickers').getFullList({ perPage: 500 }).catch(e => {
+          console.warn('premium_stickers fetch failed:', e);
+          return [];
+        }),
+      ]);
+      allPacks = [
+        ...normalRecords.map(r => mapPbRecord(r, false)),
+        ...premiumRecords.map(r => mapPbRecord(r, true)),
+      ];
+      console.log(`PocketBase: ${allPacks.length} paket yüklendi`);
 
       console.table(allPacks.slice(0, 10).map(p => ({ name: p.name, dl: p.download_count })));
       setPacks(allPacks.sort((a, b) => (a.name || '').localeCompare(b.name || '')));
