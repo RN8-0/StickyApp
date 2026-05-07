@@ -189,7 +189,27 @@ object SocialRepository {
             put("user_id", viewer.id)
             put("user_email", viewer.email)
             put("display_name", viewer.name.ifBlank { viewer.email })
-        }) }.getOrElse { JSONObject().put("liked", false) }
+        }) }.getOrElse {
+            val existing = runCatching {
+                PocketBaseHelper.listAllRecords("reply_likes", filter = "reply_id='${escape(replyId)}' && user_id='${escape(viewer.id)}'", perPage = 1)
+            }.getOrDefault(emptyList())
+            if (existing.isNotEmpty()) {
+                existing.forEach { PocketBaseHelper.deleteRecord("reply_likes", it.optString("id")) }
+                val count = runCatching { PocketBaseHelper.listAllRecords("reply_likes", filter = "reply_id='${escape(replyId)}'", perPage = 200).size }.getOrDefault(0)
+                JSONObject().put("liked", false).put("like_count", count)
+            } else {
+                PocketBaseHelper.createRecord("reply_likes", JSONObject().apply {
+                    put("reply_id", replyId)
+                    put("pack_id", packId)
+                    put("user_id", viewer.id)
+                    put("user_email", viewer.email)
+                    put("display_name", viewer.name.ifBlank { viewer.email })
+                    put("created_at", java.time.Instant.now().toString())
+                })
+                val count = runCatching { PocketBaseHelper.listAllRecords("reply_likes", filter = "reply_id='${escape(replyId)}'", perPage = 200).size }.getOrDefault(1)
+                JSONObject().put("liked", true).put("like_count", count)
+            }
+        }
     }
 
     suspend fun updateProfile(context: Context, displayName: String, bio: String, showEmail: Boolean, photoUrl: String): JSONObject = withContext(Dispatchers.IO) {
@@ -367,6 +387,7 @@ object SocialRepository {
         val comments = runCatching { PocketBaseHelper.listAllRecords("pack_comments", filter = "pack_id='${escape(packId)}'", perPage = 200) }.getOrDefault(emptyList())
         val likes = runCatching { PocketBaseHelper.listAllRecords("comment_likes", filter = "pack_id='${escape(packId)}'", perPage = 200) }.getOrDefault(emptyList())
         val replies = runCatching { PocketBaseHelper.listAllRecords("comment_replies", filter = "pack_id='${escape(packId)}'", perPage = 200) }.getOrDefault(emptyList())
+        val replyLikes = runCatching { PocketBaseHelper.listAllRecords("reply_likes", filter = "pack_id='${escape(packId)}'", perPage = 200) }.getOrDefault(emptyList())
         val viewerKeys = setOf(viewer.id.lowercase(), viewer.email.lowercase()).filter { it.isNotBlank() }.toSet()
         val sorted = comments.sortedByDescending { it.optString("created_at", it.optString("created")) }
         return JSONArray().apply {
@@ -378,7 +399,16 @@ object SocialRepository {
                 put(JSONObject(comment.toString()).apply {
                     put("like_count", comment.optInt("like_count", commentLikes.size))
                     put("liked", commentLikes.any { like -> listOf(like.optString("user_id"), like.optString("user_email")).map { it.lowercase() }.any { it in viewerKeys } })
-                    put("replies", JSONArray().apply { commentReplies.forEach { put(it) } })
+                    put("replies", JSONArray().apply {
+                        commentReplies.forEach { reply ->
+                            val replyId = reply.optString("id")
+                            val rLikes = replyLikes.filter { it.optString("reply_id") == replyId }
+                            put(JSONObject(reply.toString()).apply {
+                                put("like_count", reply.optInt("like_count", rLikes.size))
+                                put("liked", rLikes.any { rl -> listOf(rl.optString("user_id"), rl.optString("user_email")).map { it.lowercase() }.any { it in viewerKeys } })
+                            })
+                        }
+                    })
                 })
             }
         }

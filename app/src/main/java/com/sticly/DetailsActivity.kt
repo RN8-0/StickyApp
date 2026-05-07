@@ -754,8 +754,11 @@ class DetailsActivity : AppCompatActivity() {
             // Publish to Store button
             checkIfAlreadySubmitted(pack.id) { alreadySubmitted ->
                 if (alreadySubmitted) {
-                    btnPublishTop?.isEnabled = false
-                    btnPublishTop?.alpha = 0.45f
+                    btnPublishTop?.isEnabled = true
+                    btnPublishTop?.alpha = 1f
+                    btnPublishTop?.setOnClickListener {
+                        Toast.makeText(this, getString(R.string.publish_pack_already_submitted), Toast.LENGTH_SHORT).show()
+                    }
                 } else {
                     val publishClick = View.OnClickListener {
                         if (pack.stickers.size !in 9..30) {

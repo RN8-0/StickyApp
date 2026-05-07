@@ -504,7 +504,7 @@
                     android:layout_height="wrap_content"
                     android:layout_gravity="bottom|end"
                     android:layout_marginEnd="16dp"
-                    android:layout_marginBottom="88dp"
+                    android:layout_marginBottom="70dp"
                     app:srcCompat="@drawable/ic_scroll_up"
                     app:backgroundTint="@color/primary"
                     app:fabSize="mini"
@@ -534,7 +534,7 @@
             <LinearLayout
                 android:id="@+id/bottomNav"
                 android:layout_width="match_parent"
-                android:layout_height="68dp"
+                android:layout_height="56dp"
                 android:background="@color/bottom_nav_bg"
                 android:orientation="horizontal"
                 android:elevation="12dp"
@@ -550,7 +550,7 @@
                     android:layout_weight="1"
                     android:orientation="vertical"
                     android:gravity="center"
-                    android:paddingBottom="6dp"
+                    android:paddingBottom="4dp"
                     android:background="?selectableItemBackground">
                     <ImageView
                         android:id="@+id/iconFavorites"
@@ -579,7 +579,7 @@
                     android:layout_weight="1"
                     android:orientation="vertical"
                     android:gravity="center"
-                    android:paddingBottom="6dp"
+                    android:paddingBottom="4dp"
                     android:background="?selectableItemBackground">
                     <ImageView
                         android:id="@+id/iconAICreate"
@@ -608,8 +608,8 @@
                     android:layout_weight="1"
                     android:orientation="vertical"
                     android:gravity="center"
-                    android:layout_marginTop="-18dp"
-                    android:layout_marginBottom="4dp"
+                    android:layout_marginTop="-16dp"
+                    android:layout_marginBottom="2dp"
                     android:clipChildren="false"
                     android:clipToPadding="false"
                     android:background="?selectableItemBackgroundBorderless">
@@ -649,7 +649,7 @@
                     android:layout_weight="1"
                     android:orientation="vertical"
                     android:gravity="center"
-                    android:paddingBottom="6dp"
+                    android:paddingBottom="4dp"
                     android:background="?selectableItemBackground">
                     <ImageView
                         android:id="@+id/iconMyStickers"
@@ -678,7 +678,7 @@
                     android:layout_weight="1"
                     android:orientation="vertical"
                     android:gravity="center"
-                    android:paddingBottom="6dp"
+                    android:paddingBottom="4dp"
                     android:background="?selectableItemBackground">
                     <ImageView
                         android:id="@+id/iconProfile"
