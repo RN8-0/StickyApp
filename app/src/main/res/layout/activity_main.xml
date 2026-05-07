@@ -504,7 +504,7 @@
                     android:layout_height="wrap_content"
                     android:layout_gravity="bottom|end"
                     android:layout_marginEnd="16dp"
-                    android:layout_marginBottom="62dp"
+                    android:layout_marginBottom="8dp"
                     app:srcCompat="@drawable/ic_scroll_up"
                     app:tint="@color/white"
                     app:backgroundTint="@color/primary"

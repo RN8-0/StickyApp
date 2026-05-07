@@ -1159,19 +1159,65 @@ class DetailsActivity : AppCompatActivity() {
             btnSend.isEnabled = false
             btnSend.alpha = 0.4f
             lifecycleScope.launch {
+                val parentId = replyToCommentId
                 runCatching {
-                    val parentId = replyToCommentId
                     if (parentId == null) SocialRepository.addComment(this@DetailsActivity, pack, body)
                     else SocialRepository.addCommentReply(this@DetailsActivity, parentId, pack.id, body)
-                }.onSuccess {
+                }.onSuccess { result ->
+                    val viewer = SocialRepository.currentUser(this@DetailsActivity)
+                    val now = java.time.Instant.now().toString()
                     etInput.setText("")
                     replyToCommentId = null
                     etInput.hint = getString(R.string.comment_hint)
                     replyBanner.visibility = View.GONE
                     updateSendButton()
-                    refreshComments()
                     currentPackCommentCount++
                     findViewById<TextView>(R.id.tvPackCommentCount)?.text = formatCompactNumber(currentPackCommentCount)
+                    if (parentId == null) {
+                        val newComment = JSONObject().apply {
+                            put("id", result.optJSONObject("comment")?.optString("id") ?: "")
+                            put("display_name", viewer.name.ifBlank { viewer.email })
+                            put("photo_url", viewer.photoUrl)
+                            put("body", body)
+                            put("like_count", 0)
+                            put("liked", false)
+                            put("replies", JSONArray())
+                            put("created_at", now)
+                        }
+                        val newView = buildCommentRow(newComment, pack.id) { cId, author ->
+                            replyToCommentId = cId
+                            tvReplyingTo.text = getString(R.string.reply_to_user, author)
+                            replyBanner.visibility = View.VISIBLE
+                            etInput.requestFocus()
+                        }
+                        commentsContainer.addView(newView, 0)
+                        tvCommentCount.text = currentPackCommentCount.toString()
+                    } else {
+                        val replyData = result.optJSONObject("reply") ?: result
+                        val newReply = JSONObject().apply {
+                            put("id", replyData.optString("id", ""))
+                            put("display_name", viewer.name.ifBlank { viewer.email })
+                            put("photo_url", viewer.photoUrl)
+                            put("body", body)
+                            put("like_count", 0)
+                            put("liked", false)
+                            put("created_at", now)
+                        }
+                        for (i in 0 until commentsContainer.childCount) {
+                            val child = commentsContainer.getChildAt(i)
+                            if (child.tag == parentId) {
+                                val repliesContainer = child.findViewById<LinearLayout>(R.id.repliesContainer)
+                                val replyView = buildReplyRow(newReply, pack.id, parentId) { cId, author ->
+                                    replyToCommentId = cId
+                                    tvReplyingTo.text = getString(R.string.reply_to_user, author)
+                                    replyBanner.visibility = View.VISIBLE
+                                    etInput.requestFocus()
+                                }
+                                repliesContainer.addView(replyView)
+                                break
+                            }
+                        }
+                    }
                 }.onFailure { showThemedSnackbar(it.message ?: getString(R.string.error_generic)) }
                 btnSend.isEnabled = true
                 btnSend.alpha = 1f
@@ -1244,6 +1290,7 @@ class DetailsActivity : AppCompatActivity() {
 
         btnLike.setOnClickListener {
             if (!requireSocialSignIn()) return@setOnClickListener
+            animateLike(ivLikeIcon)
             lifecycleScope.launch {
                 runCatching { SocialRepository.toggleCommentLike(this@DetailsActivity, commentId, packId) }
                     .onSuccess { result ->
@@ -1258,6 +1305,7 @@ class DetailsActivity : AppCompatActivity() {
             }
         }
 
+        row.tag = commentId
         tvReply.setOnClickListener { onReply(commentId, author) }
 
         val replies = comment.optJSONArray("replies") ?: JSONArray()
@@ -1269,6 +1317,17 @@ class DetailsActivity : AppCompatActivity() {
         }
 
         return row
+    }
+
+    private fun animateLike(view: View) {
+        ObjectAnimator.ofPropertyValuesHolder(
+            view,
+            android.animation.PropertyValuesHolder.ofFloat("scaleX", 1f, 1.45f, 1f),
+            android.animation.PropertyValuesHolder.ofFloat("scaleY", 1f, 1.45f, 1f)
+        ).apply {
+            duration = 280
+            interpolator = OvershootInterpolator(2f)
+        }.start()
     }
 
     private fun buildReplyRow(item: JSONObject, packId: String, parentCommentId: String, onReply: (String, String) -> Unit): View {
@@ -1304,6 +1363,7 @@ class DetailsActivity : AppCompatActivity() {
 
         btnLike.setOnClickListener {
             if (!requireSocialSignIn()) return@setOnClickListener
+            animateLike(ivLikeIcon)
             lifecycleScope.launch {
                 runCatching { SocialRepository.toggleReplyLike(this@DetailsActivity, replyId, packId) }
                     .onSuccess { res ->
@@ -1314,6 +1374,7 @@ class DetailsActivity : AppCompatActivity() {
                         tvLikeCount.setTextColor(ContextCompat.getColor(this@DetailsActivity, color))
                         tvLikeCount.text = if (replyLikeCount > 0) replyLikeCount.toString() else ""
                     }
+                    .onFailure { showThemedSnackbar(it.message ?: getString(R.string.error_generic)) }
             }
         }
 
@@ -1413,9 +1474,6 @@ class DetailsActivity : AppCompatActivity() {
         lifecycleScope.launch {
             try {
                 val existing = withContext(Dispatchers.IO) {
-                    val stickerFiles = CustomStickerManager.getStickerFiles(this@DetailsActivity, packId)
-                    val currentSignature = stickerFiles.sortedBy { it.name }
-                        .joinToString("|") { file -> "${file.name}:${file.length()}:${file.lastModified()}" }
                     val userKeys = listOf(user?.uid.orEmpty(), email, PreferencesHelper.getDeviceId(this@DetailsActivity))
                         .map { it.trim().lowercase() }
                         .filter { it.isNotBlank() }
@@ -1427,15 +1485,12 @@ class DetailsActivity : AppCompatActivity() {
                         val ownerKeys = listOf(record.optString("user_id"), record.optString("user_email"), record.optString("device_id"))
                             .map { it.trim().lowercase() }
                             .filter { it.isNotBlank() }
-                        if (userKeys.none { ownerKeys.contains(it) }) return@filter false
-                        val previousSignature = record.optString("note").substringAfter("source_signature=", "")
-                        val previousCount = record.optInt("sticker_count", 0)
-                        previousSignature == currentSignature || (previousSignature.isBlank() && previousCount == stickerFiles.size)
+                        userKeys.any { ownerKeys.contains(it) }
                     }
                 }
                 callback(existing.isNotEmpty())
             } catch (_: Exception) {
-                callback(false)
+                callback(true)
             }
         }
     }

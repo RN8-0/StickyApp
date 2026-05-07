@@ -154,7 +154,26 @@ object SocialRepository {
             put("user_id", viewer.id)
             put("user_email", viewer.email)
             put("display_name", viewer.name.ifBlank { viewer.email })
-        }) }.getOrElse { JSONObject().put("liked", false) }
+        }) }.getOrElse {
+            val filter = "comment_id='${escape(commentId)}' && (user_id='${escape(viewer.id)}' || user_email='${escape(viewer.email)}')"
+            val existing = runCatching { PocketBaseHelper.listAllRecords("comment_likes", filter = filter, perPage = 1) }.getOrDefault(emptyList())
+            if (existing.isNotEmpty()) {
+                existing.forEach { runCatching { PocketBaseHelper.deleteRecord("comment_likes", it.optString("id")) } }
+                val count = runCatching { PocketBaseHelper.listAllRecords("comment_likes", filter = "comment_id='${escape(commentId)}'", perPage = 200).size }.getOrDefault(0)
+                JSONObject().put("liked", false).put("like_count", count)
+            } else {
+                runCatching { PocketBaseHelper.createRecord("comment_likes", JSONObject().apply {
+                    put("comment_id", commentId)
+                    put("pack_id", packId)
+                    put("user_id", viewer.id)
+                    put("user_email", viewer.email)
+                    put("display_name", viewer.name.ifBlank { viewer.email })
+                    put("created_at", java.time.Instant.now().toString())
+                }) }
+                val count = runCatching { PocketBaseHelper.listAllRecords("comment_likes", filter = "comment_id='${escape(commentId)}'", perPage = 200).size }.getOrDefault(1)
+                JSONObject().put("liked", true).put("like_count", count)
+            }
+        }
     }
 
     suspend fun addCommentReply(context: Context, commentId: String, packId: String, body: String): JSONObject = withContext(Dispatchers.IO) {
@@ -183,13 +202,32 @@ object SocialRepository {
     suspend fun toggleReplyLike(context: Context, replyId: String, packId: String): JSONObject = withContext(Dispatchers.IO) {
         requireSignedIn(context)
         val viewer = currentUser(context)
-        postJson("/api/social/comments/reply/like", JSONObject().apply {
+        runCatching { postJson("/api/social/comments/reply/like", JSONObject().apply {
             put("reply_id", replyId)
             put("pack_id", packId)
             put("user_id", viewer.id)
             put("user_email", viewer.email)
             put("display_name", viewer.name.ifBlank { viewer.email })
-        })
+        }) }.getOrElse {
+            val filter = "comment_id='${escape(replyId)}' && (user_id='${escape(viewer.id)}' || user_email='${escape(viewer.email)}')"
+            val existing = runCatching { PocketBaseHelper.listAllRecords("comment_likes", filter = filter, perPage = 1) }.getOrDefault(emptyList())
+            if (existing.isNotEmpty()) {
+                existing.forEach { runCatching { PocketBaseHelper.deleteRecord("comment_likes", it.optString("id")) } }
+                val count = runCatching { PocketBaseHelper.listAllRecords("comment_likes", filter = "comment_id='${escape(replyId)}'", perPage = 200).size }.getOrDefault(0)
+                JSONObject().put("liked", false).put("like_count", count)
+            } else {
+                runCatching { PocketBaseHelper.createRecord("comment_likes", JSONObject().apply {
+                    put("comment_id", replyId)
+                    put("pack_id", packId)
+                    put("user_id", viewer.id)
+                    put("user_email", viewer.email)
+                    put("display_name", viewer.name.ifBlank { viewer.email })
+                    put("created_at", java.time.Instant.now().toString())
+                }) }
+                val count = runCatching { PocketBaseHelper.listAllRecords("comment_likes", filter = "comment_id='${escape(replyId)}'", perPage = 200).size }.getOrDefault(1)
+                JSONObject().put("liked", true).put("like_count", count)
+            }
+        }
     }
 
     suspend fun updateProfile(context: Context, displayName: String, bio: String, showEmail: Boolean, photoUrl: String): JSONObject = withContext(Dispatchers.IO) {

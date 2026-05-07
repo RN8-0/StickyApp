@@ -718,6 +718,7 @@ router.post('/comments/like', async (req, res) => {
     const packId = clean(req.body.pack_id);
     const userId = clean(req.body.user_id);
     const userEmail = clean(req.body.user_email);
+    const actorName = clean(req.body.display_name) || userEmail;
     if (!commentId || (!userId && !userEmail)) return res.status(400).json({ error: 'Missing comment or user.' });
     const likes = await safeFetchAll('comment_likes');
     const existing = likes.find((like) => clean(like.comment_id) === commentId && viewerMatches(like, userId, userEmail));
@@ -729,14 +730,38 @@ router.post('/comments/like', async (req, res) => {
     } else {
       const resp = await pbFetch('/api/collections/comment_likes/records', {
         method: 'POST',
-        body: JSON.stringify({ comment_id: commentId, pack_id: packId, user_id: userId, user_email: userEmail, display_name: clean(req.body.display_name), created_at: new Date().toISOString() })
+        body: JSON.stringify({ comment_id: commentId, pack_id: packId, user_id: userId, user_email: userEmail, display_name: actorName, created_at: new Date().toISOString() })
       });
       if (!resp.ok) throw new Error(await resp.text());
     }
     const nextLikes = await safeFetchAll('comment_likes');
     const likeCount = nextLikes.filter((like) => clean(like.comment_id) === commentId).length;
-    const resp = await pbFetch(`/api/collections/pack_comments/records/${commentId}`, { method: 'PATCH', body: JSON.stringify({ like_count: likeCount }) });
-    if (!resp.ok) console.warn('[Social comment like] count update failed:', await resp.text());
+    const patchResp = await pbFetch(`/api/collections/pack_comments/records/${commentId}`, { method: 'PATCH', body: JSON.stringify({ like_count: likeCount }) });
+    if (!patchResp.ok) console.warn('[Social comment like] count update failed:', await patchResp.text());
+    if (liked) {
+      const commentResp = await pbFetch(`/api/collections/pack_comments/records/${commentId}`);
+      if (commentResp.ok) {
+        const comment = await commentResp.json();
+        const authorId = clean(comment.user_id) || clean(comment.user_email);
+        const isSelf = authorId && (authorId === userId || authorId === userEmail);
+        if (authorId && !isSelf) {
+          pbFetch('/api/collections/notifications/records', {
+            method: 'POST',
+            body: JSON.stringify({
+              user_id: authorId,
+              title: 'Sticky',
+              body: `${actorName} liked your comment.`,
+              message: `${actorName} liked your comment.`,
+              type: 'comment_like',
+              from: userId || userEmail,
+              pack_id: packId,
+              read: false,
+              timestamp: new Date().toISOString()
+            })
+          }).catch(() => {});
+        }
+      }
+    }
     res.json({ liked, like_count: likeCount });
   } catch (err) {
     console.error('[Social comment like]', err.message);
@@ -749,21 +774,47 @@ router.post('/comments/reply', async (req, res) => {
     const commentId = clean(req.body.comment_id);
     const packId = clean(req.body.pack_id);
     const body = clean(req.body.body);
+    const actorId = clean(req.body.user_id);
+    const actorEmail = clean(req.body.user_email);
+    const actorName = clean(req.body.display_name) || actorEmail;
     if (!commentId || !packId || !body) return res.status(400).json({ error: 'Missing comment, pack or reply.' });
     const payload = {
       comment_id: commentId,
       pack_id: packId,
-      user_id: clean(req.body.user_id),
-      user_email: clean(req.body.user_email),
-      display_name: clean(req.body.display_name),
+      user_id: actorId,
+      user_email: actorEmail,
+      display_name: actorName,
       photo_url: clean(req.body.photo_url),
       body: body.slice(0, 500),
       created_at: new Date().toISOString(),
     };
     const resp = await pbFetch('/api/collections/comment_replies/records', { method: 'POST', body: JSON.stringify(payload) });
     if (!resp.ok) throw new Error(await resp.text());
+    const replyRecord = await resp.json();
     await updatePackCounters(packId, clean(req.body.collection || 'stickers'));
-    res.json({ reply: await resp.json() });
+    const commentResp = await pbFetch(`/api/collections/pack_comments/records/${commentId}`);
+    if (commentResp.ok) {
+      const comment = await commentResp.json();
+      const authorId = clean(comment.user_id) || clean(comment.user_email);
+      const isSelf = authorId && (authorId === actorId || authorId === actorEmail);
+      if (authorId && !isSelf) {
+        pbFetch('/api/collections/notifications/records', {
+          method: 'POST',
+          body: JSON.stringify({
+            user_id: authorId,
+            title: 'Sticky',
+            body: `${actorName} replied to your comment: "${body.slice(0, 60)}${body.length > 60 ? '…' : ''}"`,
+            message: `${actorName} replied to your comment.`,
+            type: 'comment_reply',
+            from: actorId || actorEmail,
+            pack_id: packId,
+            read: false,
+            timestamp: new Date().toISOString()
+          })
+        }).catch(() => {});
+      }
+    }
+    res.json({ reply: replyRecord });
   } catch (err) {
     console.error('[Social comment reply]', err.message);
     res.status(500).json({ error: err.message });
