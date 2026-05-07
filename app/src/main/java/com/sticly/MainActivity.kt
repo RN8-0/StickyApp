@@ -2668,6 +2668,10 @@ Rules:
                     message = msg,
                     onConfirm = {
                         lifecycleScope.launch {
+                            // Immediately remove from adapter so UI updates instantly
+                            val rvPublished = this@MainActivity.findViewById<RecyclerView>(R.id.rvPublishedPacks)
+                            rvPublished?.adapter = SubmissionAdapter(items.filter { it.id != item.id })
+
                             withContext(Dispatchers.IO) {
                                 val deletedByWorker = runCatching {
                                     SocialRepository.deleteSharedPack(this@MainActivity, item.id, item.storePackId ?: item.id).optBoolean("success", false)
@@ -2678,8 +2682,13 @@ Rules:
                                         PocketBaseHelper.deleteRecord("stickers", item.storePackId)
                                     }
                                 }
+                                // Remove from global pack cache so Explore tab no longer shows it
+                                val targetId = item.storePackId ?: item.id
+                                StickerRepository.allPacksCache = StickerRepository.allPacksCache
+                                    .filter { it.id != targetId }
                             }
                             Toast.makeText(this@MainActivity, "Submission deleted", Toast.LENGTH_SHORT).show()
+                            profileSocialJson = null
                             loadProfileData()
                         }
                     }

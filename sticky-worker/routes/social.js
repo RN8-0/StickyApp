@@ -705,6 +705,12 @@ router.post('/pack/delete', async (req, res) => {
       deleted.submissions = await deleteRecordsWhere('user_submissions', (item) => clean(item.sticker_pack_id) === targetPackId);
     }
 
+    socialStateCache = null;
+    socialStateExpiresAt = 0;
+    socialStatePromise = null;
+    profilesCache = null;
+    profilesExpiresAt = 0;
+    profilesPromise = null;
     res.json({ success: true, deleted });
   } catch (err) {
     console.error('[Social pack delete]', err.message);

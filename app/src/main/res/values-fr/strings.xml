@@ -690,6 +690,6 @@
 
     <!-- Comment Translation -->
     <string name="translate">Traduire</string>
-    <string name="show_original">Afficher l'original</string>
+    <string name="show_original">Afficher l\'original</string>
     <string name="translating">Traduction…</string>
 </resources>
