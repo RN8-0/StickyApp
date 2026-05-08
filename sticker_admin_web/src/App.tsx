@@ -1223,6 +1223,9 @@ function App() {
   };
 
   const stripDraftPublishMeta = (draft: StickerPack, translations: Record<string, string>, currentName: string) => {
+    if (!currentName?.trim()) {
+      throw new Error('Pack name is empty. Please edit the draft and set a name before publishing.');
+    }
     const packDataWithoutMeta = { ...(draft as any) };
     [
       'id',
@@ -1237,9 +1240,17 @@ function App() {
       'draft_data',
     ].forEach((key) => delete packDataWithoutMeta[key]);
 
+    // Filter out empty translation values to avoid overwriting with blanks
+    const cleanTranslations: Record<string, string> = {};
+    for (const [key, val] of Object.entries(translations)) {
+      if (val?.trim()) {
+        cleanTranslations[key] = val;
+      }
+    }
+
     return {
       ...packDataWithoutMeta,
-      ...translations,
+      ...cleanTranslations,
       name: currentName,
       name_en: currentName,
       is_active: true,
@@ -1397,6 +1408,11 @@ function App() {
 
   const publishDraft = async (draft: StickerPack) => {
     if (!window.confirm(`Are you sure you want to publish "${draft.name}"?`)) return;
+    // Validate pack has a name before publishing
+    if (!draft.name?.trim()) {
+      alert('❌ Cannot publish: Pack name is empty. Please edit the draft and set a name first.');
+      return;
+    }
     setDraftPublishing(draft.id);
     setSinglePublishProgress({ step: 'Preparing...', percent: 5 });
     try {
@@ -1525,11 +1541,33 @@ function App() {
 
   const updateDraftPack = async () => {
     if (!selectedDraft || !draftEditData) return;
+    // Validate required fields
+    if (!draftEditData.name?.trim()) {
+      alert('Pack name is required!');
+      return;
+    }
     try {
-      const updatedData: any = { ...draftEditData };
-      updatedData.image_data_version = Date.now().toString();
+      // Merge edit data with existing draft fields to preserve all data
+      const updatedData: any = {
+        ...selectedDraft,
+        ...draftEditData,
+        image_data_version: Date.now().toString(),
+      };
+      // Remove meta fields that shouldn't be sent in update
+      delete updatedData.id;
+      delete updatedData.collectionId;
+      delete updatedData.collectionName;
+      delete updatedData.expand;
+      delete updatedData.created;
+      delete updatedData.updated;
+      delete updatedData.images;
+      delete updatedData.tray_image;
+      // Preserve stickers, tray, telegram fields from the original draft
+      if (selectedDraft.stickers?.length) updatedData.stickers = selectedDraft.stickers;
+      if (selectedDraft.tray_url) updatedData.tray_url = selectedDraft.tray_url;
+      if (selectedDraft.tray_image_file) updatedData.tray_image_file = selectedDraft.tray_image_file;
       await pb.collection('draft_stickers').update(selectedDraft.id, updatedData);
-      const updated = { ...selectedDraft, ...updatedData } as StickerPack;
+      const updated = { ...selectedDraft, ...draftEditData } as StickerPack;
       setDraftPacks(prev => prev.map(p => p.id === selectedDraft.id ? updated : p));
       setSelectedDraft(updated);
       setShowDraftEditModal(false);
