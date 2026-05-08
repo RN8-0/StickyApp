@@ -2080,6 +2080,7 @@ Rules:
         val emptyState = findViewById<View>(R.id.profileEmptyState)
         val adminMessages = findViewById<View>(R.id.adminMessagesContainer)
 
+        val avatarCard = findViewById<View>(R.id.profileAvatarCard)
         if (!isGoogleProfileSignedIn()) {
             loginPrompt?.visibility = View.VISIBLE
             statsRow?.visibility = View.GONE
@@ -2089,6 +2090,7 @@ Rules:
             rvPublished?.visibility = View.GONE
             emptyState?.visibility = View.GONE
             adminMessages?.visibility = View.GONE
+            avatarCard?.visibility = View.GONE
             avatar?.visibility = View.GONE
             displayName?.visibility = View.GONE
             bio?.visibility = View.GONE
@@ -2096,6 +2098,7 @@ Rules:
             email?.text = ""
             return
         }
+        avatarCard?.visibility = View.VISIBLE
 
         loginPrompt?.visibility = View.GONE
         statsRow?.visibility = View.VISIBLE

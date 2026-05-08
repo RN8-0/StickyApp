@@ -342,10 +342,12 @@ class PackAdapter(
             h.btnDeletePack?.visibility = View.VISIBLE
             h.btnDeletePack?.setColorFilter(0xFFFF6B6B.toInt())
             h.btnDeletePack?.setOnClickListener { onDeleteClick?.invoke(pack) }
+            h.stickerPreviewContainer?.gravity = android.view.Gravity.END
         } else {
             h.btnFavorite?.visibility = View.GONE
             h.btnDelete?.visibility = View.GONE
             h.btnDeletePack?.visibility = View.GONE
+            h.stickerPreviewContainer?.gravity = android.view.Gravity.CENTER
         }
 
         h.crownIcon?.visibility = if (pack.isPremium) View.VISIBLE else View.GONE

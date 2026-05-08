@@ -1152,7 +1152,7 @@ function App() {
   const fetchDrafts = async () => {
     setDraftLoading(true);
     try {
-      const records = await pb.collection('draft_stickers').getFullList({ sort: '-created_at' });
+      const records = await pb.collection('draft_stickers').getFullList({ sort: '-created' });
       const DRAFT_COLL = 'draft_stickers';
       const drafts: StickerPack[] = (records as any[]).map(r => ({
         id: r.id,
@@ -1570,11 +1570,16 @@ function App() {
         if (draftEditData[key]) updatedData[key] = draftEditData[key];
       });
       await pb.collection('draft_stickers').update(selectedDraft.id, updatedData);
-      const updated = { ...selectedDraft, ...updatedData } as StickerPack;
+      const saved = await pb.collection('draft_stickers').getOne(selectedDraft.id);
+      const updated = { ...selectedDraft, ...updatedData, name: saved.name, name_en: saved.name_en, sticker_count: saved.sticker_count } as StickerPack;
       setDraftPacks(prev => prev.map(p => p.id === selectedDraft.id ? updated : p));
       setSelectedDraft(updated);
       setShowDraftEditModal(false);
-      alert('Draft updated successfully.');
+      if (saved.name !== trimmedName) {
+        alert(`Warning: PocketBase saved name as "${saved.name}" instead of "${trimmedName}". Check collection write rules.`);
+      } else {
+        alert('Draft updated successfully.');
+      }
     } catch (error: any) {
       console.error('Draft update error:', error);
       const fieldErrors = error?.data
