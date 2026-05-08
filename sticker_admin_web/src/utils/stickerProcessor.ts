@@ -29,6 +29,61 @@ async function loadFFmpegInstance(ffmpeg: FFmpeg): Promise<void> {
     throw lastError || new Error('FFmpeg failed to load from all sources');
 }
 
+// Pool of 2 pre-loaded FFmpeg instances — shared across parallel animated sticker calls.
+// Avoids re-loading 22MB WASM for every sticker (saves ~10s per sticker).
+class FFmpegPool {
+    private entries: Array<{ ffmpeg: FFmpeg; inUse: boolean }> = [];
+    private preloadPromise: Promise<void> | null = null;
+    private waiters: Array<() => void> = [];
+
+    preload(): Promise<void> {
+        if (!this.preloadPromise) {
+            this.preloadPromise = Promise.all([
+                this.createSlot(),
+                this.createSlot(),
+            ]).then(() => {});
+        }
+        return this.preloadPromise;
+    }
+
+    private async createSlot(): Promise<void> {
+        const ffmpeg = new FFmpeg();
+        await loadFFmpegInstance(ffmpeg);
+        this.entries.push({ ffmpeg, inUse: false });
+    }
+
+    async acquire(): Promise<{ ffmpeg: FFmpeg; release: () => void }> {
+        await this.preload();
+        return new Promise((resolve) => {
+            const tryGet = () => {
+                const entry = this.entries.find(e => !e.inUse);
+                if (entry) {
+                    entry.inUse = true;
+                    resolve({
+                        ffmpeg: entry.ffmpeg,
+                        release: () => {
+                            entry.inUse = false;
+                            if (this.waiters.length > 0) this.waiters.shift()!();
+                        }
+                    });
+                } else {
+                    this.waiters.push(tryGet);
+                }
+            };
+            tryGet();
+        });
+    }
+
+    terminateAll(): void {
+        this.entries.forEach(e => { try { e.ffmpeg.terminate(); } catch {} });
+        this.entries = [];
+        this.waiters = [];
+        this.preloadPromise = null;
+    }
+}
+
+const ffmpegPool = new FFmpegPool();
+
 export type StickerProgress = {
     message: string;
     percentage: number;
@@ -115,12 +170,13 @@ class StickerProcessor {
         this.loadPromise = null;
         try { this.ffmpeg?.terminate(); } catch {}
         this.ffmpeg = null;
+        ffmpegPool.terminateAll();
         return this.load();
     }
 
     // Uygulama açılır açılmaz çağrılacak - FFmpeg'i önceden yükle
     async preload() {
-        return this.load();
+        await Promise.all([this.load(), ffmpegPool.preload()]);
     }
 
     /**
@@ -504,20 +560,28 @@ class StickerProcessor {
      * Create animated WebP from PNG frame blobs (for TGS import)
      */
     async processFromPngFrames(pngBlobs: Blob[], fps: number, onProgress?: (p: StickerProgress) => void): Promise<Blob> {
-        const ffmpeg = new FFmpeg();
-        await loadFFmpegInstance(ffmpeg);
+        const { ffmpeg, release } = await ffmpegPool.acquire();
 
         onProgress?.({ message: `Writing ${pngBlobs.length} frames...`, percentage: 40 });
 
         for (let i = 0; i < pngBlobs.length; i++) {
-            const frameName = `frame_${(i + 1).toString().padStart(4, '0')}.png`;
+            const frameName = `frame_${i.toString().padStart(4, '0')}.png`;
             await ffmpeg.writeFile(frameName, await fetchFile(pngBlobs[i]));
         }
 
         try {
             return await this.createWebPFromFrames(ffmpeg, pngBlobs.length, onProgress, fps);
         } finally {
-            try { ffmpeg.terminate(); } catch {}
+            // Clean up all frame and output files before returning instance to pool
+            try {
+                const files = await ffmpeg.listDir('.');
+                await Promise.all(
+                    files
+                        .filter(f => f.name.startsWith('frame_') || f.name === 'output.webp')
+                        .map(f => ffmpeg.deleteFile(f.name).catch(() => {}))
+                );
+            } catch {}
+            release();
         }
     }
 

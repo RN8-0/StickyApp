@@ -84,17 +84,28 @@
           }
         });
       }
-      /* Show error only if JS bundle fails to load within 30 seconds */
+      /* Auto-retry once if React doesn't mount in 15 seconds, then show error */
+      var retried = sessionStorage.getItem('_loadRetry') === '1';
       var timeout = setTimeout(function() {
-        var el = document.getElementById('js-error');
-        if (el) { el.style.display = 'flex'; }
-      }, 30000);
+        var rootEl = document.getElementById('root');
+        if (!rootEl || rootEl.children.length === 0) {
+          if (!retried) {
+            sessionStorage.setItem('_loadRetry', '1');
+            window.location.replace(window.location.href);
+          } else {
+            sessionStorage.removeItem('_loadRetry');
+            var el = document.getElementById('js-error');
+            if (el) { el.style.display = 'flex'; }
+          }
+        }
+      }, 15000);
       /* Clear timeout once React has mounted (root has children) */
       var rootEl = document.getElementById('root');
       if (rootEl) {
         var observer = new MutationObserver(function() {
           if (rootEl.children.length > 0) {
             clearTimeout(timeout);
+            sessionStorage.removeItem('_loadRetry');
             observer.disconnect();
           }
         });
