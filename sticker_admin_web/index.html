@@ -66,20 +66,20 @@
 <body>
   <div id="root"></div>
   <div id="js-error">
-    <h1>⚠️ Failed to load application</h1>
+    <h1>&#9888;&#65039; Failed to load application</h1>
     <p>The admin panel could not load. This might be due to a network issue or a temporary server problem.</p>
     <button onclick="window.location.reload()">Reload Page</button>
   </div>
   <script>
-    /* Run AFTER #root and #js-error exist in the DOM */
     (function() {
-      /* Unregister stale service workers; reload once so the page runs without them */
-      if ('serviceWorker' in navigator && !sessionStorage.getItem('swClean')) {
+      /* Unregister ALL service workers on every load.
+         After unregistering, the SW list is empty — no reload loop.
+         We only reload when we actually removed something. */
+      if ('serviceWorker' in navigator) {
         navigator.serviceWorker.getRegistrations().then(function(regs) {
           if (regs.length > 0) {
-            sessionStorage.setItem('swClean', '1');
             Promise.all(regs.map(function(r) { return r.unregister(); })).then(function() {
-              window.location.reload();
+              window.location.replace(window.location.href);
             });
           }
         });
@@ -87,9 +87,7 @@
       /* Show error only if JS bundle fails to load within 30 seconds */
       var timeout = setTimeout(function() {
         var el = document.getElementById('js-error');
-        if (el) {
-          el.style.display = 'flex';
-        }
+        if (el) { el.style.display = 'flex'; }
       }, 30000);
       /* Clear timeout once React has mounted (root has children) */
       var rootEl = document.getElementById('root');
