@@ -1346,6 +1346,16 @@ function App() {
       // Get file token for protected draft files
       const draftFileToken = await pb.files.getToken().catch(() => null);
 
+      // Fetch actual stored filenames from the draft record as fallback for broken URLs
+      let draftImageFiles: string[] = [];
+      try {
+        const draftRec = await pb.collection('draft_stickers').getOne(draft.id);
+        const imgs = draftRec?.images;
+        draftImageFiles = Array.isArray(imgs) ? imgs : (imgs ? [imgs] : []);
+      } catch { /* best effort */ }
+
+      const addToken = (url: string) => draftFileToken ? `${url}${url.includes('?') ? '&' : '?'}token=${encodeURIComponent(draftFileToken)}` : url;
+
       const copiedStickers: Sticker[] = [];
       for (let index = 0; index < sourceStickers.length; index++) {
         const sticker: any = sourceStickers[index];
@@ -1354,8 +1364,22 @@ function App() {
 
         onStep?.(`Copying sticker ${index + 1}/${sourceStickers.length}...`, 55 + Math.round((index / sourceStickers.length) * 25));
         const requestedName = normalizeFileName(sticker.image_file || sticker.name || `sticker_${index + 1}.webp`, `sticker_${index + 1}.webp`);
-        const srcUrl = draftFileToken ? `${sourceUrl}${sourceUrl.includes('?') ? '&' : '?'}token=${encodeURIComponent(draftFileToken)}` : sourceUrl;
-        const file = await fetchAsFile(srcUrl, requestedName);
+        const srcUrl = addToken(sourceUrl);
+        let file: File;
+        try {
+          file = await fetchAsFile(srcUrl, requestedName);
+        } catch (fetchErr: any) {
+          // Fallback: URL in JSON might be stale — find the actual file in the record's images field
+          if (String(fetchErr?.message || '').includes('404') && draftImageFiles.length > 0) {
+            const baseName = (sticker.image_file || '').replace(/\.[^.]+$/, '');
+            const actualFile = (baseName ? draftImageFiles.find(f => f.startsWith(baseName)) : null) || draftImageFiles[index];
+            if (!actualFile) throw fetchErr;
+            const fallbackUrl = addToken(getFileUrl('draft_stickers', draft.id, actualFile));
+            file = await fetchAsFile(fallbackUrl, requestedName);
+          } else {
+            throw fetchErr;
+          }
+        }
         const uploadedUrl = await uploadFile(targetCollection, targetRecord.id, 'images', file, requestedName);
         const uploadedName = filenameFromUrl(uploadedUrl, requestedName);
 
@@ -1372,7 +1396,16 @@ function App() {
       if (traySourceUrl) {
         onStep?.('Copying tray image...', 84);
         const requestedTrayName = normalizeFileName(draft.tray_image_file || 'tray.png', 'tray.png');
-        const trayFileObject = await fetchAsFile(traySourceUrl, requestedTrayName);
+        let trayFileObject: File;
+        try {
+          trayFileObject = await fetchAsFile(addToken(traySourceUrl), requestedTrayName);
+        } catch (trayErr: any) {
+          if (String(trayErr?.message || '').includes('404') && copiedStickers[0]) {
+            trayFileObject = await fetchAsFile(addToken(copiedStickers[0].url), requestedTrayName);
+          } else {
+            throw trayErr;
+          }
+        }
         trayUrl = await uploadFile(targetCollection, targetRecord.id, 'tray_image', trayFileObject, requestedTrayName);
         trayFile = filenameFromUrl(trayUrl, requestedTrayName);
       }

@@ -109,13 +109,17 @@ function extractSetName(input: string): string {
     const tgMatch = input.match(/(?:t\.me|telegram\.me)\/addstickers\/([A-Za-z0-9_]+)/);
     if (tgMatch) return tgMatch[1];
 
-    // https://stickers.gg/packs/telegram/PackName
-    const sggMatch = input.match(/stickers\.gg\/packs?\/telegram\/([A-Za-z0-9_]+)/i);
+    // https://stickers.gg/packs/telegram/PackName  OR  https://stickers.gg/packs/PackName
+    const sggMatch = input.match(/stickers\.gg\/packs?\/(?:telegram\/)?([A-Za-z0-9_]+)/i);
     if (sggMatch) return sggMatch[1];
 
     // https://tlgrm.eu/stickers/PackName
     const tlgrmMatch = input.match(/tlgrm\.eu\/stickers\/([A-Za-z0-9_]+)/i);
     if (tlgrmMatch) return tlgrmMatch[1];
+
+    // https://fullyst.com/en/stickers/PackName  OR  https://fullyst.com/stickers/PackName
+    const fullystMatch = input.match(/fullyst\.com\/(?:[a-z]{2}\/)?stickers\/([A-Za-z0-9_]+)/i);
+    if (fullystMatch) return fullystMatch[1];
 
     // Generic: extract last path segment from any URL
     const genericUrlMatch = input.match(/https?:\/\/[^/]+\/.*\/([A-Za-z0-9_]+)\/?$/);
