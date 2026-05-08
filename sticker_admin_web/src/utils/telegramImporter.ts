@@ -290,7 +290,7 @@ async function processTelegramSticker(
     abortSignal?: AbortSignal
 ): Promise<Sticker | null> {
     if (abortSignal?.aborted) return null;
-    const timeoutMs = (sticker.is_animated || sticker.is_video) ? 90000 : 30000;
+    const timeoutMs = (sticker.is_animated || sticker.is_video) ? 150000 : 30000;
     let timeoutId: ReturnType<typeof setTimeout>;
     const result = await Promise.race([
         processTelegramStickerInner(botToken, sticker, packId, index, onProgress),

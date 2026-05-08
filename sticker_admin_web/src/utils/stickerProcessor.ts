@@ -2,31 +2,53 @@ import { FFmpeg } from '@ffmpeg/ffmpeg';
 import { fetchFile, toBlobURL } from '@ffmpeg/util';
 import { removeBackground } from '@imgly/background-removal';
 
-async function loadFFmpegInstance(ffmpeg: FFmpeg): Promise<void> {
-    const sources = [
-        { coreURL: '/ffmpeg-core.js', wasmURL: '/ffmpeg-core.wasm', timeout: 10000 },
-        { coreURL: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/esm/ffmpeg-core.js', wasmURL: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/esm/ffmpeg-core.wasm', timeout: 30000 },
-        { coreURL: 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm/ffmpeg-core.js', wasmURL: 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm/ffmpeg-core.wasm', timeout: 30000 },
-    ];
-    let lastError: Error | null = null;
-    for (const { coreURL, wasmURL, timeout } of sources) {
-        try {
-            await Promise.race([
-                ffmpeg.load({
-                    coreURL: await toBlobURL(coreURL, 'text/javascript'),
-                    wasmURL: await toBlobURL(wasmURL, 'application/wasm'),
-                }),
-                new Promise<never>((_, reject) =>
-                    setTimeout(() => reject(new Error(`FFmpeg load timeout`)), timeout)
-                ),
-            ]);
-            return;
-        } catch (err) {
-            lastError = err instanceof Error ? err : new Error(String(err));
-            console.warn(`[FFmpeg] Failed to load from ${coreURL}:`, lastError.message);
-        }
+// Blob URLs cached for the entire session — WASM is downloaded only once, all instances share it.
+let _ffmpegBlobURLs: { coreURL: string; wasmURL: string } | null = null;
+let _ffmpegBlobLoadPromise: Promise<{ coreURL: string; wasmURL: string }> | null = null;
+
+function getFFmpegBlobURLs(): Promise<{ coreURL: string; wasmURL: string }> {
+    if (_ffmpegBlobURLs) return Promise.resolve(_ffmpegBlobURLs);
+    if (!_ffmpegBlobLoadPromise) {
+        _ffmpegBlobLoadPromise = (async () => {
+            const sources = [
+                { core: '/ffmpeg-core.js', wasm: '/ffmpeg-core.wasm', timeout: 60000 },
+                { core: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/esm/ffmpeg-core.js', wasm: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/esm/ffmpeg-core.wasm', timeout: 90000 },
+                { core: 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm/ffmpeg-core.js', wasm: 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm/ffmpeg-core.wasm', timeout: 90000 },
+            ];
+            let lastError: Error | null = null;
+            for (const { core, wasm, timeout } of sources) {
+                try {
+                    const [coreURL, wasmURL] = await Promise.race([
+                        Promise.all([
+                            toBlobURL(core, 'text/javascript'),
+                            toBlobURL(wasm, 'application/wasm'),
+                        ]),
+                        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('toBlobURL timeout')), timeout)),
+                    ]);
+                    _ffmpegBlobURLs = { coreURL, wasmURL };
+                    console.log('[FFmpeg] WASM ready from:', core);
+                    return _ffmpegBlobURLs;
+                } catch (err) {
+                    lastError = err instanceof Error ? err : new Error(String(err));
+                    console.warn('[FFmpeg] Failed from', core, ':', lastError.message);
+                }
+            }
+            throw lastError || new Error('FFmpeg: all sources failed');
+        })().catch(err => {
+            _ffmpegBlobLoadPromise = null; // allow retry on next call
+            throw err;
+        });
     }
-    throw lastError || new Error('FFmpeg failed to load from all sources');
+    return _ffmpegBlobLoadPromise;
+}
+
+async function loadFFmpegInstance(ffmpeg: FFmpeg): Promise<void> {
+    const { coreURL, wasmURL } = await getFFmpegBlobURLs();
+    // WASM already downloaded (blob URL cached); this just initialises the WASM runtime.
+    await Promise.race([
+        ffmpeg.load({ coreURL, wasmURL }),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('FFmpeg init timeout')), 60000)),
+    ]);
 }
 
 // Pool of 2 pre-loaded FFmpeg instances — shared across parallel animated sticker calls.
