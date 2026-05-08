@@ -1152,7 +1152,7 @@ function App() {
   const fetchDrafts = async () => {
     setDraftLoading(true);
     try {
-      const records = await pb.collection('draft_stickers').getFullList({ sort: '-created' });
+      const records = await pb.collection('draft_stickers').getFullList({ sort: '-created_at' });
       const DRAFT_COLL = 'draft_stickers';
       const drafts: StickerPack[] = (records as any[]).map(r => ({
         id: r.id,
