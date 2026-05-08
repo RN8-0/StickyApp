@@ -45,7 +45,9 @@ class PackAdapter(
     private val onFavoriteChanged: (() -> Unit)? = null,
     private val onDeleteClick: ((Pack) -> Unit)? = null,
     private val onAddClick: ((Pack) -> Unit)? = null,
-    private val onPublisherClick: ((Pack) -> Unit)? = null
+    private val onPublisherClick: ((Pack) -> Unit)? = null,
+    private val onShareClick: ((Pack) -> Unit)? = null,
+    private val onLikeClick: ((Pack, VH) -> Unit)? = null
 ) : RecyclerView.Adapter<PackAdapter.VH>() {
 
     init {
@@ -140,6 +142,10 @@ class PackAdapter(
         val btnFavoriteNew: ImageButton? = v.findViewById(R.id.btnFavoriteNew)
         val btnDelete: ImageButton? = v.findViewById(R.id.btnDelete)
         val btnDeletePack: ImageButton? = v.findViewById(R.id.btnDeletePack)
+        val btnSharePackItem: ImageButton? = v.findViewById(R.id.btnSharePackItem)
+        val likeButtonContainer: android.view.ViewGroup? = v.findViewById(R.id.likeButtonContainer)
+        val btnItemLike: ImageButton? = v.findViewById(R.id.btnItemLike)
+        val tvItemLikeCount: TextView? = v.findViewById(R.id.tvItemLikeCount)
         val downloadCount: TextView? = v.findViewById(R.id.downloadCount)
         val timeAgo: TextView? = v.findViewById(R.id.timeAgo)
         val btnAdd: MaterialButton? = v.findViewById(R.id.btnAdd)
@@ -297,16 +303,13 @@ class PackAdapter(
 
         h.name?.text = pack.localizedName
 
-        // Yayıncı + çıkartma sayısı + indirme sayısı + like + view tek satırda
+        // Yayıncı + çıkartma sayısı + indirme sayısı tek satırda (like ayrı butona taşındı)
         val stickerCount = pack.stickers.size
         val pubText = StringBuilder(pack.pub.length + 60)
         pubText.append(pack.pub)
         pubText.append(" • ").append(stickerCount).append(" stickers")
         if (pack.downloadCount > 0) {
             pubText.append(" • ").append(formatDownloadCount(pack.downloadCount)).append(" downloads")
-        }
-        if (pack.likeCount > 0) {
-            pubText.append(" • ").append(formatCompactNumber(pack.likeCount)).append(" likes")
         }
         if (pack.viewCount > 0) {
             pubText.append(" • ").append(formatCompactNumber(pack.viewCount)).append(" views")
@@ -342,11 +345,32 @@ class PackAdapter(
             h.btnDeletePack?.visibility = View.VISIBLE
             h.btnDeletePack?.setColorFilter(0xFFFF6B6B.toInt())
             h.btnDeletePack?.setOnClickListener { onDeleteClick?.invoke(pack) }
-            h.stickerPreviewContainer?.gravity = android.view.Gravity.END
+            h.btnSharePackItem?.visibility = View.VISIBLE
+            h.btnSharePackItem?.setOnClickListener { onShareClick?.invoke(pack) }
+            h.likeButtonContainer?.visibility = View.GONE
+            h.stickerPreviewContainer?.gravity = android.view.Gravity.START
         } else {
             h.btnFavorite?.visibility = View.GONE
             h.btnDelete?.visibility = View.GONE
             h.btnDeletePack?.visibility = View.GONE
+            h.btnSharePackItem?.visibility = View.GONE
+            // Like butonu her zaman görünür; sayı sadece > 0 ise gösterilir
+            h.likeButtonContainer?.visibility = View.VISIBLE
+            val isLiked = SocialRepository.isLocallyLiked(context, pack.id)
+            h.btnItemLike?.setImageResource(if (isLiked) R.drawable.ic_thumb_up else R.drawable.ic_thumb_up_outline)
+            val likeColor = androidx.core.content.ContextCompat.getColor(context, if (isLiked) R.color.primary else R.color.text_hint)
+            h.btnItemLike?.setColorFilter(likeColor)
+            if (pack.likeCount > 0) {
+                h.tvItemLikeCount?.text = formatCompactNumber(pack.likeCount)
+                h.tvItemLikeCount?.setTextColor(androidx.core.content.ContextCompat.getColor(context, if (isLiked) R.color.primary else R.color.text_hint))
+                h.tvItemLikeCount?.visibility = View.VISIBLE
+            } else {
+                h.tvItemLikeCount?.text = ""
+                h.tvItemLikeCount?.visibility = View.GONE
+            }
+            val likeClick = View.OnClickListener { onLikeClick?.invoke(pack, h) }
+            h.likeButtonContainer?.setOnClickListener(likeClick)
+            h.btnItemLike?.setOnClickListener(likeClick)
             h.stickerPreviewContainer?.gravity = android.view.Gravity.CENTER
         }
 

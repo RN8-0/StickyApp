@@ -179,6 +179,8 @@ class MainActivity : AppCompatActivity() {
 
     // In-flight like requests per pack — prevents double-tap from sending duplicate API calls
     private val likeInFlight = mutableSetOf<String>()
+    // Submissions deleted by the user — filtered out of profile refreshes so they don't reappear
+    private val deletedSubmissionIds = mutableSetOf<String>()
     
     // Debounce applyFilters to prevent excessive calls
     private var filterJob: Job? = null
@@ -636,6 +638,10 @@ class MainActivity : AppCompatActivity() {
                             vh.btnItemLike?.setColorFilter(c)
                             vh.tvItemLikeCount?.setTextColor(c)
                             if (serverCount >= 0) {
+                                // Sync cache so DetailsActivity sees the updated count
+                                StickerRepository.allPacksCache = StickerRepository.allPacksCache.map {
+                                    if (it.id == pack.id) it.copy(likeCount = serverCount) else it
+                                }
                                 if (serverCount > 0) {
                                     vh.tvItemLikeCount?.text = serverCount.toString()
                                     vh.tvItemLikeCount?.visibility = View.VISIBLE
@@ -2338,8 +2344,9 @@ Rules:
                 }
                 val knownStoreIds = submissionItems.mapNotNull { it.storePackId }.toSet()
                 val knownNames = submissionItems.map { it.name.lowercase() }.toSet()
-                val items = (submissionItems + socialItems.filter { it.storePackId !in knownStoreIds && it.name.lowercase() !in knownNames })
+                val allItems = (submissionItems + socialItems.filter { it.storePackId !in knownStoreIds && it.name.lowercase() !in knownNames })
                     .sortedByDescending { it.createdAt ?: "" }
+                val items = allItems.filter { it.id !in deletedSubmissionIds }
                 val approvedCount = items.count { it.status == "approved" }
                 val stats = social.optJSONObject("stats")
                 withContext(Dispatchers.Main) {
@@ -2459,7 +2466,7 @@ Rules:
                                 }.take(6)
                             } else emptyList()
                             SubmissionItem(doc.optString("id"), name, status, stickerCount, rejectionReason, createdAt, stickerUrls, storePackId)
-                        }.sortedByDescending { it.createdAt ?: "" }
+                        }.sortedByDescending { it.createdAt ?: "" }.filter { it.id !in deletedSubmissionIds }
                         rv?.adapter = SubmissionAdapter(items)
 
                         val approvedCount = items.count { it.status == "approved" }
@@ -2751,6 +2758,8 @@ Rules:
                     message = msg,
                     onConfirm = {
                         lifecycleScope.launch {
+                            // Mark as deleted immediately so loadProfileData never shows it again
+                            deletedSubmissionIds.add(item.id)
                             // Immediately remove from adapter so UI updates instantly
                             val rvPublished = this@MainActivity.findViewById<RecyclerView>(R.id.rvPublishedPacks)
                             rvPublished?.adapter = SubmissionAdapter(items.filter { it.id != item.id })

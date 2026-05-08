@@ -1789,10 +1789,18 @@ function App() {
         }
       } catch (_) {}
 
-      // Fallback: query user_profiles directly from PocketBase
+      // Fallback: query PocketBase directly — merge user_profiles + auth users
       if (usersList.length === 0) {
-        const records = await pb.collection('user_profiles').getFullList({ sort: '-created' }).catch(() => []);
-        usersList = (records as any[]).map(mapUserData);
+        const [profiles, authUsers] = await Promise.all([
+          pb.collection('user_profiles').getFullList({ sort: '-created' }).catch(() => []),
+          pb.collection('users').getFullList({ sort: '-created' }).catch(() => []),
+        ]);
+        const profileEmails = new Set((profiles as any[]).map((p: any) => (p.email || '').toLowerCase()).filter(Boolean));
+        const combined = [
+          ...(profiles as any[]),
+          ...(authUsers as any[]).filter((u: any) => !profileEmails.has((u.email || '').toLowerCase())),
+        ];
+        usersList = combined.map(mapUserData);
       }
 
       setUsersData(usersList);

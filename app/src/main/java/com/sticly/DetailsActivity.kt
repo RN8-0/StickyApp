@@ -1005,6 +1005,10 @@ class DetailsActivity : AppCompatActivity() {
                         if (serverCount >= 0) {
                             currentPackLikeCount = serverCount
                             tvLikeCount?.text = formatCompactNumber(currentPackLikeCount)
+                            // Sync cache so home page shows updated count
+                            StickerRepository.allPacksCache = StickerRepository.allPacksCache.map {
+                                if (it.id == pack.id) it.copy(likeCount = serverCount) else it
+                            }
                         }
                     }
                     .onFailure {
