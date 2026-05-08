@@ -48,6 +48,9 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.awaitAll
+import android.animation.ObjectAnimator
+import android.animation.ValueAnimator
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
@@ -73,6 +76,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var rv: RecyclerView
     private lateinit var loadingOverlay: View
     private lateinit var addLoadingOverlay: View
+    private lateinit var circularProgressDirect: com.google.android.material.progressindicator.CircularProgressIndicator
+    private lateinit var tvDirectAddStatus: TextView
+    private lateinit var tvDirectAddSubtitle: TextView
     // skeleton removed
     private lateinit var swipeRefresh: SwipeRefreshLayout
     private lateinit var mainContent: View
@@ -473,6 +479,9 @@ class MainActivity : AppCompatActivity() {
         rv = findViewById(R.id.rv)
         loadingOverlay = findViewById(R.id.loadingOverlay)
         addLoadingOverlay = findViewById(R.id.addLoadingOverlay)
+        circularProgressDirect = findViewById(R.id.circularProgressDirect)
+        tvDirectAddStatus = findViewById(R.id.tvDirectAddStatus)
+        tvDirectAddSubtitle = findViewById(R.id.tvDirectAddSubtitle)
 
         swipeRefresh = findViewById(R.id.swipeRefresh)
         menuBtn = findViewById(R.id.menuBtn)
@@ -4075,15 +4084,74 @@ Rules:
 
     private fun prepareAndSendToWhatsApp(pack: Pack, skipInterstitial: Boolean) {
         addLoadingOverlay.visibility = View.VISIBLE
-        lifecycleScope.launch {
-            val ready = withContext(Dispatchers.IO) {
-                val currentPacks = StickerRepository.allPacksCache
-                val packsToSave = if (currentPacks.any { it.id == pack.id }) currentPacks else currentPacks + pack
-                StickerRepository.saveCacheToDisk(this@MainActivity, packsToSave)
-                if (StickerRepository.isPackCached(this@MainActivity, pack)) true else StickerRepository.downloadPackToCache(this@MainActivity, pack)
+        circularProgressDirect.progress = 0
+        tvDirectAddStatus.text = "0%"
+        tvDirectAddSubtitle.text = getString(R.string.stickers_preparing)
+
+        val totalFiles = pack.stickers.size + 1
+        val downloadedCount = java.util.concurrent.atomic.AtomicInteger(0)
+        fun updateProgress() {
+            val count = downloadedCount.get()
+            val percent = (count * 100) / totalFiles
+            tvDirectAddStatus.text = "$percent%"
+            tvDirectAddSubtitle.text = getString(R.string.stickers_preparing)
+            ObjectAnimator.ofInt(circularProgressDirect, "progress", circularProgressDirect.progress, percent).apply {
+                duration = 200
+                start()
             }
+        }
+
+        lifecycleScope.launch {
+            val success = try {
+                withContext(Dispatchers.IO) {
+                    val currentPacks = StickerRepository.allPacksCache
+                    val packsToSave = if (currentPacks.any { it.id == pack.id }) currentPacks else currentPacks + pack
+                    StickerRepository.saveCacheToDisk(this@MainActivity, packsToSave)
+
+                    // Zaten cache'de varsa direkt geç
+                    if (StickerRepository.isPackCached(this@MainActivity, pack)) {
+                        downloadedCount.set(totalFiles)
+                        true
+                    } else {
+                        val storagePath = pack.storagePath
+                        coroutineScope {
+                            // Tray
+                            val trayJob = async {
+                                StickerRepository.downloadStickerToCache(this@MainActivity, pack.id, pack.tray, storagePath, pack.trayUrl)
+                                val c = downloadedCount.incrementAndGet()
+                                withContext(Dispatchers.Main) { updateProgress() }
+                            }
+                            // Sticker'ları paralel indir
+                            pack.stickers.chunked(6).forEach { chunk ->
+                                chunk.map { sticker ->
+                                    async {
+                                        StickerRepository.downloadStickerToCache(this@MainActivity, pack.id, sticker.file, storagePath, sticker.url, allowCompression = !pack.isAnimated)
+                                        val c = downloadedCount.incrementAndGet()
+                                        withContext(Dispatchers.Main) { updateProgress() }
+                                    }
+                                }.awaitAll()
+                            }
+                            trayJob.await()
+                        }
+                        downloadedCount.get() >= totalFiles
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("WhatsAppAdd", "Download error: ${e.message}")
+                false
+            }
+
+            // %100 göster
+            tvDirectAddStatus.text = "100%"
+            tvDirectAddSubtitle.text = getString(R.string.pack_ready)
+            ObjectAnimator.ofInt(circularProgressDirect, "progress", circularProgressDirect.progress, 100).apply {
+                duration = 150
+                start()
+            }
+            delay(400)
+
             addLoadingOverlay.visibility = View.GONE
-            if (!ready) {
+            if (!success) {
                 Toast.makeText(this@MainActivity, R.string.stickers_load_failed, Toast.LENGTH_SHORT).show()
                 return@launch
             }

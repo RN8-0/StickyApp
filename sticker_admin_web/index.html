@@ -61,28 +61,6 @@
       font-size: 0.875rem;
     }
   </style>
-  <script>
-    /* Show error if JS bundle fails to load within 12 seconds */
-    (function() {
-      var timeout = setTimeout(function() {
-        var el = document.getElementById('js-error');
-        if (el) {
-          el.style.display = 'flex';
-          document.getElementById('root').style.display = 'none';
-        }
-      }, 12000);
-      /* Clear timeout once React has mounted (root is no longer empty) */
-      var observer = new MutationObserver(function() {
-        var root = document.getElementById('root');
-        if (root && root.children.length > 0) {
-          clearTimeout(timeout);
-          observer.disconnect();
-        }
-      });
-      var rootEl = document.getElementById('root');
-      if (rootEl) observer.observe(rootEl, { childList: true });
-    })();
-  </script>
 </head>
 
 <body>
@@ -92,6 +70,37 @@
     <p>The admin panel could not load. This might be due to a network issue or a temporary server problem.</p>
     <button onclick="window.location.reload()">Reload Page</button>
   </div>
+  <script>
+    /* Run AFTER #root and #js-error exist in the DOM */
+    (function() {
+      /* Unregister any stale service workers that might interfere */
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(function(registrations) {
+          for (var i = 0; i < registrations.length; i++) {
+            registrations[i].unregister();
+          }
+        });
+      }
+      /* Show error only if JS bundle fails to load within 30 seconds */
+      var timeout = setTimeout(function() {
+        var el = document.getElementById('js-error');
+        if (el) {
+          el.style.display = 'flex';
+        }
+      }, 30000);
+      /* Clear timeout once React has mounted (root has children) */
+      var rootEl = document.getElementById('root');
+      if (rootEl) {
+        var observer = new MutationObserver(function() {
+          if (rootEl.children.length > 0) {
+            clearTimeout(timeout);
+            observer.disconnect();
+          }
+        });
+        observer.observe(rootEl, { childList: true });
+      }
+    })();
+  </script>
   <script type="module" src="/src/main.tsx"></script>
 </body>
 
