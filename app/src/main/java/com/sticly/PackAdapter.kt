@@ -303,11 +303,13 @@ class PackAdapter(
 
         h.name?.text = pack.localizedName
 
-        // Yayıncı + çıkartma sayısı + indirme sayısı tek satırda (like ayrı butona taşındı)
         val stickerCount = pack.stickers.size
-        val pubText = StringBuilder(pack.pub.length + 60)
+        val pubText = StringBuilder(pack.pub.length + 80)
         pubText.append(pack.pub)
         pubText.append(" • ").append(stickerCount).append(" stickers")
+        if (pack.likeCount > 0) {
+            pubText.append(" • ♥ ").append(formatCompactNumber(pack.likeCount))
+        }
         if (pack.downloadCount > 0) {
             pubText.append(" • ").append(formatDownloadCount(pack.downloadCount)).append(" downloads")
         }
@@ -354,23 +356,10 @@ class PackAdapter(
             h.btnDelete?.visibility = View.GONE
             h.btnDeletePack?.visibility = View.GONE
             h.btnSharePackItem?.visibility = View.GONE
-            // Like butonu her zaman görünür; sayı sadece > 0 ise gösterilir
-            h.likeButtonContainer?.visibility = View.VISIBLE
-            val isLiked = SocialRepository.isLocallyLiked(context, pack.id)
-            h.btnItemLike?.setImageResource(if (isLiked) R.drawable.ic_thumb_up else R.drawable.ic_thumb_up_outline)
-            val likeColor = androidx.core.content.ContextCompat.getColor(context, if (isLiked) R.color.primary else R.color.text_hint)
-            h.btnItemLike?.setColorFilter(likeColor)
-            if (pack.likeCount > 0) {
-                h.tvItemLikeCount?.text = formatCompactNumber(pack.likeCount)
-                h.tvItemLikeCount?.setTextColor(androidx.core.content.ContextCompat.getColor(context, if (isLiked) R.color.primary else R.color.text_hint))
-                h.tvItemLikeCount?.visibility = View.VISIBLE
-            } else {
-                h.tvItemLikeCount?.text = ""
-                h.tvItemLikeCount?.visibility = View.GONE
-            }
-            val likeClick = View.OnClickListener { onLikeClick?.invoke(pack, h) }
-            h.likeButtonContainer?.setOnClickListener(likeClick)
-            h.btnItemLike?.setOnClickListener(likeClick)
+            // Like count is shown inline in subtitle text — button container is hidden
+            h.likeButtonContainer?.visibility = View.GONE
+            h.likeButtonContainer?.setOnClickListener(null)
+            h.btnItemLike?.setOnClickListener(null)
             h.stickerPreviewContainer?.gravity = android.view.Gravity.CENTER
         }
 

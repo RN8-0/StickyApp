@@ -1777,8 +1777,10 @@ function App() {
       const token = pb.authStore.token;
       let usersList: UserData[] = [];
 
+      // Use the direct worker URL — WORKER_URL falls back to wrong path on Firebase Hosting
+      const usersWorkerUrl = 'https://sticky-worker.46.225.95.201.sslip.io';
       try {
-        const resp = await fetch(`${WORKER_URL}/api/users`, {
+        const resp = await fetch(`${usersWorkerUrl}/api/users`, {
           headers: token ? { 'Authorization': `Bearer ${token}` } : {}
         });
         if (resp.ok) {
@@ -1786,8 +1788,10 @@ function App() {
           if (Array.isArray(users) && users.length > 0) {
             usersList = users.map(mapUserData);
           }
+        } else {
+          console.warn('[fetchUsers] worker returned', resp.status, await resp.text().catch(() => ''));
         }
-      } catch (_) {}
+      } catch (e) { console.warn('[fetchUsers] worker fetch failed:', e); }
 
       // Fallback: query PocketBase directly — merge user_profiles + auth users
       if (usersList.length === 0) {

@@ -601,13 +601,15 @@ router.post('/like', async (req, res) => {
     const actorDeviceId = clean(req.body.device_id);
     if (!packId || (!userId && !userEmail)) return res.status(400).json({ error: 'Missing pack or user.' });
     const likes = await safeFetchAll('pack_likes');
-    const existing = likes.find((like) => clean(like.pack_id) === packId &&
+    const existingAll = likes.filter((like) => clean(like.pack_id) === packId &&
       (lower(like.user_id) === lower(userId) || lower(like.user_email) === lower(userEmail))
     );
-    if (existing) {
-      const resp = await pbFetch(`/api/collections/pack_likes/records/${existing.id}`, { method: 'DELETE' });
-      if (!resp.ok && resp.status !== 204) throw new Error(await resp.text());
-      const counters = await updatePackCounters(packId, clean(existing.collection || req.body.collection || 'stickers'));
+    if (existingAll.length > 0) {
+      for (const ex of existingAll) {
+        const resp = await pbFetch(`/api/collections/pack_likes/records/${ex.id}`, { method: 'DELETE' });
+        if (!resp.ok && resp.status !== 204) console.warn('[Social like] delete failed:', ex.id, resp.status);
+      }
+      const counters = await updatePackCounters(packId, clean(existingAll[0].collection || req.body.collection || 'stickers'));
       return res.json({ liked: false, ...counters });
     }
     const payload = {

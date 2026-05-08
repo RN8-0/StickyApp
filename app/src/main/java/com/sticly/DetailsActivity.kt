@@ -1019,6 +1019,7 @@ class DetailsActivity : AppCompatActivity() {
                         tvLikeCount?.text = formatCompactNumber(currentPackLikeCount)
                         showThemedSnackbar(it.message ?: getString(R.string.error_generic))
                     }
+                delay(1000) // 1 second cooldown — prevents rapid double-tap race condition
                 packLikeInFlight = false
             }
         }

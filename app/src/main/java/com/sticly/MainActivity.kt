@@ -2766,7 +2766,7 @@ Rules:
 
                             withContext(Dispatchers.IO) {
                                 runCatching {
-                                    SocialRepository.deleteSharedPack(this@MainActivity, item.id, item.storePackId ?: item.id)
+                                    SocialRepository.deleteSharedPack(this@MainActivity, item.id, item.storePackId)
                                 }
                                 // Always delete directly from PB regardless of worker result
                                 runCatching { PocketBaseHelper.deleteRecord("user_submissions", item.id) }
