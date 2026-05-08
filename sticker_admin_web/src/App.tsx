@@ -1541,40 +1541,46 @@ function App() {
 
   const updateDraftPack = async () => {
     if (!selectedDraft || !draftEditData) return;
-    // Validate required fields
     if (!draftEditData.name?.trim()) {
       alert('Pack name is required!');
       return;
     }
     try {
-      // Merge edit data with existing draft fields to preserve all data
+      const trimmedName = draftEditData.name.trim();
       const updatedData: any = {
-        ...selectedDraft,
-        ...draftEditData,
+        name: trimmedName,
+        name_en: trimmedName,
+        category: draftEditData.category ?? selectedDraft.category,
+        is_premium: draftEditData.is_premium ?? (selectedDraft as any).is_premium ?? false,
+        is_animated: draftEditData.is_animated ?? (selectedDraft as any).is_animated ?? false,
+        is_active: draftEditData.is_active ?? (selectedDraft as any).is_active ?? true,
+        is_popular: draftEditData.is_popular ?? (selectedDraft as any).is_popular ?? false,
+        publisher: ((draftEditData.publisher || (selectedDraft as any).publisher || 'Sticky') as string).trim() || 'Sticky',
+        publisher_email: draftEditData.publisher_email || (selectedDraft as any).publisher_email || '',
         image_data_version: Date.now().toString(),
+        stickers: selectedDraft.stickers || [],
+        sticker_count: (selectedDraft.stickers || []).length,
       };
-      // Remove meta fields that shouldn't be sent in update
-      delete updatedData.id;
-      delete updatedData.collectionId;
-      delete updatedData.collectionName;
-      delete updatedData.expand;
-      delete updatedData.created;
-      delete updatedData.updated;
-      delete updatedData.images;
-      delete updatedData.tray_image;
-      // Preserve stickers, tray, telegram fields from the original draft
-      if (selectedDraft.stickers?.length) updatedData.stickers = selectedDraft.stickers;
-      if (selectedDraft.tray_url) updatedData.tray_url = selectedDraft.tray_url;
-      if (selectedDraft.tray_image_file) updatedData.tray_image_file = selectedDraft.tray_image_file;
+      if (draftEditData.privacy_policy_website) updatedData.privacy_policy_website = draftEditData.privacy_policy_website;
+      if (draftEditData.license_agreement_website) updatedData.license_agreement_website = draftEditData.license_agreement_website;
+      if ((selectedDraft as any).tray_url) updatedData.tray_url = (selectedDraft as any).tray_url;
+      if ((selectedDraft as any).tray_image_file) updatedData.tray_image_file = (selectedDraft as any).tray_image_file;
+      TARGET_LANGUAGES.forEach(lang => {
+        const key = `name_${lang.code}`;
+        if (draftEditData[key]) updatedData[key] = draftEditData[key];
+      });
       await pb.collection('draft_stickers').update(selectedDraft.id, updatedData);
-      const updated = { ...selectedDraft, ...draftEditData } as StickerPack;
+      const updated = { ...selectedDraft, ...updatedData } as StickerPack;
       setDraftPacks(prev => prev.map(p => p.id === selectedDraft.id ? updated : p));
       setSelectedDraft(updated);
       setShowDraftEditModal(false);
       alert('Draft updated successfully.');
     } catch (error: any) {
       console.error('Draft update error:', error);
-      alert(`Update error: ${error.message}`);
+      const fieldErrors = error?.data
+        ? '\n' + Object.entries(error.data).map(([k, v]: any) => `${k}: ${v?.message || JSON.stringify(v)}`).join('\n')
+        : '';
+      alert(`Update error: ${error.message}${fieldErrors}`);
     }
   };
 
@@ -6421,6 +6427,7 @@ function App() {
                                       is_premium: draft.is_premium,
                                       is_animated: draft.is_animated,
                                       is_active: draft.is_active,
+                                      is_popular: (draft as any).is_popular ?? false,
                                       publisher: (draft as any).publisher || 'Sticky',
                                       publisher_email: (draft as any).publisher_email || '',
                                       privacy_policy_website: (draft as any).privacy_policy_website || '',

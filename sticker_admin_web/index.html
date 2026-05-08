@@ -73,11 +73,14 @@
   <script>
     /* Run AFTER #root and #js-error exist in the DOM */
     (function() {
-      /* Unregister any stale service workers that might interfere */
-      if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.getRegistrations().then(function(registrations) {
-          for (var i = 0; i < registrations.length; i++) {
-            registrations[i].unregister();
+      /* Unregister stale service workers; reload once so the page runs without them */
+      if ('serviceWorker' in navigator && !sessionStorage.getItem('swClean')) {
+        navigator.serviceWorker.getRegistrations().then(function(regs) {
+          if (regs.length > 0) {
+            sessionStorage.setItem('swClean', '1');
+            Promise.all(regs.map(function(r) { return r.unregister(); })).then(function() {
+              window.location.reload();
+            });
           }
         });
       }
