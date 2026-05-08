@@ -81,6 +81,8 @@ class DetailsActivity : AppCompatActivity() {
     private var currentPackLikeCount = 0
     private var currentPackCommentCount = 0
     private var currentPackFavoriteCount = 0
+    private var packLikeInteracted = false
+    private var packLikeInFlight = false
     
     // Modern Activity Result API Launchers
     private val addPackLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -949,6 +951,8 @@ class DetailsActivity : AppCompatActivity() {
     }
 
     private fun setupPackSocialActions(pack: Pack) {
+        packLikeInteracted = false
+        packLikeInFlight = false
         val summaryView = findViewById<TextView>(R.id.tvPackSocialSummary)
         val likeBtn = findViewById<LinearLayout>(R.id.btnPackLike)
         val commentBtn = findViewById<LinearLayout>(R.id.btnPackComments)
@@ -975,33 +979,43 @@ class DetailsActivity : AppCompatActivity() {
         tvLikeCount?.text = formatCompactNumber(currentPackLikeCount)
         tvCommentCount?.text = formatCompactNumber(currentPackCommentCount)
 
-        applyLikeVisualToLayout(likeBtn, false)
+        applyLikeVisualToLayout(likeBtn, SocialRepository.isLocallyLiked(this, pack.id))
 
         likeBtn?.setOnClickListener {
             if (!requireSocialSignIn()) return@setOnClickListener
-            likeBtn.isEnabled = false
+            if (packLikeInFlight) return@setOnClickListener
+            packLikeInFlight = true
+            packLikeInteracted = true
+
+            val wasLiked = SocialRepository.isLocallyLiked(this, pack.id)
+            val nowLiked = !wasLiked
+            // Optimistic update — instant visual feedback before server responds
+            SocialRepository.setLocalLike(this, pack.id, nowLiked)
+            applyLikeVisualToLayout(likeBtn, nowLiked)
+            currentPackLikeCount = (currentPackLikeCount + if (nowLiked) 1 else -1).coerceAtLeast(0)
+            tvLikeCount?.text = formatCompactNumber(currentPackLikeCount)
             animateLikeButton(likeBtn)
+
             lifecycleScope.launch {
                 runCatching { SocialRepository.togglePackLike(this@DetailsActivity, pack) }
                     .onSuccess { result ->
                         val liked = result.optBoolean("liked", false)
                         applyLikeVisualToLayout(likeBtn, liked)
                         val serverCount = result.optInt("like_count", -1)
-                        val previousCount = currentPackLikeCount
-                        currentPackLikeCount = if (serverCount >= 0 && kotlin.math.abs(serverCount - previousCount) <= 1) {
-                            serverCount
-                        } else if (serverCount >= 0 && previousCount == 0 && liked && serverCount == 2) {
-                            1
-                        } else if (serverCount >= 0 && previousCount > 0) {
+                        if (serverCount >= 0) {
                             currentPackLikeCount = serverCount
-                            serverCount
-                        } else {
-                            (previousCount + if (liked) 1 else -1).coerceAtLeast(0)
+                            tvLikeCount?.text = formatCompactNumber(currentPackLikeCount)
                         }
-                        tvLikeCount?.text = formatCompactNumber(currentPackLikeCount)
                     }
-                    .onFailure { showThemedSnackbar(it.message ?: getString(R.string.error_generic)) }
-                likeBtn.isEnabled = true
+                    .onFailure {
+                        // Revert on failure
+                        SocialRepository.setLocalLike(this@DetailsActivity, pack.id, wasLiked)
+                        applyLikeVisualToLayout(likeBtn, wasLiked)
+                        currentPackLikeCount = (currentPackLikeCount + if (wasLiked) 1 else -1).coerceAtLeast(0)
+                        tvLikeCount?.text = formatCompactNumber(currentPackLikeCount)
+                        showThemedSnackbar(it.message ?: getString(R.string.error_generic))
+                    }
+                packLikeInFlight = false
             }
         }
 
@@ -1011,7 +1025,10 @@ class DetailsActivity : AppCompatActivity() {
 
         lifecycleScope.launch {
             runCatching { SocialRepository.fetchPackSocial(this@DetailsActivity, pack.id) }.onSuccess { social ->
-                applyLikeVisualToLayout(likeBtn, social.optBoolean("liked", false))
+                // Only update liked visual if user hasn't already tapped — prevents race condition overwrite
+                if (!packLikeInteracted) {
+                    applyLikeVisualToLayout(likeBtn, social.optBoolean("liked", false))
+                }
                 currentPackLikeCount = social.optInt("like_count", currentPackLikeCount)
                 currentPackCommentCount = social.optInt("comment_count", currentPackCommentCount)
                 tvLikeCount?.text = formatCompactNumber(currentPackLikeCount)
@@ -1024,7 +1041,7 @@ class DetailsActivity : AppCompatActivity() {
         layout ?: return
         val icon = layout.getChildAt(0) as? ImageView
         val text = layout.getChildAt(1) as? TextView
-        val color = ContextCompat.getColor(this, if (liked) R.color.primary else R.color.text_hint)
+        val color = ContextCompat.getColor(this, if (liked) R.color.premium_gold else R.color.text_hint)
         icon?.setColorFilter(color)
         text?.setTextColor(color)
     }

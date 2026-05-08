@@ -85,7 +85,7 @@ function createRateLimit(maxRequests, bucket = 'default') {
 const rateLimit = createRateLimit(RATE_LIMIT_MAX);
 const telegramRateLimit = createRateLimit(TELEGRAM_RATE_LIMIT_MAX, 'telegram');
 
-// Simple admin auth middleware — validates PocketBase admin/superuser token
+// Simple admin auth middleware — validates PocketBase user or superuser token
 async function adminAuth(req, res, next) {
   const authHeader = req.headers.authorization || '';
   const token = authHeader.replace(/^Bearer\s+/i, '').trim();
@@ -93,15 +93,24 @@ async function adminAuth(req, res, next) {
     return res.status(401).json({ error: 'Missing authorization token' });
   }
   try {
-    // Verify token against PocketBase
     const pbUrl = process.env.PB_URL || 'https://sh3xlf9j7symlj3otlw6s8rx.46.225.95.201.sslip.io';
-    const resp = await fetch(`${pbUrl}/api/collections/users/auth-refresh`, {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
-    });
-    if (!resp.ok) throw new Error('Token invalid');
-    const data = await resp.json();
-    req.adminUser = data.record || data;
+    const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+    // Try superusers first (admin panel tokens), then regular users
+    const endpoints = [
+      `${pbUrl}/api/collections/_superusers/auth-refresh`,
+      `${pbUrl}/api/collections/users/auth-refresh`,
+    ];
+    let validated = false;
+    for (const url of endpoints) {
+      const resp = await fetch(url, { method: 'POST', headers });
+      if (resp.ok) {
+        const data = await resp.json();
+        req.adminUser = data.record || data;
+        validated = true;
+        break;
+      }
+    }
+    if (!validated) throw new Error('Token invalid');
     next();
   } catch {
     return res.status(401).json({ error: 'Invalid or expired token' });

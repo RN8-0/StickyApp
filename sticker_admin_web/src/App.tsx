@@ -684,29 +684,47 @@ function App() {
   };
 
   const notifySubmissionUser = async (submission: UserSubmission, title: string, body: string, data: Record<string, unknown> = {}) => {
-    // 1. Create in-app notification in PocketBase (hooks will trigger FCM via individual tokens)
+    // 1. Create in-app notification in PocketBase
     await createSubmissionNotification(submission, title, body, data)
       .catch((e) => console.warn('Submission notification skipped:', e));
 
-    // 2. Send push via worker /api/notify (both device-specific AND broadcast for reliability)
-    const deviceId = submission.device_id;
-    const notifyPayload: any = { title, body, data };
-    if (deviceId) notifyPayload.deviceId = deviceId;
+    // 2. Look up FCM token directly from user_profiles for reliable delivery
+    let fcmToken = '';
+    const submissionDeviceId = submission.device_id || '';
+    const submissionUserId = (submission as any).user_id || '';
+    const submissionUserEmail = submission.user_email || '';
+    if (submissionDeviceId || submissionUserId || submissionUserEmail) {
+      try {
+        const filterParts = [
+          submissionDeviceId ? `device_id = "${submissionDeviceId}"` : '',
+          submissionUserId ? `user_id = "${submissionUserId}"` : '',
+          submissionUserEmail ? `email = "${submissionUserEmail}"` : '',
+        ].filter(Boolean).join(' || ');
+        const profiles = await pb.collection('user_profiles').getList(1, 5, {
+          filter: filterParts,
+          fields: 'fcm_token',
+        });
+        fcmToken = profiles.items.find((p: any) => p.fcm_token)?.fcm_token || '';
+      } catch (e) {
+        console.warn('FCM token lookup failed:', e);
+      }
+    }
 
-    // Use the full worker URL from PocketBase config for direct access
+    // 3. Send via worker (uses Firebase Admin SDK with service account)
+    const notifyPayload: any = { title, body, data };
+    if (submissionDeviceId) notifyPayload.deviceId = submissionDeviceId;
+    if (fcmToken) notifyPayload.fcmToken = fcmToken;
+
     const workerBaseUrl = 'https://sticky-worker.46.225.95.201.sslip.io';
+    const workerToken = pb.authStore.token;
     fetch(`${workerBaseUrl}/api/notify`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(workerToken ? { 'Authorization': `Bearer ${workerToken}` } : {}),
+      },
       body: JSON.stringify(notifyPayload),
-    }).catch((e) => console.warn('Push notification (device) skipped:', e));
-
-    // Also send via nginx-proxied worker URL as fallback
-    fetch(`${WORKER_URL}/api/notify`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(notifyPayload),
-    }).catch((e) => console.warn('Push notification (proxied) skipped:', e));
+    }).catch((e) => console.warn('Push notification (worker) skipped:', e));
   };
 
   const handleEditSubmission = (submission: UserSubmission) => {
@@ -1015,9 +1033,13 @@ function App() {
       }
 
       // 2. Send FCM push via worker (broadcast to all)
+      const broadcastToken = pb.authStore.token;
       const resp = await fetch(`${WORKER_URL}/api/notify`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(broadcastToken ? { 'Authorization': `Bearer ${broadcastToken}` } : {}),
+        },
         body: JSON.stringify({
           title: notifTitle || 'Sticky',
           body: notifBody,
@@ -1723,40 +1745,56 @@ function App() {
 
   // ========== KULLANICI YÖNETİM FONKSİYONLARI ==========
 
+  const mapUserData = (data: any): UserData => ({
+    id: data.id,
+    email: data.email || data.user_email || '',
+    is_premium: data.is_premium || false,
+    premium_type: data.premium_type || 'none',
+    premium_expiry: data.premium_expiry || data.premium_expires_at || 0,
+    favorite_packs: data.favorite_packs || [],
+    last_sync: data.last_sync || data.updated || null,
+    cancelled_at: data.cancelled_at || null,
+    cancelled_reason: data.cancelled_reason || '',
+    subscription_source: data.subscription_source || 'none',
+    subscription_history: data.subscription_history || [],
+    created_at: data.created_at || data.joined_at || data.created || null,
+    display_name: data.display_name || data.displayName || data.name || '',
+    photo_url: data.photo_url || data.photoURL || data.avatar_url || data.picture || '',
+    device_info: data.device_info || null,
+    total_stickers_added: data.total_stickers_added || 0,
+    custom_packs_count: data.custom_packs_count || 0,
+    social: data.social || undefined,
+    followers_list: data.followers_list || [],
+    following_list: data.following_list || [],
+    published_packs: data.published_packs || [],
+    share_requests: data.share_requests || [],
+    recent_comments: data.recent_comments || [],
+  });
+
   const fetchUsers = async () => {
     setUsersLoading(true);
     try {
       const token = pb.authStore.token;
-      const resp = await fetch(`${WORKER_URL}/api/users`, {
-        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
-      });
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-      const { users } = await resp.json();
-      const usersList: UserData[] = (users || []).map((data: any) => ({
-        id: data.id,
-        email: data.email || '',
-        is_premium: data.is_premium || false,
-        premium_type: data.premium_type || 'none',
-        premium_expiry: data.premium_expiry || data.premium_expires_at || 0,
-        favorite_packs: data.favorite_packs || [],
-        last_sync: data.last_sync || data.updated || null,
-        cancelled_at: data.cancelled_at || null,
-        cancelled_reason: data.cancelled_reason || '',
-        subscription_source: data.subscription_source || 'none',
-        subscription_history: data.subscription_history || [],
-        created_at: data.created_at || data.joined_at || data.created || null,
-        display_name: data.display_name || data.displayName || data.name || '',
-        photo_url: data.photo_url || data.photoURL || data.avatar_url || data.picture || '',
-        device_info: data.device_info || null,
-        total_stickers_added: data.total_stickers_added || 0,
-        custom_packs_count: data.custom_packs_count || 0,
-        social: data.social || undefined,
-        followers_list: data.followers_list || [],
-        following_list: data.following_list || [],
-        published_packs: data.published_packs || [],
-        share_requests: data.share_requests || [],
-        recent_comments: data.recent_comments || [],
-      }));
+      let usersList: UserData[] = [];
+
+      try {
+        const resp = await fetch(`${WORKER_URL}/api/users`, {
+          headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+        });
+        if (resp.ok) {
+          const { users } = await resp.json();
+          if (Array.isArray(users) && users.length > 0) {
+            usersList = users.map(mapUserData);
+          }
+        }
+      } catch (_) {}
+
+      // Fallback: query user_profiles directly from PocketBase
+      if (usersList.length === 0) {
+        const records = await pb.collection('user_profiles').getFullList({ sort: '-created' }).catch(() => []);
+        usersList = (records as any[]).map(mapUserData);
+      }
+
       setUsersData(usersList);
     } catch (error) {
       console.error("Users fetch error:", error);

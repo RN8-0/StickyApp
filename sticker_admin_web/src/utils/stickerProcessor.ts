@@ -44,67 +44,53 @@ function getFFmpegBlobURLs(): Promise<{ coreURL: string; wasmURL: string }> {
 
 async function loadFFmpegInstance(ffmpeg: FFmpeg): Promise<void> {
     const { coreURL, wasmURL } = await getFFmpegBlobURLs();
-    // WASM already downloaded (blob URL cached); this just initialises the WASM runtime.
+    // Blob URL already downloaded; this step is only WASM JIT compilation (CPU-bound, can be slow).
     await Promise.race([
         ffmpeg.load({ coreURL, wasmURL }),
-        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('FFmpeg init timeout')), 60000)),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('FFmpeg init timeout')), 180000)),
     ]);
 }
 
-// Pool of 2 pre-loaded FFmpeg instances — shared across parallel animated sticker calls.
-// Avoids re-loading 22MB WASM for every sticker (saves ~10s per sticker).
-class FFmpegPool {
-    private entries: Array<{ ffmpeg: FFmpeg; inUse: boolean }> = [];
-    private preloadPromise: Promise<void> | null = null;
-    private waiters: Array<() => void> = [];
+// Single persistent FFmpeg instance for TGS encoding, serialised via a promise-chain mutex.
+// This avoids parallel WASM JIT compilations that compete for CPU and cause timeouts.
+let _tgsFFmpegReady: Promise<FFmpeg> | null = null;
+let _tgsMutex: Promise<void> = Promise.resolve();
 
-    preload(): Promise<void> {
-        if (!this.preloadPromise) {
-            this.preloadPromise = Promise.all([
-                this.createSlot(),
-                this.createSlot(),
-            ]).then(() => {});
-        }
-        return this.preloadPromise;
-    }
-
-    private async createSlot(): Promise<void> {
-        const ffmpeg = new FFmpeg();
-        await loadFFmpegInstance(ffmpeg);
-        this.entries.push({ ffmpeg, inUse: false });
-    }
-
-    async acquire(): Promise<{ ffmpeg: FFmpeg; release: () => void }> {
-        await this.preload();
-        return new Promise((resolve) => {
-            const tryGet = () => {
-                const entry = this.entries.find(e => !e.inUse);
-                if (entry) {
-                    entry.inUse = true;
-                    resolve({
-                        ffmpeg: entry.ffmpeg,
-                        release: () => {
-                            entry.inUse = false;
-                            if (this.waiters.length > 0) this.waiters.shift()!();
-                        }
-                    });
-                } else {
-                    this.waiters.push(tryGet);
-                }
-            };
-            tryGet();
+function _ensureTgsFFmpeg(): Promise<FFmpeg> {
+    if (!_tgsFFmpegReady) {
+        _tgsFFmpegReady = (async () => {
+            const ffmpeg = new FFmpeg();
+            await loadFFmpegInstance(ffmpeg);
+            return ffmpeg;
+        })().catch(err => {
+            _tgsFFmpegReady = null;
+            throw err;
         });
     }
+    return _tgsFFmpegReady;
+}
 
-    terminateAll(): void {
-        this.entries.forEach(e => { try { e.ffmpeg.terminate(); } catch {} });
-        this.entries = [];
-        this.waiters = [];
-        this.preloadPromise = null;
+async function withTgsFFmpeg<T>(fn: (ffmpeg: FFmpeg) => Promise<T>): Promise<T> {
+    // Chain onto previous call so encoding is always serialised (one at a time).
+    let release!: () => void;
+    const prev = _tgsMutex;
+    _tgsMutex = new Promise<void>(r => { release = r; });
+    try {
+        await prev;
+        const ffmpeg = await _ensureTgsFFmpeg();
+        return await fn(ffmpeg);
+    } catch (err) {
+        _tgsFFmpegReady = null; // force fresh instance on next call after any error
+        throw err;
+    } finally {
+        release();
     }
 }
 
-const ffmpegPool = new FFmpegPool();
+function resetTgsFFmpeg(): void {
+    _tgsFFmpegReady?.then(f => { try { f.terminate(); } catch {} }).catch(() => {});
+    _tgsFFmpegReady = null;
+}
 
 export type StickerProgress = {
     message: string;
@@ -192,13 +178,13 @@ class StickerProcessor {
         this.loadPromise = null;
         try { this.ffmpeg?.terminate(); } catch {}
         this.ffmpeg = null;
-        ffmpegPool.terminateAll();
+        _tgsFFmpegReady = null;
         return this.load();
     }
 
     // Uygulama açılır açılmaz çağrılacak - FFmpeg'i önceden yükle
     async preload() {
-        await Promise.all([this.load(), ffmpegPool.preload()]);
+        await Promise.all([this.load(), _ensureTgsFFmpeg().catch(() => {})]);
     }
 
     /**
@@ -582,29 +568,27 @@ class StickerProcessor {
      * Create animated WebP from PNG frame blobs (for TGS import)
      */
     async processFromPngFrames(pngBlobs: Blob[], fps: number, onProgress?: (p: StickerProgress) => void): Promise<Blob> {
-        const { ffmpeg, release } = await ffmpegPool.acquire();
+        return withTgsFFmpeg(async (ffmpeg) => {
+            onProgress?.({ message: `Writing ${pngBlobs.length} frames...`, percentage: 40 });
 
-        onProgress?.({ message: `Writing ${pngBlobs.length} frames...`, percentage: 40 });
+            for (let i = 0; i < pngBlobs.length; i++) {
+                const frameName = `frame_${i.toString().padStart(4, '0')}.png`;
+                await ffmpeg.writeFile(frameName, await fetchFile(pngBlobs[i]));
+            }
 
-        for (let i = 0; i < pngBlobs.length; i++) {
-            const frameName = `frame_${i.toString().padStart(4, '0')}.png`;
-            await ffmpeg.writeFile(frameName, await fetchFile(pngBlobs[i]));
-        }
-
-        try {
-            return await this.createWebPFromFrames(ffmpeg, pngBlobs.length, onProgress, fps);
-        } finally {
-            // Clean up all frame and output files before returning instance to pool
             try {
-                const files = await ffmpeg.listDir('.');
-                await Promise.all(
-                    files
-                        .filter(f => f.name.startsWith('frame_') || f.name === 'output.webp')
-                        .map(f => ffmpeg.deleteFile(f.name).catch(() => {}))
-                );
-            } catch {}
-            release();
-        }
+                return await this.createWebPFromFrames(ffmpeg, pngBlobs.length, onProgress, fps);
+            } finally {
+                try {
+                    const files = await ffmpeg.listDir('.');
+                    await Promise.all(
+                        files
+                            .filter((f: { name: string }) => f.name.startsWith('frame_') || f.name === 'output.webp')
+                            .map((f: { name: string }) => ffmpeg.deleteFile(f.name).catch(() => {}))
+                    );
+                } catch {}
+            }
+        });
     }
 
     /**

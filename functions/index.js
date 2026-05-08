@@ -2,7 +2,7 @@
  * Firebase Cloud Functions for StickyApp
  * Deploy with: firebase deploy --only functions
  */
-const { onCall, HttpsError } = require('firebase-functions/v2/https');
+const { onCall, onRequest, HttpsError } = require('firebase-functions/v2/https');
 const { onDocumentCreated, onDocumentUpdated } = require('firebase-functions/v2/firestore');
 const admin = require('firebase-admin');
 
@@ -119,6 +119,50 @@ exports.onNewPackCreated = onDocumentCreated('sticker_packs/{packId}', async (ev
     await admin.messaging().send(message);
   } catch (error) {
     console.error('FCM send failed:', error.message);
+  }
+});
+
+/**
+ * Admin panelden doğrudan FCM token'a bildirim gönder (pack onayı için)
+ * POST body: { fcmToken, title, body, data }
+ */
+exports.sendPushNotification = onRequest({ cors: true, invoker: 'public' }, async (req, res) => {
+  if (req.method !== 'POST') {
+    res.status(405).json({ error: 'Method Not Allowed' });
+    return;
+  }
+
+  const { fcmToken, title, body, data = {} } = req.body || {};
+  if (!fcmToken) {
+    res.status(400).json({ error: 'fcmToken is required' });
+    return;
+  }
+
+  const message = {
+    notification: {
+      title: title || 'Sticky',
+      body: body || '',
+    },
+    data: Object.fromEntries(
+      Object.entries(data).map(([k, v]) => [k, String(v)])
+    ),
+    token: fcmToken,
+    android: {
+      priority: 'high',
+      notification: {
+        channelId: 'sticky_notifications',
+        icon: 'ic_notification_sticky',
+        color: '#7B5EA7',
+      },
+    },
+  };
+
+  try {
+    const messageId = await admin.messaging().send(message);
+    res.json({ success: true, messageId });
+  } catch (error) {
+    console.error('sendPushNotification error:', error.message);
+    res.status(500).json({ error: error.message });
   }
 });
 

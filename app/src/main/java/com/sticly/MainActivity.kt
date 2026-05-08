@@ -176,6 +176,9 @@ class MainActivity : AppCompatActivity() {
     
     // Cache parsed dates to avoid repeated SimpleDateFormat.parse() in sort loops
     private val parsedDateCache = mutableMapOf<String, Long>()
+
+    // In-flight like requests per pack — prevents double-tap from sending duplicate API calls
+    private val likeInFlight = mutableSetOf<String>()
     
     // Debounce applyFilters to prevent excessive calls
     private var filterJob: Job? = null
@@ -508,7 +511,11 @@ class MainActivity : AppCompatActivity() {
 
         // FAB: scroll-to-top
         val btnScrollToTop = findViewById<com.google.android.material.floatingactionbutton.FloatingActionButton>(R.id.btnScrollToTop)
-        btnScrollToTop?.setOnClickListener { rv.smoothScrollToPosition(0) }
+        btnScrollToTop?.setOnClickListener {
+            val appBar = findViewById<com.google.android.material.appbar.AppBarLayout>(R.id.mainAppBarLayout)
+            appBar?.setExpanded(true, true)
+            rv.smoothScrollToPosition(0)
+        }
         rv.addOnScrollListener(object : androidx.recyclerview.widget.RecyclerView.OnScrollListener() {
             override fun onScrolled(recyclerView: androidx.recyclerview.widget.RecyclerView, dx: Int, dy: Int) {
                 val totalScrolled = (recyclerView.layoutManager as? androidx.recyclerview.widget.LinearLayoutManager)
@@ -583,6 +590,70 @@ class MainActivity : AppCompatActivity() {
             },
             onPublisherClick = { pack ->
                 showPacksByPublisher(pack.pub)
+            },
+            onShareClick = { pack ->
+                val count = pack.stickers.size
+                if (count !in 9..30) {
+                    showThemedCountWarning(getString(R.string.publish_pack_count_range))
+                } else {
+                    startActivity(Intent(this, SubmitPackActivity::class.java).putExtra("packId", pack.id))
+                    overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left)
+                }
+            },
+            onLikeClick = onLikeClick@{ pack, vh ->
+                if (!SocialRepository.isSignedIn(this)) {
+                    android.widget.Toast.makeText(this, getString(R.string.profile_login_required), android.widget.Toast.LENGTH_SHORT).show()
+                    return@onLikeClick
+                }
+                // Block concurrent API calls for the same pack
+                if (likeInFlight.contains(pack.id)) return@onLikeClick
+                likeInFlight.add(pack.id)
+
+                val wasLiked = SocialRepository.isLocallyLiked(this, pack.id)
+                val nowLiked = !wasLiked
+                // Update local state immediately so a rapid second tap reads the correct state
+                SocialRepository.setLocalLike(this, pack.id, nowLiked)
+
+                // Optimistic UI update
+                vh.btnItemLike?.setImageResource(if (nowLiked) R.drawable.ic_thumb_up else R.drawable.ic_thumb_up_outline)
+                val color = androidx.core.content.ContextCompat.getColor(this, if (nowLiked) R.color.primary else R.color.text_hint)
+                vh.btnItemLike?.setColorFilter(color)
+                vh.tvItemLikeCount?.setTextColor(color)
+                val optimisticCount = pack.likeCount + if (nowLiked) 1 else -1
+                if (optimisticCount > 0) {
+                    vh.tvItemLikeCount?.text = optimisticCount.toString()
+                    vh.tvItemLikeCount?.visibility = View.VISIBLE
+                } else {
+                    vh.tvItemLikeCount?.visibility = View.GONE
+                }
+                lifecycleScope.launch {
+                    runCatching { SocialRepository.togglePackLike(this@MainActivity, pack) }
+                        .onSuccess { result ->
+                            val liked = result.optBoolean("liked", nowLiked)
+                            val serverCount = result.optInt("like_count", -1)
+                            vh.btnItemLike?.setImageResource(if (liked) R.drawable.ic_thumb_up else R.drawable.ic_thumb_up_outline)
+                            val c = androidx.core.content.ContextCompat.getColor(this@MainActivity, if (liked) R.color.primary else R.color.text_hint)
+                            vh.btnItemLike?.setColorFilter(c)
+                            vh.tvItemLikeCount?.setTextColor(c)
+                            if (serverCount >= 0) {
+                                if (serverCount > 0) {
+                                    vh.tvItemLikeCount?.text = serverCount.toString()
+                                    vh.tvItemLikeCount?.visibility = View.VISIBLE
+                                } else {
+                                    vh.tvItemLikeCount?.visibility = View.GONE
+                                }
+                            }
+                        }
+                        .onFailure {
+                            // Revert local state and UI on failure
+                            SocialRepository.setLocalLike(this@MainActivity, pack.id, wasLiked)
+                            vh.btnItemLike?.setImageResource(if (wasLiked) R.drawable.ic_thumb_up else R.drawable.ic_thumb_up_outline)
+                            val c = androidx.core.content.ContextCompat.getColor(this@MainActivity, if (wasLiked) R.color.primary else R.color.text_hint)
+                            vh.btnItemLike?.setColorFilter(c)
+                            vh.tvItemLikeCount?.setTextColor(c)
+                        }
+                    likeInFlight.remove(pack.id)
+                }
             }
         )
         rv.adapter = adapter
@@ -644,6 +715,8 @@ class MainActivity : AppCompatActivity() {
                 updateCategoryChipSelection()
                 categoryChipGroup.visibility = View.VISIBLE
                 showHomeSections()
+                // Expand app bar when explicitly switching to explore tab
+                findViewById<com.google.android.material.appbar.AppBarLayout>(R.id.mainAppBarLayout)?.setExpanded(true, false)
                 tabExplore.post {
                     if (!restoreExploreState()) {
                         applyFilters()
@@ -797,10 +870,9 @@ class MainActivity : AppCompatActivity() {
                 toolbarSubtitle.visibility = View.GONE
                 categoryChipGroup.visibility = View.VISIBLE
                 showHomeSections()
-                ((mainContent as? android.view.ViewGroup)?.getChildAt(0) as? com.google.android.material.appbar.AppBarLayout)?.setExpanded(true, false)
             }
             FilterType.FAVORITES -> {
-                searchBarLayoutCached?.visibility = View.VISIBLE
+                searchBarLayoutCached?.visibility = View.GONE
                 iconFavorites.setColorFilter(activeColor)
                 textFavorites.setTextColor(activeColor)
                 
@@ -1928,8 +2000,7 @@ Rules:
                 Toast.makeText(this, getString(R.string.profile_login_required), Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
-            startActivity(Intent(this, SubmitPackActivity::class.java))
-            overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left)
+            tabMyStickers.performClick()
         }
 
         btnLogin?.setOnClickListener {
@@ -2685,14 +2756,13 @@ Rules:
                             rvPublished?.adapter = SubmissionAdapter(items.filter { it.id != item.id })
 
                             withContext(Dispatchers.IO) {
-                                val deletedByWorker = runCatching {
-                                    SocialRepository.deleteSharedPack(this@MainActivity, item.id, item.storePackId ?: item.id).optBoolean("success", false)
-                                }.getOrDefault(false)
-                                if (!deletedByWorker) {
-                                    PocketBaseHelper.deleteRecord("user_submissions", item.id)
-                                    if (item.status == "approved" && item.storePackId != null) {
-                                        PocketBaseHelper.deleteRecord("stickers", item.storePackId)
-                                    }
+                                runCatching {
+                                    SocialRepository.deleteSharedPack(this@MainActivity, item.id, item.storePackId ?: item.id)
+                                }
+                                // Always delete directly from PB regardless of worker result
+                                runCatching { PocketBaseHelper.deleteRecord("user_submissions", item.id) }
+                                if (item.status == "approved" && item.storePackId != null) {
+                                    runCatching { PocketBaseHelper.deleteRecord("stickers", item.storePackId) }
                                 }
                                 // Remove from global pack cache so Explore tab no longer shows it
                                 val targetId = item.storePackId ?: item.id
@@ -2766,6 +2836,7 @@ Rules:
                             PreferencesHelper.getDeviceId(this@MainActivity)
                         )
                         loadProfileData()
+                        runOnUiThread { aiUpdateGenerateButton?.invoke() }
                     } catch (e: Exception) {
                         Toast.makeText(this@MainActivity, "Sign-in failed: ${e.message}", Toast.LENGTH_SHORT).show()
                     }
@@ -3053,11 +3124,11 @@ Rules:
                 isCheckable = true
                 isChecked = isActive
                 tag = info.id
-                chipStartPadding = 12.dpToPx().toFloat()
-                chipEndPadding = 12.dpToPx().toFloat()
+                chipStartPadding = 8.dpToPx().toFloat()
+                chipEndPadding = 8.dpToPx().toFloat()
                 chipCornerRadius = 50.dpToPx().toFloat()
-                chipMinHeight = 38.dpToPx().toFloat()
-                textSize = 13f
+                chipMinHeight = 28.dpToPx().toFloat()
+                textSize = 11f
                 typeface = if (isActive) android.graphics.Typeface.DEFAULT_BOLD else android.graphics.Typeface.DEFAULT
                 setChipBackgroundColorResource(if (isActive) R.color.accent else R.color.white)
                 setTextColor(getColor(if (isActive) R.color.white else R.color.text_primary))
@@ -3094,11 +3165,11 @@ Rules:
                 isCheckable = true
                 isChecked = isActive
                 tag = categoryKey
-                chipStartPadding = 12.dpToPx().toFloat()
-                chipEndPadding = 12.dpToPx().toFloat()
+                chipStartPadding = 8.dpToPx().toFloat()
+                chipEndPadding = 8.dpToPx().toFloat()
                 chipCornerRadius = 50.dpToPx().toFloat()
-                chipMinHeight = 38.dpToPx().toFloat()
-                textSize = 13f
+                chipMinHeight = 28.dpToPx().toFloat()
+                textSize = 11f
                 typeface = if (isActive) android.graphics.Typeface.DEFAULT_BOLD else android.graphics.Typeface.DEFAULT
                 setChipBackgroundColorResource(if (isActive) R.color.accent else R.color.white)
                 setTextColor(getColor(if (isActive) R.color.white else R.color.text_primary))
@@ -3158,11 +3229,11 @@ Rules:
                 isCheckable = true
                 isChecked = isActive
                 tag = info.id
-                chipStartPadding = 12.dpToPx().toFloat()
-                chipEndPadding = 12.dpToPx().toFloat()
+                chipStartPadding = 8.dpToPx().toFloat()
+                chipEndPadding = 8.dpToPx().toFloat()
                 chipCornerRadius = 50.dpToPx().toFloat()
-                chipMinHeight = 38.dpToPx().toFloat()
-                textSize = 13f
+                chipMinHeight = 28.dpToPx().toFloat()
+                textSize = 11f
                 typeface = if (isActive) android.graphics.Typeface.DEFAULT_BOLD else android.graphics.Typeface.DEFAULT
                 setChipBackgroundColorResource(if (isActive) R.color.accent else R.color.white)
                 setTextColor(getColor(if (isActive) R.color.white else R.color.text_primary))
@@ -3809,6 +3880,22 @@ Rules:
 
 
 
+
+    private fun showThemedCountWarning(message: String) {
+        val snackbar = com.google.android.material.snackbar.Snackbar.make(rv, message, com.google.android.material.snackbar.Snackbar.LENGTH_LONG)
+        val view = snackbar.view
+        val lp = view.layoutParams as? android.widget.FrameLayout.LayoutParams
+        val margin = (16 * resources.displayMetrics.density).toInt()
+        lp?.setMargins(margin, 0, margin, margin)
+        lp?.let { view.layoutParams = it }
+        val bg = android.graphics.drawable.GradientDrawable().apply {
+            setColor(androidx.core.content.ContextCompat.getColor(this@MainActivity, R.color.primary))
+            cornerRadius = (24 * resources.displayMetrics.density)
+        }
+        view.background = bg
+        snackbar.setTextColor(android.graphics.Color.WHITE)
+        snackbar.show()
+    }
 
     private fun showFaqDialog() {
         startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(StickyConfig.legalUrl("#faq"))))

@@ -42,6 +42,26 @@ async function sendFcmViaLegacyKey(topic, title, body, imageUrl, data = {}) {
   return result.message_id || 'sent';
 }
 
+async function sendFcmToToken(token, title, body, imageUrl, data = {}) {
+  const admin = require('firebase-admin');
+  if (!admin.apps.length) throw new Error('Firebase Admin not initialized');
+  const message = {
+    token,
+    notification: { title, body },
+    android: {
+      priority: 'high',
+      notification: {
+        channelId: 'sticky_notifications',
+        icon: 'ic_notification_sticky',
+        color: '#7B5EA7',
+        ...(imageUrl ? { imageUrl } : {}),
+      },
+    },
+    data: Object.fromEntries(Object.entries(data).map(([k, v]) => [k, String(v)])),
+  };
+  return admin.messaging().send(message);
+}
+
 async function sendFcm(topic, title, body, imageUrl, data = {}) {
   const admin = require('firebase-admin');
   if (admin.apps.length) return sendFcmViaAdminSdk(topic, title, body, imageUrl, data);
@@ -57,14 +77,25 @@ async function sendNtfy(topic, title, body, imageUrl) {
   return { success: true };
 }
 
-// POST /notify — broadcast to all users or specific device
+// POST /notify — broadcast to all users, specific device, or specific FCM token
 router.post('/', async (req, res) => {
   try {
-    const { title = 'Sticky', body, imageUrl, topic, deviceId, data = {} } = req.body;
+    const { title = 'Sticky', body, imageUrl, topic, deviceId, fcmToken, data = {} } = req.body;
     if (!body) return res.status(400).json({ error: 'body required' });
 
     const results = { fcm: null, ntfy: null };
 
+    // Direct token delivery takes priority over topic
+    if (fcmToken) {
+      try {
+        const messageId = await sendFcmToToken(fcmToken, title, body, imageUrl, data);
+        results.fcm = { success: true, messageId, method: 'token' };
+        console.log('[Notify FCM] sent to token, messageId:', messageId);
+      } catch (fcmErr) {
+        console.error('[Notify FCM token]', fcmErr.message);
+        results.fcm = { success: false, error: fcmErr.message };
+      }
+    } else {
     const fcmTopic = deviceId ? `user_${deviceId.replace(/[^a-zA-Z0-9_-]/g, '_')}` : FCM_BROADCAST_TOPIC;
     try {
       const messageId = await sendFcm(fcmTopic, title, body, imageUrl, data);
@@ -73,6 +104,7 @@ router.post('/', async (req, res) => {
     } catch (fcmErr) {
       console.error('[Notify FCM]', fcmErr.message);
       results.fcm = { success: false, error: fcmErr.message };
+    }
     }
 
     try {

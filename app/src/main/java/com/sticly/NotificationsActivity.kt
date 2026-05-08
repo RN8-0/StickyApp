@@ -18,9 +18,6 @@ import com.google.android.material.appbar.MaterialToolbar
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.net.HttpURLConnection
-import java.net.URL
-import java.net.URLEncoder
 
 class NotificationsActivity : AppCompatActivity() {
 
@@ -99,7 +96,7 @@ class NotificationsActivity : AppCompatActivity() {
         userId = firebaseUser?.uid.orEmpty()
 
         lifecycleScope.launch {
-            val list = withContext(Dispatchers.IO) { fetchFromWorker(deviceId, userId, userEmail) }
+            val list = withContext(Dispatchers.IO) { fetchFromPocketBase(deviceId, userId, userEmail) }
             progress.visibility = View.GONE
             items.clear()
             items.addAll(list.map { it.copy(read = true) })
@@ -114,9 +111,9 @@ class NotificationsActivity : AppCompatActivity() {
             withContext(Dispatchers.IO) {
                 list.filter { !it.read }.forEach { msg ->
                     runCatching {
-                        workerPatch(
-                            "${PocketBaseHelper.WORKER_URL}/api/notifications/${msg.id}",
-                            "{\"read\":true}"
+                        PocketBaseHelper.updateRecord(
+                            "notifications", msg.id,
+                            org.json.JSONObject().put("read", true)
                         )
                     }
                 }
@@ -150,65 +147,31 @@ class NotificationsActivity : AppCompatActivity() {
 
     private fun doClearAll() {
         lifecycleScope.launch {
-            var success = false
+            val idsToDelete = items.map { it.id }.toList()
             withContext(Dispatchers.IO) {
-                runCatching {
-                    val params = buildQueryParams(deviceId, userId, userEmail)
-                    if (params.isNotEmpty()) {
-                        val conn = URL("${PocketBaseHelper.WORKER_URL}/api/notifications?$params")
-                            .openConnection() as HttpURLConnection
-                        conn.requestMethod = "DELETE"
-                        conn.connectTimeout = 10_000
-                        conn.readTimeout = 10_000
-                        val code = conn.responseCode
-                        if (code in 200..299) {
-                            val body = conn.inputStream.bufferedReader().readText()
-                            val json = org.json.JSONObject(body)
-                            success = json.optBoolean("success", false)
-                            android.util.Log.d("Notifications", "Delete response: $code, success=$success, deleted=${json.optInt("deleted", 0)}")
-                        } else {
-                            android.util.Log.e("Notifications", "Delete failed: $code")
-                        }
-                        conn.disconnect()
-                    }
-                }.onFailure { e ->
-                    android.util.Log.e("Notifications", "Delete error", e)
+                idsToDelete.forEach { id ->
+                    runCatching { PocketBaseHelper.deleteRecord("notifications", id) }
                 }
             }
-            if (success) {
-                items.clear()
-                rv.adapter?.notifyDataSetChanged()
-                emptyView.visibility = View.VISIBLE
-                rv.visibility = View.GONE
-                Toast.makeText(this@NotificationsActivity, getString(R.string.notifications_cleared), Toast.LENGTH_SHORT).show()
-            } else {
-                Toast.makeText(this@NotificationsActivity, getString(R.string.notifications_clear_error), Toast.LENGTH_SHORT).show()
-            }
+            items.clear()
+            rv.adapter?.notifyDataSetChanged()
+            emptyView.visibility = View.VISIBLE
+            rv.visibility = View.GONE
+            Toast.makeText(this@NotificationsActivity, getString(R.string.notifications_cleared), Toast.LENGTH_SHORT).show()
         }
     }
 
-    private suspend fun fetchFromWorker(deviceId: String, userId: String, email: String): List<Notif> {
+    private suspend fun fetchFromPocketBase(deviceId: String, userId: String, email: String): List<Notif> {
         return runCatching {
-            val params = buildQueryParams(deviceId, userId, email)
-            if (params.isEmpty()) return@runCatching emptyList()
-            val conn = URL("${PocketBaseHelper.WORKER_URL}/api/notifications?$params")
-                .openConnection() as HttpURLConnection
-            conn.requestMethod = "GET"
-            conn.connectTimeout = 10_000
-            conn.readTimeout = 15_000
-            conn.connect()
-            if (conn.responseCode != 200) {
-                conn.disconnect()
-                return@runCatching emptyList()
-            }
-            val json = conn.inputStream.bufferedReader().readText()
-            conn.disconnect()
-            val arr = org.json.JSONArray(json)
-            (0 until arr.length()).map { i ->
-                val record = arr.getJSONObject(i)
-                val timestamp = record.optString("timestamp").ifBlank {
-                    record.optString("created", record.optString("created_at", record.optString("updated", "")))
-                }
+            val filterParts = mutableListOf<String>()
+            if (deviceId.isNotBlank()) filterParts.add("device_id='${deviceId.replace("'", "\\'")}'")
+            if (userId.isNotBlank()) filterParts.add("user_id='${userId.replace("'", "\\'")}'")
+            if (email.isNotBlank()) filterParts.add("email='${email.replace("'", "\\'")}'")
+            if (filterParts.isEmpty()) return@runCatching emptyList()
+            val filter = filterParts.joinToString(" || ")
+            val records = PocketBaseHelper.listRecords("notifications", filter = filter, perPage = 200)
+            records.map { record ->
+                val timestamp = record.optString("created").ifBlank { record.optString("updated", "") }
                 val date = parseTimestamp(timestamp)
                 val topic = record.optString("topic", record.optString("type", "general"))
                 val data = notificationData(record)
@@ -255,27 +218,6 @@ class NotificationsActivity : AppCompatActivity() {
             "social_follow" -> getString(R.string.notification_follow_title) to getString(R.string.notification_follow_body, actor)
             "pack_like" -> getString(R.string.notification_pack_like_title) to getString(R.string.notification_pack_like_body, actor, packName.ifBlank { getString(R.string.sticker_pack) })
             else -> fallbackTitle to fallbackBody
-        }
-    }
-
-    private fun buildQueryParams(deviceId: String, userId: String, email: String): String {
-        val parts = mutableListOf<String>()
-        if (deviceId.isNotBlank()) parts.add("deviceId=${URLEncoder.encode(deviceId, "UTF-8")}")
-        if (userId.isNotBlank()) parts.add("userId=${URLEncoder.encode(userId, "UTF-8")}")
-        if (email.isNotBlank()) parts.add("email=${URLEncoder.encode(email, "UTF-8")}")
-        return parts.joinToString("&")
-    }
-
-    private fun workerPatch(url: String, body: String) {
-        runCatching {
-            val conn = URL(url).openConnection() as HttpURLConnection
-            conn.requestMethod = "PATCH"
-            conn.setRequestProperty("Content-Type", "application/json")
-            conn.doOutput = true
-            conn.connectTimeout = 8_000
-            conn.outputStream.write(body.toByteArray())
-            conn.connect()
-            conn.disconnect()
         }
     }
 

@@ -61,44 +61,53 @@
       font-size: 0.875rem;
     }
   </style>
-  <script type="module" crossorigin src="/static/index-0A9qMFXg.js"></script>
+  <script type="module" crossorigin src="/static/index-BxSnLguk.js"></script>
   <link rel="stylesheet" crossorigin href="/static/index-l_ejFL0F.css">
 </head>
 
 <body>
   <div id="root"></div>
   <div id="js-error">
-    <h1>⚠️ Failed to load application</h1>
+    <h1>&#9888;&#65039; Failed to load application</h1>
     <p>The admin panel could not load. This might be due to a network issue or a temporary server problem.</p>
     <button onclick="window.location.reload()">Reload Page</button>
   </div>
   <script>
-    /* Run AFTER #root and #js-error exist in the DOM */
     (function() {
-      /* Unregister stale service workers; reload once so the page runs without them */
-      if ('serviceWorker' in navigator && !sessionStorage.getItem('swClean')) {
+      /* Unregister ALL service workers on every load.
+         After unregistering, the SW list is empty — no reload loop.
+         We only reload when we actually removed something. */
+      if ('serviceWorker' in navigator) {
         navigator.serviceWorker.getRegistrations().then(function(regs) {
           if (regs.length > 0) {
-            sessionStorage.setItem('swClean', '1');
             Promise.all(regs.map(function(r) { return r.unregister(); })).then(function() {
-              window.location.reload();
+              window.location.replace(window.location.href);
             });
           }
         });
       }
-      /* Show error only if JS bundle fails to load within 30 seconds */
+      /* Auto-retry once if React doesn't mount in 15 seconds, then show error */
+      var retried = sessionStorage.getItem('_loadRetry') === '1';
       var timeout = setTimeout(function() {
-        var el = document.getElementById('js-error');
-        if (el) {
-          el.style.display = 'flex';
+        var rootEl = document.getElementById('root');
+        if (!rootEl || rootEl.children.length === 0) {
+          if (!retried) {
+            sessionStorage.setItem('_loadRetry', '1');
+            window.location.replace(window.location.href);
+          } else {
+            sessionStorage.removeItem('_loadRetry');
+            var el = document.getElementById('js-error');
+            if (el) { el.style.display = 'flex'; }
+          }
         }
-      }, 30000);
+      }, 15000);
       /* Clear timeout once React has mounted (root has children) */
       var rootEl = document.getElementById('root');
       if (rootEl) {
         var observer = new MutationObserver(function() {
           if (rootEl.children.length > 0) {
             clearTimeout(timeout);
+            sessionStorage.removeItem('_loadRetry');
             observer.disconnect();
           }
         });
