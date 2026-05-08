@@ -22,6 +22,11 @@ ENV VITE_IMAGE_PROXY_URL=$VITE_IMAGE_PROXY_URL
 
 RUN npm run build
 
+# Bundle FFmpeg WASM locally so it loads from our server (fast) instead of CDN
+RUN npm install --no-save @ffmpeg/core@0.12.6 && \
+    cp node_modules/@ffmpeg/core/dist/esm/ffmpeg-core.js dist/ && \
+    cp node_modules/@ffmpeg/core/dist/esm/ffmpeg-core.wasm dist/
+
 FROM nginx:1.27-alpine
 COPY --from=build /app/dist /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf

@@ -2,6 +2,33 @@ import { FFmpeg } from '@ffmpeg/ffmpeg';
 import { fetchFile, toBlobURL } from '@ffmpeg/util';
 import { removeBackground } from '@imgly/background-removal';
 
+async function loadFFmpegInstance(ffmpeg: FFmpeg): Promise<void> {
+    const sources = [
+        { coreURL: '/ffmpeg-core.js', wasmURL: '/ffmpeg-core.wasm', timeout: 10000 },
+        { coreURL: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/esm/ffmpeg-core.js', wasmURL: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/esm/ffmpeg-core.wasm', timeout: 30000 },
+        { coreURL: 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm/ffmpeg-core.js', wasmURL: 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm/ffmpeg-core.wasm', timeout: 30000 },
+    ];
+    let lastError: Error | null = null;
+    for (const { coreURL, wasmURL, timeout } of sources) {
+        try {
+            await Promise.race([
+                ffmpeg.load({
+                    coreURL: await toBlobURL(coreURL, 'text/javascript'),
+                    wasmURL: await toBlobURL(wasmURL, 'application/wasm'),
+                }),
+                new Promise<never>((_, reject) =>
+                    setTimeout(() => reject(new Error(`FFmpeg load timeout`)), timeout)
+                ),
+            ]);
+            return;
+        } catch (err) {
+            lastError = err instanceof Error ? err : new Error(String(err));
+            console.warn(`[FFmpeg] Failed to load from ${coreURL}:`, lastError.message);
+        }
+    }
+    throw lastError || new Error('FFmpeg failed to load from all sources');
+}
+
 export type StickerProgress = {
     message: string;
     percentage: number;
@@ -71,41 +98,13 @@ class StickerProcessor {
     async load() {
         if (this.isLoaded) return;
         if (this.isLoading && this.loadPromise) return this.loadPromise;
-
         this.isLoading = true;
         this.loadPromise = (async () => {
             this.ffmpeg = new FFmpeg();
-
-            const cdnSources = [
-                'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm',
-                'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/esm',
-            ];
-
-            let lastError: Error | null = null;
-            for (const baseURL of cdnSources) {
-                try {
-                    const loadPromise = this.ffmpeg.load({
-                        coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
-                        wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
-                    });
-                    const timeout = new Promise<never>((_, reject) =>
-                        setTimeout(() => reject(new Error(`FFmpeg load timeout from ${baseURL}`)), 30000)
-                    );
-                    await Promise.race([loadPromise, timeout]);
-                    this.isLoaded = true;
-                    this.isLoading = false;
-                    return;
-                } catch (err) {
-                    lastError = err instanceof Error ? err : new Error(String(err));
-                    console.warn(`[FFmpeg] Failed to load from ${baseURL}:`, lastError.message);
-                    // Retry next source
-                }
-            }
-
+            await loadFFmpegInstance(this.ffmpeg);
+            this.isLoaded = true;
             this.isLoading = false;
-            throw lastError || new Error('FFmpeg failed to load from all CDN sources');
         })();
-
         return this.loadPromise;
     }
 
@@ -228,8 +227,7 @@ class StickerProcessor {
     /**
      * Create WhatsApp-compatible animated WebP from frames
      */
-    private async createWebPFromFrames(frameCount: number, onProgress?: (p: StickerProgress) => void, fps: number = DEFAULT_FPS): Promise<Blob> {
-        const ffmpeg = this.ffmpeg!;
+    private async createWebPFromFrames(ffmpeg: FFmpeg, frameCount: number, onProgress?: (p: StickerProgress) => void, fps: number = DEFAULT_FPS): Promise<Blob> {
         const outputName = 'output.webp';
         const MAX_SIZE = 500 * 1024;
 
@@ -433,7 +431,7 @@ class StickerProcessor {
             }
 
             // 3. Create WebP with detected fps
-            return this.createWebPFromFrames(frameCount, onProgress, detectedFps);
+            return this.createWebPFromFrames(ffmpeg, frameCount, onProgress, detectedFps);
         }
 
         // No background removal - FAST method
@@ -506,8 +504,8 @@ class StickerProcessor {
      * Create animated WebP from PNG frame blobs (for TGS import)
      */
     async processFromPngFrames(pngBlobs: Blob[], fps: number, onProgress?: (p: StickerProgress) => void): Promise<Blob> {
-        await this.load();
-        const ffmpeg = this.ffmpeg!;
+        const ffmpeg = new FFmpeg();
+        await loadFFmpegInstance(ffmpeg);
 
         onProgress?.({ message: `Writing ${pngBlobs.length} frames...`, percentage: 40 });
 
@@ -516,7 +514,11 @@ class StickerProcessor {
             await ffmpeg.writeFile(frameName, await fetchFile(pngBlobs[i]));
         }
 
-        return this.createWebPFromFrames(pngBlobs.length, onProgress, fps);
+        try {
+            return await this.createWebPFromFrames(ffmpeg, pngBlobs.length, onProgress, fps);
+        } finally {
+            try { ffmpeg.terminate(); } catch {}
+        }
     }
 
     /**
@@ -639,7 +641,7 @@ class StickerProcessor {
         }
 
         decoder.close();
-        return this.createWebPFromFrames(totalFrames, onProgress, outputFps);
+        return this.createWebPFromFrames(ffmpeg, totalFrames, onProgress, outputFps);
     }
 
     /**

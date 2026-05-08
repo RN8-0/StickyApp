@@ -717,7 +717,7 @@ export async function importTelegramPacks(
 
                     const processedStickers: Sticker[] = [];
                     const sourceList = sourceSubPack.sourceStickers;
-                    const PARALLEL_BATCH = sourceSubPack.isAnimated ? 1 : 3;
+                    const PARALLEL_BATCH = sourceSubPack.isAnimated ? 2 : 3;
 
                     for (let j = 0; j < sourceList.length; j += PARALLEL_BATCH) {
                         if (abortSignal?.aborted) break;
