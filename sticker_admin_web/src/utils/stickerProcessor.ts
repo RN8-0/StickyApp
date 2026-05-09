@@ -3,8 +3,9 @@ import { fetchFile, toBlobURL } from '@ffmpeg/util';
 import { removeBackground } from '@imgly/background-removal';
 
 // Blob URLs cached for the entire session — WASM is downloaded only once, all instances share it.
-let _ffmpegBlobURLs: { coreURL: string; wasmURL: string } | null = null;
-let _ffmpegBlobLoadPromise: Promise<{ coreURL: string; wasmURL: string }> | null = null;
+type FFmpegBlobURLs = { coreURL: string; wasmURL: string; classWorkerURL: string };
+let _ffmpegBlobURLs: FFmpegBlobURLs | null = null;
+let _ffmpegBlobLoadPromise: Promise<FFmpegBlobURLs> | null = null;
 
 // Validated fetch: a 200 OK from the SPA fallback returns index.html, and toBlobURL would
 // happily wrap that HTML in an "application/wasm" blob — FFmpeg.load() then silently hangs
@@ -29,7 +30,7 @@ async function fetchValidatedBlob(url: string, kind: 'wasm' | 'js'): Promise<str
     }
 }
 
-function getFFmpegBlobURLs(): Promise<{ coreURL: string; wasmURL: string }> {
+function getFFmpegBlobURLs(): Promise<FFmpegBlobURLs> {
     if (_ffmpegBlobURLs) return Promise.resolve(_ffmpegBlobURLs);
     if (!_ffmpegBlobLoadPromise) {
         _ffmpegBlobLoadPromise = (async () => {
@@ -37,12 +38,23 @@ function getFFmpegBlobURLs(): Promise<{ coreURL: string; wasmURL: string }> {
             // catch-all returns index.html with HTTP 200, fooling toBlobURL into wrapping
             // HTML as WASM. CDN-only is reliable.
             void toBlobURL; // keep import shape; we use fetchValidatedBlob below
+            // Per-source timeout deliberately short (25s): the user's previous failure mode was
+            // both CDNs hanging for the full window before falling through, accumulating ~130s
+            // of dead time per import. Real CDN responses arrive in <5s when reachable; if 25s
+            // isn't enough, the source is effectively unreachable and another won't help.
+            //
+            // classWorkerURL is passed as the *raw CDN URL* (not a blob), because the FFmpeg
+            // worker.js does relative imports of "./const.js" and "./errors.js" — those only
+            // resolve when the worker is loaded from its real origin. Loading worker.js from
+            // a blob URL silently breaks those imports, the worker never posts READY, and
+            // ffmpeg.load() hangs until our timeout fires (the symptom user hit: every animated
+            // sticker fails with "FFmpeg init timeout").
             const sources = [
-                { core: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/esm/ffmpeg-core.js', wasm: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/esm/ffmpeg-core.wasm', timeout: 90000 },
-                { core: 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm/ffmpeg-core.js', wasm: 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm/ffmpeg-core.wasm', timeout: 90000 },
+                { core: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/esm/ffmpeg-core.js', wasm: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/esm/ffmpeg-core.wasm', worker: 'https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.15/dist/esm/worker.js', timeout: 25000 },
+                { core: 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm/ffmpeg-core.js', wasm: 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm/ffmpeg-core.wasm', worker: 'https://unpkg.com/@ffmpeg/ffmpeg@0.12.15/dist/esm/worker.js', timeout: 25000 },
             ];
             let lastError: Error | null = null;
-            for (const { core, wasm, timeout } of sources) {
+            for (const { core, wasm, worker, timeout } of sources) {
                 try {
                     const [coreURL, wasmURL] = await Promise.race([
                         Promise.all([
@@ -51,8 +63,8 @@ function getFFmpegBlobURLs(): Promise<{ coreURL: string; wasmURL: string }> {
                         ]),
                         new Promise<never>((_, reject) => setTimeout(() => reject(new Error('fetch timeout')), timeout)),
                     ]);
-                    _ffmpegBlobURLs = { coreURL, wasmURL };
-                    console.log('[FFmpeg] WASM ready from:', core);
+                    _ffmpegBlobURLs = { coreURL, wasmURL, classWorkerURL: worker };
+                    console.log('[FFmpeg] WASM ready from:', core, '(worker:', worker, ')');
                     return _ffmpegBlobURLs;
                 } catch (err) {
                     lastError = err instanceof Error ? err : new Error(String(err));
@@ -69,12 +81,22 @@ function getFFmpegBlobURLs(): Promise<{ coreURL: string; wasmURL: string }> {
 }
 
 async function loadFFmpegInstance(ffmpeg: FFmpeg): Promise<void> {
-    const { coreURL, wasmURL } = await getFFmpegBlobURLs();
-    // Blob URL already downloaded; this step is only WASM JIT compilation (CPU-bound, can be slow).
-    await Promise.race([
-        ffmpeg.load({ coreURL, wasmURL }),
-        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('FFmpeg init timeout')), 180000)),
-    ]);
+    const { coreURL, wasmURL, classWorkerURL } = await getFFmpegBlobURLs();
+    // Blob URL already downloaded; this step is only WASM JIT compilation. Real init is <5s
+    // on a healthy worker; 60s is a generous ceiling. Anything longer almost always means
+    // the FFmpeg worker silently crashed (no error event), so retrying with a fresh instance
+    // is more productive than waiting another two minutes on a dead worker.
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+        await Promise.race([
+            ffmpeg.load({ coreURL, wasmURL, classWorkerURL }),
+            new Promise<never>((_, reject) => {
+                timer = setTimeout(() => reject(new Error('FFmpeg init timeout')), 60000);
+            }),
+        ]);
+    } finally {
+        if (timer) clearTimeout(timer);
+    }
 }
 
 // NOTE: previously this file maintained a *second* FFmpeg WASM instance (`_tgsFFmpegReady`)
@@ -155,12 +177,30 @@ class StickerProcessor {
         if (this.isLoaded) return;
         if (this.isLoading && this.loadPromise) return this.loadPromise;
         this.isLoading = true;
+        // Hold a reference to the in-flight instance outside the IIFE so the catch handler
+        // can terminate it on failure. Without this, a timed-out ffmpeg.load() leaves the
+        // underlying Worker running and we accumulate one orphan per failed sticker — at 15
+        // stickers per pack the browser starves on workers and every retry fails fast.
+        let fresh: FFmpeg | null = null;
         this.loadPromise = (async () => {
-            this.ffmpeg = new FFmpeg();
-            await loadFFmpegInstance(this.ffmpeg);
+            fresh = new FFmpeg();
+            await loadFFmpegInstance(fresh);
+            this.ffmpeg = fresh;
             this.isLoaded = true;
             this.isLoading = false;
-        })();
+        })().catch((err) => {
+            // Critical: a rejected loadPromise was being cached forever, so once the first
+            // sticker hit a CDN timeout every subsequent sticker awaited the same rejection
+            // and "failed" instantly. Reset the state machine so the *next* sticker can try
+            // again with a clean instance.
+            this.isLoaded = false;
+            this.isLoading = false;
+            this.loadPromise = null;
+            try { fresh?.terminate(); } catch {}
+            try { this.ffmpeg?.terminate(); } catch {}
+            this.ffmpeg = null;
+            throw err;
+        });
         return this.loadPromise;
     }
 
