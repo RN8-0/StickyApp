@@ -417,17 +417,16 @@ class DetailsActivity : AppCompatActivity() {
      * Bu sayede RecyclerView bind olduğunda görseller anında görünür
      */
     private fun preloadAllStickers(pack: Pack, stickers: List<Sticker>) {
-        // Preload işlemini arka planda paralel yap.
-        // ÖNEMLİ: drop(9) yazılması nedeniyle 6, 7, 8 indeksindeki stickerlar hiç önyüklenmiyordu —
-        // 5'li grid'de 2. satırın 2-3-4. hücreleri her açılışta gri kalıyordu. Şimdi tüm pack'i,
-        // ilk 6'sı yüksek öncelikle ve geri kalanı paralel olarak (8'erli) çekiyoruz.
+        // Preload işlemini arka planda paralel yap
         lifecycleScope.launch(Dispatchers.IO) {
             val glide = Glide.with(applicationContext)
             val storagePath = pack.storagePath
 
+            // İlk 6 çıkartmayı öncelikli yükle (görünen 2 satır)
             val priorityStickers = stickers.take(6)
-            val restStickers = stickers.drop(6)
+            val restStickers = stickers.drop(9)
 
+            // Öncelikli olanları paralel yükle
             priorityStickers.map { sticker ->
                 async {
                     try {
@@ -436,17 +435,11 @@ class DetailsActivity : AppCompatActivity() {
                 }
             }.awaitAll()
 
-            // Geri kalanları da paralel — sequential forEach pack başına 9 sticker'ı
-            // tek tek indirip görünür gecikme yaratıyordu. 8'erli batch hem hızlı hem
-            // bağlantıyı boğmuyor.
-            restStickers.chunked(8).forEach { batch ->
-                batch.map { sticker ->
-                    async {
-                        try {
-                            preloadSingleSticker(glide, pack, sticker, storagePath)
-                        } catch (_: Exception) {}
-                    }
-                }.awaitAll()
+            // Geri kalanları arka planda yükle
+            restStickers.forEach { sticker ->
+                try {
+                    preloadSingleSticker(glide, pack, sticker, storagePath)
+                } catch (_: Exception) {}
             }
         }
     }

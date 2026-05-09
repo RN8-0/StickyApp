@@ -54,17 +54,12 @@ class StickyApp : Application() {
             }
         }, 2500)
 
-        // Firebase'den güncel veriyi arka planda çek + önbellek thumbnail'larını önyükle.
-        // 1.5s gecikme — MainActivity'nin ilk render'ı + DetailsActivity'nin ilk açılışı sırasında
-        // bandwidth'i bu önyüklemeyle paylaşmıyoruz. Pack count 10'a düşürüldü (~50 thumbnail);
-        // 15 ile 8 paralel HIGH-priority indirme kullanıcının açtığı paketin sticker'larıyla
-        // network için yarışıyordu.
+        // Firebase'den güncel veriyi arka planda çek
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                kotlinx.coroutines.delay(1_500)
                 val packs = StickerRepository.loadPacks(this@StickyApp, forceRefresh = false)
                 if (packs.isNotEmpty()) {
-                    StickyGlideModule.preloadFeedPacks(this@StickyApp, packs, preloadCount = 10)
+                    StickyGlideModule.preloadStickerPreviews(this@StickyApp, packs, packCount = 8, stickersPerPack = 2)
                 }
             } catch (_: Exception) {}
         }

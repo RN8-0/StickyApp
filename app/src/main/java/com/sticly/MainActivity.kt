@@ -467,11 +467,9 @@ class MainActivity : AppCompatActivity() {
             loadPacks(forceRefresh = true)
         }
         
-        // Delay real-time observer start to avoid cascading reloads during initial load.
-        // 1s is enough — initial loadPacks above completes well before this fires, and a
-        // shorter delay shaves ~1.5s off how soon admin-panel edits start propagating.
+        // Delay real-time observer start to avoid cascading reloads during initial load
         lifecycleScope.launch {
-            delay(1_000)
+            delay(2_500)
             StickerRepository.startObservingPacks(this@MainActivity)
         }
     }

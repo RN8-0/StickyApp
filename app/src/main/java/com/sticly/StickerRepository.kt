@@ -249,10 +249,6 @@ object StickerRepository {
         val appContext = context.applicationContext
         lastObservedSignature = packSignature(allPacksCache)
         observerJob = repositoryScope.launch {
-            // Polling kept at 8s — going lower (3s was tried) hammers PocketBase with
-            // listAllRecords on two 500-row collections, slowing the admin panel and the
-            // image proxy that serves the same backend. 8s is a small regression in
-            // edit-propagation lag but keeps the server responsive.
             delay(2_000)
             while (isActive) {
                 try {
@@ -266,7 +262,7 @@ object StickerRepository {
                 } catch (e: Exception) {
                     Log.e(TAG, "PocketBase poll failed: ${e.message}")
                 }
-                delay(8_000)
+                delay(6_000)
             }
         }
     }
