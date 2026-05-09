@@ -1775,7 +1775,7 @@ function App() {
     setUsersLoading(true);
     try {
       const token = pb.authStore.token;
-      let usersList: UserData[] = [];
+      let workerUsers: UserData[] = [];
 
       // Use the direct worker URL — WORKER_URL falls back to wrong path on Firebase Hosting
       const usersWorkerUrl = 'https://sticky-worker.46.225.95.201.sslip.io';
@@ -1786,20 +1786,29 @@ function App() {
         if (resp.ok) {
           const { users } = await resp.json();
           if (Array.isArray(users) && users.length > 0) {
-            usersList = users.map(mapUserData);
+            workerUsers = users.map(mapUserData);
           }
         } else {
           console.warn('[fetchUsers] worker returned', resp.status, await resp.text().catch(() => ''));
         }
       } catch (e) { console.warn('[fetchUsers] worker fetch failed:', e); }
 
-      // Fallback: query PocketBase directly — use user_submissions as primary source, merge with profile data
-      if (usersList.length === 0) {
-        const [profiles, authUsers, submissions] = await Promise.all([
-          pb.collection('user_profiles').getFullList({ sort: '-created' }).catch(() => []),
-          pb.collection('users').getFullList({ sort: '-created' }).catch(() => []),
-          pb.collection('user_submissions').getFullList({ sort: '-created_at', fields: 'user_id,user_email,display_name,publisher_name,photo_url,device_id,created,created_at' }).catch(() => []),
-        ]);
+      // ALWAYS query PocketBase too and merge — worker may be missing PB_ADMIN_PASS env
+      // (returns empty/error) or may return a stale subset, so the PB query is the source of
+      // truth for the inconsistency case ("sometimes works, sometimes empty"). allSettled
+      // means a single failing collection (e.g. permission-restricted users) doesn't void
+      // the whole list.
+      const [profilesRes, authUsersRes, submissionsRes] = await Promise.allSettled([
+        pb.collection('user_profiles').getFullList({ sort: '-created' }),
+        pb.collection('users').getFullList({ sort: '-created' }),
+        pb.collection('user_submissions').getFullList({ sort: '-created_at' }),
+      ]);
+      const profiles = profilesRes.status === 'fulfilled' ? profilesRes.value : [];
+      const authUsers = authUsersRes.status === 'fulfilled' ? authUsersRes.value : [];
+      const submissions = submissionsRes.status === 'fulfilled' ? submissionsRes.value : [];
+
+      let usersList: UserData[] = [];
+      {
 
         // Build a profile lookup for enrichment (email → profile data)
         const profileByEmail = new Map<string, any>();
@@ -1852,6 +1861,23 @@ function App() {
         }
 
         usersList = combined.map(mapUserData);
+      }
+
+      // Merge worker users (if any) with PB-derived users — keep whichever set is larger,
+      // and union by email so neither source can leave the panel empty by itself.
+      if (workerUsers.length > 0 || usersList.length > 0) {
+        const byKey = new Map<string, UserData>();
+        const keyOf = (u: UserData) => (u.email || u.id || '').toLowerCase();
+        for (const u of usersList) { const k = keyOf(u); if (k) byKey.set(k, u); }
+        for (const u of workerUsers) {
+          const k = keyOf(u); if (!k) continue;
+          const existing = byKey.get(k);
+          // Prefer the entry with more populated fields (display_name / photo_url present)
+          if (!existing || (!existing.display_name && u.display_name) || (!existing.photo_url && u.photo_url)) {
+            byKey.set(k, { ...existing, ...u });
+          }
+        }
+        usersList = Array.from(byKey.values());
       }
 
       setUsersData(usersList);

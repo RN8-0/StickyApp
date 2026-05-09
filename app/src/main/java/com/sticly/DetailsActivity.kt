@@ -1046,10 +1046,16 @@ class DetailsActivity : AppCompatActivity() {
         layout ?: return
         val icon = layout.getChildAt(0) as? ImageView
         val text = layout.getChildAt(1) as? TextView
-        val color = ContextCompat.getColor(this, if (liked) R.color.premium_gold else R.color.white)
+        // Liked → bright gold. Not liked → 60% white (reads as a dim grey on the purple
+        // toolbar_bg strip, matching what users expect from a "not liked" state).
+        val color = if (liked) {
+            ContextCompat.getColor(this, R.color.premium_gold)
+        } else {
+            android.graphics.Color.argb(154, 255, 255, 255)
+        }
         if (icon != null) {
-            // XML uses app:tint (AppCompat supportImageTintList) — must be cleared via ImageViewCompat
-            // before setColorFilter takes effect, otherwise the tint stays at the XML value.
+            // XML uses app:tint (AppCompat supportImageTintList) — must override via ImageViewCompat,
+            // otherwise the supportImageTintList stays at the XML value of @color/white.
             androidx.core.widget.ImageViewCompat.setImageTintList(icon, android.content.res.ColorStateList.valueOf(color))
             icon.setColorFilter(color)
         }

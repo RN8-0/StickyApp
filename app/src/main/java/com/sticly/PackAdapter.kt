@@ -308,7 +308,7 @@ class PackAdapter(
         pubText.append(pack.pub)
         pubText.append(" • ").append(stickerCount).append(" stickers")
         if (pack.likeCount > 0) {
-            pubText.append(" • ♥ ").append(formatCompactNumber(pack.likeCount))
+            pubText.append(" • 👍 ").append(formatCompactNumber(pack.likeCount))
         }
         if (pack.downloadCount > 0) {
             pubText.append(" • ").append(formatDownloadCount(pack.downloadCount)).append(" downloads")

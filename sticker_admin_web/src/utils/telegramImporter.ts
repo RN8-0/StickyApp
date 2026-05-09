@@ -294,7 +294,9 @@ async function processTelegramSticker(
     abortSignal?: AbortSignal
 ): Promise<Sticker | null> {
     if (abortSignal?.aborted) return null;
-    const timeoutMs = (sticker.is_animated || sticker.is_video) ? 150000 : 30000;
+    // Animated/video need more time: rendering frames + (mutex-serialised) FFmpeg encoding.
+    // 4 minutes per sticker covers worst case (45 frames @ low CPU) without false timeouts.
+    const timeoutMs = (sticker.is_animated || sticker.is_video) ? 240000 : 30000;
     let timeoutId: ReturnType<typeof setTimeout>;
     const result = await Promise.race([
         processTelegramStickerInner(botToken, sticker, packId, index, onProgress),
@@ -329,70 +331,42 @@ async function processTelegramStickerInner(
         console.log(`[TELEGRAM] Sticker #${index + 1}: animated=${sticker.is_animated}, video=${sticker.is_video}, thumb=${!!sticker.thumbnail}`);
 
         if (sticker.is_animated) {
-            // Animated TGS → render ALL frames via lottie-web SVG → FFmpeg animated WebP
+            // Animated TGS → render frames via lottie-web canvas → FFmpeg animated WebP.
+            // No retry/forceReload here: with mutex-serialised FFmpeg, a forceReload from one
+            // sticker would terminate the WASM instance another sticker is mid-encoding on,
+            // cascading every concurrent sticker into failure.
             onProgress?.(`Rendering animated sticker #${index + 1}...`);
-            let lastError: any = null;
+            try {
+                const filePath = await getFile(botToken, sticker.file_id);
+                const blob = await downloadTelegramFile(botToken, filePath);
+                const tgsBuffer = await blob.arrayBuffer();
 
-            for (let attempt = 0; attempt < 2; attempt++) {
-                try {
-                    if (attempt > 0) {
-                        onProgress?.(`Retrying animated #${index + 1} (reloading FFmpeg)...`);
-                        await stickerProcessor.forceReload();
-                    }
-                    const filePath = await getFile(botToken, sticker.file_id);
-                    const blob = await downloadTelegramFile(botToken, filePath);
-                    const tgsBuffer = await blob.arrayBuffer();
+                const { frames, fps } = await renderTgsFrames(tgsBuffer, onProgress);
+                console.log(`[TELEGRAM] TGS #${index + 1}: ${frames.length} frames @ ${fps}fps`);
 
-                    const { frames, fps } = await renderTgsFrames(tgsBuffer, onProgress);
-                    console.log(`[TELEGRAM] TGS #${index + 1}: ${frames.length} frames @ ${fps}fps`);
-
-                    onProgress?.(`Encoding animated WebP #${index + 1} (${frames.length} frames)...`);
-                    webpBlob = await stickerProcessor.processFromPngFrames(frames, fps, (p) => {
-                        onProgress?.(`Sticker #${index + 1}: ${p.message}`);
-                    });
-                    console.log(`[TELEGRAM] ✓ Animated WebP for #${index + 1}: ${Math.round(webpBlob.size / 1024)}KB`);
-                    lastError = null;
-                    break;
-                } catch (err: any) {
-                    lastError = err;
-                    console.warn(`[TELEGRAM] Animated attempt ${attempt + 1} failed for #${index + 1}:`, err.message);
-                }
-            }
-
-            if (lastError) {
-                console.error(`[TELEGRAM] Animated render failed for #${index + 1} after retries:`, lastError.message);
-                onProgress?.(`⚠️ Animated #${index + 1} failed, skipping (no static fallback for animated packs)...`);
+                onProgress?.(`Encoding animated WebP #${index + 1} (${frames.length} frames)...`);
+                webpBlob = await stickerProcessor.processFromPngFrames(frames, fps, (p) => {
+                    onProgress?.(`Sticker #${index + 1}: ${p.message}`);
+                });
+                console.log(`[TELEGRAM] ✓ Animated WebP for #${index + 1}: ${Math.round(webpBlob.size / 1024)}KB`);
+            } catch (err: any) {
+                console.error(`[TELEGRAM] Animated render failed for #${index + 1}:`, err.message);
+                onProgress?.(`⚠️ Animated #${index + 1} failed, skipping...`);
                 return null;
             }
         } else if (sticker.is_video) {
-            // Video WebM → FFmpeg → animated WebP
             onProgress?.(`Processing video sticker #${index + 1}...`);
-            let lastError: any = null;
-
-            for (let attempt = 0; attempt < 2; attempt++) {
-                try {
-                    if (attempt > 0) {
-                        onProgress?.(`Retrying video #${index + 1} (reloading FFmpeg)...`);
-                        await stickerProcessor.forceReload();
-                    }
-                    const filePath = await getFile(botToken, sticker.file_id);
-                    const blob = await downloadTelegramFile(botToken, filePath);
-                    const videoFile = new File([blob], `sticker_${index}.webm`, { type: 'video/webm' });
-                    webpBlob = await stickerProcessor.processAnimated(videoFile, (p) => {
-                        onProgress?.(`Sticker #${index + 1}: ${p.message}`);
-                    });
-                    console.log(`[TELEGRAM] ✓ Video→WebP for #${index + 1}: ${Math.round(webpBlob.size / 1024)}KB`);
-                    lastError = null;
-                    break;
-                } catch (err: any) {
-                    lastError = err;
-                    console.warn(`[TELEGRAM] Video attempt ${attempt + 1} failed for #${index + 1}:`, err.message);
-                }
-            }
-
-            if (lastError) {
-                console.error(`[TELEGRAM] Video render failed for #${index + 1} after retries:`, lastError.message);
-                onProgress?.(`⚠️ Video #${index + 1} failed, skipping (no static fallback for animated packs)...`);
+            try {
+                const filePath = await getFile(botToken, sticker.file_id);
+                const blob = await downloadTelegramFile(botToken, filePath);
+                const videoFile = new File([blob], `sticker_${index}.webm`, { type: 'video/webm' });
+                webpBlob = await stickerProcessor.processAnimated(videoFile, (p) => {
+                    onProgress?.(`Sticker #${index + 1}: ${p.message}`);
+                });
+                console.log(`[TELEGRAM] ✓ Video→WebP for #${index + 1}: ${Math.round(webpBlob.size / 1024)}KB`);
+            } catch (err: any) {
+                console.error(`[TELEGRAM] Video render failed for #${index + 1}:`, err.message);
+                onProgress?.(`⚠️ Video #${index + 1} failed, skipping...`);
                 return null;
             }
         } else {
@@ -721,7 +695,10 @@ export async function importTelegramPacks(
 
                     const processedStickers: Sticker[] = [];
                     const sourceList = sourceSubPack.sourceStickers;
-                    const PARALLEL_BATCH = sourceSubPack.isAnimated ? 2 : 3;
+                    // Animated stickers share a single mutex-serialised FFmpeg instance, so
+                    // running them in parallel only piles them up in the encode queue while the
+                    // per-sticker timeout keeps ticking — all of them time out. Serialise to 1.
+                    const PARALLEL_BATCH = sourceSubPack.isAnimated ? 1 : 3;
 
                     for (let j = 0; j < sourceList.length; j += PARALLEL_BATCH) {
                         if (abortSignal?.aborted) break;
