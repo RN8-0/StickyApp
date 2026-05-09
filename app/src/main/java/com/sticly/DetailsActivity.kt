@@ -1047,7 +1047,7 @@ class DetailsActivity : AppCompatActivity() {
         val icon = layout.getChildAt(0) as? ImageView
         val text = layout.getChildAt(1) as? TextView
         val color = ContextCompat.getColor(this, if (liked) R.color.premium_gold else R.color.text_hint)
-        icon?.setColorFilter(color)
+        icon?.imageTintList = android.content.res.ColorStateList.valueOf(color)
         text?.setTextColor(color)
     }
 

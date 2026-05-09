@@ -133,11 +133,10 @@ object SocialRepository {
         val viewer = currentUser(context)
         val deviceId = PreferencesHelper.getDeviceId(context)
         val result = runCatching {
-            // Only include non-blank identifiers to avoid matching wrong records
+            // pack_likes has no device_id field — only filter by user_id and user_email
             val userParts = buildList {
                 if (viewer.id.isNotBlank()) add("user_id='${escape(viewer.id)}'")
                 if (viewer.email.isNotBlank()) add("user_email='${escape(viewer.email)}'")
-                if (deviceId.isNotBlank()) add("device_id='${escape(deviceId)}'")
             }
             val filter = if (userParts.isEmpty()) {
                 "pack_id='${escape(pack.id)}'"
@@ -160,7 +159,6 @@ object SocialRepository {
                     put("pack_id", pack.id)
                     put("user_id", viewer.id)
                     put("user_email", viewer.email)
-                    put("device_id", deviceId)
                     put("display_name", viewer.name.ifBlank { viewer.email })
                     put("photo_url", viewer.photoUrl)
                 })

@@ -179,8 +179,11 @@ class MainActivity : AppCompatActivity() {
 
     // In-flight like requests per pack — prevents double-tap from sending duplicate API calls
     private val likeInFlight = mutableSetOf<String>()
-    // Submissions deleted by the user — filtered out of profile refreshes so they don't reappear
-    private val deletedSubmissionIds = mutableSetOf<String>()
+    // Submissions deleted by the user — persisted to prefs so deleted packs never reappear across refreshes
+    private val deletedSubmissionIds: MutableSet<String> by lazy {
+        getSharedPreferences("sticky_prefs", MODE_PRIVATE)
+            .getStringSet("deleted_submission_ids", emptySet())?.toMutableSet() ?: mutableSetOf()
+    }
     
     // Debounce applyFilters to prevent excessive calls
     private var filterJob: Job? = null
@@ -2760,9 +2763,12 @@ Rules:
                         lifecycleScope.launch {
                             // Mark as deleted immediately so loadProfileData never shows it again
                             deletedSubmissionIds.add(item.id)
+                            item.storePackId?.let { deletedSubmissionIds.add(it) }
+                            getSharedPreferences("sticky_prefs", MODE_PRIVATE).edit()
+                                .putStringSet("deleted_submission_ids", deletedSubmissionIds.toSet()).apply()
                             // Immediately remove from adapter so UI updates instantly
                             val rvPublished = this@MainActivity.findViewById<RecyclerView>(R.id.rvPublishedPacks)
-                            rvPublished?.adapter = SubmissionAdapter(items.filter { it.id != item.id })
+                            rvPublished?.adapter = SubmissionAdapter(items.filter { it.id != item.id && it.storePackId != item.storePackId })
 
                             withContext(Dispatchers.IO) {
                                 val esc = { v: String -> v.replace("'", "\\'") }
@@ -2785,6 +2791,11 @@ Rules:
                                         found.forEach { sub ->
                                             runCatching { PocketBaseHelper.deleteRecord("user_submissions", sub.optString("id")) }
                                             deletedSubmissionIds.add(sub.optString("id"))
+                                            sub.optString("sticker_pack_id").takeIf { it.isNotBlank() }?.let { deletedSubmissionIds.add(it) }
+                                        }
+                                        withContext(Dispatchers.Main) {
+                                            getSharedPreferences("sticky_prefs", MODE_PRIVATE).edit()
+                                                .putStringSet("deleted_submission_ids", deletedSubmissionIds.toSet()).apply()
                                         }
                                     }
                                     // Delete by storePackId if available
