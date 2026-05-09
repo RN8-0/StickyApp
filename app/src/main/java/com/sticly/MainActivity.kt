@@ -960,7 +960,7 @@ class MainActivity : AppCompatActivity() {
         fun updateGenerateButton() {
             val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
             if (user == null) {
-                aiBtnGenerate?.text = "Sign in with Google"
+                aiBtnGenerate?.text = getString(R.string.profile_sign_in)
                 aiBtnGenerate?.setIconResource(R.drawable.ic_google)
             } else {
                 aiBtnGenerate?.text = "✨ ${getString(R.string.ai_generate)}"
@@ -1712,7 +1712,7 @@ Rules:
                 // Show user creations if any
                 if (items.isNotEmpty()) {
                     tvTitle.visibility = View.VISIBLE
-                    tvTitle.text = "Your Creations"
+                    tvTitle.text = getString(R.string.ai_your_creations)
                     rvHistory.visibility = View.VISIBLE
                     rvHistory.isNestedScrollingEnabled = false
                     aiHistoryAdapter = AiHistoryAdapter(items.toMutableList()) { item ->

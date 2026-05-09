@@ -24,7 +24,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="24dp"
-            android:text="Welcome to Sticky"
+            android:text="@string/login_welcome"
             android:textColor="@color/white"
             android:textSize="28sp"
             android:textStyle="bold" />
@@ -34,7 +34,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
             android:gravity="center"
-            android:text="Sync your stickers to the cloud\nand access them anywhere!"
+            android:text="@string/login_subtitle"
             android:textColor="#CCFFFFFF"
             android:textSize="16sp" />
 
@@ -45,7 +45,7 @@
             android:layout_height="56dp"
             android:layout_marginTop="48dp"
             android:backgroundTint="@color/white"
-            android:text="Sign in with Google"
+            android:text="@string/profile_sign_in"
             android:textAllCaps="false"
             android:textColor="@color/black"
             android:textSize="16sp"
@@ -62,7 +62,7 @@
             android:layout_marginTop="32dp"
             android:background="?selectableItemBackground"
             android:padding="8dp"
-            android:text="Skip for now"
+            android:text="@string/login_skip"
             android:textColor="#CCFFFFFF"
             android:textSize="14sp"
             android:textStyle="bold" />

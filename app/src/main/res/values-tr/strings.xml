@@ -720,4 +720,18 @@
     <string name="translate">Çevir</string>
     <string name="show_original">Orijinali göster</string>
     <string name="translating">Çevriliyor…</string>
+
+    <!-- Login Activity -->
+    <string name="login_welcome">Sticky\'e Hoş Geldiniz</string>
+    <string name="login_subtitle">Çıkartmalarınızı buluta senkronize edin\nve istediğiniz yerden erişin!</string>
+    <string name="login_skip">Şimdilik geç</string>
+
+    <!-- Profile Admin Messages -->
+    <string name="admin_messages_header">📬 Yöneticiden Mesajlar</string>
+
+    <!-- AI History -->
+    <string name="ai_your_creations">Eserleriniz</string>
+
+    <!-- Home Sections -->
+    <string name="home_recently_added">✨ Yeni Eklenenler</string>
 </resources>

@@ -244,7 +244,7 @@
                                         android:textStyle="bold"
                                         android:paddingHorizontal="16dp"
                                         android:paddingBottom="8dp"
-                                        android:text="✨ Recently Added" />
+                                        android:text="@string/home_recently_added" />
 
                                     <androidx.recyclerview.widget.RecyclerView
                                         android:id="@+id/rvStories"

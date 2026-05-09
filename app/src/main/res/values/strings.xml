@@ -19,6 +19,8 @@
     <string name="ok">OK</string>
     <string name="cancel">Cancel</string>
     <string name="delete">Delete</string>
+    <string name="comment_delete_title">Delete comment</string>
+    <string name="comment_delete_message">Delete your comment? This cannot be undone.</string>
 
     <!-- Drawer Menu -->
     <string name="contact_us">Contact Us</string>
@@ -832,4 +834,18 @@
     <string name="translate">Translate</string>
     <string name="show_original">Show original</string>
     <string name="translating">Translating…</string>
+
+    <!-- Login Activity -->
+    <string name="login_welcome">Welcome to Sticky</string>
+    <string name="login_subtitle">Sync your stickers to the cloud\nand access them anywhere!</string>
+    <string name="login_skip">Skip for now</string>
+
+    <!-- Profile Admin Messages -->
+    <string name="admin_messages_header">📬 Messages from Admin</string>
+
+    <!-- AI History -->
+    <string name="ai_your_creations">Your Creations</string>
+
+    <!-- Home Sections -->
+    <string name="home_recently_added">✨ Recently Added</string>
 </resources>

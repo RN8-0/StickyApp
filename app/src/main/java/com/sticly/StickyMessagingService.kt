@@ -95,13 +95,12 @@ class StickyMessagingService : FirebaseMessagingService() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
-        // Süslü başlık ve mesaj oluştur
-        val decoratedTitle = "🎉 $title ✨"
-        val decoratedBody = "🌟 $body\n\n💫 Hemen keşfet ve arkadaşlarınla paylaş!"
-
+        // Show exactly what was sent — no decorations, no extra hardcoded copy. The admin
+        // panel composes the full title/body and any added emoji/locale text leaks into every
+        // notification regardless of language.
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_notification_sticky) // Changed to use the new Sticky logo silhouette
-            .setContentTitle(decoratedTitle)
+            .setSmallIcon(R.drawable.ic_notification_sticky)
+            .setContentTitle(title)
             .setContentText(body)
             .setColor(ContextCompat.getColor(this, R.color.primary))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
@@ -110,7 +109,6 @@ class StickyMessagingService : FirebaseMessagingService() {
             .setDefaults(NotificationCompat.DEFAULT_ALL)
             .setCategory(NotificationCompat.CATEGORY_PROMO)
 
-        // Eğer resim URL'si varsa "Fancy" notification (BigPictureStyle) yap
         if (!imageUrl.isNullOrEmpty()) {
             try {
                 val url = java.net.URL(imageUrl)
@@ -119,28 +117,25 @@ class StickyMessagingService : FirebaseMessagingService() {
                 connection.connect()
                 val input = connection.inputStream
                 val bitmap = BitmapFactory.decodeStream(input)
-                
+
                 builder.setStyle(
                     NotificationCompat.BigPictureStyle()
                         .bigPicture(bitmap)
-                        .setBigContentTitle(decoratedTitle)
-                        .setSummaryText(decoratedBody)
+                        .setBigContentTitle(title)
+                        .setSummaryText(body)
                 )
             } catch (e: Exception) {
-                // Resim yüklenemezse klasik stile dön
                 builder.setStyle(
                     NotificationCompat.BigTextStyle()
-                        .bigText(decoratedBody)
-                        .setBigContentTitle(decoratedTitle)
-                        .setSummaryText("Sticky Stickers")
+                        .bigText(body)
+                        .setBigContentTitle(title)
                 )
             }
         } else {
             builder.setStyle(
                 NotificationCompat.BigTextStyle()
-                    .bigText(decoratedBody)
-                    .setBigContentTitle(decoratedTitle)
-                    .setSummaryText("Sticky Stickers")
+                    .bigText(body)
+                    .setBigContentTitle(title)
             )
         }
 
