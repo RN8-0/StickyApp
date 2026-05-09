@@ -225,11 +225,14 @@ class MainActivity : AppCompatActivity() {
         val downloads = pack.downloadCount.toDouble()
         val views = pack.viewCount.toDouble()
         val favorites = pack.favoriteCount.toDouble()
+        val likes = pack.likeCount.toDouble()
+        val comments = pack.commentCount.toDouble()
         val fakeBase = pack.fakeDownloadBase.toDouble()
 
         // 1. Quality Score (Wilson Score Interval - like Reddit/YouTube)
-        // Measures true engagement quality, not raw volume
-        val totalSignals = downloads + favorites
+        // Likes and comments are explicit positive signals — fold them into the totalSignals
+        // alongside downloads/favorites so the Wilson confidence interval reflects them.
+        val totalSignals = downloads + favorites + likes + comments
         val positiveRate = if (views > 0) (totalSignals / views).coerceAtMost(1.0) else 0.0
         val z = 1.96 // 95% confidence
         val n = views.coerceAtLeast(1.0)
@@ -241,7 +244,8 @@ class MainActivity : AppCompatActivity() {
         }
 
         // 2. Engagement Score (weighted signals)
-        val engagementScore = downloads * 1.0 + favorites * 3.0 + fakeBase * 0.1
+        // Comments weigh highest — writing one is a stronger signal than a download or like.
+        val engagementScore = downloads * 1.0 + favorites * 3.0 + likes * 5.0 + comments * 8.0 + fakeBase * 0.1
 
         // 3. Time Decay (YouTube-style exponential decay with freshness boost)
         var ageMultiplier = 1.0
@@ -268,14 +272,15 @@ class MainActivity : AppCompatActivity() {
             else -> 1.0
         }
 
-        // 5. Popular flag boost (only used in popular section, not main list)
-        // Removed from ranking — popular section uses its own filter
+        // 5. Popular flag — admin curation acts as a multiplier on top of real engagement
+        //    rather than an exclusive filter, so admin picks float up but don't replace real signal.
+        val popularBoost = if (pack.isPopular) 1.4 else 1.0
 
         // 6. Deterministic jitter per session (ensures variety between sessions)
         val jitter = 1.0 + (((pack.id.hashCode().toLong() xor sessionSeed) % 200) / 1000.0)
 
-        // Final Score = (Quality * Engagement * Freshness * Diversity) with jitter
-        return (wilsonScore * 100 + engagementScore) * ageMultiplier * diversityBonus * jitter
+        // Final Score = (Quality * Engagement * Freshness * Diversity * PopularBoost) with jitter
+        return (wilsonScore * 100 + engagementScore) * ageMultiplier * diversityBonus * popularBoost * jitter
     }
 
     private val notificationPermissionLauncher = registerForActivityResult(
@@ -525,7 +530,9 @@ class MainActivity : AppCompatActivity() {
             override fun onScrolled(recyclerView: androidx.recyclerview.widget.RecyclerView, dx: Int, dy: Int) {
                 val totalScrolled = (recyclerView.layoutManager as? androidx.recyclerview.widget.LinearLayoutManager)
                     ?.findFirstVisibleItemPosition() ?: 0
-                val visible = currentFilter != FilterType.CUSTOM && currentFilter != FilterType.PROFILE && totalScrolled >= 6
+                // Only show on the home/ALL tab — Favorites, AI, Custom, Profile etc.
+                // each have their own UI and should not show this floating button.
+                val visible = currentFilter == FilterType.ALL && totalScrolled >= 6
                 btnScrollToTop?.visibility = if (visible) View.VISIBLE else View.GONE
             }
         })
@@ -795,6 +802,13 @@ class MainActivity : AppCompatActivity() {
     private fun updateBottomNavUI() {
         val activeColor = navActiveColor
         val inactiveColor = navInactiveColor
+
+        // Hide the scroll-to-top FAB the moment the user leaves the home/Explore tab —
+        // the scroll listener only fires on scroll, so without this the button can stay
+        // visible while the user is on Favorites/AI/Custom/Profile.
+        if (currentFilter != FilterType.ALL) {
+            findViewById<com.google.android.material.floatingactionbutton.FloatingActionButton>(R.id.btnScrollToTop)?.visibility = View.GONE
+        }
 
         // Reset all (iconExplore always white - it sits on purple circular bg)
         iconExplore.setColorFilter(android.graphics.Color.WHITE)
@@ -2953,19 +2967,15 @@ Rules:
     private fun updateRegionalPacks(packs: List<Pack>) {
         regionalPopularTitle.text = getString(R.string.popular_stickers)
 
-        // First try to get packs marked as popular from admin panel, sorted by rank score
-        var regionalTopPacks = packs
-            .filter { it.isActive && it.category != "custom" && it.isPopular }
+        // "Popular" is now driven entirely by real engagement (downloads + favorites + likes
+        // + comments + recency, weighted in calculateRankScore). The admin's isPopular flag
+        // is no longer required to appear here — it acts as a multiplier inside the score so
+        // curated picks float to the top, but every active non-custom pack is eligible. This
+        // matches the user's expectation: "gerçekten uygulamada en popüler stickerlar gösterilmeli".
+        val regionalTopPacks = packs
+            .filter { it.isActive && it.category != "custom" }
             .sortedByDescending { getOrCalculateRankScore(it) }
             .take(10)
-
-        // Fallback to rank-score-based sorting if no popular packs set
-        if (regionalTopPacks.isEmpty()) {
-            regionalTopPacks = packs
-                .filter { it.isActive && it.category != "custom" }
-                .sortedByDescending { getOrCalculateRankScore(it) }
-                .take(10)
-        }
 
         if (regionalTopPacks.isEmpty()) {
             regionalPopularContainer.visibility = View.GONE

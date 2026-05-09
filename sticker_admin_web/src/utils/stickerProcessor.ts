@@ -77,46 +77,13 @@ async function loadFFmpegInstance(ffmpeg: FFmpeg): Promise<void> {
     ]);
 }
 
-// Single persistent FFmpeg instance for TGS encoding, serialised via a promise-chain mutex.
-// This avoids parallel WASM JIT compilations that compete for CPU and cause timeouts.
-let _tgsFFmpegReady: Promise<FFmpeg> | null = null;
-let _tgsMutex: Promise<void> = Promise.resolve();
-
-function _ensureTgsFFmpeg(): Promise<FFmpeg> {
-    if (!_tgsFFmpegReady) {
-        _tgsFFmpegReady = (async () => {
-            const ffmpeg = new FFmpeg();
-            await loadFFmpegInstance(ffmpeg);
-            return ffmpeg;
-        })().catch(err => {
-            _tgsFFmpegReady = null;
-            throw err;
-        });
-    }
-    return _tgsFFmpegReady;
-}
-
-async function withTgsFFmpeg<T>(fn: (ffmpeg: FFmpeg) => Promise<T>): Promise<T> {
-    // Chain onto previous call so encoding is always serialised (one at a time).
-    let release!: () => void;
-    const prev = _tgsMutex;
-    _tgsMutex = new Promise<void>(r => { release = r; });
-    try {
-        await prev;
-        const ffmpeg = await _ensureTgsFFmpeg();
-        return await fn(ffmpeg);
-    } catch (err) {
-        _tgsFFmpegReady = null; // force fresh instance on next call after any error
-        throw err;
-    } finally {
-        release();
-    }
-}
-
-function resetTgsFFmpeg(): void {
-    _tgsFFmpegReady?.then(f => { try { f.terminate(); } catch {} }).catch(() => {});
-    _tgsFFmpegReady = null;
-}
+// NOTE: previously this file maintained a *second* FFmpeg WASM instance (`_tgsFFmpegReady`)
+// behind a promise-chain mutex (`_tgsMutex`) just for TGS encoding. With PARALLEL_BATCH=1
+// in the Telegram importer there is no concurrent encoding to protect against, and the
+// dual-instance setup forced TGS imports to pay the WASM JIT compilation cost a *second*
+// time on top of the StickerProcessor's main instance — which on the user's machine looked
+// indistinguishable from a hang. We now reuse the single `this.ffmpeg` instance everywhere,
+// matching the pre-migration behaviour that was confirmed working in commit da19c71.
 
 export type StickerProgress = {
     message: string;
@@ -204,13 +171,12 @@ class StickerProcessor {
         this.loadPromise = null;
         try { this.ffmpeg?.terminate(); } catch {}
         this.ffmpeg = null;
-        _tgsFFmpegReady = null;
         return this.load();
     }
 
     // Uygulama açılır açılmaz çağrılacak - FFmpeg'i önceden yükle
     async preload() {
-        await Promise.all([this.load(), _ensureTgsFFmpeg().catch(() => {})]);
+        await this.load();
     }
 
     /**
@@ -594,27 +560,27 @@ class StickerProcessor {
      * Create animated WebP from PNG frame blobs (for TGS import)
      */
     async processFromPngFrames(pngBlobs: Blob[], fps: number, onProgress?: (p: StickerProgress) => void): Promise<Blob> {
-        return withTgsFFmpeg(async (ffmpeg) => {
-            onProgress?.({ message: `Writing ${pngBlobs.length} frames...`, percentage: 40 });
+        await this.load();
+        const ffmpeg = this.ffmpeg!;
+        onProgress?.({ message: `Writing ${pngBlobs.length} frames...`, percentage: 40 });
 
-            for (let i = 0; i < pngBlobs.length; i++) {
-                const frameName = `frame_${i.toString().padStart(4, '0')}.png`;
-                await ffmpeg.writeFile(frameName, await fetchFile(pngBlobs[i]));
-            }
+        for (let i = 0; i < pngBlobs.length; i++) {
+            const frameName = `frame_${i.toString().padStart(4, '0')}.png`;
+            await ffmpeg.writeFile(frameName, await fetchFile(pngBlobs[i]));
+        }
 
+        try {
+            return await this.createWebPFromFrames(ffmpeg, pngBlobs.length, onProgress, fps);
+        } finally {
             try {
-                return await this.createWebPFromFrames(ffmpeg, pngBlobs.length, onProgress, fps);
-            } finally {
-                try {
-                    const files = await ffmpeg.listDir('.');
-                    await Promise.all(
-                        files
-                            .filter((f: { name: string }) => f.name.startsWith('frame_') || f.name === 'output.webp')
-                            .map((f: { name: string }) => ffmpeg.deleteFile(f.name).catch(() => {}))
-                    );
-                } catch {}
-            }
-        });
+                const files = await ffmpeg.listDir('.');
+                await Promise.all(
+                    files
+                        .filter((f: { name: string }) => f.name.startsWith('frame_') || f.name === 'output.webp')
+                        .map((f: { name: string }) => ffmpeg.deleteFile(f.name).catch(() => {}))
+                );
+            } catch {}
+        }
     }
 
     /**
