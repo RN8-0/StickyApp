@@ -163,20 +163,17 @@ class NotificationsActivity : AppCompatActivity() {
 
     private suspend fun fetchFromPocketBase(deviceId: String, userId: String, email: String): List<Notif> {
         return runCatching {
+            // notifications schema fields: user_id, device_id, pack_id, body, title, etc.
+            // There is NO 'email' field — using it causes HTTP 400 and returns nothing.
+            // Admin panel stores recipientId in user_id: it can be a Firebase UID, an email, or a device_id.
             val filterParts = mutableListOf<String>()
-            // Match notifications stored with user_id, email, or device_id fields
             if (userId.isNotBlank()) filterParts.add("user_id='${userId.replace("'", "\\'")}'")
-            if (email.isNotBlank()) {
-                filterParts.add("email='${email.replace("'", "\\'")}'")
-                // Admin panel stores email as user_id (recipientId = device_id || user_id || user_email)
-                filterParts.add("user_id='${email.replace("'", "\\'")}'")
-            }
+            if (email.isNotBlank()) filterParts.add("user_id='${email.replace("'", "\\'")}'")
             if (deviceId.isNotBlank()) {
-                filterParts.add("device_id='${deviceId.replace("'", "\\'")}'")
-                // Admin panel may store device_id as user_id when no user auth exists
                 filterParts.add("user_id='${deviceId.replace("'", "\\'")}'")
+                filterParts.add("device_id='${deviceId.replace("'", "\\'")}'")
             }
-            // Always include admin broadcast notifications (user_id='broadcast')
+            // Admin broadcasts (sent to all users)
             filterParts.add("user_id='broadcast'")
             val filter = filterParts.distinct().joinToString(" || ")
             val records = PocketBaseHelper.listRecords("notifications", filter = filter, perPage = 200)

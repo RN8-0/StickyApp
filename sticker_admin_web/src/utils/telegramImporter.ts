@@ -206,8 +206,12 @@ async function renderTgsFrames(
 
         const totalFrames = anim.totalFrames;
         const originalFps = lottieData.fr || 60;
-        const targetFps = 15;
-        const frameStep = Math.max(1, Math.round(originalFps / targetFps));
+        // Lower target FPS + cap output frames so encoding (FFmpeg WASM) doesn't take >60s per sticker.
+        // 30 frames at 12fps = 2.5s of animation, which is enough for short looping stickers.
+        const MAX_OUTPUT_FRAMES = 30;
+        const targetFps = 12;
+        const fpsStep = Math.max(1, Math.round(originalFps / targetFps));
+        const frameStep = Math.max(fpsStep, Math.ceil(totalFrames / MAX_OUTPUT_FRAMES));
 
         // Use lottie's own canvas directly
         const lottieCanvas = wrapper.querySelector('canvas') as HTMLCanvasElement;

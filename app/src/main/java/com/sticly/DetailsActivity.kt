@@ -1046,8 +1046,13 @@ class DetailsActivity : AppCompatActivity() {
         layout ?: return
         val icon = layout.getChildAt(0) as? ImageView
         val text = layout.getChildAt(1) as? TextView
-        val color = ContextCompat.getColor(this, if (liked) R.color.premium_gold else R.color.text_hint)
-        icon?.imageTintList = android.content.res.ColorStateList.valueOf(color)
+        val color = ContextCompat.getColor(this, if (liked) R.color.premium_gold else R.color.white)
+        if (icon != null) {
+            // XML uses app:tint (AppCompat supportImageTintList) — must be cleared via ImageViewCompat
+            // before setColorFilter takes effect, otherwise the tint stays at the XML value.
+            androidx.core.widget.ImageViewCompat.setImageTintList(icon, android.content.res.ColorStateList.valueOf(color))
+            icon.setColorFilter(color)
+        }
         text?.setTextColor(color)
     }
 
