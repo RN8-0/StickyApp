@@ -37,28 +37,75 @@ object StickerRepository {
     private var lastObservedSignature: String = ""
 
     /**
-     * Tum paketleri yukler (PocketBase + Ozel + Lokal Assets)
+     * HIZLI YUKLEME: Lokal verileri (disk cache + ozel paketler + assets) aninda dondurur.
+     * Ag istegi YAPMAZ. UI'in ilk karede veri gostermesi icin kullanilir.
      */
-    suspend fun loadPacks(context: Context, forceRefresh: Boolean = false): List<Pack> = withContext(Dispatchers.IO) {
-        fun youtubeStyleScore(pack: Pack): Double {
-            if (pack.category == "custom") return Double.MAX_VALUE + pack.id.hashCode().mod(1000).toDouble()
-            val ageHours = runCatching {
-                if (pack.createdAt.isBlank()) 240.0 else {
-                    val created = java.time.Instant.parse(pack.createdAt)
-                    java.time.Duration.between(created, java.time.Instant.now()).toHours().coerceAtLeast(1).toDouble()
-                }
-            }.getOrDefault(240.0)
-            val engagement = pack.downloadCount * 5.0 + pack.favoriteCount * 4.0 + pack.likeCount * 6.0 + pack.commentCount * 8.0 + pack.viewCount * 0.35
-            val freshness = 18.0 / (ageHours + 6.0).pow(0.42)
-            val qualityBoost = if (pack.isPopular) 18.0 else 0.0
-            val communityBoost = if (pack.source == "user_submission" || pack.publisherUserId.isNotBlank()) 4.0 else 0.0
-            return pack.engagementScore.takeIf { it > 0.0 } ?: (engagement + freshness + qualityBoost + communityBoost)
+    suspend fun loadLocalPacks(context: Context): List<Pack> = withContext(Dispatchers.IO) {
+        val packs = mutableListOf<Pack>()
+
+        // 1. Disk cache (en hizli)
+        val diskPacks = loadCacheFromDisk(context)
+        if (diskPacks.isNotEmpty()) {
+            packs.addAll(diskPacks)
         }
-        fun shufflePacks(packs: List<Pack>) = packs.sortedWith(
+
+        // 2. Ozel paketler
+        try {
+            val customPacks = CustomStickerManager.getCustomPacks(context).mapNotNull { cp ->
+                CustomStickerManager.toWhatsAppPack(context, cp.id)?.copy(category = "custom")
+            }
+            val existingIds = packs.map { it.id }.toSet()
+            packs.addAll(customPacks.filter { it.id !in existingIds })
+        } catch (e: Exception) {
+            Log.e(TAG, "loadLocalPacks custom error: ${e.message}")
+        }
+
+        // 3. Lokal assets (disk cache yoksa veya eksikse)
+        try {
+            val localPacks = Loader.load(context) ?: emptyList()
+            val existingIds = packs.map { it.id }.toSet()
+            packs.addAll(localPacks.filter { it.id !in existingIds })
+        } catch (e: Exception) {
+            Log.e(TAG, "loadLocalPacks assets error: ${e.message}")
+        }
+
+        val result = shufflePacks(packs)
+        if (result.isNotEmpty() && diskPacks.isEmpty()) {
+            // Ilk acilista disk cache yoksa olustur
+            allPacksCache = result
+            saveCacheToDisk(context, result)
+        }
+        Log.d(TAG, "loadLocalPacks: ${result.size} packs (fast path)")
+        result
+    }
+
+    /** Shuffle helper — reused by both loadLocalPacks and loadPacks */
+    private fun shufflePacks(packs: List<Pack>): List<Pack> {
+        return packs.sortedWith(
             compareByDescending<Pack> { youtubeStyleScore(it) }
                 .thenBy { it.id.hashCode() }
         )
-        
+    }
+
+    private fun youtubeStyleScore(pack: Pack): Double {
+        if (pack.category == "custom") return Double.MAX_VALUE + pack.id.hashCode().mod(1000).toDouble()
+        val ageHours = runCatching {
+            if (pack.createdAt.isBlank()) 240.0 else {
+                val created = java.time.Instant.parse(pack.createdAt)
+                java.time.Duration.between(created, java.time.Instant.now()).toHours().coerceAtLeast(1).toDouble()
+            }
+        }.getOrDefault(240.0)
+        val engagement = pack.downloadCount * 5.0 + pack.favoriteCount * 4.0 + pack.likeCount * 6.0 + pack.commentCount * 8.0 + pack.viewCount * 0.35
+        val freshness = 18.0 / (ageHours + 6.0).pow(0.42)
+        val qualityBoost = if (pack.isPopular) 18.0 else 0.0
+        val communityBoost = if (pack.source == "user_submission" || pack.publisherUserId.isNotBlank()) 4.0 else 0.0
+        return pack.engagementScore.takeIf { it > 0.0 } ?: (engagement + freshness + qualityBoost + communityBoost)
+    }
+
+    /**
+     * Tum paketleri yukler (PocketBase + Ozel + Lokal Assets)
+     */
+    suspend fun loadPacks(context: Context, forceRefresh: Boolean = false): List<Pack> = withContext(Dispatchers.IO) {
         if (!forceRefresh && allPacksCache.isNotEmpty()) {
             return@withContext allPacksCache
         }
@@ -66,36 +113,39 @@ object StickerRepository {
         val allPacks = mutableListOf<Pack>()
 
         try {
-            // 1. Kullanıcının oluşturduğu özel paketleri yükle
-            val customPacks = CustomStickerManager.getCustomPacks(context).mapNotNull { cp ->
-                CustomStickerManager.toWhatsAppPack(context, cp.id)?.copy(category = "custom")
-            }
-            allPacks.addAll(customPacks)
-            Log.d(TAG, "Loaded ${customPacks.size} custom packs")
+            // 1. Lokal verileri hizlica yukle (disk cache + custom + assets)
+            val localPacks = loadLocalPacks(context)
+            allPacks.addAll(localPacks)
 
-            // 2. Paketleri PocketBase'den yukle
+            // 2. PocketBase'den guncel veriyi cek (otoriter kaynak)
             val packsFromPocketBase = loadPacksFromPocketBase()
             if (packsFromPocketBase.isNotEmpty()) {
-                Log.d(TAG, "Loaded ${packsFromPocketBase.size} packs from PocketBase")
-                allPacks.addAll(packsFromPocketBase)
+                val pbIds = packsFromPocketBase.map { it.id }.toSet()
+                val localAssetIds = Loader.load(context)?.map { it.id }?.toSet() ?: emptySet()
+                
+                // SADECE sunucuda var olan + custom + lokal asset pack'leri tut
+                // Disk cache'ten gelen ama PB'de olmayan pack'leri SIL (admin silmis olabilir)
+                allPacks.clear()
+                allPacks.addAll(packsFromPocketBase)  // PB otoriter
+                
+                // Custom pack'leri ekle (sunucuda yok, lokal)
+                allPacks.addAll(localPacks.filter { 
+                    it.category == "custom" || it.id.startsWith("custom_") 
+                })
+                
+                // Lokal asset pack'lerini ekle (contents.json'dan)
+                allPacks.addAll(localPacks.filter { 
+                    it.id in localAssetIds && it.id !in pbIds 
+                })
+                
+                Log.d(TAG, "Loaded ${packsFromPocketBase.size} packs from PocketBase (authoritative)")
             }
-
-            // 3. HER ZAMAN lokal asset paketlerini ekle
-            val existingIds = allPacks.map { it.id }.toSet()
-            val localPacks = try {
-                Loader.load(context)?.filter { it.id !in existingIds } ?: emptyList()
-            } catch (e: Exception) {
-                Log.e(TAG, "Error loading local packs: ${e.message}")
-                emptyList()
-            }
-            Log.d(TAG, "Loaded ${localPacks.size} local asset packs")
-            allPacks.addAll(localPacks)
 
             val previousPacks = allPacksCache
             val result = shufflePacks(allPacks)
             clearChangedPackCaches(context, previousPacks, result)
-            allPacksCache = result // Statik cache'i güncelle
-            saveCacheToDisk(context, result) // Diske kaydet (Provider için)
+            allPacksCache = result // Statik cache'i guncelle
+            saveCacheToDisk(context, result) // Diske kaydet (Provider icin)
             return@withContext result
 
         } catch (e: Exception) {
@@ -107,14 +157,14 @@ object StickerRepository {
                 return@withContext diskCache
             }
             
-            // Disk de boşsa lokal assets'ten yükle
+            // Disk de bossa lokal assets'ten yukle
             val localPacks = try {
                 Loader.load(context) ?: emptyList()
             } catch (ex: Exception) {
                 emptyList()
             }
             val result = shufflePacks(localPacks + allPacks)
-            allPacksCache = result // Statik cache'i güncelle
+            allPacksCache = result // Statik cache'i guncelle
             return@withContext result
         }
     }

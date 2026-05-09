@@ -24,6 +24,14 @@
 -keep class * implements com.google.gson.JsonSerializer
 -keep class * implements com.google.gson.JsonDeserializer
 
+# Sticky Models — Gson reflection ile serialize/deserialize ediliyor, obfuscate edilmemeli
+-keep class com.sticly.Pack { <fields>; }
+-keep class com.sticly.Sticker { <fields>; }
+-keep class com.sticly.Response { <fields>; }
+-keep class com.sticly.BillingSettings { <fields>; }
+-keep class com.sticly.BillingPlan { <fields>; }
+-keep class com.sticly.BillingConfig { <fields>; }
+
 # ML Kit
 -keep class com.google.mlkit.** { *; }
 -dontwarn com.google.mlkit.**

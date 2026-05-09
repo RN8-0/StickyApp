@@ -22,12 +22,27 @@ class StickyApp : Application() {
         // Karanlık temayı tamamen devre dışı bırak (Hep açık tema)
         androidx.appcompat.app.AppCompatDelegate.setDefaultNightMode(androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_NO)
 
-        // ASYNC: Disk cache'i IO thread'de yükle — main thread'i bloklamadan
+        // HIZLI BASLATMA: Lokal asset'leri hemen (sync) yukle - cok kucuk JSON, <5ms
+        // Bu sayede MainActivity ilk karede mutlaka veri gorecek
+        try {
+            val localPacks = Loader.load(this)
+            if (localPacks.isNotEmpty() && StickerRepository.allPacksCache.isEmpty()) {
+                StickerRepository.allPacksCache = localPacks
+            }
+        } catch (_: Exception) {}
+
+        // ASYNC: Disk cache + ag verisini arka planda yukle (ana thread bloklanmaz)
         CoroutineScope(Dispatchers.IO).launch {
             try {
+                // Disk cache'i oku ve memory cache'i guncelle
                 val diskPacks = StickerRepository.loadCacheFromDisk(this@StickyApp)
                 if (diskPacks.isNotEmpty()) {
                     StickerRepository.allPacksCache = diskPacks
+                }
+                // PocketBase'den guncel veriyi cek
+                val packs = StickerRepository.loadPacks(this@StickyApp, forceRefresh = false)
+                if (packs.isNotEmpty()) {
+                    StickyGlideModule.preloadStickerPreviews(this@StickyApp, packs, packCount = 8, stickersPerPack = 2)
                 }
             } catch (_: Exception) {}
         }
@@ -53,15 +68,5 @@ class StickyApp : Application() {
                 Log.e("StickyApp", "AdMob initialization failed: ${e.message}", e)
             }
         }, 2500)
-
-        // Firebase'den güncel veriyi arka planda çek
-        CoroutineScope(Dispatchers.IO).launch {
-            try {
-                val packs = StickerRepository.loadPacks(this@StickyApp, forceRefresh = false)
-                if (packs.isNotEmpty()) {
-                    StickyGlideModule.preloadStickerPreviews(this@StickyApp, packs, packCount = 8, stickersPerPack = 2)
-                }
-            } catch (_: Exception) {}
-        }
     }
 }

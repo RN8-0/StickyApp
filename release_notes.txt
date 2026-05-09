@@ -1,102 +1,119 @@
 <tr-TR>
-🛠️ Sticly v4.6.0 — Kararlılık & Performans Güncellemesi!
-• 🚀 Animasyonlu çıkartma içe aktarma hızlandırıldı, paralel işleme ve yerel WASM ile daha kararlı kodlama.
-• 🛡️ Bellek sızıntıları giderildi, güvenlik katmanı güçlendirildi ve hata yönetimi iyileştirildi.
-• ⚙️ Taslak verileri koruma altına alındı, yayınlama akışı sağlamlaştırıldı ve CDN yedekleme mekanizması eklendi.
+⚡ Sticly v4.7.0 — Hızlı Başlatma & Performans Güncellemesi!
+• 🚀 Soğuk başlatma süresi büyük ölçüde azaltıldı, ana sayfa anında yükleniyor.
+• 📦 Lokal veri ön yükleme ile çıkartma paketleri ilk karede gösteriliyor.
+• 🧹 Ana thread bloklaması giderildi, uygulama açılışı hızlandı.
+• 🐛 Küçük hata düzeltmeleri ve kararlılık iyileştirmeleri.
 </tr-TR>
 <ar>
-🛠️ Sticly v4.6.0 — تحديث الاستقرار والأداء!
-• 🚀 تسريع استيراد الملصقات المتحركة بمعالجة متوازية وترميز أكثر استقراراً عبر WASM المحلي.
-• 🛡️ إصلاح تسرب الذاكرة وتعزيز الأمان وتحسين إدارة الأخطاء.
-• ⚙️ حماية بيانات المسودات وتقوية تدفق النشر وإضافة آلية احتياطية لـ CDN.
+⚡ Sticly v4.7.0 — تحديث سرعة التشغيل والأداء!
+• 🚀 تقليل وقت التشغيل البارد بشكل كبير، الصفحة الرئيسية تُحمّل فوراً.
+• 📦 عرض حزم الملصقات فوراً مع التحميل المسبق للبيانات المحلية.
+• 🧹 إزالة حظر الخيط الرئيسي، تسريع فتح التطبيق.
+• 🐛 إصلاحات صغيرة وتحسينات في الاستقرار.
 </ar>
 <de-DE>
-🛠️ Sticly v4.6.0 — Stabilitäts- & Leistungsupdate!
-• 🚀 Schnellerer Import animierter Sticker durch parallele Verarbeitung und stabilere Kodierung mit lokalem WASM.
-• 🛡️ Speicherlecks behoben, Sicherheitsebene verstärkt und Fehlerbehandlung verbessert.
-• ⚙️ Entwurfsdaten geschützt, Veröffentlichungsablauf abgesichert und CDN-Fallback-Mechanismus hinzugefügt.
+⚡ Sticly v4.7.0 — Schnellstart & Leistungsupdate!
+• 🚀 Kaltstartzeit drastisch reduziert, Startseite lädt sofort.
+• 📦 Stickerpakete werden durch lokales Preloading im ersten Frame angezeigt.
+• 🧹 Haupt-Thread-Blockierung beseitigt, App-Start beschleunigt.
+• 🐛 Kleinere Fehlerbehebungen und Stabilitätsverbesserungen.
 </de-DE>
 <en-US>
-🛠️ Sticly v4.6.0 — Stability & Performance Update!
-• 🚀 Faster animated sticker import with parallel processing and more stable encoding via local WASM.
-• 🛡️ Memory leaks patched, security layer hardened and error handling improved.
-• ⚙️ Draft data protection, strengthened publish flow and CDN fallback mechanism added.
+⚡ Sticly v4.7.0 — Fast Launch & Performance Update!
+• 🚀 Cold start time drastically reduced, home screen loads instantly.
+• 📦 Sticker packs displayed immediately via local data preloading.
+• 🧹 Main thread blocking removed, app startup accelerated.
+• 🐛 Minor bug fixes and stability improvements.
 </en-US>
 <es-419>
-🛠️ Sticly v4.6.0 — ¡Actualización de estabilidad y rendimiento!
-• 🚀 Importación de stickers animados más rápida con procesamiento paralelo y codificación más estable mediante WASM local.
-• 🛡️ Fugas de memoria corregidas, capa de seguridad reforzada y manejo de errores mejorado.
-• ⚙️ Protección de datos de borradores, flujo de publicación fortalecido y mecanismo de respaldo CDN añadido.
+⚡ Sticly v4.7.0 — ¡Actualización de arranque rápido y rendimiento!
+• 🚀 Tiempo de arranque en frío drásticamente reducido, pantalla principal carga al instante.
+• 📦 Paquetes de stickers mostrados inmediatamente con precarga de datos locales.
+• 🧹 Eliminado el bloqueo del hilo principal, inicio de la app acelerado.
+• 🐛 Correcciones menores y mejoras de estabilidad.
 </es-419>
 <fil>
-🛠️ Sticly v4.6.0 — Update sa Katatagan at Pagganap!
-• 🚀 Mas mabilis na pag-import ng animated sticker sa pamamagitan ng parallel processing at mas matatag na encoding gamit ang local WASM.
-• 🛡️ Naayos ang memory leaks, pinalakas ang security layer at pinahusay ang error handling.
-• ⚙️ Protektado ang draft data, pinalakas ang publish flow at idinagdag ang CDN fallback mechanism.
+⚡ Sticly v4.7.0 — Mabilis na Paglunsad at Pag-update ng Pagganap!
+• 🚀 Lubos na binawasan ang cold start time, agad na naglo-load ang home screen.
+• 📦 Agad na ipinapakita ang mga sticker pack sa pamamagitan ng local data preloading.
+• 🧹 Inalis ang main thread blocking, pinabilis ang pagsisimula ng app.
+• 🐛 Mga maliliit na pag-aayos at pagpapahusay ng katatagan.
 </fil>
 <fr-FR>
-🛠️ Sticly v4.6.0 — Mise à jour de stabilité et performance !
-• 🚀 Importation de stickers animés plus rapide grâce au traitement parallèle et à un encodage plus stable via WASM local.
-• 🛡️ Fuites de mémoire corrigées, couche de sécurité renforcée et gestion des erreurs améliorée.
-• ⚙️ Protection des données de brouillon, flux de publication renforcé et mécanisme de secours CDN ajouté.
+⚡ Sticly v4.7.0 — Démarrage rapide et mise à jour des performances !
+• 🚀 Temps de démarrage à froid considérablement réduit, l'écran d'accueil se charge instantanément.
+• 📦 Packs de stickers affichés immédiatement grâce au préchargement des données locales.
+• 🧹 Blocage du thread principal supprimé, démarrage de l'application accéléré.
+• 🐛 Corrections mineures et améliorations de la stabilité.
 </fr-FR>
 <hi-IN>
-🛠️ Sticly v4.6.0 — स्थिरता और प्रदर्शन अपडेट!
-• 🚀 समानांतर प्रसंस्करण और स्थानीय WASM के माध्यम से अधिक स्थिर एन्कोडिंग के साथ तेज़ एनिमेटेड स्टिकर आयात।
-• 🛡️ मेमोरी लीक को ठीक किया गया, सुरक्षा परत को मजबूत किया गया और त्रुटि प्रबंधन में सुधार किया गया।
-• ⚙️ ड्राफ्ट डेटा सुरक्षित, प्रकाशन प्रवाह मजबूत और CDN फ़ॉलबैक तंत्र जोड़ा गया।
+⚡ Sticly v4.7.0 — तेज़ लॉन्च और प्रदर्शन अपडेट!
+• 🚀 कोल्ड स्टार्ट समय भारी रूप से कम, होम स्क्रीन तुरंत लोड होती है।
+• 📦 स्थानीय डेटा प्रीलोडिंग के माध्यम से स्टिकर पैक तुरंत दिखाए जाते हैं।
+• 🧹 मुख्य थ्रेड अवरोध हटाया गया, ऐप स्टार्टअप तेज़ किया गया।
+• 🐛 छोटे बग फिक्स और स्थिरता सुधार।
 </hi-IN>
 <id>
-🛠️ Sticly v4.6.0 — Pembaruan Stabilitas & Kinerja!
-• 🚀 Impor stiker animasi lebih cepat dengan pemrosesan paralel dan encoding lebih stabil melalui WASM lokal.
-• 🛡️ Kebocoran memori ditambal, lapisan keamanan diperkuat, dan penanganan error ditingkatkan.
-• ⚙️ Data draf terlindungi, alur publikasi diperkuat, dan mekanisme fallback CDN ditambahkan.
+⚡ Sticly v4.7.0 — Peluncuran Cepat & Pembaruan Kinerja!
+• 🚀 Waktu cold start berkurang drastis, layar utama langsung termuat.
+• 📦 Paket stiker langsung ditampilkan melalui pramuat data lokal.
+• 🧹 Pemblokiran thread utama dihapus, startup aplikasi dipercepat.
+• 🐛 Perbaikan bug kecil dan peningkatan stabilitas.
 </id>
 <it-IT>
-🛠️ Sticly v4.6.0 — Aggiornamento di stabilità e prestazioni!
-• 🚀 Importazione sticker animati più veloce con elaborazione parallela e codifica più stabile tramite WASM locale.
-• 🛡️ Perdite di memoria corrette, livello di sicurezza rafforzato e gestione degli errori migliorata.
-• ⚙️ Dati delle bozze protetti, flusso di pubblicazione rafforzato e meccanismo di fallback CDN aggiunto.
+⚡ Sticly v4.7.0 — Avvio rapido e aggiornamento delle prestazioni!
+• 🚀 Tempo di avvio a freddo drasticamente ridotto, schermata principale caricata all'istante.
+• 📦 Pacchetti sticker mostrati immediatamente grazie al precaricamento dei dati locali.
+• 🧹 Blocco del thread principale rimosso, avvio dell'app accelerato.
+• 🐛 Correzioni minori e miglioramenti della stabilità.
 </it-IT>
 <ja-JP>
-🛠️ Sticly v4.6.0 — 安定性とパフォーマンスのアップデート！
-• 🚀 並列処理とローカルWASMによる安定したエンコードで、アニメーションステッカーのインポートが高速化されました。
-• 🛡️ メモリリークを修正し、セキュリティ層を強化、エラー処理を改善しました。
-• ⚙️ 下書きデータの保護、公開フローの強化、CDNフォールバック機構を追加しました。
+⚡ Sticly v4.7.0 — 高速起動とパフォーマンスアップデート！
+• 🚀 コールドスタート時間を大幅に短縮、ホーム画面が即座に読み込まれます。
+• 📦 ローカルデータのプリロードにより、ステッカーパックがすぐに表示されます。
+• 🧹 メインスレッドのブロッキングを解消し、アプリの起動を高速化しました。
+• 🐛 軽微なバグ修正と安定性の向上。
 </ja-JP>
 <ko-KR>
-🛠️ Sticly v4.6.0 — 안정성 및 성능 업데이트!
-• 🚀 병렬 처리와 로컬 WASM을 통한 더 안정적인 인코딩으로 애니메이션 스티커 가져오기가 빨라졌습니다.
-• 🛡️ 메모리 누수를 수정하고 보안 계층을 강화했으며 오류 처리를 개선했습니다.
-• ⚙️ 초안 데이터 보호, 게시 흐름 강화 및 CDN 폴백 메커니즘을 추가했습니다.
+⚡ Sticly v4.7.0 — 빠른 실행 및 성능 업데이트!
+• 🚀 콜드 스타트 시간 대폭 단축, 홈 화면이 즉시 로드됩니다.
+• 📦 로컬 데이터 사전 로딩으로 스티커 팩이 즉시 표시됩니다.
+• 🧹 메인 스레드 차단 제거, 앱 시작 속도 향상.
+• 🐛 사소한 버그 수정 및 안정성 개선.
 </ko-KR>
 <pt-BR>
-🛠️ Sticly v4.6.0 — Atualização de estabilidade e desempenho!
-• 🚀 Importação de stickers animados mais rápida com processamento paralelo e codificação mais estável via WASM local.
-• 🛡️ Vazamentos de memória corrigidos, camada de segurança reforçada e tratamento de erros aprimorado.
-• ⚙️ Proteção de dados de rascunho, fluxo de publicação fortalecido e mecanismo de fallback CDN adicionado.
+⚡ Sticly v4.7.0 — Inicialização rápida e atualização de desempenho!
+• 🚀 Tempo de inicialização a frio drasticamente reduzido, tela inicial carrega instantaneamente.
+• 📦 Pacotes de stickers exibidos imediatamente via pré-carregamento de dados locais.
+• 🧹 Bloqueio da thread principal removido, inicialização do app acelerada.
+• 🐛 Pequenas correções de bugs e melhorias de estabilidade.
 </pt-BR>
 <ru-RU>
-🛠️ Sticly v4.6.0 — Обновление стабильности и производительности!
-• 🚀 Ускоренный импорт анимированных стикеров с параллельной обработкой и более стабильным кодированием через локальный WASM.
-• 🛡️ Исправлены утечки памяти, усилен уровень безопасности и улучшена обработка ошибок.
-• ⚙️ Защита данных черновиков, усиленный процесс публикации и добавлен механизм резервного CDN.
+⚡ Sticly v4.7.0 — Быстрый запуск и обновление производительности!
+• 🚀 Время холодного старта значительно сокращено, главный экран загружается мгновенно.
+• 📦 Стикер-паки отображаются сразу благодаря предзагрузке локальных данных.
+• 🧹 Устранена блокировка главного потока, запуск приложения ускорен.
+• 🐛 Мелкие исправления ошибок и улучшения стабильности.
 </ru-RU>
 <th>
-🛠️ Sticly v4.6.0 — อัปเดตความเสถียรและประสิทธิภาพ!
-• 🚀 นำเข้าสติกเกอร์เคลื่อนไหวเร็วขึ้นด้วยการประมวลผลแบบขนานและการเข้ารหัสที่เสถียรขึ้นผ่าน WASM ในเครื่อง
-• 🛡️ แก้ไขการรั่วไหลของหน่วยความจำ เสริมความปลอดภัย และปรับปรุงการจัดการข้อผิดพลาด
-• ⚙️ ปกป้องข้อมูลร่าง เสริมความแข็งแกร่งของขั้นตอนการเผยแพร่ และเพิ่มกลไกสำรอง CDN
+⚡ Sticly v4.7.0 — อัปเดตการเริ่มต้นเร็วและประสิทธิภาพ!
+• 🚀 ลดเวลา cold start ลงอย่างมาก หน้าหลักโหลดทันที
+• 📦 แสดงแพ็กสติกเกอร์ทันทีผ่านการโหลดข้อมูลล่วงหน้าในเครื่อง
+• 🧹 ลบการบล็อกเธรดหลัก เร่งการเริ่มต้นแอป
+• 🐛 แก้ไขข้อบกพร่องเล็กน้อยและปรับปรุงความเสถียร
 </th>
 <vi>
-🛠️ Sticly v4.6.0 — Cập nhật ổn định và hiệu suất!
-• 🚀 Nhập sticker động nhanh hơn với xử lý song song và mã hóa ổn định hơn qua WASM cục bộ.
-• 🛡️ Đã vá lỗi rò rỉ bộ nhớ, tăng cường lớp bảo mật và cải thiện xử lý lỗi.
-• ⚙️ Bảo vệ dữ liệu bản nháp, tăng cường luồng xuất bản và thêm cơ chế dự phòng CDN.
+⚡ Sticly v4.7.0 — Cập nhật khởi động nhanh & hiệu suất!
+• 🚀 Giảm đáng kể thời gian khởi động nguội, màn hình chính tải ngay lập tức.
+• 📦 Gói sticker hiển thị ngay nhờ tải trước dữ liệu cục bộ.
+• 🧹 Loại bỏ chặn luồng chính, tăng tốc khởi động ứng dụng.
+• 🐛 Sửa lỗi nhỏ và cải thiện độ ổn định.
 </vi>
 <zh-CN>
-🛠️ Sticly v4.6.0 — 稳定性与性能更新！
-• 🚀 通过并行处理和本地 WASM 实现更稳定的编码，动态贴纸导入速度更快。
-• 🛡️ 修复了内存泄漏，强化了安全层，改进了错误处理。
-• ⚙️ 保护草稿数据，加强发布流程，并添加了 CDN 回退机制。
+⚡ Sticly v4.7.0 — 快速启动与性能更新！
+• 🚀 冷启动时间大幅缩短，主页即时加载。
+• 📦 通过本地数据预加载，贴纸包立即显示。
+• 🧹 移除主线程阻塞，加速应用启动。
+• 🐛 小错误修复和稳定性改进。
 </zh-CN>

@@ -3657,29 +3657,25 @@ Rules:
     private fun loadPacks(forceRefresh: Boolean = false) {
         lifecycleScope.launch {
             try {
-                // 1. Memory cache ANINDA göster
-                if (StickerRepository.allPacksCache.isNotEmpty()) {
-                    displayPacks(StickerRepository.allPacksCache)
-                } else {
-                    // Disk cache'ten oku (sadece memory boşsa)
-                    showSkeleton()
-                    val diskPacks = withContext(Dispatchers.IO) {
-                        StickerRepository.loadCacheFromDisk(this@MainActivity)
+                // Eger memory cache bossa (ilk kurulum), lokal verileri hemen goster
+                if (StickerRepository.allPacksCache.isEmpty()) {
+                    val localPacks = withContext(Dispatchers.IO) {
+                        StickerRepository.loadLocalPacks(this@MainActivity)
                     }
-                    if (diskPacks.isNotEmpty()) {
-                        StickerRepository.allPacksCache = diskPacks
-                        displayPacks(diskPacks)
+                    if (localPacks.isNotEmpty()) {
+                        StickerRepository.allPacksCache = localPacks
+                        displayPacks(localPacks)
                     }
                 }
 
-                // 2. PocketBase'den güncel veriyi çek (arka planda). Açılışta disk cache gösterildiyse
-                // forceRefresh=false eski cache'i tekrar döndürür; bu yüzden arka plan senkronu her zaman sunucuya gider.
-                val loadedPacks = withContext(Dispatchers.IO) {
-                    StickerRepository.loadPacks(this@MainActivity, forceRefresh = true)
-                }
-
-                if (loadedPacks.isNotEmpty()) {
-                    displayPacks(loadedPacks)
+                // Network fetch — sadece online isek
+                if (NetworkUtils.isOnline(this@MainActivity)) {
+                    val remotePacks = withContext(Dispatchers.IO) {
+                        StickerRepository.loadPacks(this@MainActivity, forceRefresh = true)
+                    }
+                    if (remotePacks.isNotEmpty()) {
+                        displayPacks(remotePacks)
+                    }
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
