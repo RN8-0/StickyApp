@@ -30,6 +30,23 @@ async function fetchValidatedBlob(url: string, kind: 'wasm' | 'js'): Promise<str
     }
 }
 
+// The browser blocks `new Worker(crossOriginURL, { type: 'module' })` outright even when
+// the CDN serves CORS headers. Workers must come from same-origin or a blob: URL. So we
+// download worker.js with its two relative deps (const.js, errors.js), strip worker.js's
+// imports, concatenate, and serve the result as a same-origin blob worker. All three files
+// are tiny (<5KB combined), so the extra fetches are cheap.
+async function buildClassWorkerBlobURL(base: string): Promise<string> {
+    const [constSrc, errorsSrc, workerSrc] = await Promise.all([
+        fetch(base + 'const.js').then(r => { if (!r.ok) throw new Error(`const.js ${r.status}`); return r.text(); }),
+        fetch(base + 'errors.js').then(r => { if (!r.ok) throw new Error(`errors.js ${r.status}`); return r.text(); }),
+        fetch(base + 'worker.js').then(r => { if (!r.ok) throw new Error(`worker.js ${r.status}`); return r.text(); }),
+    ]);
+    // Drop worker.js's relative imports; the bindings come from the inlined files below.
+    const workerNoImports = workerSrc.replace(/^\s*import\s+\{[^}]*\}\s+from\s+["']\.\/[^"']+["'];?\s*$/gm, '');
+    const combined = `${errorsSrc}\n${constSrc}\n${workerNoImports}`;
+    return URL.createObjectURL(new Blob([combined], { type: 'application/javascript' }));
+}
+
 function getFFmpegBlobURLs(): Promise<FFmpegBlobURLs> {
     if (_ffmpegBlobURLs) return Promise.resolve(_ffmpegBlobURLs);
     if (!_ffmpegBlobLoadPromise) {
@@ -42,29 +59,23 @@ function getFFmpegBlobURLs(): Promise<FFmpegBlobURLs> {
             // both CDNs hanging for the full window before falling through, accumulating ~130s
             // of dead time per import. Real CDN responses arrive in <5s when reachable; if 25s
             // isn't enough, the source is effectively unreachable and another won't help.
-            //
-            // classWorkerURL is passed as the *raw CDN URL* (not a blob), because the FFmpeg
-            // worker.js does relative imports of "./const.js" and "./errors.js" — those only
-            // resolve when the worker is loaded from its real origin. Loading worker.js from
-            // a blob URL silently breaks those imports, the worker never posts READY, and
-            // ffmpeg.load() hangs until our timeout fires (the symptom user hit: every animated
-            // sticker fails with "FFmpeg init timeout").
             const sources = [
-                { core: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/esm/ffmpeg-core.js', wasm: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/esm/ffmpeg-core.wasm', worker: 'https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.15/dist/esm/worker.js', timeout: 25000 },
-                { core: 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm/ffmpeg-core.js', wasm: 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm/ffmpeg-core.wasm', worker: 'https://unpkg.com/@ffmpeg/ffmpeg@0.12.15/dist/esm/worker.js', timeout: 25000 },
+                { core: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/esm/ffmpeg-core.js', wasm: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/esm/ffmpeg-core.wasm', workerBase: 'https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.15/dist/esm/', timeout: 25000 },
+                { core: 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm/ffmpeg-core.js', wasm: 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm/ffmpeg-core.wasm', workerBase: 'https://unpkg.com/@ffmpeg/ffmpeg@0.12.15/dist/esm/', timeout: 25000 },
             ];
             let lastError: Error | null = null;
-            for (const { core, wasm, worker, timeout } of sources) {
+            for (const { core, wasm, workerBase, timeout } of sources) {
                 try {
-                    const [coreURL, wasmURL] = await Promise.race([
+                    const [coreURL, wasmURL, classWorkerURL] = await Promise.race([
                         Promise.all([
                             fetchValidatedBlob(core, 'js'),
                             fetchValidatedBlob(wasm, 'wasm'),
+                            buildClassWorkerBlobURL(workerBase),
                         ]),
                         new Promise<never>((_, reject) => setTimeout(() => reject(new Error('fetch timeout')), timeout)),
                     ]);
-                    _ffmpegBlobURLs = { coreURL, wasmURL, classWorkerURL: worker };
-                    console.log('[FFmpeg] WASM ready from:', core, '(worker:', worker, ')');
+                    _ffmpegBlobURLs = { coreURL, wasmURL, classWorkerURL };
+                    console.log('[FFmpeg] WASM + worker blob ready from:', core);
                     return _ffmpegBlobURLs;
                 } catch (err) {
                     lastError = err instanceof Error ? err : new Error(String(err));
