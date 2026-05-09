@@ -54,12 +54,16 @@ class StickyApp : Application() {
             }
         }, 2500)
 
-        // Firebase'den güncel veriyi arka planda çek
+        // Firebase'den güncel veriyi arka planda çek + önbellek thumbnail'larını önyükle.
+        // Önceki ayar 8×2=16 thumbnail ile çok az kalıyordu; ana sayfada görünür olan yaklaşık
+        // 5-6 paket × 5 önizleme = ~30 thumbnail'ı kapsamıyordu, kullanıcı her cold start'ta
+        // ağdan tek tek indirme bekliyordu. preloadFeedPacks(15) ilk 30 görüntüyü HIGH önceliklı,
+        // kalanı LOW önceliklı olarak paralel indirir.
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val packs = StickerRepository.loadPacks(this@StickyApp, forceRefresh = false)
                 if (packs.isNotEmpty()) {
-                    StickyGlideModule.preloadStickerPreviews(this@StickyApp, packs, packCount = 8, stickersPerPack = 2)
+                    StickyGlideModule.preloadFeedPacks(this@StickyApp, packs, preloadCount = 15)
                 }
             } catch (_: Exception) {}
         }

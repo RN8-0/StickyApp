@@ -52,6 +52,8 @@ import kotlinx.coroutines.awaitAll
 import android.animation.ObjectAnimator
 import android.animation.ValueAnimator
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -139,6 +141,10 @@ class MainActivity : AppCompatActivity() {
     private val aiGenerateQueue = java.util.concurrent.ConcurrentLinkedQueue<String>()
     private var aiActiveGenerations = java.util.concurrent.atomic.AtomicInteger(0)
     private val AI_MAX_QUEUE = 4
+    // Serialises history.json read/write so two parallel generations can't clobber each other:
+    // before the lock, both jobs read the same array, then each writes their own +1 — losing
+    // one item from the manifest while the .webp still sits on disk.
+    private val aiHistoryMutex = Mutex()
     private var aiHistoryAdapter: AiHistoryAdapter? = null
     private var aiUpdateGenerateButton: (() -> Unit)? = null
 
@@ -461,9 +467,11 @@ class MainActivity : AppCompatActivity() {
             loadPacks(forceRefresh = true)
         }
         
-        // Delay real-time observer start to avoid cascading reloads during initial load
+        // Delay real-time observer start to avoid cascading reloads during initial load.
+        // 1s is enough — initial loadPacks above completes well before this fires, and a
+        // shorter delay shaves ~1.5s off how soon admin-panel edits start propagating.
         lifecycleScope.launch {
-            delay(2_500)
+            delay(1_000)
             StickerRepository.startObservingPacks(this@MainActivity)
         }
     }
@@ -1634,17 +1642,19 @@ Rules:
                 java.io.FileOutputStream(file).use { out ->
                     bitmap.compress(Bitmap.CompressFormat.WEBP, 90, out)
                 }
-                // Save metadata
-                val metaFile = java.io.File(dir, "history.json")
-                val arr = try {
-                    if (metaFile.exists()) JSONArray(metaFile.readText()) else JSONArray()
-                } catch (_: Exception) { JSONArray() }
-                arr.put(JSONObject().apply {
-                    put("file", fileName)
-                    put("prompt", prompt)
-                    put("time", System.currentTimeMillis())
-                })
-                metaFile.writeText(arr.toString())
+                // Manifest read-modify-write must be atomic across concurrent generations.
+                aiHistoryMutex.withLock {
+                    val metaFile = java.io.File(dir, "history.json")
+                    val arr = try {
+                        if (metaFile.exists()) JSONArray(metaFile.readText()) else JSONArray()
+                    } catch (_: Exception) { JSONArray() }
+                    arr.put(JSONObject().apply {
+                        put("file", fileName)
+                        put("prompt", prompt)
+                        put("time", System.currentTimeMillis())
+                    })
+                    metaFile.writeText(arr.toString())
+                }
                 file.absolutePath
             } catch (_: Exception) { null }
         }

@@ -249,7 +249,10 @@ object StickerRepository {
         val appContext = context.applicationContext
         lastObservedSignature = packSignature(allPacksCache)
         observerJob = repositoryScope.launch {
-            delay(2_000)
+            // Tightened from 2s/6s to 1s/3s so admin-panel pack edits (rename, version bump,
+            // sticker swap) propagate to the live app within ~3s instead of ~8s. Each poll
+            // is a 2-collection PocketBase listAllRecords call; doubling the rate is fine.
+            delay(1_000)
             while (isActive) {
                 try {
                     val packs = loadPacks(appContext, forceRefresh = true)
@@ -262,7 +265,7 @@ object StickerRepository {
                 } catch (e: Exception) {
                     Log.e(TAG, "PocketBase poll failed: ${e.message}")
                 }
-                delay(6_000)
+                delay(3_000)
             }
         }
     }
