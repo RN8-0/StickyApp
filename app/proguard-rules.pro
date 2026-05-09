@@ -111,10 +111,6 @@
 -dontwarn java.lang.reflect.AnnotatedType
 -dontwarn com.google.common.reflect.**
 
-# Unity Ads
--keep class com.unity3d.ads.** { *; }
--dontwarn com.unity3d.ads.**
-
 # Shimmer
 -keep class com.facebook.shimmer.** { *; }
 -dontwarn com.facebook.shimmer.**

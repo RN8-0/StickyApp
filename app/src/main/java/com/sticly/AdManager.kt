@@ -76,14 +76,6 @@ object AdManager {
             isInitialized = true
             Log.d(TAG, "AdMob SDK initialized. Status: ${initStatus.adapterStatusMap}")
 
-            // Unity Ads mediation
-            try {
-                com.unity3d.ads.UnityAds.initialize(context, "6048973", false)
-                Log.d(TAG, "Unity Ads initialized for mediation (Game ID: 6048973)")
-            } catch (e: Exception) {
-                Log.e(TAG, "Unity Ads initialization failed: ${e.message}")
-            }
-
             // Reklamları yükle
             android.os.Handler(android.os.Looper.getMainLooper()).post {
                 loadRewardedAd(context)

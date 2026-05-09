@@ -114,12 +114,6 @@ dependencies {
 
     // AdMob
     implementation 'com.google.android.gms:play-services-ads:23.6.0'
-    
-    // Unity Ads SDK
-    implementation 'com.unity3d.ads:unity-ads:4.12.2'
-    
-    // Unity Ads Mediation for AdMob
-    implementation 'com.google.ads.mediation:unity:4.12.2.0'
 
     // Google Play Billing
     implementation 'com.android.billingclient:billing-ktx:7.1.1'
