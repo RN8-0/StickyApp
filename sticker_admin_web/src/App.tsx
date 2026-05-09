@@ -1793,17 +1793,64 @@ function App() {
         }
       } catch (e) { console.warn('[fetchUsers] worker fetch failed:', e); }
 
-      // Fallback: query PocketBase directly — merge user_profiles + auth users
+      // Fallback: query PocketBase directly — use user_submissions as primary source, merge with profile data
       if (usersList.length === 0) {
-        const [profiles, authUsers] = await Promise.all([
+        const [profiles, authUsers, submissions] = await Promise.all([
           pb.collection('user_profiles').getFullList({ sort: '-created' }).catch(() => []),
           pb.collection('users').getFullList({ sort: '-created' }).catch(() => []),
+          pb.collection('user_submissions').getFullList({ sort: '-created_at', fields: 'user_id,user_email,display_name,publisher_name,photo_url,device_id,created,created_at' }).catch(() => []),
         ]);
-        const profileEmails = new Set((profiles as any[]).map((p: any) => (p.email || '').toLowerCase()).filter(Boolean));
-        const combined = [
-          ...(profiles as any[]),
-          ...(authUsers as any[]).filter((u: any) => !profileEmails.has((u.email || '').toLowerCase())),
-        ];
+
+        // Build a profile lookup for enrichment (email → profile data)
+        const profileByEmail = new Map<string, any>();
+        const profileById = new Map<string, any>();
+        for (const p of profiles as any[]) {
+          if (p.email) profileByEmail.set(p.email.toLowerCase(), p);
+          if (p.user_id) profileById.set(p.user_id.toLowerCase(), p);
+          if (p.id) profileById.set(p.id.toLowerCase(), p);
+        }
+        for (const u of authUsers as any[]) {
+          if (u.email && !profileByEmail.has(u.email.toLowerCase())) profileByEmail.set(u.email.toLowerCase(), u);
+        }
+
+        // Derive unique users from submissions (primary source — always accessible to admin)
+        const submissionUsers = new Map<string, any>();
+        for (const s of submissions as any[]) {
+          const key = (s.user_email || s.user_id || s.device_id || '').toLowerCase();
+          if (!key) continue;
+          if (!submissionUsers.has(key)) {
+            const profile = profileByEmail.get((s.user_email || '').toLowerCase()) || profileById.get((s.user_id || '').toLowerCase());
+            submissionUsers.set(key, {
+              id: s.user_id || s.device_id || key,
+              email: s.user_email || '',
+              display_name: s.display_name || s.publisher_name || profile?.display_name || profile?.name || '',
+              photo_url: s.photo_url || profile?.photo_url || profile?.avatar_url || '',
+              created: s.created_at || s.created,
+              is_premium: profile?.is_premium || false,
+              premium_type: profile?.premium_type || 'none',
+              premium_expiry: profile?.premium_expiry || 0,
+            });
+          }
+        }
+
+        // Also include users from profiles/auth who have no submissions
+        const seenEmails = new Set<string>(Array.from(submissionUsers.keys()));
+        const combined: any[] = Array.from(submissionUsers.values());
+        for (const p of profiles as any[]) {
+          const key = (p.email || p.user_id || '').toLowerCase();
+          if (key && !seenEmails.has(key)) {
+            seenEmails.add(key);
+            combined.push(p);
+          }
+        }
+        for (const u of authUsers as any[]) {
+          const key = (u.email || '').toLowerCase();
+          if (key && !seenEmails.has(key)) {
+            seenEmails.add(key);
+            combined.push(u);
+          }
+        }
+
         usersList = combined.map(mapUserData);
       }
 

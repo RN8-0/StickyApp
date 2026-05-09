@@ -131,18 +131,62 @@ object SocialRepository {
     suspend fun togglePackLike(context: Context, pack: Pack): JSONObject = withContext(Dispatchers.IO) {
         requireSignedIn(context)
         val viewer = currentUser(context)
-        runCatching { postJson("/api/social/like", JSONObject().apply {
-            put("pack_id", pack.id)
-            put("collection", pack.storagePath)
-            put("user_id", viewer.id)
-            put("user_email", viewer.email)
-            put("device_id", PreferencesHelper.getDeviceId(context))
-            put("display_name", viewer.name.ifBlank { viewer.email })
-            put("photo_url", viewer.photoUrl)
-        }) }.getOrElse {
+        val deviceId = PreferencesHelper.getDeviceId(context)
+        val result = runCatching {
+            // Only include non-blank identifiers to avoid matching wrong records
+            val userParts = buildList {
+                if (viewer.id.isNotBlank()) add("user_id='${escape(viewer.id)}'")
+                if (viewer.email.isNotBlank()) add("user_email='${escape(viewer.email)}'")
+                if (deviceId.isNotBlank()) add("device_id='${escape(deviceId)}'")
+            }
+            val filter = if (userParts.isEmpty()) {
+                "pack_id='${escape(pack.id)}'"
+            } else {
+                "pack_id='${escape(pack.id)}' && (${userParts.joinToString(" || ")})"
+            }
+            val existing = PocketBaseHelper.listAllRecords("pack_likes", filter = filter, perPage = 1)
+            if (existing.isNotEmpty()) {
+                existing.forEach { runCatching { PocketBaseHelper.deleteRecord("pack_likes", it.optString("id")) } }
+                val count = PocketBaseHelper.listAllRecords("pack_likes", filter = "pack_id='${escape(pack.id)}'", perPage = 500).size
+                // Update pack's like_count in stickers collection
+                runCatching {
+                    for (col in listOf("stickers", "premium_stickers")) {
+                        runCatching { PocketBaseHelper.updateRecord(col, pack.id, JSONObject().put("like_count", count)) }
+                    }
+                }
+                JSONObject().put("liked", false).put("like_count", count)
+            } else {
+                PocketBaseHelper.createRecord("pack_likes", JSONObject().apply {
+                    put("pack_id", pack.id)
+                    put("user_id", viewer.id)
+                    put("user_email", viewer.email)
+                    put("device_id", deviceId)
+                    put("display_name", viewer.name.ifBlank { viewer.email })
+                    put("photo_url", viewer.photoUrl)
+                })
+                val count = PocketBaseHelper.listAllRecords("pack_likes", filter = "pack_id='${escape(pack.id)}'", perPage = 500).size
+                // Update pack's like_count in stickers collection
+                runCatching {
+                    for (col in listOf("stickers", "premium_stickers")) {
+                        runCatching { PocketBaseHelper.updateRecord(col, pack.id, JSONObject().put("like_count", count)) }
+                    }
+                }
+                JSONObject().put("liked", true).put("like_count", count)
+            }
+        }.getOrElse {
             val liked = toggleLocalLike(context, pack.id)
             JSONObject().put("liked", liked)
         }
+        // Always sync local state so the icon stays consistent across screens
+        syncLocalLike(context, pack.id, result.optBoolean("liked", isLocallyLiked(context, pack.id)))
+        result
+    }
+
+    private fun syncLocalLike(context: Context, packId: String, liked: Boolean) {
+        val likes = localLikedSet(context)
+        if (liked) likes.add(packId) else likes.remove(packId)
+        context.getSharedPreferences("sticky_prefs", Context.MODE_PRIVATE)
+            .edit().putStringSet("local_pack_likes", likes).apply()
     }
 
     suspend fun toggleCommentLike(context: Context, commentId: String, packId: String): JSONObject = withContext(Dispatchers.IO) {
@@ -449,7 +493,14 @@ object SocialRepository {
         .getStringSet("local_pack_likes", emptySet())
         ?.toMutableSet() ?: mutableSetOf()
 
-    private fun isLocallyLiked(context: Context, packId: String): Boolean = localLikedSet(context).contains(packId)
+    fun isLocallyLiked(context: Context, packId: String): Boolean = localLikedSet(context).contains(packId)
+
+    fun setLocalLike(context: Context, packId: String, liked: Boolean) {
+        val likes = localLikedSet(context)
+        if (liked) likes.add(packId) else likes.remove(packId)
+        context.getSharedPreferences("sticky_prefs", Context.MODE_PRIVATE)
+            .edit().putStringSet("local_pack_likes", likes).apply()
+    }
 
     private fun toggleLocalLike(context: Context, packId: String): Boolean {
         val likes = localLikedSet(context)

@@ -2346,7 +2346,7 @@ Rules:
                 val knownNames = submissionItems.map { it.name.lowercase() }.toSet()
                 val allItems = (submissionItems + socialItems.filter { it.storePackId !in knownStoreIds && it.name.lowercase() !in knownNames })
                     .sortedByDescending { it.createdAt ?: "" }
-                val items = allItems.filter { it.id !in deletedSubmissionIds }
+                val items = allItems.filter { it.id !in deletedSubmissionIds && (it.storePackId == null || it.storePackId !in deletedSubmissionIds) }
                 val approvedCount = items.count { it.status == "approved" }
                 val stats = social.optJSONObject("stats")
                 withContext(Dispatchers.Main) {
@@ -2765,18 +2765,51 @@ Rules:
                             rvPublished?.adapter = SubmissionAdapter(items.filter { it.id != item.id })
 
                             withContext(Dispatchers.IO) {
+                                val esc = { v: String -> v.replace("'", "\\'") }
                                 runCatching {
                                     SocialRepository.deleteSharedPack(this@MainActivity, item.id, item.storePackId)
                                 }
-                                // Always delete directly from PB regardless of worker result
+                                // Delete from user_submissions by item.id (works for submission items)
                                 runCatching { PocketBaseHelper.deleteRecord("user_submissions", item.id) }
-                                if (item.status == "approved" && item.storePackId != null) {
-                                    runCatching { PocketBaseHelper.deleteRecord("stickers", item.storePackId) }
+                                // For approved packs, also search submission records by sticker_pack_id / pack_name
+                                if (item.status == "approved") {
+                                    val storeId = item.storePackId ?: item.id
+                                    val submFilter = buildList {
+                                        add("sticker_pack_id='${esc(storeId)}'")
+                                        add("source_pack_id='${esc(storeId)}'")
+                                        add("source_pack_id='${esc(item.id)}'")
+                                        if (item.name.isNotBlank()) add("pack_name='${esc(item.name)}'")
+                                    }.distinct().joinToString(" || ")
+                                    runCatching {
+                                        val found = PocketBaseHelper.listRecords("user_submissions", filter = submFilter, perPage = 10)
+                                        found.forEach { sub ->
+                                            runCatching { PocketBaseHelper.deleteRecord("user_submissions", sub.optString("id")) }
+                                            deletedSubmissionIds.add(sub.optString("id"))
+                                        }
+                                    }
+                                    // Delete by storePackId if available
+                                    if (item.storePackId != null) {
+                                        runCatching { PocketBaseHelper.deleteRecord("stickers", item.storePackId) }
+                                        runCatching { PocketBaseHelper.deleteRecord("premium_stickers", item.storePackId) }
+                                    }
+                                    // Also search by source_pack_id / pack_name in case storePackId is unset
+                                    val searchParts = mutableListOf<String>()
+                                    searchParts.add("source_pack_id='${esc(item.id)}'")
+                                    if (item.name.isNotBlank()) {
+                                        searchParts.add("(name='${esc(item.name)}' || pack_name='${esc(item.name)}')")
+                                    }
+                                    val searchFilter = searchParts.joinToString(" || ")
+                                    for (collection in listOf("stickers", "premium_stickers")) {
+                                        runCatching {
+                                            val found = PocketBaseHelper.listRecords(collection, filter = searchFilter, perPage = 10)
+                                            found.forEach { PocketBaseHelper.deleteRecord(collection, it.optString("id")) }
+                                        }
+                                    }
                                 }
                                 // Remove from global pack cache so Explore tab no longer shows it
                                 val targetId = item.storePackId ?: item.id
                                 StickerRepository.allPacksCache = StickerRepository.allPacksCache
-                                    .filter { it.id != targetId }
+                                    .filter { it.id != targetId && it.id != item.id }
                             }
                             Toast.makeText(this@MainActivity, "Submission deleted", Toast.LENGTH_SHORT).show()
                             profileSocialJson = null
