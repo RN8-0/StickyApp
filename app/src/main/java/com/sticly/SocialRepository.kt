@@ -132,8 +132,23 @@ object SocialRepository {
         requireSignedIn(context)
         val viewer = currentUser(context)
         val deviceId = PreferencesHelper.getDeviceId(context)
+        // PocketBase's pack_likes.delete rule is superuser-only — a regular user's auth token
+        // gets HTTP 403 on unlike, so the record persists and the like comes back on refresh.
+        // Route through the worker, which auths as superadmin (PB_ADMIN_PASS) and handles the
+        // create-or-delete toggle for us. Direct PocketBase fallback covers the worker-down case.
         val result = runCatching {
-            // pack_likes has no device_id field — only filter by user_id and user_email
+            postJson("/api/social/like", JSONObject().apply {
+                put("pack_id", pack.id)
+                put("packId", pack.id)
+                put("collection", pack.storagePath.ifBlank { "stickers" })
+                put("user_id", viewer.id)
+                put("user_email", viewer.email)
+                put("display_name", viewer.name.ifBlank { viewer.email })
+                put("photo_url", viewer.photoUrl)
+                put("device_id", deviceId)
+            })
+        }.recoverCatching {
+            // Fallback: direct PocketBase (works for create, will fail on delete unless rule is loosened)
             val userParts = buildList {
                 if (viewer.id.isNotBlank()) add("user_id='${escape(viewer.id)}'")
                 if (viewer.email.isNotBlank()) add("user_email='${escape(viewer.email)}'")
@@ -147,12 +162,6 @@ object SocialRepository {
             if (existing.isNotEmpty()) {
                 existing.forEach { runCatching { PocketBaseHelper.deleteRecord("pack_likes", it.optString("id")) } }
                 val count = PocketBaseHelper.listAllRecords("pack_likes", filter = "pack_id='${escape(pack.id)}'", perPage = 500).size
-                // Update pack's like_count in stickers collection
-                runCatching {
-                    for (col in listOf("stickers", "premium_stickers")) {
-                        runCatching { PocketBaseHelper.updateRecord(col, pack.id, JSONObject().put("like_count", count)) }
-                    }
-                }
                 JSONObject().put("liked", false).put("like_count", count)
             } else {
                 PocketBaseHelper.createRecord("pack_likes", JSONObject().apply {
@@ -163,12 +172,6 @@ object SocialRepository {
                     put("photo_url", viewer.photoUrl)
                 })
                 val count = PocketBaseHelper.listAllRecords("pack_likes", filter = "pack_id='${escape(pack.id)}'", perPage = 500).size
-                // Update pack's like_count in stickers collection
-                runCatching {
-                    for (col in listOf("stickers", "premium_stickers")) {
-                        runCatching { PocketBaseHelper.updateRecord(col, pack.id, JSONObject().put("like_count", count)) }
-                    }
-                }
                 JSONObject().put("liked", true).put("like_count", count)
             }
         }.getOrElse {

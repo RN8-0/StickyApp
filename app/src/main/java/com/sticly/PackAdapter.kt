@@ -304,19 +304,37 @@ class PackAdapter(
         h.name?.text = pack.localizedName
 
         val stickerCount = pack.stickers.size
-        val pubText = StringBuilder(pack.pub.length + 80)
-        pubText.append(pack.pub)
-        pubText.append(" • ").append(stickerCount).append(" stickers")
+        // Build the pub line with an inline thumb-up ImageSpan (tinted to text_secondary)
+        // so the like indicator stays grey alongside the rest of the line — using a 👍 emoji
+        // makes Android render it in the system colour-emoji font (yellow), which the user
+        // does not want next to grey text.
+        val pubBuilder = android.text.SpannableStringBuilder()
+        pubBuilder.append(pack.pub)
+        pubBuilder.append(" • ").append(stickerCount.toString()).append(" stickers")
         if (pack.likeCount > 0) {
-            pubText.append(" • 👍 ").append(formatCompactNumber(pack.likeCount))
+            pubBuilder.append(" • ")
+            val iconStart = pubBuilder.length
+            pubBuilder.append(" ") // placeholder character that the ImageSpan replaces
+            val drawable = androidx.core.content.ContextCompat.getDrawable(context, R.drawable.ic_thumb_up_outline)
+            if (drawable != null) {
+                val size = (h.pub?.textSize ?: 36f).toInt()
+                drawable.setBounds(0, 0, size, size)
+                drawable.setTint(androidx.core.content.ContextCompat.getColor(context, R.color.text_secondary))
+                pubBuilder.setSpan(
+                    android.text.style.ImageSpan(drawable, android.text.style.ImageSpan.ALIGN_BASELINE),
+                    iconStart, iconStart + 1,
+                    android.text.Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
+                )
+            }
+            pubBuilder.append(" ").append(formatCompactNumber(pack.likeCount))
         }
         if (pack.downloadCount > 0) {
-            pubText.append(" • ").append(formatDownloadCount(pack.downloadCount)).append(" downloads")
+            pubBuilder.append(" • ").append(formatDownloadCount(pack.downloadCount)).append(" downloads")
         }
         if (pack.viewCount > 0) {
-            pubText.append(" • ").append(formatCompactNumber(pack.viewCount)).append(" views")
+            pubBuilder.append(" • ").append(formatCompactNumber(pack.viewCount)).append(" views")
         }
-        h.pub?.text = pubText
+        h.pub?.text = pubBuilder
 
         // Publisher photo
         if (pack.publisherPhotoUrl.isNotBlank()) {

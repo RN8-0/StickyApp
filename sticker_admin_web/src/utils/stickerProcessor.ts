@@ -6,12 +6,38 @@ import { removeBackground } from '@imgly/background-removal';
 let _ffmpegBlobURLs: { coreURL: string; wasmURL: string } | null = null;
 let _ffmpegBlobLoadPromise: Promise<{ coreURL: string; wasmURL: string }> | null = null;
 
+// Validated fetch: a 200 OK from the SPA fallback returns index.html, and toBlobURL would
+// happily wrap that HTML in an "application/wasm" blob — FFmpeg.load() then silently hangs
+// trying to JIT-compile HTML as WebAssembly. We sniff the bytes and reject anything that
+// is not actual WebAssembly (magic header 0x00 0x61 0x73 0x6d) or JavaScript.
+async function fetchValidatedBlob(url: string, kind: 'wasm' | 'js'): Promise<string> {
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status} for ${url}`);
+    const buffer = await resp.arrayBuffer();
+    const bytes = new Uint8Array(buffer);
+    if (kind === 'wasm') {
+        if (bytes.length < 4 || bytes[0] !== 0x00 || bytes[1] !== 0x61 || bytes[2] !== 0x73 || bytes[3] !== 0x6d) {
+            throw new Error(`Not a WASM file (got ${bytes.length}B starting with ${Array.from(bytes.slice(0, 4)).map(b => b.toString(16)).join(' ')})`);
+        }
+        return URL.createObjectURL(new Blob([buffer], { type: 'application/wasm' }));
+    } else {
+        // JS: reject HTML (starts with '<')
+        if (bytes.length === 0 || bytes[0] === 0x3c /* '<' */) {
+            throw new Error(`Not a JS file (got ${bytes.length}B, looks like HTML)`);
+        }
+        return URL.createObjectURL(new Blob([buffer], { type: 'text/javascript' }));
+    }
+}
+
 function getFFmpegBlobURLs(): Promise<{ coreURL: string; wasmURL: string }> {
     if (_ffmpegBlobURLs) return Promise.resolve(_ffmpegBlobURLs);
     if (!_ffmpegBlobLoadPromise) {
         _ffmpegBlobLoadPromise = (async () => {
+            // Local source removed: ffmpeg-core.wasm is not in public/, and the SPA
+            // catch-all returns index.html with HTTP 200, fooling toBlobURL into wrapping
+            // HTML as WASM. CDN-only is reliable.
+            void toBlobURL; // keep import shape; we use fetchValidatedBlob below
             const sources = [
-                { core: '/ffmpeg-core.js', wasm: '/ffmpeg-core.wasm', timeout: 60000 },
                 { core: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/esm/ffmpeg-core.js', wasm: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/esm/ffmpeg-core.wasm', timeout: 90000 },
                 { core: 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm/ffmpeg-core.js', wasm: 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm/ffmpeg-core.wasm', timeout: 90000 },
             ];
@@ -20,10 +46,10 @@ function getFFmpegBlobURLs(): Promise<{ coreURL: string; wasmURL: string }> {
                 try {
                     const [coreURL, wasmURL] = await Promise.race([
                         Promise.all([
-                            toBlobURL(core, 'text/javascript'),
-                            toBlobURL(wasm, 'application/wasm'),
+                            fetchValidatedBlob(core, 'js'),
+                            fetchValidatedBlob(wasm, 'wasm'),
                         ]),
-                        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('toBlobURL timeout')), timeout)),
+                        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('fetch timeout')), timeout)),
                     ]);
                     _ffmpegBlobURLs = { coreURL, wasmURL };
                     console.log('[FFmpeg] WASM ready from:', core);
