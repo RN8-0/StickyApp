@@ -55,15 +55,16 @@ class StickyApp : Application() {
         }, 2500)
 
         // Firebase'den güncel veriyi arka planda çek + önbellek thumbnail'larını önyükle.
-        // Önceki ayar 8×2=16 thumbnail ile çok az kalıyordu; ana sayfada görünür olan yaklaşık
-        // 5-6 paket × 5 önizleme = ~30 thumbnail'ı kapsamıyordu, kullanıcı her cold start'ta
-        // ağdan tek tek indirme bekliyordu. preloadFeedPacks(15) ilk 30 görüntüyü HIGH önceliklı,
-        // kalanı LOW önceliklı olarak paralel indirir.
+        // 1.5s gecikme — MainActivity'nin ilk render'ı + DetailsActivity'nin ilk açılışı sırasında
+        // bandwidth'i bu önyüklemeyle paylaşmıyoruz. Pack count 10'a düşürüldü (~50 thumbnail);
+        // 15 ile 8 paralel HIGH-priority indirme kullanıcının açtığı paketin sticker'larıyla
+        // network için yarışıyordu.
         CoroutineScope(Dispatchers.IO).launch {
             try {
+                kotlinx.coroutines.delay(1_500)
                 val packs = StickerRepository.loadPacks(this@StickyApp, forceRefresh = false)
                 if (packs.isNotEmpty()) {
-                    StickyGlideModule.preloadFeedPacks(this@StickyApp, packs, preloadCount = 15)
+                    StickyGlideModule.preloadFeedPacks(this@StickyApp, packs, preloadCount = 10)
                 }
             } catch (_: Exception) {}
         }

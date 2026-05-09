@@ -14,6 +14,26 @@ import java.net.URL
 import java.net.URLEncoder
 
 object SocialRepository {
+    // Session-level set of comment IDs the user has deleted. Even if the backend delete
+    // succeeds at one layer but a stale read or replication lag re-serves the comment,
+    // we filter it out client-side so the user never sees it return within the session.
+    private val deletedCommentIds: MutableSet<String> = java.util.Collections.synchronizedSet(mutableSetOf())
+
+    fun markCommentDeleted(id: String) {
+        if (id.isNotBlank()) deletedCommentIds.add(id)
+    }
+
+    private fun filterDeletedComments(comments: JSONArray): JSONArray {
+        if (deletedCommentIds.isEmpty()) return comments
+        val out = JSONArray()
+        for (i in 0 until comments.length()) {
+            val c = comments.optJSONObject(i) ?: continue
+            if (deletedCommentIds.contains(c.optString("id"))) continue
+            out.put(c)
+        }
+        return out
+    }
+
     data class CurrentUser(
         val id: String,
         val email: String,
@@ -77,7 +97,8 @@ object SocialRepository {
     }
 
     suspend fun fetchComments(packId: String): JSONArray = withContext(Dispatchers.IO) {
-        getJson("/api/social/comments", mapOf("packId" to packId)).optJSONArray("comments") ?: JSONArray()
+        val raw = getJson("/api/social/comments", mapOf("packId" to packId)).optJSONArray("comments") ?: JSONArray()
+        filterDeletedComments(raw)
     }
 
     suspend fun fetchComments(context: Context, packId: String): JSONArray = withContext(Dispatchers.IO) {
@@ -85,8 +106,9 @@ object SocialRepository {
         val workerResult = runCatching {
             getJson("/api/social/comments", mapOf("packId" to packId, "viewerId" to viewer.id, "viewerEmail" to viewer.email)).optJSONArray("comments") ?: JSONArray()
         }.getOrNull()
-        if (workerResult != null && workerResult.length() > 0) workerResult
-        else runCatching { fetchCommentsFromPocketBase(packId, viewer) }.getOrDefault(workerResult ?: JSONArray())
+        val raw = if (workerResult != null && workerResult.length() > 0) workerResult
+            else runCatching { fetchCommentsFromPocketBase(packId, viewer) }.getOrDefault(workerResult ?: JSONArray())
+        filterDeletedComments(raw)
     }
 
     suspend fun fetchPackSocial(context: Context, packId: String): JSONObject = withContext(Dispatchers.IO) {
@@ -193,7 +215,7 @@ object SocialRepository {
     suspend fun deleteComment(context: Context, commentId: String, packId: String): JSONObject = withContext(Dispatchers.IO) {
         requireSignedIn(context)
         val viewer = currentUser(context)
-        runCatching {
+        val result = runCatching {
             postJson("/api/social/comments/delete", JSONObject().apply {
                 put("comment_id", commentId)
                 put("pack_id", packId)
@@ -216,6 +238,10 @@ object SocialRepository {
             }
             JSONObject().put("deleted", true)
         }
+        // Whichever path succeeded, suppress this comment id from any future fetch in this
+        // session — guards against stale reads / cache lag re-surfacing the deleted comment.
+        markCommentDeleted(commentId)
+        result
     }
 
     suspend fun toggleCommentLike(context: Context, commentId: String, packId: String): JSONObject = withContext(Dispatchers.IO) {

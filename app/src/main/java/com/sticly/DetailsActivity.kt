@@ -12,6 +12,7 @@ import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
+import android.view.ViewGroup
 import android.view.Window
 import android.view.WindowManager
 import android.view.animation.AccelerateDecelerateInterpolator
@@ -416,16 +417,17 @@ class DetailsActivity : AppCompatActivity() {
      * Bu sayede RecyclerView bind olduğunda görseller anında görünür
      */
     private fun preloadAllStickers(pack: Pack, stickers: List<Sticker>) {
-        // Preload işlemini arka planda paralel yap
+        // Preload işlemini arka planda paralel yap.
+        // ÖNEMLİ: drop(9) yazılması nedeniyle 6, 7, 8 indeksindeki stickerlar hiç önyüklenmiyordu —
+        // 5'li grid'de 2. satırın 2-3-4. hücreleri her açılışta gri kalıyordu. Şimdi tüm pack'i,
+        // ilk 6'sı yüksek öncelikle ve geri kalanı paralel olarak (8'erli) çekiyoruz.
         lifecycleScope.launch(Dispatchers.IO) {
             val glide = Glide.with(applicationContext)
             val storagePath = pack.storagePath
 
-            // İlk 6 çıkartmayı öncelikli yükle (görünen 2 satır)
             val priorityStickers = stickers.take(6)
-            val restStickers = stickers.drop(9)
+            val restStickers = stickers.drop(6)
 
-            // Öncelikli olanları paralel yükle
             priorityStickers.map { sticker ->
                 async {
                     try {
@@ -434,11 +436,17 @@ class DetailsActivity : AppCompatActivity() {
                 }
             }.awaitAll()
 
-            // Geri kalanları arka planda yükle
-            restStickers.forEach { sticker ->
-                try {
-                    preloadSingleSticker(glide, pack, sticker, storagePath)
-                } catch (_: Exception) {}
+            // Geri kalanları da paralel — sequential forEach pack başına 9 sticker'ı
+            // tek tek indirip görünür gecikme yaratıyordu. 8'erli batch hem hızlı hem
+            // bağlantıyı boğmuyor.
+            restStickers.chunked(8).forEach { batch ->
+                batch.map { sticker ->
+                    async {
+                        try {
+                            preloadSingleSticker(glide, pack, sticker, storagePath)
+                        } catch (_: Exception) {}
+                    }
+                }.awaitAll()
             }
         }
     }
@@ -1366,21 +1374,31 @@ class DetailsActivity : AppCompatActivity() {
             (viewer.email.isNotBlank() && comment.optString("user_email").equals(viewer.email, ignoreCase = true))
         if (isAuthor) {
             row.setOnLongClickListener {
-                val dialog = android.app.AlertDialog.Builder(this)
-                    .setTitle("Delete comment")
-                    .setMessage("Delete your comment? This cannot be undone.")
-                    .setPositiveButton(android.R.string.ok) { _, _ ->
-                        lifecycleScope.launch {
-                            runCatching { SocialRepository.deleteComment(this@DetailsActivity, commentId, packId) }
-                                .onSuccess {
-                                    val parent = row.parent as? ViewGroup
-                                    parent?.removeView(row)
-                                }
-                                .onFailure { showThemedSnackbar(it.message ?: getString(R.string.error_generic)) }
-                        }
-                    }
-                    .setNegativeButton(android.R.string.cancel, null)
+                val dialogView = layoutInflater.inflate(R.layout.dialog_delete_confirm, null)
+                dialogView.findViewById<TextView>(R.id.tvDeleteTitle).text = getString(R.string.comment_delete_title)
+                dialogView.findViewById<TextView>(R.id.tvDeleteMessage).text = getString(R.string.comment_delete_message)
+                val btnCancel = dialogView.findViewById<MaterialButton>(R.id.btnDeleteCancel)
+                val btnConfirm = dialogView.findViewById<MaterialButton>(R.id.btnDeleteConfirm)
+                btnCancel.text = getString(android.R.string.cancel)
+                btnConfirm.text = getString(R.string.delete)
+                val dialog = androidx.appcompat.app.AlertDialog.Builder(this)
+                    .setView(dialogView)
                     .create()
+                dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+                btnCancel.setOnClickListener { dialog.dismiss() }
+                btnConfirm.setOnClickListener {
+                    dialog.dismiss()
+                    // Optimistic remove: hide row immediately so the user sees the action take
+                    // effect even if the worker is slow. The session-level deletedCommentIds
+                    // set in SocialRepository keeps it hidden across refreshes.
+                    SocialRepository.markCommentDeleted(commentId)
+                    val parent = row.parent as? ViewGroup
+                    parent?.removeView(row)
+                    lifecycleScope.launch {
+                        runCatching { SocialRepository.deleteComment(this@DetailsActivity, commentId, packId) }
+                            .onFailure { showThemedSnackbar(it.message ?: getString(R.string.error_generic)) }
+                    }
+                }
                 dialog.show()
                 true
             }
