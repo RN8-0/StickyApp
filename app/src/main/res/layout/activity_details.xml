@@ -16,80 +16,96 @@
         android:id="@+id/toolbarLayout"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:minHeight="50dp"
+        android:minHeight="44dp"
         android:orientation="vertical"
-        android:background="@color/primary"
-        android:paddingBottom="4dp">
+        android:background="@color/primary">
 
         <!-- Top bar: Back button + App name + Logo -->
         <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="56dp"
+            android:layout_height="48dp"
             android:orientation="horizontal"
             android:gravity="center_vertical"
             android:paddingHorizontal="4dp">
 
             <ImageButton
                 android:id="@+id/btnBack"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
                 android:background="?selectableItemBackgroundBorderless"
                 android:src="@drawable/ic_back"
                 app:tint="@color/text_on_primary"
                 android:contentDescription="Back" />
 
             <ImageView
-                android:layout_width="28dp"
-                android:layout_height="28dp"
-                android:layout_marginStart="4dp"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:layout_marginStart="2dp"
                 android:src="@drawable/ic_logo_white"
                 app:tint="@color/text_on_primary" />
 
-            <TextView
+            <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:layout_marginStart="8dp"
-                android:text="@string/app_name"
-                android:textColor="@color/text_on_primary"
-                android:textSize="18sp"
-                android:textStyle="bold" />
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/app_name"
+                    android:textColor="@color/text_on_primary"
+                    android:textSize="16sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/name"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textSize="10sp"
+                    android:textColor="@color/text_on_primary_secondary"
+                    android:maxLines="1"
+                    android:ellipsize="end"
+                    android:fontFamily="sans-serif" />
+
+            </LinearLayout>
 
             <ImageButton
                 android:id="@+id/btnPublishPackTop"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
                 android:background="?selectableItemBackgroundBorderless"
                 android:src="@drawable/ic_share"
                 app:tint="@color/text_on_primary"
                 android:visibility="gone"
                 android:contentDescription="@string/publish_pack" />
 
-            <!-- Installed Icon - WhatsApp'a eklenmiş paketi gösterir -->
+            <!-- Installed Icon -->
             <ImageView
                 android:id="@+id/installedIcon"
-                android:layout_width="28dp"
-                android:layout_height="28dp"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
                 android:padding="2dp"
                 android:src="@drawable/ic_check_circle"
                 android:visibility="gone" />
 
-            <!-- Premium Icon - Toolbar'da -->
+            <!-- Premium Icon -->
             <ImageView
                 android:id="@+id/premiumIconToolbar"
-                android:layout_width="28dp"
-                android:layout_height="28dp"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
                 android:layout_marginEnd="4dp"
                 android:padding="2dp"
                 android:src="@drawable/ic_gem"
                 app:tint="@color/premium_gold"
                 android:visibility="gone" />
 
-            <!-- Toplu Silme Onay Butonu (Toolbar'da) -->
+            <!-- Toplu Silme Onay Butonu -->
             <ImageButton
                 android:id="@+id/btnConfirmDelete"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
                 android:background="?selectableItemBackgroundBorderless"
                 android:src="@drawable/ic_delete"
                 app:tint="@color/delete_red"
@@ -98,36 +114,23 @@
 
         </LinearLayout>
 
-        <!-- Category name (pack name) -->
-        <TextView
-            android:id="@+id/name"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:paddingHorizontal="16dp"
-            android:textSize="16sp"
-            android:textColor="@color/text_on_primary_secondary"
-            android:textStyle="normal"
-            android:fontFamily="sans-serif" />
-
     </LinearLayout>
 
-    <!-- Publisher Strip: Shared by + Like/Comment buttons -->
+    <!-- Publisher Strip: toolbar ile bütünleşik, ince bar -->
     <LinearLayout
         android:id="@+id/publisherStrip"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:minHeight="48dp"
+        android:layout_height="40dp"
         android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:paddingHorizontal="12dp"
-        android:paddingVertical="6dp"
-        android:background="@color/surface"
+        android:paddingHorizontal="10dp"
+        android:background="@color/toolbar_bg"
         android:visibility="gone">
 
         <ImageView
             android:id="@+id/publisherAvatar"
-            android:layout_width="32dp"
-            android:layout_height="32dp"
+            android:layout_width="26dp"
+            android:layout_height="26dp"
             android:src="@drawable/ic_person"
             android:scaleType="centerCrop"
             android:background="@drawable/circle_avatar_bg" />
@@ -136,84 +139,85 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:layout_marginStart="10dp"
+            android:layout_marginStart="8dp"
             android:orientation="vertical">
 
             <TextView
                 android:id="@+id/tvPublisherName"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:textColor="@color/text_primary"
-                android:textSize="14sp"
-                android:textStyle="bold" />
+                android:textColor="@color/white"
+                android:textSize="12sp"
+                android:textStyle="bold"
+                android:maxLines="1"
+                android:ellipsize="end" />
 
             <TextView
                 android:id="@+id/tvPublisherHint"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="View profile"
-                android:textColor="@color/text_secondary"
-                android:textSize="11sp" />
+                android:textColor="@color/text_on_primary_secondary"
+                android:textSize="9sp"
+                android:visibility="gone" />
 
         </LinearLayout>
 
-        <!-- Like button with count -->
+        <!-- Like button (çembersiz, beyaz/sarı ikon) -->
         <LinearLayout
             android:id="@+id/btnPackLike"
             android:layout_width="wrap_content"
-            android:layout_height="32dp"
+            android:layout_height="match_parent"
             android:orientation="horizontal"
             android:gravity="center_vertical"
-            android:background="@drawable/bg_button_outline_rounded"
-            android:paddingHorizontal="10dp"
-            android:layout_marginEnd="8dp"
+            android:background="?selectableItemBackgroundBorderless"
+            android:paddingHorizontal="8dp"
+            android:layout_marginEnd="2dp"
             android:clickable="true"
-            android:focusable="true"
-            android:foreground="?selectableItemBackground">
+            android:focusable="true">
 
             <ImageView
                 android:layout_width="16dp"
                 android:layout_height="16dp"
                 android:src="@drawable/ic_thumb_up"
-                app:tint="@color/primary" />
+                app:tint="@color/white" />
 
             <TextView
                 android:id="@+id/tvPackLikeCount"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="4dp"
-                android:textSize="12sp"
-                android:textColor="@color/primary"
+                android:layout_marginStart="3dp"
+                android:textSize="11sp"
+                android:textColor="@color/white"
                 android:textStyle="bold" />
 
         </LinearLayout>
 
-        <!-- Comment button -->
+        <!-- Comment button (çembersiz, beyaz ikon) -->
         <LinearLayout
             android:id="@+id/btnPackComments"
             android:layout_width="wrap_content"
-            android:layout_height="32dp"
+            android:layout_height="match_parent"
             android:orientation="horizontal"
             android:gravity="center_vertical"
-            android:background="@drawable/bg_button_outline_rounded"
-            android:paddingHorizontal="10dp"
+            android:background="?selectableItemBackgroundBorderless"
+            android:paddingHorizontal="8dp"
             android:clickable="true"
-            android:focusable="true"
-            android:foreground="?selectableItemBackground">
+            android:focusable="true">
 
             <ImageView
                 android:layout_width="16dp"
                 android:layout_height="16dp"
                 android:src="@drawable/ic_comment"
-                app:tint="@color/primary" />
+                app:tint="@color/white" />
 
             <TextView
                 android:id="@+id/tvPackCommentCount"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="4dp"
-                android:textSize="12sp"
-                android:textColor="@color/primary"
+                android:layout_marginStart="3dp"
+                android:textSize="11sp"
+                android:textColor="@color/white"
                 android:textStyle="bold" />
 
         </LinearLayout>
@@ -221,13 +225,13 @@
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnFollowPublisher"
             android:layout_width="wrap_content"
-            android:layout_height="32dp"
-            android:minWidth="72dp"
+            android:layout_height="28dp"
+            android:minWidth="64dp"
             android:text="Follow"
             android:textAllCaps="false"
-            android:textSize="11sp"
-            app:cornerRadius="16dp"
-            android:layout_marginStart="8dp"
+            android:textSize="10sp"
+            app:cornerRadius="14dp"
+            android:layout_marginStart="6dp"
             android:visibility="gone" />
 
     </LinearLayout>

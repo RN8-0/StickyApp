@@ -37,7 +37,10 @@ object PushTokenManager {
             try {
                 val deviceId = PreferencesHelper.getDeviceId(context)
                 val firebaseUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
-                val isAuthenticated = firebaseUser != null && !firebaseUser.email.isNullOrBlank()
+                val prefs = context.getSharedPreferences("sticky_prefs", Context.MODE_PRIVATE)
+                val pbEmail = prefs.getString("user_email", "")?.trim() ?: ""
+                // Allow profile creation for Firebase users AND PocketBase-authenticated users
+                val isAuthenticated = (firebaseUser != null && !firebaseUser.email.isNullOrBlank()) || pbEmail.isNotBlank()
                 val payload = JSONObject().apply {
                     put("fcm_token", token)
                     put("notifications_enabled", PreferencesHelper.isNotificationsEnabled(context))

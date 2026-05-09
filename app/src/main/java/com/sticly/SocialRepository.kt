@@ -190,6 +190,34 @@ object SocialRepository {
             .edit().putStringSet("local_pack_likes", likes).apply()
     }
 
+    suspend fun deleteComment(context: Context, commentId: String, packId: String): JSONObject = withContext(Dispatchers.IO) {
+        requireSignedIn(context)
+        val viewer = currentUser(context)
+        runCatching {
+            postJson("/api/social/comments/delete", JSONObject().apply {
+                put("comment_id", commentId)
+                put("pack_id", packId)
+                put("user_id", viewer.id)
+                put("user_email", viewer.email)
+            })
+        }.getOrElse {
+            // Direct PB fallback — works only if pack_comments.delete rule allows user to
+            // delete own record (@request.auth.id == user_id), otherwise will surface 403.
+            runCatching { PocketBaseHelper.deleteRecord("pack_comments", commentId) }
+                .getOrElse { throw it }
+            // Best-effort: clean up replies and likes for this comment.
+            runCatching {
+                val replies = PocketBaseHelper.listAllRecords("comment_replies", filter = "comment_id='${escape(commentId)}'", perPage = 200)
+                replies.forEach { runCatching { PocketBaseHelper.deleteRecord("comment_replies", it.optString("id")) } }
+            }
+            runCatching {
+                val likes = PocketBaseHelper.listAllRecords("comment_likes", filter = "comment_id='${escape(commentId)}'", perPage = 200)
+                likes.forEach { runCatching { PocketBaseHelper.deleteRecord("comment_likes", it.optString("id")) } }
+            }
+            JSONObject().put("deleted", true)
+        }
+    }
+
     suspend fun toggleCommentLike(context: Context, commentId: String, packId: String): JSONObject = withContext(Dispatchers.IO) {
         requireSignedIn(context)
         val viewer = currentUser(context)

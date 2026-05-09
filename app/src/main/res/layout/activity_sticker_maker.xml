@@ -226,16 +226,18 @@
                     android:layout_width="72dp"
                     android:layout_height="match_parent"
                     android:orientation="vertical"
-                    android:gravity="center">
+                    android:gravity="center"
+                    android:clickable="false"
+                    android:focusable="false">
                     <ImageButton
                         android:id="@+id/btnToolRemoveBg"
-                        android:layout_width="28dp"
-                        android:layout_height="28dp"
+                        android:layout_width="44dp"
+                        android:layout_height="44dp"
                         android:background="?selectableItemBackgroundBorderless"
                         android:src="@drawable/ic_photo"
                         app:tint="#AAAAAA"
                         android:scaleType="centerInside"
-                        android:padding="4dp"
+                        android:padding="8dp"
                         android:contentDescription="@string/remove_bg_short" />
                     <TextView
                         android:id="@+id/labelToolRemoveBg"
@@ -244,7 +246,7 @@
                         android:text="@string/remove_bg_short"
                         android:textColor="#AAAAAA"
                         android:textSize="10sp"
-                        android:layout_marginTop="2dp"
+                        android:layout_marginTop="-4dp"
                         android:gravity="center"
                         android:maxLines="1" />
                 </LinearLayout>

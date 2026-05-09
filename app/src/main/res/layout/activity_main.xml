@@ -206,6 +206,7 @@
                     
                     <!-- Content remains same -->
                     <com.google.android.material.appbar.AppBarLayout
+                        android:id="@+id/mainAppBarLayout"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:background="@android:color/transparent"
@@ -251,7 +252,8 @@
                                         android:layout_height="wrap_content"
                                         android:paddingHorizontal="12dp"
                                         android:clipToPadding="false"
-                                        android:overScrollMode="never" />
+                                        android:overScrollMode="never"
+                                        android:nestedScrollingEnabled="false" />
 
                                 </LinearLayout>
 
@@ -292,7 +294,8 @@
                                         android:layout_height="wrap_content"
                                         android:paddingHorizontal="12dp"
                                         android:clipToPadding="false"
-                                        android:overScrollMode="never" />
+                                        android:overScrollMode="never"
+                                        android:nestedScrollingEnabled="false" />
 
                                 </LinearLayout>
 
@@ -302,7 +305,7 @@
                                     android:layout_width="match_parent"
                                     android:layout_height="wrap_content"
                                     android:scrollbars="none"
-                                    android:paddingVertical="8dp"
+                                    android:paddingVertical="4dp"
                                     android:clipToPadding="false">
 
                                     <com.google.android.material.chip.ChipGroup

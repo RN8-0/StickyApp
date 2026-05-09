@@ -291,14 +291,20 @@ class StickerProcessor {
 
         let blob: Blob | null = null;
 
-        // Quality based on frame count — start high
-        const qualities = frameCount > 50 ? [50, 35, 25, 15] : [65, 50, 35, 25];
+        // Single fast pass first; only retry at lower quality if the result is too big.
+        // 4-pass quality loops at compression_level 4 made libwebp WASM run for >2 minutes per
+        // sticker on the user's machine, blowing past the 240s outer timeout. compression_level 0
+        // is dramatically faster and the size delta is small for short stickers.
+        const qualities = frameCount > 50 ? [35, 20] : [55, 30];
 
-        for (const q of qualities) {
+        for (let qi = 0; qi < qualities.length; qi++) {
+            const q = qualities[qi];
             try { await ffmpeg.deleteFile(outputName); } catch { }
 
             const actualFps = Math.min(fps, MAX_FPS);
             const frameDurationMs = Math.round(1000 / actualFps);
+
+            onProgress?.({ message: `Encoding pass ${qi + 1}/${qualities.length} (q:${q})...`, percentage: 75 + qi * 10 });
 
             await ffmpeg.exec([
                 '-framerate', actualFps.toString(),
@@ -309,7 +315,7 @@ class StickerProcessor {
                 '-lossless', '0',
                 '-q:v', q.toString(),
                 '-pix_fmt', 'yuva420p',
-                '-compression_level', '4',
+                '-compression_level', '0',
                 '-loop', '0',
                 '-an',
                 outputName
@@ -320,17 +326,7 @@ class StickerProcessor {
             blob = new Blob([data as any], { type: 'image/webp' });
 
             if (blob.size <= MAX_SIZE) break;
-
-            onProgress?.({ message: `Compressing (q:${q})...`, percentage: 85 });
         }
-
-        // Cleanup in parallel
-        const cleanupPromises = [];
-        for (let i = 0; i < frameCount; i++) {
-            cleanupPromises.push(ffmpeg.deleteFile(`frame_${i.toString().padStart(4, '0')}.png`).catch(() => {}));
-        }
-        cleanupPromises.push(ffmpeg.deleteFile(outputName).catch(() => {}));
-        await Promise.all(cleanupPromises);
 
         onProgress?.({ message: `Done! (${Math.round(blob!.size / 1024)}KB)`, percentage: 100 });
         return blob!;

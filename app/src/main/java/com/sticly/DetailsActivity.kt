@@ -1358,6 +1358,33 @@ class DetailsActivity : AppCompatActivity() {
         }
 
         row.tag = commentId
+
+        // Long-press → delete (author only). The auth check is enforced by the worker too,
+        // but hide the option for non-authors to avoid a confusing 403 toast.
+        val viewer = SocialRepository.currentUser(this)
+        val isAuthor = comment.optString("user_id").equals(viewer.id, ignoreCase = true) ||
+            (viewer.email.isNotBlank() && comment.optString("user_email").equals(viewer.email, ignoreCase = true))
+        if (isAuthor) {
+            row.setOnLongClickListener {
+                val dialog = android.app.AlertDialog.Builder(this)
+                    .setTitle("Delete comment")
+                    .setMessage("Delete your comment? This cannot be undone.")
+                    .setPositiveButton(android.R.string.ok) { _, _ ->
+                        lifecycleScope.launch {
+                            runCatching { SocialRepository.deleteComment(this@DetailsActivity, commentId, packId) }
+                                .onSuccess {
+                                    val parent = row.parent as? ViewGroup
+                                    parent?.removeView(row)
+                                }
+                                .onFailure { showThemedSnackbar(it.message ?: getString(R.string.error_generic)) }
+                        }
+                    }
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .create()
+                dialog.show()
+                true
+            }
+        }
         tvReply.setOnClickListener { onReply(commentId, author) }
 
         val replies = comment.optJSONArray("replies") ?: JSONArray()

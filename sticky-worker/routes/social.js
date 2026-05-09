@@ -720,6 +720,51 @@ router.post('/pack/delete', async (req, res) => {
   }
 });
 
+router.post('/comments/delete', async (req, res) => {
+  try {
+    const commentId = clean(req.body.comment_id);
+    const userId = clean(req.body.user_id);
+    const userEmail = clean(req.body.user_email);
+    if (!commentId) return res.status(400).json({ error: 'Missing comment_id.' });
+
+    // Authorization: only the original author (matched by user_id or user_email) may delete.
+    const commentResp = await pbFetch(`/api/collections/pack_comments/records/${commentId}`);
+    if (!commentResp.ok) {
+      return res.status(commentResp.status).json({ error: 'Comment not found.' });
+    }
+    const comment = await commentResp.json();
+    const ownerKeys = [lower(comment.user_id), lower(comment.user_email)].filter(Boolean);
+    const actorKeys = [lower(userId), lower(userEmail)].filter(Boolean);
+    const isOwner = ownerKeys.some((k) => actorKeys.includes(k));
+    const isAdmin = req.body.admin === true || req.body.admin === 'true';
+    if (!isOwner && !isAdmin) {
+      return res.status(403).json({ error: 'You can only delete your own comments.' });
+    }
+
+    // Cascade: replies + likes for this comment.
+    const [replies, likes] = await Promise.all([
+      safeFetchAll('comment_replies'),
+      safeFetchAll('comment_likes'),
+    ]);
+    const deleteOps = [];
+    for (const r of replies) {
+      if (clean(r.comment_id) === commentId) deleteOps.push(pbFetch(`/api/collections/comment_replies/records/${r.id}`, { method: 'DELETE' }));
+    }
+    for (const l of likes) {
+      if (clean(l.comment_id) === commentId) deleteOps.push(pbFetch(`/api/collections/comment_likes/records/${l.id}`, { method: 'DELETE' }));
+    }
+    await Promise.all(deleteOps);
+
+    const delResp = await pbFetch(`/api/collections/pack_comments/records/${commentId}`, { method: 'DELETE' });
+    if (!delResp.ok && delResp.status !== 204) throw new Error(await delResp.text());
+
+    res.json({ deleted: true });
+  } catch (err) {
+    console.error('[Social comment delete]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.post('/comments/like', async (req, res) => {
   try {
     const commentId = clean(req.body.comment_id);

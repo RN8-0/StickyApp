@@ -345,7 +345,11 @@ object StickerRepository {
         }
 
         if (fileName.isNotBlank() && trimmed.contains("/api/files/")) {
-            return if (trimmed.contains("/api/files/$collection/$packId/")) trimmed else canonicalPocketBaseUrl
+            // Preserve any valid PocketBase file URL from the current host.
+            // Cross-collection URLs are intentional: approved packs in 'stickers' still
+            // serve their image files from the original 'user_submissions' collection.
+            val pbHost = PocketBaseHelper.PB_URL.trimEnd('/')
+            return if (trimmed.startsWith(pbHost)) trimmed else canonicalPocketBaseUrl
         }
 
         if (trimmed.contains("firebasestorage.googleapis.com") && fileName.isNotBlank()) {

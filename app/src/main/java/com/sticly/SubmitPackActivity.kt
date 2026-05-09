@@ -168,24 +168,39 @@ class SubmitPackActivity : AppCompatActivity() {
 
         window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS)
         window.addFlags(android.view.WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
-        window.statusBarColor = androidx.core.content.ContextCompat.getColor(this, R.color.white)
+        window.statusBarColor = androidx.core.content.ContextCompat.getColor(this, R.color.primary_dark)
     }
 
     private fun setupCategories() {
         chipGroupCategory.isSelectionRequired = true
+        chipGroupCategory.viewTreeObserver.addOnGlobalLayoutListener(object : android.view.ViewTreeObserver.OnGlobalLayoutListener {
+            override fun onGlobalLayout() {
+                chipGroupCategory.viewTreeObserver.removeOnGlobalLayoutListener(this)
+                val containerWidth = chipGroupCategory.width
+                val chipWidth = if (containerWidth > 0) (containerWidth - 6.dp() * 2) / 3 else 0
+                for (i in 0 until chipGroupCategory.childCount) {
+                    val chip = chipGroupCategory.getChildAt(i) as? Chip ?: continue
+                    if (chipWidth > 0) {
+                        chip.layoutParams = chip.layoutParams.also { it.width = chipWidth }
+                    }
+                }
+            }
+        })
         categories.forEach { (category, stringRes) ->
             val chip = Chip(this).apply {
                 text = getString(stringRes)
                 isCheckable = true
                 isCheckedIconVisible = false
-                minHeight = 32.dp()
-                chipMinHeight = 32.dp().toFloat()
-                chipCornerRadius = 16.dp().toFloat()
-                chipStartPadding = 8.dp().toFloat()
-                chipEndPadding = 8.dp().toFloat()
+                minHeight = 36.dp()
+                chipMinHeight = 36.dp().toFloat()
+                chipCornerRadius = 10.dp().toFloat()
+                chipStartPadding = 6.dp().toFloat()
+                chipEndPadding = 6.dp().toFloat()
                 textStartPadding = 0f
                 textEndPadding = 0f
-                textSize = 11.5f
+                textSize = 12f
+                gravity = android.view.Gravity.CENTER
+                textAlignment = android.view.View.TEXT_ALIGNMENT_CENTER
                 tag = category
                 setOnCheckedChangeListener { _, checked -> styleCategoryChip(this, checked) }
             }
