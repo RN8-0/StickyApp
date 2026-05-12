@@ -37,6 +37,7 @@ const usersRouter = require('./routes/users');
 const statsRouter = require('./routes/stats');
 const socialRouter = require('./routes/social');
 const aiRouter = require('./routes/ai');
+const reportRouter = require('./routes/report');
 
 const app = express();
 app.use(express.json());
@@ -135,6 +136,7 @@ app.use('/api/users', rateLimit, adminAuth, usersRouter);
 app.use('/api/stats', rateLimit, statsRouter);
 app.use('/api/social', rateLimit, socialRouter);
 app.use('/api/ai', rateLimit, adminAuth, aiRouter);
+app.use('/api/report', rateLimit, reportRouter);
 
 app.get('/health', (_, res) => res.json({ status: 'ok', ts: Date.now() }));
 
