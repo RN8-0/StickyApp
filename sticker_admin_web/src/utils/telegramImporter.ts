@@ -420,23 +420,34 @@ async function processTelegramStickerInner(
 // ========== TRAY IMAGE ==========
 
 async function createTrayFromSticker(stickers: Sticker[], packId: string): Promise<{ trayUrl: string; trayFile: string }> {
-    try {
-        if (stickers.length === 0) return { trayUrl: '', trayFile: '' };
-        const chosenSticker = stickers[0];
+    for (let attempt = 0; attempt < Math.min(stickers.length, 3); attempt++) {
+        const chosenSticker = stickers[attempt];
+        try {
+            const response = await fetch(chosenSticker.url);
+            if (!response.ok) continue;
+            const blob = await response.blob();
 
-        const response = await fetch(chosenSticker.url);
-        const blob = await response.blob();
-        const tempFile = new File([blob], 'tray.webp', { type: 'image/webp' });
-        const trayBlob = await stickerProcessor.processTray(tempFile, () => {});
+            let trayBlob: Blob;
+            try {
+                const tempFile = new File([blob], 'tray.webp', { type: blob.type || 'image/webp' });
+                trayBlob = await stickerProcessor.processTray(tempFile, () => {});
+            } catch {
+                // processTray can fail for animated WebP — fall back to the raw blob
+                trayBlob = blob;
+            }
 
-        const trayFileName = `tray_${Date.now()}.png`;
-        const trayUrl = await uploadFile('draft_stickers', packId, 'tray_image', trayBlob, trayFileName);
-
-        return { trayUrl, trayFile: trayFileName };
-    } catch (error) {
-        console.error('[TELEGRAM] Tray creation error:', error);
-        return { trayUrl: '', trayFile: '' };
+            const trayFileName = `tray_${Date.now()}.png`;
+            const trayUrl = await uploadFile('draft_stickers', packId, 'tray_image', trayBlob, trayFileName);
+            return { trayUrl, trayFile: trayFileName };
+        } catch (error) {
+            console.warn(`[TELEGRAM] Tray attempt ${attempt + 1} failed:`, (error as any)?.message);
+        }
     }
+    // Final fallback: store the first sticker URL directly as tray_url (no separate upload)
+    if (stickers[0]?.url) {
+        return { trayUrl: stickers[0].url, trayFile: stickers[0].image_file || 'tray.webp' };
+    }
+    return { trayUrl: '', trayFile: '' };
 }
 
 // ========== MAIN IMPORT FUNCTION ==========

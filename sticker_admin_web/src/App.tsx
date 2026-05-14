@@ -49,6 +49,7 @@ import {
   Flag,
   UserPlus,
   Inbox,
+  Wrench,
 } from 'lucide-react';
 import { translateTextAllLanguages, TARGET_LANGUAGES } from './utils/translator';
 import {
@@ -294,6 +295,7 @@ function App() {
 
   const [packs, setPacks] = useState<StickerPack[]>([]);
   const [loading, setLoading] = useState(true);
+  const [repairProgress, setRepairProgress] = useState<{ current: number; total: number; message: string } | null>(null);
   const [selectedPack, setSelectedPack] = useState<StickerPack | null>(null);
   const [selectedStickerIds, setSelectedStickerIds] = useState<string[]>([]);
   const [isSelectionMode, setIsSelectionMode] = useState(false);
@@ -1170,6 +1172,78 @@ function App() {
     }
   };
 
+  // Fills empty `name` / `tray_url` / `tray_image_file` across all published packs so the
+  // Android app stops falling back to the record id and the dashboard sidebar shows covers.
+  // Activates packs that have stickers but were left inactive after a partial import so they
+  // surface in the app's Recently Added section.
+  const repairEmptyPacks = async () => {
+    const broken = packs.filter(p => {
+      const noName = !(p.name && String(p.name).trim());
+      const noTray = !(p.tray_url && String(p.tray_url).trim());
+      const inactiveWithStickers = p.is_active === false && Array.isArray(p.stickers) && p.stickers.length > 0;
+      return noName || noTray || inactiveWithStickers;
+    });
+
+    if (broken.length === 0) {
+      alert('No empty packs to repair. All packs already have a name and cover.');
+      return;
+    }
+    if (!window.confirm(`Repair ${broken.length} pack(s) with missing name / cover / active flag? This bumps image_data_version so the Android app refetches them.`)) return;
+
+    setRepairProgress({ current: 0, total: broken.length, message: 'Starting repair...' });
+    let fixed = 0;
+    let failed = 0;
+
+    for (let i = 0; i < broken.length; i++) {
+      const pack = broken[i];
+      const collection = (pack as any)._collection || (pack.is_premium ? 'premium_stickers' : 'stickers');
+      setRepairProgress({ current: i + 1, total: broken.length, message: `Repairing ${pack.id.slice(-6)}...` });
+
+      try {
+        const update: any = {};
+        const firstSticker = Array.isArray(pack.stickers) ? (pack.stickers[0] as any) : null;
+
+        const trimmedName = (pack.name || '').toString().trim();
+        if (!trimmedName) {
+          const nameEn = ((pack as any).name_en || '').toString().trim();
+          const tgTitle = ((pack as any).telegram_set_title || '').toString().trim();
+          const category = (pack.category || 'pack').toString().trim();
+          const fallback = nameEn
+            || tgTitle
+            || `${category.charAt(0).toUpperCase()}${category.slice(1)} ${pack.id.slice(-4).toUpperCase()}`;
+          update.name = fallback;
+          if (!((pack as any).name_en || '').toString().trim()) update.name_en = fallback;
+        }
+
+        const trimmedTrayUrl = (pack.tray_url || '').toString().trim();
+        if (!trimmedTrayUrl && firstSticker?.url) {
+          update.tray_url = firstSticker.url;
+        }
+        const trimmedTrayFile = (pack.tray_image_file || '').toString().trim();
+        if (!trimmedTrayFile && firstSticker?.image_file) {
+          update.tray_image_file = firstSticker.image_file;
+        }
+
+        if (pack.is_active === false && Array.isArray(pack.stickers) && pack.stickers.length > 0) {
+          update.is_active = true;
+        }
+
+        if (Object.keys(update).length === 0) continue;
+
+        update.image_data_version = (Number(pack.image_data_version || 0) + 1).toString();
+        await pb.collection(collection).update(pack.id, update);
+        fixed++;
+      } catch (err: any) {
+        console.error(`[REPAIR] ${pack.id} failed:`, err);
+        failed++;
+      }
+    }
+
+    setRepairProgress(null);
+    await fetchPacks();
+    alert(`Repair complete. Fixed: ${fixed}, Failed: ${failed}. The Android app may need a refresh to pick up the changes.`);
+  };
+
   // ========== DRAFT MANAGEMENT ==========
   const fetchDrafts = async () => {
     setDraftLoading(true);
@@ -1618,8 +1692,21 @@ function App() {
       };
       if (draftEditData.privacy_policy_website) updatedData.privacy_policy_website = draftEditData.privacy_policy_website;
       if (draftEditData.license_agreement_website) updatedData.license_agreement_website = draftEditData.license_agreement_website;
-      if ((selectedDraft as any).tray_url) updatedData.tray_url = (selectedDraft as any).tray_url;
-      if ((selectedDraft as any).tray_image_file) updatedData.tray_image_file = (selectedDraft as any).tray_image_file;
+      // Auto-cover: keep existing tray, otherwise promote first sticker so the dashboard
+      // and publish flow have something to show without a separate upload step.
+      const existingTrayUrl = ((selectedDraft as any).tray_url || '').toString().trim();
+      const existingTrayFile = ((selectedDraft as any).tray_image_file || '').toString().trim();
+      const firstDraftSticker = (selectedDraft.stickers || [])[0] as any;
+      if (existingTrayUrl) {
+        updatedData.tray_url = existingTrayUrl;
+      } else if (firstDraftSticker?.url) {
+        updatedData.tray_url = firstDraftSticker.url;
+      }
+      if (existingTrayFile) {
+        updatedData.tray_image_file = existingTrayFile;
+      } else if (firstDraftSticker?.image_file) {
+        updatedData.tray_image_file = firstDraftSticker.image_file;
+      }
       TARGET_LANGUAGES.forEach(lang => {
         const key = `name_${lang.code}`;
         if (draftEditData[key]) updatedData[key] = draftEditData[key];
@@ -2215,7 +2302,8 @@ function App() {
           'name', 'publisher', 'publisher_email', 'publisher_user_id', 'publisher_photo_url',
           'category', 'is_animated', 'is_premium',
           'is_active', 'is_popular', 'product_id', 'price_try', 'price_usd', 'price_eur',
-          'image_data_version'
+          'image_data_version',
+          'tray_url', 'tray_image_file', 'created_at'
         ]);
         return Object.fromEntries(
           Object.entries(data).filter(([key, value]) =>
@@ -2227,6 +2315,30 @@ function App() {
 
       const updatedData: any = sanitizePackUpdate(editFormData);
       updatedData.publisher = (updatedData.publisher || 'Sticky').trim() || 'Sticky';
+
+      // Auto-cover fallback: if pack has no tray but has stickers, use first sticker as tray
+      const firstSticker = (selectedPack.stickers || [])[0];
+      const hasTrayAfterEdit = (updatedData.tray_url ?? selectedPack.tray_url ?? '').toString().trim();
+      if (!hasTrayAfterEdit && firstSticker?.url) {
+        updatedData.tray_url = firstSticker.url;
+        updatedData.tray_image_file = firstSticker.image_file || 'tray.webp';
+      }
+
+      // Ensure name is non-empty so the Android app doesn't fall back to the record id.
+      const normalizedName = (updatedData.name ?? selectedPack.name ?? '').toString().trim();
+      if (!normalizedName) {
+        const fallbackName =
+          ((selectedPack as any).name_en || '').toString().trim() ||
+          ((selectedPack as any).telegram_set_title || '').toString().trim() ||
+          `Pack ${selectedPack.id.slice(-6).toUpperCase()}`;
+        updatedData.name = fallbackName;
+        updatedData.name_en = fallbackName;
+      } else {
+        // Always keep name_en in sync with name so the Android English locale
+        // and the auto-translate hook both see the correct primary name.
+        updatedData.name_en = normalizedName;
+      }
+
       updatedData.image_data_version = (Number(selectedPack.image_data_version || 0) + 1).toString();
       if (updatedData.is_premium) {
         if (!updatedData.price_try) updatedData.price_try = '69,99 TL';
@@ -2243,7 +2355,11 @@ function App() {
       const oldCollection = (selectedPack as any)._collection || (selectedPack.is_premium ? 'premium_stickers' : 'stickers');
       await pb.collection(oldCollection).update(selectedPack.id, updatedData);
 
-      const updated = { ...selectedPack, ...updatedData } as StickerPack;
+      // Re-read from PB so any field the server normalised (or silently rejected) is reflected
+      // in local state — prevents "edit didn't stick" surprises after refresh.
+      let saved: any = null;
+      try { saved = await pb.collection(oldCollection).getOne(selectedPack.id); } catch { /* best effort */ }
+      const updated = { ...selectedPack, ...updatedData, ...(saved || {}) } as StickerPack;
       setPacks(packs.map(p => p.id === selectedPack.id ? updated : p));
       setSelectedPack(updated);
       setShowEditPackModal(false);
@@ -3078,6 +3194,18 @@ function App() {
           >
             <RefreshCcw size={18} className={cn("text-textSec group-hover:text-primary transition-colors", (loading || checkingSizes) && 'animate-spin text-primary')} />
           </button>
+
+          {activeTab === 'dashboard' && (
+            <button
+              onClick={repairEmptyPacks}
+              disabled={!!repairProgress || loading}
+              className="hidden sm:flex items-center gap-2 px-3 py-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/20 rounded-xl transition-all active:scale-95 disabled:opacity-50"
+              title="Fill missing name / cover for all packs and reactivate packs with stickers"
+            >
+              <Wrench size={16} />
+              <span className="text-[10px] font-black uppercase tracking-wider">Repair Empty</span>
+            </button>
+          )}
 
           <div className="w-px h-6 bg-white/10 mx-1 hidden md:block" />
 
@@ -7152,6 +7280,34 @@ function App() {
           </div>
         )}
       </Modal>
+
+      {/* Repair Empty Packs Progress Overlay */}
+      {repairProgress && (
+        <div className="fixed inset-0 z-[100] bg-background/90 backdrop-blur-xl flex flex-col items-center justify-center space-y-6 animate-in fade-in duration-300 p-6">
+          <div className="relative">
+            <div className="absolute inset-0 bg-amber-500/20 blur-[60px] rounded-full animate-pulse" />
+            <div className="relative bg-card/60 p-8 rounded-[3rem] border border-amber-500/20 shadow-2xl backdrop-blur-3xl">
+              <Wrench className="text-amber-400 animate-pulse" size={60} />
+            </div>
+          </div>
+          <div className="text-center space-y-2 max-w-md">
+            <h3 className="text-2xl font-black text-white uppercase tracking-tight">Repairing Empty Packs</h3>
+            <p className="text-amber-300 text-xs font-bold uppercase tracking-widest">{repairProgress.message}</p>
+          </div>
+          <div className="w-full max-w-md space-y-2">
+            <div className="flex items-center justify-between text-[10px] font-black text-textSec uppercase tracking-widest px-1">
+              <span>{repairProgress.current} / {repairProgress.total}</span>
+              <span className="text-amber-400">{Math.round((repairProgress.current / Math.max(1, repairProgress.total)) * 100)}%</span>
+            </div>
+            <div className="w-full bg-white/5 h-3 rounded-full overflow-hidden border border-white/5 p-1">
+              <div
+                className="h-full bg-gradient-to-r from-amber-500 to-orange-500 rounded-full transition-all duration-500"
+                style={{ width: `${(repairProgress.current / Math.max(1, repairProgress.total)) * 100}%` }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Processing Overlay */}
       {
