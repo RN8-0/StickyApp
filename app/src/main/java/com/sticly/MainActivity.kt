@@ -138,6 +138,7 @@ class MainActivity : AppCompatActivity() {
     private var aiGeneratedBitmap: Bitmap? = null
     private var aiRawBitmap: Bitmap? = null
     private var aiGenerateJob: Job? = null
+    private var aiLastPrompt: String = ""
     private val aiGenerateQueue = java.util.concurrent.ConcurrentLinkedQueue<String>()
     private var aiActiveGenerations = java.util.concurrent.atomic.AtomicInteger(0)
     private val AI_MAX_QUEUE = 4
@@ -401,6 +402,12 @@ class MainActivity : AppCompatActivity() {
         } else {
             // Show loading overlay — hidden by showContent() when first data arrives
             loadingOverlay.visibility = View.VISIBLE
+            // Safety timeout: if loading takes > 12s, show content anyway to prevent "app won't load" rejection
+            loadingOverlay.postDelayed({
+                if (loadingOverlay.visibility == View.VISIBLE) {
+                    showContent()
+                }
+            }, 12_000)
         }
 
         // Show blocking bottom sheet if no internet
@@ -435,16 +442,16 @@ class MainActivity : AppCompatActivity() {
             val deviceIdForFcm = PreferencesHelper.getDeviceId(this)
             if (deviceIdForFcm.isNotBlank()) {
                 val safeTopic = "user_${deviceIdForFcm.replace(Regex("[^a-zA-Z0-9_-]"), "_")}"
-                FirebaseMessaging.getInstance().subscribeToTopic(safeTopic)
+                try { FirebaseMessaging.getInstance().subscribeToTopic(safeTopic) } catch (_: Exception) {}
             }
-            PreferencesHelper.restorePocketBaseAuth(this)
-            PushTokenManager.refreshAndSync(this)
+            try { PreferencesHelper.restorePocketBaseAuth(this) } catch (_: Exception) {}
+            try { PushTokenManager.refreshAndSync(this) } catch (_: Exception) {}
 
             // Kullanıcı giriş yapmışsa Firebase ile senkronize et (e-posta dahil)
             val currentUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
             if (currentUser != null) {
-                PreferencesHelper.syncUserData(this, currentUser.uid)
-                PreferencesHelper.startRealtimeSync(this, currentUser.uid)
+                try { PreferencesHelper.syncUserData(this, currentUser.uid) } catch (_: Exception) {}
+                try { PreferencesHelper.startRealtimeSync(this, currentUser.uid) } catch (_: Exception) {}
             }
             syncPremiumStatus {
                 updateBottomNavUI()
@@ -987,6 +994,7 @@ class MainActivity : AppCompatActivity() {
         // Style chips removed — single high-quality sticker style
         val aiBtnInspireMe = findViewById<View>(R.id.aiBtnInspireMe)
         val aiBtnClosePreview = findViewById<ImageView>(R.id.aiBtnClosePreview)
+        val aiBtnReport = findViewById<MaterialButton>(R.id.aiBtnReport)
         fun updateAiDailyCounter() {
             val remaining = aiGetRemainingCount()
             aiTvDailyCounter?.text = if (remaining < 0) {
@@ -1076,6 +1084,7 @@ class MainActivity : AppCompatActivity() {
                         val scaledBmp = Bitmap.createScaledBitmap(bitmap, 512, 512, true)
                         aiRawBitmap = scaledBmp
                         aiGeneratedBitmap = scaledBmp
+                        aiLastPrompt = queuedPrompt
 
                         val savedPath = aiSaveToHistory(scaledBmp, queuedPrompt)
 
@@ -1085,6 +1094,7 @@ class MainActivity : AppCompatActivity() {
                             aiEditButtons?.visibility = View.VISIBLE
                             aiBtnAddToPack?.visibility = View.VISIBLE
                             aiBtnClosePreview?.visibility = View.VISIBLE
+                            aiBtnReport?.visibility = View.VISIBLE
                             aiIncrementCount()
                             updateAiDailyCounter()
                             aiContentContainer?.post { aiLoadHistory() }
@@ -1145,6 +1155,8 @@ class MainActivity : AppCompatActivity() {
             aiShowPackPickerDialog()
         }
 
+        aiBtnReport?.setOnClickListener { aiShowReportDialog() }
+
         // Inspire Me: DeepSeek generates a random creative prompt
         aiBtnInspireMe?.setOnClickListener {
             aiBtnInspireMe.isEnabled = false
@@ -1166,6 +1178,7 @@ class MainActivity : AppCompatActivity() {
             aiEditButtons?.visibility = View.GONE
             aiBtnAddToPack?.visibility = View.GONE
             aiBtnClosePreview?.visibility = View.GONE
+            aiBtnReport?.visibility = View.GONE
             findViewById<TextView>(R.id.aiTvPromptDisplay)?.visibility = View.GONE
             aiRawBitmap = null
             aiGeneratedBitmap = null
@@ -1623,6 +1636,68 @@ Rules:
         }
     }
 
+    // ─── AI Report ──────────────────────────────────────────────────────
+
+    private fun aiShowReportDialog() {
+        val reportView = layoutInflater.inflate(R.layout.dialog_report, null)
+        val reasons = intArrayOf(
+            R.string.ai_report_offensive, R.string.ai_report_inappropriate,
+            R.string.ai_report_hate, R.string.ai_report_violence,
+            R.string.ai_report_spam, R.string.ai_report_other
+        )
+        val optionIds = intArrayOf(
+            R.id.reportOption1, R.id.reportOption2, R.id.reportOption3,
+            R.id.reportOption4, R.id.reportOption5, R.id.reportOption6
+        )
+
+        val dialog = AlertDialog.Builder(this, R.style.MaterialAlertDialogTheme)
+            .setView(reportView)
+            .setNegativeButton(android.R.string.cancel, null)
+            .create()
+
+        for (i in reasons.indices) {
+            reportView.findViewById<View>(optionIds[i])?.setOnClickListener {
+                dialog.dismiss()
+                aiSendReport(getString(reasons[i]))
+            }
+        }
+
+        dialog.show()
+    }
+
+    private fun aiSendReport(reason: String) {
+        lifecycleScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    val workerUrl = PocketBaseHelper.WORKER_URL
+                    val body = JSONObject().apply {
+                        put("type", "ai_report")
+                        put("reason", reason)
+                        put("prompt", aiLastPrompt)
+                        put("style", "")
+                        put("timestamp", System.currentTimeMillis())
+                    }
+                    val conn = URL("$workerUrl/api/report").openConnection() as HttpURLConnection
+                    conn.requestMethod = "POST"
+                    conn.setRequestProperty("Content-Type", "application/json")
+                    conn.connectTimeout = 8000
+                    conn.readTimeout = 8000
+                    conn.doOutput = true
+                    OutputStreamWriter(conn.outputStream).use { it.write(body.toString()) }
+                    conn.responseCode
+                    conn.disconnect()
+                }
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@MainActivity, R.string.ai_report_sent, Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@MainActivity, R.string.ai_report_error, Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
     // ─── AI History ─────────────────────────────────────────────────────
 
     private fun aiGetHistoryDir(): java.io.File {
@@ -1786,6 +1861,7 @@ Rules:
         val btnAddToPack = sheetView.findViewById<com.google.android.material.button.MaterialButton>(R.id.btnAddToPack)
         val btnRegenerate = sheetView.findViewById<com.google.android.material.button.MaterialButton>(R.id.btnRegenerate)
         val btnDelete = sheetView.findViewById<com.google.android.material.button.MaterialButton>(R.id.btnDelete)
+        val btnReportSheet = sheetView.findViewById<com.google.android.material.button.MaterialButton>(R.id.btnReport)
 
         // Edit — open sticker editor with this image
         btnEdit?.setOnClickListener {
@@ -1835,6 +1911,12 @@ Rules:
                 aiDeleteHistoryItem(item)
                 dialog.dismiss()
             }
+        }
+
+        // Report
+        btnReportSheet?.setOnClickListener {
+            aiLastPrompt = item.prompt
+            aiShowReportDialog()
         }
 
         dialog.setContentView(sheetView)
@@ -3569,8 +3651,7 @@ Rules:
 
         noInternetDialog = com.google.android.material.bottomsheet.BottomSheetDialog(this, R.style.RoundedBottomSheetDialog).apply {
             setContentView(R.layout.bottom_sheet_no_internet)
-            setCancelable(false)
-            setCanceledOnTouchOutside(false)
+            setCancelable(true)
 
             findViewById<View>(R.id.btnRetryConnection)?.setOnClickListener {
                 if (NetworkUtils.isOnline(this@MainActivity)) {

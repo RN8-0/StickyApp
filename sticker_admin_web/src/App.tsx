@@ -1181,6 +1181,8 @@ function App() {
   // Silent background repair: runs after every fetchPacks. No alerts, no confirms,
   // no progress UI — just patches PocketBase records that are missing name/tray/active
   // and returns the updated packs so the UI shows them immediately.
+  // Also stamps created_at = NOW on every repair so the admin's "NEW" filter and any
+  // Android fallback that reads created_at surfaces the repaired pack as fresh.
   const autoRepairBrokenPacks = async (packs: StickerPack[]): Promise<StickerPack[]> => {
     const broken = packs.filter(p => {
       const noName = !(p.name && String(p.name).trim());
@@ -1192,6 +1194,7 @@ function App() {
 
     console.info(`[AUTO_REPAIR] Found ${broken.length} broken pack(s), repairing silently...`);
     const updated: StickerPack[] = [];
+    const nowIso = new Date().toISOString();
 
     for (const pack of broken) {
       const collection = (pack as any)._collection || (pack.is_premium ? 'premium_stickers' : 'stickers');
@@ -1226,6 +1229,9 @@ function App() {
 
         if (Object.keys(update).length === 0) continue;
 
+        // Always stamp a fresh created_at when a pack was actually broken — these were
+        // botched imports, so treat the repair moment as the effective creation time.
+        update.created_at = nowIso;
         update.image_data_version = (Number(pack.image_data_version || 0) + 1).toString();
         const saved = await pb.collection(collection).update(pack.id, update);
         updated.push({ ...pack, ...update, ...saved } as StickerPack);

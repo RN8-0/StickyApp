@@ -207,6 +207,24 @@
 
         </LinearLayout>
 
+        <!-- Report flag button -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnReport"
+            style="@style/Widget.MaterialComponents.Button.TextButton"
+            android:layout_width="wrap_content"
+            android:layout_height="32dp"
+            android:layout_gravity="center"
+            android:layout_marginTop="8dp"
+            android:text="@string/ai_report"
+            android:textAllCaps="false"
+            android:textSize="11sp"
+            android:textColor="@color/text_secondary"
+            app:icon="@drawable/ic_report_flag"
+            app:iconGravity="textStart"
+            app:iconTint="@color/text_secondary"
+            app:iconSize="14dp"
+            app:iconPadding="3dp" />
+
     </LinearLayout>
 
 </LinearLayout>

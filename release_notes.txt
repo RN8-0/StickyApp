@@ -1,75 +1,75 @@
 <tr-TR>
-⚡ Sticly v4.7.0 — Hızlı Başlatma & Performans Güncellemesi!
+⚡ Sticly v4.9.0 — Hızlı Başlatma & Performans Güncellemesi!
 • 🚀 Soğuk başlatma süresi büyük ölçüde azaltıldı, ana sayfa anında yükleniyor.
 • 📦 Lokal veri ön yükleme ile çıkartma paketleri ilk karede gösteriliyor.
 • 🧹 Ana thread bloklaması giderildi, uygulama açılışı hızlandı.
 • 🐛 Küçük hata düzeltmeleri ve kararlılık iyileştirmeleri.
 </tr-TR>
 <ar>
-⚡ Sticly v4.7.0 — تحديث سرعة التشغيل والأداء!
+⚡ Sticly v4.9.0 — تحديث سرعة التشغيل والأداء!
 • 🚀 تقليل وقت التشغيل البارد بشكل كبير، الصفحة الرئيسية تُحمّل فوراً.
 • 📦 عرض حزم الملصقات فوراً مع التحميل المسبق للبيانات المحلية.
 • 🧹 إزالة حظر الخيط الرئيسي، تسريع فتح التطبيق.
 • 🐛 إصلاحات صغيرة وتحسينات في الاستقرار.
 </ar>
 <de-DE>
-⚡ Sticly v4.7.0 — Schnellstart & Leistungsupdate!
+⚡ Sticly v4.9.0 — Schnellstart & Leistungsupdate!
 • 🚀 Kaltstartzeit drastisch reduziert, Startseite lädt sofort.
 • 📦 Stickerpakete werden durch lokales Preloading im ersten Frame angezeigt.
 • 🧹 Haupt-Thread-Blockierung beseitigt, App-Start beschleunigt.
 • 🐛 Kleinere Fehlerbehebungen und Stabilitätsverbesserungen.
 </de-DE>
 <en-US>
-⚡ Sticly v4.7.0 — Fast Launch & Performance Update!
+⚡ Sticly v4.9.0 — Fast Launch & Performance Update!
 • 🚀 Cold start time drastically reduced, home screen loads instantly.
 • 📦 Sticker packs displayed immediately via local data preloading.
 • 🧹 Main thread blocking removed, app startup accelerated.
 • 🐛 Minor bug fixes and stability improvements.
 </en-US>
 <es-419>
-⚡ Sticly v4.7.0 — ¡Actualización de arranque rápido y rendimiento!
+⚡ Sticly v4.9.0 — ¡Actualización de arranque rápido y rendimiento!
 • 🚀 Tiempo de arranque en frío drásticamente reducido, pantalla principal carga al instante.
 • 📦 Paquetes de stickers mostrados inmediatamente con precarga de datos locales.
 • 🧹 Eliminado el bloqueo del hilo principal, inicio de la app acelerado.
 • 🐛 Correcciones menores y mejoras de estabilidad.
 </es-419>
 <fil>
-⚡ Sticly v4.7.0 — Mabilis na Paglunsad at Pag-update ng Pagganap!
+⚡ Sticly v4.9.0 — Mabilis na Paglunsad at Pag-update ng Pagganap!
 • 🚀 Lubos na binawasan ang cold start time, agad na naglo-load ang home screen.
 • 📦 Agad na ipinapakita ang mga sticker pack sa pamamagitan ng local data preloading.
 • 🧹 Inalis ang main thread blocking, pinabilis ang pagsisimula ng app.
 • 🐛 Mga maliliit na pag-aayos at pagpapahusay ng katatagan.
 </fil>
 <fr-FR>
-⚡ Sticly v4.7.0 — Démarrage rapide et mise à jour des performances !
+⚡ Sticly v4.9.0 — Démarrage rapide et mise à jour des performances !
 • 🚀 Temps de démarrage à froid considérablement réduit, l'écran d'accueil se charge instantanément.
 • 📦 Packs de stickers affichés immédiatement grâce au préchargement des données locales.
 • 🧹 Blocage du thread principal supprimé, démarrage de l'application accéléré.
 • 🐛 Corrections mineures et améliorations de la stabilité.
 </fr-FR>
 <hi-IN>
-⚡ Sticly v4.7.0 — तेज़ लॉन्च और प्रदर्शन अपडेट!
+⚡ Sticly v4.9.0 — तेज़ लॉन्च और प्रदर्शन अपडेट!
 • 🚀 कोल्ड स्टार्ट समय भारी रूप से कम, होम स्क्रीन तुरंत लोड होती है।
 • 📦 स्थानीय डेटा प्रीलोडिंग के माध्यम से स्टिकर पैक तुरंत दिखाए जाते हैं।
 • 🧹 मुख्य थ्रेड अवरोध हटाया गया, ऐप स्टार्टअप तेज़ किया गया।
 • 🐛 छोटे बग फिक्स और स्थिरता सुधार।
 </hi-IN>
 <id>
-⚡ Sticly v4.7.0 — Peluncuran Cepat & Pembaruan Kinerja!
+⚡ Sticly v4.9.0 — Peluncuran Cepat & Pembaruan Kinerja!
 • 🚀 Waktu cold start berkurang drastis, layar utama langsung termuat.
 • 📦 Paket stiker langsung ditampilkan melalui pramuat data lokal.
 • 🧹 Pemblokiran thread utama dihapus, startup aplikasi dipercepat.
 • 🐛 Perbaikan bug kecil dan peningkatan stabilitas.
 </id>
 <it-IT>
-⚡ Sticly v4.7.0 — Avvio rapido e aggiornamento delle prestazioni!
+⚡ Sticly v4.9.0 — Avvio rapido e aggiornamento delle prestazioni!
 • 🚀 Tempo di avvio a freddo drasticamente ridotto, schermata principale caricata all'istante.
 • 📦 Pacchetti sticker mostrati immediatamente grazie al precaricamento dei dati locali.
 • 🧹 Blocco del thread principale rimosso, avvio dell'app accelerato.
 • 🐛 Correzioni minori e miglioramenti della stabilità.
 </it-IT>
 <ja-JP>
-⚡ Sticly v4.7.0 — 高速起動とパフォーマンスアップデート！
+⚡ Sticly v4.9.0 — 高速起動とパフォーマンスアップデート！
 • 🚀 コールドスタート時間を大幅に短縮、ホーム画面が即座に読み込まれます。
 • 📦 ローカルデータのプリロードにより、ステッカーパックがすぐに表示されます。
 • 🧹 メインスレッドのブロッキングを解消し、アプリの起動を高速化しました。
@@ -83,35 +83,35 @@
 • 🐛 사소한 버그 수정 및 안정성 개선.
 </ko-KR>
 <pt-BR>
-⚡ Sticly v4.7.0 — Inicialização rápida e atualização de desempenho!
+⚡ Sticly v4.9.0 — Inicialização rápida e atualização de desempenho!
 • 🚀 Tempo de inicialização a frio drasticamente reduzido, tela inicial carrega instantaneamente.
 • 📦 Pacotes de stickers exibidos imediatamente via pré-carregamento de dados locais.
 • 🧹 Bloqueio da thread principal removido, inicialização do app acelerada.
 • 🐛 Pequenas correções de bugs e melhorias de estabilidade.
 </pt-BR>
 <ru-RU>
-⚡ Sticly v4.7.0 — Быстрый запуск и обновление производительности!
+⚡ Sticly v4.9.0 — Быстрый запуск и обновление производительности!
 • 🚀 Время холодного старта значительно сокращено, главный экран загружается мгновенно.
 • 📦 Стикер-паки отображаются сразу благодаря предзагрузке локальных данных.
 • 🧹 Устранена блокировка главного потока, запуск приложения ускорен.
 • 🐛 Мелкие исправления ошибок и улучшения стабильности.
 </ru-RU>
 <th>
-⚡ Sticly v4.7.0 — อัปเดตการเริ่มต้นเร็วและประสิทธิภาพ!
+⚡ Sticly v4.9.0 — อัปเดตการเริ่มต้นเร็วและประสิทธิภาพ!
 • 🚀 ลดเวลา cold start ลงอย่างมาก หน้าหลักโหลดทันที
 • 📦 แสดงแพ็กสติกเกอร์ทันทีผ่านการโหลดข้อมูลล่วงหน้าในเครื่อง
 • 🧹 ลบการบล็อกเธรดหลัก เร่งการเริ่มต้นแอป
 • 🐛 แก้ไขข้อบกพร่องเล็กน้อยและปรับปรุงความเสถียร
 </th>
 <vi>
-⚡ Sticly v4.7.0 — Cập nhật khởi động nhanh & hiệu suất!
+⚡ Sticly v4.9.0 — Cập nhật khởi động nhanh & hiệu suất!
 • 🚀 Giảm đáng kể thời gian khởi động nguội, màn hình chính tải ngay lập tức.
 • 📦 Gói sticker hiển thị ngay nhờ tải trước dữ liệu cục bộ.
 • 🧹 Loại bỏ chặn luồng chính, tăng tốc khởi động ứng dụng.
 • 🐛 Sửa lỗi nhỏ và cải thiện độ ổn định.
 </vi>
 <zh-CN>
-⚡ Sticly v4.7.0 — 快速启动与性能更新！
+⚡ Sticly v4.9.0 — 快速启动与性能更新！
 • 🚀 冷启动时间大幅缩短，主页即时加载。
 • 📦 通过本地数据预加载，贴纸包立即显示。
 • 🧹 移除主线程阻塞，加速应用启动。

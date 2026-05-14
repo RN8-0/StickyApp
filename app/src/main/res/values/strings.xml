@@ -727,6 +727,18 @@
     <string name="google_account_connected">Your account is connected with Google</string>
     <string name="notification_channel_desc">Notifications about new sticker packs</string>
     <string name="ai_loading_hint">You can explore other stickers while this runs in the background</string>
+    <string name="ai_report">Report</string>
+    <string name="ai_report_title">Report AI-Generated Content</string>
+    <string name="ai_report_message">If this sticker is offensive or inappropriate, please let us know. Your report helps us improve content safety.</string>
+    <string name="ai_report_reason_hint">Describe the issue (optional)</string>
+    <string name="ai_report_offensive">Offensive content</string>
+    <string name="ai_report_inappropriate">Inappropriate content</string>
+    <string name="ai_report_hate">Hate speech or harassment</string>
+    <string name="ai_report_violence">Violence or gore</string>
+    <string name="ai_report_spam">Spam or misleading</string>
+    <string name="ai_report_other">Other</string>
+    <string name="ai_report_sent">Thank you! Your report has been submitted.</string>
+    <string name="ai_report_error">Report could not be sent. Please try again.</string>
 
     <!-- Profile Tab -->
     <string name="profile">Profile</string>

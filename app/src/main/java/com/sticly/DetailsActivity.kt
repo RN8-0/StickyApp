@@ -38,6 +38,9 @@ import kotlinx.coroutines.*
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.io.OutputStreamWriter
+import java.net.HttpURLConnection
+import java.net.URL
 import java.util.concurrent.atomic.AtomicInteger
 import android.animation.ValueAnimator
 import android.animation.ObjectAnimator
@@ -1027,6 +1030,11 @@ class DetailsActivity : AppCompatActivity() {
 
         commentBtn?.setOnClickListener {
             showCommentsSheet(pack)
+        }
+
+        // Report button in publisher strip (next to like/comment)
+        findViewById<LinearLayout>(R.id.btnPackReport)?.setOnClickListener {
+            showReportDialog(pack)
         }
 
         lifecycleScope.launch {
@@ -2870,6 +2878,67 @@ class DetailsActivity : AppCompatActivity() {
         snackbar.setBackgroundTint(ContextCompat.getColor(this, R.color.card_bg))
         snackbar.setTextColor(ContextCompat.getColor(this, R.color.text_primary))
         snackbar.show()
+    }
+
+    private fun showReportDialog(pack: Pack) {
+        val reportView = layoutInflater.inflate(R.layout.dialog_report, null)
+        val reasons = intArrayOf(
+            R.string.ai_report_offensive, R.string.ai_report_inappropriate,
+            R.string.ai_report_hate, R.string.ai_report_violence,
+            R.string.ai_report_spam, R.string.ai_report_other
+        )
+        val optionIds = intArrayOf(
+            R.id.reportOption1, R.id.reportOption2, R.id.reportOption3,
+            R.id.reportOption4, R.id.reportOption5, R.id.reportOption6
+        )
+
+        val dialog = AlertDialog.Builder(this, R.style.MaterialAlertDialogTheme)
+            .setView(reportView)
+            .setNegativeButton(android.R.string.cancel, null)
+            .create()
+
+        for (i in reasons.indices) {
+            reportView.findViewById<View>(optionIds[i])?.setOnClickListener {
+                dialog.dismiss()
+                aiSendReport(getString(reasons[i]), pack)
+            }
+        }
+
+        dialog.show()
+    }
+
+    private fun aiSendReport(reason: String, pack: Pack) {
+        lifecycleScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    val workerUrl = PocketBaseHelper.WORKER_URL
+                    val body = JSONObject().apply {
+                        put("type", "ai_report")
+                        put("reason", reason)
+                        put("pack_id", pack.id)
+                        put("pack_name", pack.localizedName)
+                        put("pack_image", pack.trayUrl)
+                        put("timestamp", System.currentTimeMillis())
+                    }
+                    val conn = URL("$workerUrl/api/report").openConnection() as HttpURLConnection
+                    conn.requestMethod = "POST"
+                    conn.setRequestProperty("Content-Type", "application/json")
+                    conn.connectTimeout = 8000
+                    conn.readTimeout = 8000
+                    conn.doOutput = true
+                    OutputStreamWriter(conn.outputStream).use { it.write(body.toString()) }
+                    conn.responseCode
+                    conn.disconnect()
+                }
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@DetailsActivity, R.string.ai_report_sent, Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@DetailsActivity, R.string.ai_report_error, Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
     }
 
     override fun onDestroy() {

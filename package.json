@@ -7,5 +7,10 @@
     "sticker_admin_web",
     "sticky-worker",
     "store-screenshots"
-  ]
+  ],
+  "dependencies": {
+    "express": "^5.2.1",
+    "puppeteer-extra": "^3.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2"
+  }
 }

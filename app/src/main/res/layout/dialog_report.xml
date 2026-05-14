@@ -1,0 +1,259 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="24dp"
+    android:background="@drawable/bg_dialog_report">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/ai_report_title"
+        android:textSize="20sp"
+        android:textStyle="bold"
+        android:textColor="#1A1A2E"
+        android:layout_marginBottom="6dp" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/ai_report_message"
+        android:textSize="13sp"
+        android:textColor="#666680"
+        android:layout_marginBottom="20dp"
+        android:lineSpacingExtra="3dp" />
+
+    <LinearLayout
+        android:id="@+id/reportOption1"
+        android:layout_width="match_parent"
+        android:layout_height="52dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:background="@drawable/bg_report_option"
+        android:paddingHorizontal="16dp"
+        android:layout_marginBottom="8dp"
+        android:clickable="true"
+        android:focusable="true"
+        android:foreground="?attr/selectableItemBackground">
+
+        <TextView
+            android:layout_width="38dp"
+            android:layout_height="38dp"
+            android:gravity="center"
+            android:text="🚫"
+            android:textSize="20sp"
+            android:background="@drawable/bg_report_icon_circle"
+            android:layout_marginEnd="14dp" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/ai_report_offensive"
+            android:textSize="14sp"
+            android:textColor="#1A1A2E" />
+
+        <ImageView
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:src="@drawable/ic_chevron_right"
+            app:tint="#9999AA" />
+
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/reportOption2"
+        android:layout_width="match_parent"
+        android:layout_height="52dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:background="@drawable/bg_report_option"
+        android:paddingHorizontal="16dp"
+        android:layout_marginBottom="8dp"
+        android:clickable="true"
+        android:focusable="true"
+        android:foreground="?attr/selectableItemBackground">
+
+        <TextView
+            android:layout_width="38dp"
+            android:layout_height="38dp"
+            android:gravity="center"
+            android:text="⚠️"
+            android:textSize="20sp"
+            android:background="@drawable/bg_report_icon_circle"
+            android:layout_marginEnd="14dp" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/ai_report_inappropriate"
+            android:textSize="14sp"
+            android:textColor="#1A1A2E" />
+
+        <ImageView
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:src="@drawable/ic_chevron_right"
+            app:tint="#9999AA" />
+
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/reportOption3"
+        android:layout_width="match_parent"
+        android:layout_height="52dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:background="@drawable/bg_report_option"
+        android:paddingHorizontal="16dp"
+        android:layout_marginBottom="8dp"
+        android:clickable="true"
+        android:focusable="true"
+        android:foreground="?attr/selectableItemBackground">
+
+        <TextView
+            android:layout_width="38dp"
+            android:layout_height="38dp"
+            android:gravity="center"
+            android:text="💬"
+            android:textSize="20sp"
+            android:background="@drawable/bg_report_icon_circle"
+            android:layout_marginEnd="14dp" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/ai_report_hate"
+            android:textSize="14sp"
+            android:textColor="#1A1A2E" />
+
+        <ImageView
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:src="@drawable/ic_chevron_right"
+            app:tint="#9999AA" />
+
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/reportOption4"
+        android:layout_width="match_parent"
+        android:layout_height="52dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:background="@drawable/bg_report_option"
+        android:paddingHorizontal="16dp"
+        android:layout_marginBottom="8dp"
+        android:clickable="true"
+        android:focusable="true"
+        android:foreground="?attr/selectableItemBackground">
+
+        <TextView
+            android:layout_width="38dp"
+            android:layout_height="38dp"
+            android:gravity="center"
+            android:text="🩸"
+            android:textSize="20sp"
+            android:background="@drawable/bg_report_icon_circle"
+            android:layout_marginEnd="14dp" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/ai_report_violence"
+            android:textSize="14sp"
+            android:textColor="#1A1A2E" />
+
+        <ImageView
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:src="@drawable/ic_chevron_right"
+            app:tint="#9999AA" />
+
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/reportOption5"
+        android:layout_width="match_parent"
+        android:layout_height="52dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:background="@drawable/bg_report_option"
+        android:paddingHorizontal="16dp"
+        android:layout_marginBottom="8dp"
+        android:clickable="true"
+        android:focusable="true"
+        android:foreground="?attr/selectableItemBackground">
+
+        <TextView
+            android:layout_width="38dp"
+            android:layout_height="38dp"
+            android:gravity="center"
+            android:text="📢"
+            android:textSize="20sp"
+            android:background="@drawable/bg_report_icon_circle"
+            android:layout_marginEnd="14dp" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/ai_report_spam"
+            android:textSize="14sp"
+            android:textColor="#1A1A2E" />
+
+        <ImageView
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:src="@drawable/ic_chevron_right"
+            app:tint="#9999AA" />
+
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/reportOption6"
+        android:layout_width="match_parent"
+        android:layout_height="52dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:background="@drawable/bg_report_option"
+        android:paddingHorizontal="16dp"
+        android:layout_marginBottom="4dp"
+        android:clickable="true"
+        android:focusable="true"
+        android:foreground="?attr/selectableItemBackground">
+
+        <TextView
+            android:layout_width="38dp"
+            android:layout_height="38dp"
+            android:gravity="center"
+            android:text="⋯"
+            android:textSize="22sp"
+            android:textStyle="bold"
+            android:textColor="#666680"
+            android:background="@drawable/bg_report_icon_circle"
+            android:layout_marginEnd="14dp" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/ai_report_other"
+            android:textSize="14sp"
+            android:textColor="#1A1A2E" />
+
+        <ImageView
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:src="@drawable/ic_chevron_right"
+            app:tint="#9999AA" />
+
+    </LinearLayout>
+
+</LinearLayout>
+

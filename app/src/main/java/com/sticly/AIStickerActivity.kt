@@ -48,6 +48,7 @@ class AIStickerActivity : AppCompatActivity() {
     private lateinit var actionButtons: View
     private lateinit var tvError: TextView
     private lateinit var tvDailyCounter: TextView
+    private lateinit var btnReport: MaterialButton
     private lateinit var styleChipGroup: ChipGroup
     private lateinit var premiumUpsellCard: CardView
     private lateinit var bgRemovalRow: View
@@ -57,6 +58,8 @@ class AIStickerActivity : AppCompatActivity() {
     private var generatedBitmap: Bitmap? = null
     private var rawBitmap: Bitmap? = null
     private var generateJob: Job? = null
+    private var lastPrompt: String = ""
+    private var lastStyle: String = ""
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -82,6 +85,7 @@ class AIStickerActivity : AppCompatActivity() {
         bgRemovalRow = findViewById(R.id.bgRemovalRow)
         switchRemoveBg = findViewById(R.id.switchRemoveBg)
         exampleSection = findViewById(R.id.exampleSection)
+        btnReport = findViewById(R.id.btnReport)
 
         findViewById<ImageButton>(R.id.btnBack).setOnClickListener { finish() }
 
@@ -103,6 +107,8 @@ class AIStickerActivity : AppCompatActivity() {
         findViewById<MaterialButton>(R.id.btnSaveSticker).setOnClickListener {
             showPackPickerDialog()
         }
+
+        btnReport.setOnClickListener { showReportDialog() }
 
         switchRemoveBg.setOnCheckedChangeListener { _, isChecked ->
             val bmp = rawBitmap ?: return@setOnCheckedChangeListener
@@ -231,6 +237,8 @@ class AIStickerActivity : AppCompatActivity() {
 
                 updateStatus(getString(R.string.ai_optimizing_prompt))
                 val style = getSelectedStyle()
+                lastPrompt = prompt
+                lastStyle = style
                 val optimizedPrompt = optimizePromptWithDeepSeek(prompt, style)
 
                 updateStatus(getString(R.string.ai_generating_image))
@@ -605,6 +613,66 @@ Rules:
             }
             .setNegativeButton(android.R.string.cancel, null)
             .show()
+    }
+
+    private fun showReportDialog() {
+        val reportView = layoutInflater.inflate(R.layout.dialog_report, null)
+        val reasons = arrayOf(
+            R.string.ai_report_offensive, R.string.ai_report_inappropriate,
+            R.string.ai_report_hate, R.string.ai_report_violence,
+            R.string.ai_report_spam, R.string.ai_report_other
+        )
+        val optionIds = intArrayOf(
+            R.id.reportOption1, R.id.reportOption2, R.id.reportOption3,
+            R.id.reportOption4, R.id.reportOption5, R.id.reportOption6
+        )
+
+        val dialog = AlertDialog.Builder(this, R.style.MaterialAlertDialogTheme)
+            .setView(reportView)
+            .setNegativeButton(android.R.string.cancel, null)
+            .create()
+
+        for (i in reasons.indices) {
+            reportView.findViewById<View>(optionIds[i])?.setOnClickListener {
+                dialog.dismiss()
+                sendReport(getString(reasons[i]))
+            }
+        }
+
+        dialog.show()
+    }
+
+    private fun sendReport(reason: String) {
+        lifecycleScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    val workerUrl = PocketBaseHelper.WORKER_URL
+                    val body = JSONObject().apply {
+                        put("type", "ai_report")
+                        put("reason", reason)
+                        put("prompt", lastPrompt)
+                        put("style", lastStyle)
+                        put("timestamp", System.currentTimeMillis())
+                    }
+                    val conn = URL("$workerUrl/api/report").openConnection() as HttpURLConnection
+                    conn.requestMethod = "POST"
+                    conn.setRequestProperty("Content-Type", "application/json")
+                    conn.connectTimeout = 8000
+                    conn.readTimeout = 8000
+                    conn.doOutput = true
+                    OutputStreamWriter(conn.outputStream).use { it.write(body.toString()) }
+                    conn.responseCode
+                    conn.disconnect()
+                }
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@AIStickerActivity, R.string.ai_report_sent, Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@AIStickerActivity, R.string.ai_report_error, Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
     }
 
     override fun onDestroy() {

@@ -445,6 +445,24 @@
                         android:textSize="13sp"
                         android:layout_marginTop="8dp" />
 
+                    <!-- Report flag button -->
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnReport"
+                        style="@style/Widget.MaterialComponents.Button.TextButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="36dp"
+                        android:layout_gravity="center"
+                        android:layout_marginTop="12dp"
+                        android:text="@string/ai_report"
+                        android:textAllCaps="false"
+                        android:textSize="12sp"
+                        android:textColor="@color/text_secondary"
+                        app:icon="@drawable/ic_report_flag"
+                        app:iconGravity="textStart"
+                        app:iconTint="@color/text_secondary"
+                        app:iconSize="16dp"
+                        app:iconPadding="4dp" />
+
                 </LinearLayout>
 
             </androidx.cardview.widget.CardView>
