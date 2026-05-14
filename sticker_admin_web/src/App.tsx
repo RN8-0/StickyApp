@@ -49,7 +49,6 @@ import {
   Flag,
   UserPlus,
   Inbox,
-  Wrench,
 } from 'lucide-react';
 import { translateTextAllLanguages, TARGET_LANGUAGES } from './utils/translator';
 import {
@@ -295,7 +294,6 @@ function App() {
 
   const [packs, setPacks] = useState<StickerPack[]>([]);
   const [loading, setLoading] = useState(true);
-  const [repairProgress, setRepairProgress] = useState<{ current: number; total: number; message: string } | null>(null);
   const [selectedPack, setSelectedPack] = useState<StickerPack | null>(null);
   const [selectedStickerIds, setSelectedStickerIds] = useState<string[]>([]);
   const [isSelectionMode, setIsSelectionMode] = useState(false);
@@ -1163,7 +1161,15 @@ function App() {
         ...premiumRecords.map(r => mapPbRecord(r, true)),
       ];
       console.info(`[Packs] ${allPacks.length} packs loaded`);
-      setPacks(allPacks.sort((a, b) => (a.name || '').localeCompare(b.name || '')));
+
+      // Auto-repair: silently fill empty name / tray / inactive on packs that have stickers
+      // so the Android app never sees record-id-as-name and Recently Added always picks them up.
+      const repaired = await autoRepairBrokenPacks(allPacks);
+      const finalPacks = repaired.length > 0
+        ? allPacks.map(p => repaired.find(r => r.id === p.id) || p)
+        : allPacks;
+
+      setPacks(finalPacks.sort((a, b) => (a.name || '').localeCompare(b.name || '')));
     } catch (error: any) {
       console.error("Fetch error:", error);
       alert("Data Fetch Error: " + (error?.message || "Unknown error"));
@@ -1172,33 +1178,23 @@ function App() {
     }
   };
 
-  // Fills empty `name` / `tray_url` / `tray_image_file` across all published packs so the
-  // Android app stops falling back to the record id and the dashboard sidebar shows covers.
-  // Activates packs that have stickers but were left inactive after a partial import so they
-  // surface in the app's Recently Added section.
-  const repairEmptyPacks = async () => {
+  // Silent background repair: runs after every fetchPacks. No alerts, no confirms,
+  // no progress UI — just patches PocketBase records that are missing name/tray/active
+  // and returns the updated packs so the UI shows them immediately.
+  const autoRepairBrokenPacks = async (packs: StickerPack[]): Promise<StickerPack[]> => {
     const broken = packs.filter(p => {
       const noName = !(p.name && String(p.name).trim());
       const noTray = !(p.tray_url && String(p.tray_url).trim());
       const inactiveWithStickers = p.is_active === false && Array.isArray(p.stickers) && p.stickers.length > 0;
       return noName || noTray || inactiveWithStickers;
     });
+    if (broken.length === 0) return [];
 
-    if (broken.length === 0) {
-      alert('No empty packs to repair. All packs already have a name and cover.');
-      return;
-    }
-    if (!window.confirm(`Repair ${broken.length} pack(s) with missing name / cover / active flag? This bumps image_data_version so the Android app refetches them.`)) return;
+    console.info(`[AUTO_REPAIR] Found ${broken.length} broken pack(s), repairing silently...`);
+    const updated: StickerPack[] = [];
 
-    setRepairProgress({ current: 0, total: broken.length, message: 'Starting repair...' });
-    let fixed = 0;
-    let failed = 0;
-
-    for (let i = 0; i < broken.length; i++) {
-      const pack = broken[i];
+    for (const pack of broken) {
       const collection = (pack as any)._collection || (pack.is_premium ? 'premium_stickers' : 'stickers');
-      setRepairProgress({ current: i + 1, total: broken.length, message: `Repairing ${pack.id.slice(-6)}...` });
-
       try {
         const update: any = {};
         const firstSticker = Array.isArray(pack.stickers) ? (pack.stickers[0] as any) : null;
@@ -1231,17 +1227,15 @@ function App() {
         if (Object.keys(update).length === 0) continue;
 
         update.image_data_version = (Number(pack.image_data_version || 0) + 1).toString();
-        await pb.collection(collection).update(pack.id, update);
-        fixed++;
+        const saved = await pb.collection(collection).update(pack.id, update);
+        updated.push({ ...pack, ...update, ...saved } as StickerPack);
       } catch (err: any) {
-        console.error(`[REPAIR] ${pack.id} failed:`, err);
-        failed++;
+        console.warn(`[AUTO_REPAIR] ${pack.id} failed:`, err?.message || err);
       }
     }
 
-    setRepairProgress(null);
-    await fetchPacks();
-    alert(`Repair complete. Fixed: ${fixed}, Failed: ${failed}. The Android app may need a refresh to pick up the changes.`);
+    if (updated.length > 0) console.info(`[AUTO_REPAIR] ✓ Fixed ${updated.length}/${broken.length} pack(s)`);
+    return updated;
   };
 
   // ========== DRAFT MANAGEMENT ==========
@@ -3195,17 +3189,6 @@ function App() {
             <RefreshCcw size={18} className={cn("text-textSec group-hover:text-primary transition-colors", (loading || checkingSizes) && 'animate-spin text-primary')} />
           </button>
 
-          {activeTab === 'dashboard' && (
-            <button
-              onClick={repairEmptyPacks}
-              disabled={!!repairProgress || loading}
-              className="hidden sm:flex items-center gap-2 px-3 py-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/20 rounded-xl transition-all active:scale-95 disabled:opacity-50"
-              title="Fill missing name / cover for all packs and reactivate packs with stickers"
-            >
-              <Wrench size={16} />
-              <span className="text-[10px] font-black uppercase tracking-wider">Repair Empty</span>
-            </button>
-          )}
 
           <div className="w-px h-6 bg-white/10 mx-1 hidden md:block" />
 
@@ -7280,34 +7263,6 @@ function App() {
           </div>
         )}
       </Modal>
-
-      {/* Repair Empty Packs Progress Overlay */}
-      {repairProgress && (
-        <div className="fixed inset-0 z-[100] bg-background/90 backdrop-blur-xl flex flex-col items-center justify-center space-y-6 animate-in fade-in duration-300 p-6">
-          <div className="relative">
-            <div className="absolute inset-0 bg-amber-500/20 blur-[60px] rounded-full animate-pulse" />
-            <div className="relative bg-card/60 p-8 rounded-[3rem] border border-amber-500/20 shadow-2xl backdrop-blur-3xl">
-              <Wrench className="text-amber-400 animate-pulse" size={60} />
-            </div>
-          </div>
-          <div className="text-center space-y-2 max-w-md">
-            <h3 className="text-2xl font-black text-white uppercase tracking-tight">Repairing Empty Packs</h3>
-            <p className="text-amber-300 text-xs font-bold uppercase tracking-widest">{repairProgress.message}</p>
-          </div>
-          <div className="w-full max-w-md space-y-2">
-            <div className="flex items-center justify-between text-[10px] font-black text-textSec uppercase tracking-widest px-1">
-              <span>{repairProgress.current} / {repairProgress.total}</span>
-              <span className="text-amber-400">{Math.round((repairProgress.current / Math.max(1, repairProgress.total)) * 100)}%</span>
-            </div>
-            <div className="w-full bg-white/5 h-3 rounded-full overflow-hidden border border-white/5 p-1">
-              <div
-                className="h-full bg-gradient-to-r from-amber-500 to-orange-500 rounded-full transition-all duration-500"
-                style={{ width: `${(repairProgress.current / Math.max(1, repairProgress.total)) * 100}%` }}
-              />
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Processing Overlay */}
       {
