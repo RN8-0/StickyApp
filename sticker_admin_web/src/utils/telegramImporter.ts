@@ -869,6 +869,21 @@ export async function importTelegramPacks(
 
             batchProcessedNames.add(setName.toLowerCase());
 
+            // Pasting several pack links used to "crash after the first few packs":
+            // the long-lived FFmpeg WASM instance accumulates state/memory across an
+            // animated pack and eventually the worker dies mid-encode. Start every
+            // animated pack on a fresh encoder so the import stays stable to the end.
+            if (isAnimatedPack && i < packInputs.length - 1) {
+                onProgress?.({
+                    currentPack: i + 1,
+                    totalPacks: packInputs.length,
+                    currentStep: '♻️ Refreshing encoder before next pack...',
+                    status: 'running',
+                    completedPacks
+                });
+                await stickerProcessor.forceReload().catch(() => {});
+            }
+
         } catch (error: any) {
             console.error(`[TELEGRAM] Import error (${input}):`, error);
             errors.push(error.message || 'Unknown error');

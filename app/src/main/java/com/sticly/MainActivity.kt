@@ -121,6 +121,11 @@ class MainActivity : AppCompatActivity() {
     private var navInactiveColor = 0
     private var lastForegroundPackRefresh = 0L
 
+    // Language this activity was built with — used to self-recreate when the user
+    // changes the language in Settings while MainActivity sits in the back stack
+    // (attachBaseContext only re-runs on recreate, so otherwise Home stays English).
+    private var createdWithLanguage: String = ""
+
     // Regional Popular
     private lateinit var regionalPopularContainer: View
     private lateinit var regionalPopularTitle: TextView
@@ -384,6 +389,7 @@ class MainActivity : AppCompatActivity() {
             return
         }
         setContentView(R.layout.activity_main)
+        createdWithLanguage = PreferencesHelper.getLanguage(this)
 
         // Restore state if activity was recreated
         if (s != null) {
@@ -3545,6 +3551,13 @@ Rules:
     override fun onResume() {
         super.onResume()
 
+        // If the language was changed (e.g. in Settings) while this activity was
+        // in the back stack, rebuild it so the new locale is actually applied.
+        if (createdWithLanguage.isNotEmpty() && createdWithLanguage != PreferencesHelper.getLanguage(this)) {
+            recreate()
+            return
+        }
+
         // WhatsApp installation status (runs on IO with 500ms delay, lightweight)
         checkInstallationUpdates()
         
@@ -3726,6 +3739,13 @@ Rules:
         val distinctPacks = packs.distinctBy { it.id }
         val oldSignature = allPacks.sortedBy { it.id }.joinToString("|") { "${it.id}:${it.version}:${it.stickers.size}:${it.isActive}" }
         val newSignature = distinctPacks.sortedBy { it.id }.joinToString("|") { "${it.id}:${it.version}:${it.stickers.size}:${it.isActive}" }
+        // Cold start triggers loadPacks() from several sources (StickyApp preload,
+        // MainActivity, the realtime observer). When the pack set has not actually
+        // changed, skip the whole rebuild — the repeated rebuilds are exactly what
+        // makes the list visibly load "in chunks" on slower devices.
+        if (oldSignature == newSignature && contentShown && allPacks.isNotEmpty()) {
+            return
+        }
         if (oldSignature != newSignature) savedExploreList = null
         allPacks = distinctPacks
         setupCategoryChips()

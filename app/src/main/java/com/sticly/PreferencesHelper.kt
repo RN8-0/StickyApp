@@ -517,7 +517,12 @@ object PreferencesHelper {
 
     // Language
     fun getLanguage(context: Context): String {
-        val supportedLanguages = setOf("en", "tr", "es", "zh", "ar", "hi", "pt", "fr", "de", "ja")
+        // Must cover every values-* resource folder the app ships, otherwise a
+        // device whose system language HAS a translation still defaults to English.
+        val supportedLanguages = setOf(
+            "en", "tr", "es", "zh", "ar", "hi", "pt", "fr", "de", "ja",
+            "ko", "it", "ru", "th", "vi", "id", "in", "fil", "tl"
+        )
         val defaultLang = java.util.Locale.getDefault().language.takeIf { it in supportedLanguages } ?: "en"
         return getPrefs(context).getString(KEY_LANGUAGE, defaultLang) ?: defaultLang
     }

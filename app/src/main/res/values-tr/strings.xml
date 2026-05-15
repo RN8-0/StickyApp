@@ -734,4 +734,42 @@
 
     <!-- Home Sections -->
     <string name="home_recently_added">✨ Yeni Eklenenler</string>
+
+    <!-- v5.0.0 — eksik çeviriler tamamlandı -->
+    <string name="delete">Sil</string>
+    <string name="comment_delete_title">Yorumu sil</string>
+    <string name="comment_delete_message">Yorumunuz silinsin mi? Bu işlem geri alınamaz.</string>
+    <string name="clear_all">Tümünü Temizle</string>
+    <string name="clear_all_confirm">Tüm bildirimler temizlensin mi?</string>
+    <string name="notifications_cleared">Bildirimler temizlendi</string>
+    <string name="notifications_clear_error">Bildirimler temizlenemedi. Lütfen tekrar deneyin.</string>
+    <string name="ai_report">Şikâyet Et</string>
+    <string name="ai_report_title">Yapay Zekâ İçeriğini Şikâyet Et</string>
+    <string name="ai_report_message">Bu çıkartma rahatsız edici veya uygunsuzsa lütfen bize bildirin. Şikâyetiniz içerik güvenliğini iyileştirmemize yardımcı olur.</string>
+    <string name="ai_report_reason_hint">Sorunu açıklayın (isteğe bağlı)</string>
+    <string name="ai_report_offensive">Rahatsız edici içerik</string>
+    <string name="ai_report_inappropriate">Uygunsuz içerik</string>
+    <string name="ai_report_hate">Nefret söylemi veya taciz</string>
+    <string name="ai_report_violence">Şiddet veya kan</string>
+    <string name="ai_report_spam">Spam veya yanıltıcı</string>
+    <string name="ai_report_other">Diğer</string>
+    <string name="ai_report_sent">Teşekkürler! Şikâyetiniz gönderildi.</string>
+    <string name="ai_report_error">Şikâyet gönderilemedi. Lütfen tekrar deneyin.</string>
+    <string name="profile_edit">Profili düzenle</string>
+    <string name="profile_display_name">Görünen ad</string>
+    <string name="profile_bio_hint">Hakkında</string>
+    <string name="profile_photo_url">Profil fotoğrafı URL\'si</string>
+    <string name="profile_show_email">E-postayı profilde göster</string>
+    <string name="profile_update_failed">Profil güncellenemedi</string>
+    <string name="follow">Takip Et</string>
+    <string name="comments">Yorumlar</string>
+    <string name="just_now">Az önce</string>
+    <string name="be_first_to_comment">İlk yorumu sen yap</string>
+    <string name="submit_pending_exists">Zaten incelemeyi bekleyen bir paketiniz var. Yeni bir paket göndermeden önce lütfen onun onaylanmasını veya reddedilmesini bekleyin.</string>
+    <string name="publisher_title">Yayıncı Profili</string>
+    <string name="publisher_default">Yayıncı</string>
+    <string name="publisher_subtitle_loading">Paketler yükleniyor…</string>
+    <string name="publisher_subtitle_count">%1$d çıkartma paketi yayınlandı</string>
+    <string name="publisher_pack_downloads">%1$d indirme</string>
+    <string name="publisher_empty">Bu kullanıcı henüz hiç paket yayınlamadı.</string>
 </resources>

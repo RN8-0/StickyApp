@@ -346,7 +346,9 @@ class StickerProcessor {
         // 4-pass quality loops at compression_level 4 made libwebp WASM run for >2 minutes per
         // sticker on the user's machine, blowing past the 240s outer timeout. compression_level 0
         // is dramatically faster and the size delta is small for short stickers.
-        const qualities = frameCount > 50 ? [35, 20] : [55, 30];
+        // Quality floor pushed down to 5: an over-the-limit WebP gets the sticker
+        // rejected entirely, so a low-quality-but-valid sticker always beats none.
+        const qualities = frameCount > 50 ? [35, 20, 10, 5] : [55, 35, 20, 10, 5];
 
         for (let qi = 0; qi < qualities.length; qi++) {
             const q = qualities[qi];
@@ -608,38 +610,58 @@ class StickerProcessor {
      */
     async processFromPngFrames(pngBlobs: Blob[], fps: number, onProgress?: (p: StickerProgress) => void): Promise<Blob> {
         await this.load();
-        const ffmpeg = this.ffmpeg!;
-        // Remove frames left behind by a previous sticker. A crashed or aborted
-        // encode can leave stale frame_*.png in the shared WASM FS; createWebPFromFrames
-        // globs frame_%04d.png, so those stale frames would be muxed into THIS
-        // sticker's WebP and produce a corrupted ("broken") result.
-        try {
-            const stale = await ffmpeg.listDir('.');
-            await Promise.all(
-                stale
-                    .filter((f: { name: string }) => f.name.startsWith('frame_') || f.name === 'output.webp')
-                    .map((f: { name: string }) => ffmpeg.deleteFile(f.name).catch(() => {}))
-            );
-        } catch { /* listing/cleanup is best-effort */ }
-        onProgress?.({ message: `Writing ${pngBlobs.length} frames...`, percentage: 40 });
+        const WHATSAPP_LIMIT = 500 * 1024;
 
-        for (let i = 0; i < pngBlobs.length; i++) {
-            const frameName = `frame_${i.toString().padStart(4, '0')}.png`;
-            await ffmpeg.writeFile(frameName, await fetchFile(pngBlobs[i]));
-        }
+        // A WebP over WhatsApp's 500KB ceiling is rejected by the importer and the
+        // sticker is lost — that is exactly the "pack has 15 stickers but only 7
+        // imported" bug. Rather than fail, progressively drop frames (and halve fps
+        // to keep timing) and re-encode until the result fits.
+        let frames = pngBlobs;
+        let currentFps = fps;
+        let best: Blob | null = null;
 
-        try {
-            return await this.createWebPFromFrames(ffmpeg, pngBlobs.length, onProgress, fps);
-        } finally {
+        for (let attempt = 0; attempt < 4; attempt++) {
+            const ffmpeg = this.ffmpeg!;
+            // Purge stale frames left by a previous sticker / previous attempt so
+            // createWebPFromFrames (which globs frame_%04d.png) never muxes them in
+            // and produce a corrupted ("broken") result.
+            const purge = async () => {
+                try {
+                    const files = await ffmpeg.listDir('.');
+                    await Promise.all(
+                        files
+                            .filter((f: { name: string }) => f.name.startsWith('frame_') || f.name === 'output.webp')
+                            .map((f: { name: string }) => ffmpeg.deleteFile(f.name).catch(() => {}))
+                    );
+                } catch { /* best-effort */ }
+            };
+            await purge();
+
+            onProgress?.({ message: `Writing ${frames.length} frames...`, percentage: 40 });
+            for (let i = 0; i < frames.length; i++) {
+                await ffmpeg.writeFile(`frame_${i.toString().padStart(4, '0')}.png`, await fetchFile(frames[i]));
+            }
+
+            let blob: Blob;
             try {
-                const files = await ffmpeg.listDir('.');
-                await Promise.all(
-                    files
-                        .filter((f: { name: string }) => f.name.startsWith('frame_') || f.name === 'output.webp')
-                        .map((f: { name: string }) => ffmpeg.deleteFile(f.name).catch(() => {}))
-                );
-            } catch {}
+                blob = await this.createWebPFromFrames(ffmpeg, frames.length, onProgress, currentFps);
+            } finally {
+                await purge();
+            }
+
+            best = blob;
+            if (blob.size <= WHATSAPP_LIMIT || frames.length <= 6) return blob;
+
+            // Still too big — keep every other frame, halve fps, encode again.
+            const reduced = frames.filter((_, idx) => idx % 2 === 0);
+            onProgress?.({
+                message: `${Math.round(blob.size / 1024)}KB too large — retrying with ${reduced.length} frames...`,
+                percentage: 60,
+            });
+            frames = reduced;
+            currentFps = Math.max(MIN_FPS, Math.round(currentFps / 2));
         }
+        return best!;
     }
 
     /**

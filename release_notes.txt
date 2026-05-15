@@ -1,119 +1,136 @@
 <tr-TR>
-⚡ Sticly v4.9.0 — Hızlı Başlatma & Performans Güncellemesi!
-• 🚀 Soğuk başlatma süresi büyük ölçüde azaltıldı, ana sayfa anında yükleniyor.
-• 📦 Lokal veri ön yükleme ile çıkartma paketleri ilk karede gösteriliyor.
-• 🧹 Ana thread bloklaması giderildi, uygulama açılışı hızlandı.
-• 🐛 Küçük hata düzeltmeleri ve kararlılık iyileştirmeleri.
+🌍 Sticly v5.0.0 — Dil & Hız Güncellemesi!
+• 🌍 Dil sorunu giderildi — seçtiğiniz dil artık tüm ekranlarda eksiksiz uygulanıyor.
+• ⚡ Çıkartma paketleri çok daha hızlı ve akıcı yükleniyor, parça parça yüklenme sorunu giderildi.
+• ✨ Yeni eklenen paketler ana sayfada anında görünüyor.
+• 💎 Premium paket görselleri ve isimleri düzgün gösteriliyor.
+• 🐛 Hata düzeltmeleri ve kararlılık iyileştirmeleri.
 </tr-TR>
 <ar>
-⚡ Sticly v4.9.0 — تحديث سرعة التشغيل والأداء!
-• 🚀 تقليل وقت التشغيل البارد بشكل كبير، الصفحة الرئيسية تُحمّل فوراً.
-• 📦 عرض حزم الملصقات فوراً مع التحميل المسبق للبيانات المحلية.
-• 🧹 إزالة حظر الخيط الرئيسي، تسريع فتح التطبيق.
-• 🐛 إصلاحات صغيرة وتحسينات في الاستقرار.
+🌍 Sticly v5.0.0 — تحديث اللغة والسرعة!
+• 🌍 تم إصلاح مشكلة اللغة — اللغة التي تختارها تُطبَّق الآن بالكامل على جميع الشاشات.
+• ⚡ تحميل حزم الملصقات أصبح أسرع وأكثر سلاسة، وتم حل مشكلة التحميل المتقطع.
+• ✨ الحزم المضافة حديثاً تظهر فوراً في الصفحة الرئيسية.
+• 💎 صور وأسماء الحزم المميزة تُعرض بشكل صحيح.
+• 🐛 إصلاحات للأخطاء وتحسينات في الاستقرار.
 </ar>
 <de-DE>
-⚡ Sticly v4.9.0 — Schnellstart & Leistungsupdate!
-• 🚀 Kaltstartzeit drastisch reduziert, Startseite lädt sofort.
-• 📦 Stickerpakete werden durch lokales Preloading im ersten Frame angezeigt.
-• 🧹 Haupt-Thread-Blockierung beseitigt, App-Start beschleunigt.
-• 🐛 Kleinere Fehlerbehebungen und Stabilitätsverbesserungen.
+🌍 Sticly v5.0.0 — Sprach- & Geschwindigkeitsupdate!
+• 🌍 Sprachproblem behoben — die gewählte Sprache wird jetzt auf allen Bildschirmen vollständig angewendet.
+• ⚡ Stickerpakete laden viel schneller und flüssiger, das stückweise Laden wurde behoben.
+• ✨ Neu hinzugefügte Pakete erscheinen sofort auf der Startseite.
+• 💎 Premium-Paketbilder und -Namen werden korrekt angezeigt.
+• 🐛 Fehlerbehebungen und Stabilitätsverbesserungen.
 </de-DE>
 <en-US>
-⚡ Sticly v4.9.0 — Fast Launch & Performance Update!
-• 🚀 Cold start time drastically reduced, home screen loads instantly.
-• 📦 Sticker packs displayed immediately via local data preloading.
-• 🧹 Main thread blocking removed, app startup accelerated.
-• 🐛 Minor bug fixes and stability improvements.
+🌍 Sticly v5.0.0 — Language & Speed Update!
+• 🌍 Language issue fixed — your chosen language now applies fully across every screen.
+• ⚡ Sticker packs load far faster and smoother; the choppy "loads in chunks" issue is gone.
+• ✨ Newly added packs now show up instantly on the home screen.
+• 💎 Premium pack covers and names display correctly.
+• 🐛 Bug fixes and stability improvements.
 </en-US>
 <es-419>
-⚡ Sticly v4.9.0 — ¡Actualización de arranque rápido y rendimiento!
-• 🚀 Tiempo de arranque en frío drásticamente reducido, pantalla principal carga al instante.
-• 📦 Paquetes de stickers mostrados inmediatamente con precarga de datos locales.
-• 🧹 Eliminado el bloqueo del hilo principal, inicio de la app acelerado.
-• 🐛 Correcciones menores y mejoras de estabilidad.
+🌍 Sticly v5.0.0 — ¡Actualización de idioma y velocidad!
+• 🌍 Problema de idioma corregido: el idioma elegido ahora se aplica por completo en todas las pantallas.
+• ⚡ Los paquetes de stickers cargan mucho más rápido y fluido; se solucionó la carga por partes.
+• ✨ Los paquetes recién añadidos aparecen al instante en la pantalla principal.
+• 💎 Las portadas y nombres de los paquetes premium se muestran correctamente.
+• 🐛 Correcciones de errores y mejoras de estabilidad.
 </es-419>
 <fil>
-⚡ Sticly v4.9.0 — Mabilis na Paglunsad at Pag-update ng Pagganap!
-• 🚀 Lubos na binawasan ang cold start time, agad na naglo-load ang home screen.
-• 📦 Agad na ipinapakita ang mga sticker pack sa pamamagitan ng local data preloading.
-• 🧹 Inalis ang main thread blocking, pinabilis ang pagsisimula ng app.
-• 🐛 Mga maliliit na pag-aayos at pagpapahusay ng katatagan.
+🌍 Sticly v5.0.0 — Update sa Wika at Bilis!
+• 🌍 Naayos ang isyu sa wika — ang piniling wika mo ay buong nailalapat na sa lahat ng screen.
+• ⚡ Mas mabilis at mas maayos nang mag-load ang mga sticker pack; ayos na ang paunti-unting pag-load.
+• ✨ Ang mga bagong dagdag na pack ay agad nang lumalabas sa home screen.
+• 💎 Tama nang ipinapakita ang mga cover at pangalan ng premium pack.
+• 🐛 Mga pag-aayos ng bug at pagpapahusay ng katatagan.
 </fil>
 <fr-FR>
-⚡ Sticly v4.9.0 — Démarrage rapide et mise à jour des performances !
-• 🚀 Temps de démarrage à froid considérablement réduit, l'écran d'accueil se charge instantanément.
-• 📦 Packs de stickers affichés immédiatement grâce au préchargement des données locales.
-• 🧹 Blocage du thread principal supprimé, démarrage de l'application accéléré.
-• 🐛 Corrections mineures et améliorations de la stabilité.
+🌍 Sticly v5.0.0 — Mise à jour langue et vitesse !
+• 🌍 Problème de langue corrigé — la langue choisie s'applique désormais entièrement sur tous les écrans.
+• ⚡ Les packs de stickers se chargent bien plus vite et en fluidité ; le chargement par à-coups est résolu.
+• ✨ Les packs récemment ajoutés apparaissent instantanément sur l'écran d'accueil.
+• 💎 Les couvertures et noms des packs premium s'affichent correctement.
+• 🐛 Corrections de bugs et améliorations de la stabilité.
 </fr-FR>
 <hi-IN>
-⚡ Sticly v4.9.0 — तेज़ लॉन्च और प्रदर्शन अपडेट!
-• 🚀 कोल्ड स्टार्ट समय भारी रूप से कम, होम स्क्रीन तुरंत लोड होती है।
-• 📦 स्थानीय डेटा प्रीलोडिंग के माध्यम से स्टिकर पैक तुरंत दिखाए जाते हैं।
-• 🧹 मुख्य थ्रेड अवरोध हटाया गया, ऐप स्टार्टअप तेज़ किया गया।
-• 🐛 छोटे बग फिक्स और स्थिरता सुधार।
+🌍 Sticly v5.0.0 — भाषा और गति अपडेट!
+• 🌍 भाषा समस्या ठीक की गई — आपकी चुनी हुई भाषा अब हर स्क्रीन पर पूरी तरह लागू होती है।
+• ⚡ स्टिकर पैक बहुत तेज़ और सहज लोड होते हैं; टुकड़ों में लोड होने की समस्या हल हुई।
+• ✨ नए जोड़े गए पैक अब होम स्क्रीन पर तुरंत दिखते हैं।
+• 💎 प्रीमियम पैक के कवर और नाम सही ढंग से दिखते हैं।
+• 🐛 बग फिक्स और स्थिरता सुधार।
 </hi-IN>
 <id>
-⚡ Sticly v4.9.0 — Peluncuran Cepat & Pembaruan Kinerja!
-• 🚀 Waktu cold start berkurang drastis, layar utama langsung termuat.
-• 📦 Paket stiker langsung ditampilkan melalui pramuat data lokal.
-• 🧹 Pemblokiran thread utama dihapus, startup aplikasi dipercepat.
-• 🐛 Perbaikan bug kecil dan peningkatan stabilitas.
+🌍 Sticly v5.0.0 — Pembaruan Bahasa & Kecepatan!
+• 🌍 Masalah bahasa diperbaiki — bahasa yang Anda pilih kini diterapkan penuh di semua layar.
+• ⚡ Paket stiker termuat jauh lebih cepat dan mulus; masalah pemuatan bertahap teratasi.
+• ✨ Paket yang baru ditambahkan kini langsung muncul di layar utama.
+• 💎 Sampul dan nama paket premium ditampilkan dengan benar.
+• 🐛 Perbaikan bug dan peningkatan stabilitas.
 </id>
 <it-IT>
-⚡ Sticly v4.9.0 — Avvio rapido e aggiornamento delle prestazioni!
-• 🚀 Tempo di avvio a freddo drasticamente ridotto, schermata principale caricata all'istante.
-• 📦 Pacchetti sticker mostrati immediatamente grazie al precaricamento dei dati locali.
-• 🧹 Blocco del thread principale rimosso, avvio dell'app accelerato.
-• 🐛 Correzioni minori e miglioramenti della stabilità.
+🌍 Sticly v5.0.0 — Aggiornamento lingua e velocità!
+• 🌍 Problema della lingua risolto — la lingua scelta ora si applica completamente in ogni schermata.
+• ⚡ I pacchetti sticker si caricano molto più velocemente e fluidi; risolto il caricamento a blocchi.
+• ✨ I pacchetti appena aggiunti compaiono subito nella schermata principale.
+• 💎 Copertine e nomi dei pacchetti premium vengono mostrati correttamente.
+• 🐛 Correzioni di bug e miglioramenti della stabilità.
 </it-IT>
 <ja-JP>
-⚡ Sticly v4.9.0 — 高速起動とパフォーマンスアップデート！
-• 🚀 コールドスタート時間を大幅に短縮、ホーム画面が即座に読み込まれます。
-• 📦 ローカルデータのプリロードにより、ステッカーパックがすぐに表示されます。
-• 🧹 メインスレッドのブロッキングを解消し、アプリの起動を高速化しました。
-• 🐛 軽微なバグ修正と安定性の向上。
+🌍 Sticly v5.0.0 — 言語＆スピードアップデート！
+• 🌍 言語の問題を修正 — 選択した言語がすべての画面に完全に適用されるようになりました。
+• ⚡ ステッカーパックの読み込みが大幅に高速かつスムーズに。途切れる読み込みを解消しました。
+• ✨ 新しく追加されたパックがホーム画面にすぐ表示されます。
+• 💎 プレミアムパックのカバーと名前が正しく表示されます。
+• 🐛 バグ修正と安定性の向上。
 </ja-JP>
 <ko-KR>
-⚡ Sticly v4.7.0 — 빠른 실행 및 성능 업데이트!
-• 🚀 콜드 스타트 시간 대폭 단축, 홈 화면이 즉시 로드됩니다.
-• 📦 로컬 데이터 사전 로딩으로 스티커 팩이 즉시 표시됩니다.
-• 🧹 메인 스레드 차단 제거, 앱 시작 속도 향상.
-• 🐛 사소한 버그 수정 및 안정성 개선.
+🌍 Sticly v5.0.0 — 언어 & 속도 업데이트!
+• 🌍 언어 문제 해결 — 선택한 언어가 이제 모든 화면에 완전히 적용됩니다.
+• ⚡ 스티커 팩이 훨씬 빠르고 부드럽게 로드되며, 끊겨서 로드되던 문제가 해결되었습니다.
+• ✨ 새로 추가된 팩이 홈 화면에 즉시 표시됩니다.
+• 💎 프리미엄 팩의 커버와 이름이 올바르게 표시됩니다.
+• 🐛 버그 수정 및 안정성 개선.
 </ko-KR>
 <pt-BR>
-⚡ Sticly v4.9.0 — Inicialização rápida e atualização de desempenho!
-• 🚀 Tempo de inicialização a frio drasticamente reduzido, tela inicial carrega instantaneamente.
-• 📦 Pacotes de stickers exibidos imediatamente via pré-carregamento de dados locais.
-• 🧹 Bloqueio da thread principal removido, inicialização do app acelerada.
-• 🐛 Pequenas correções de bugs e melhorias de estabilidade.
+🌍 Sticly v5.0.0 — Atualização de idioma e velocidade!
+• 🌍 Problema de idioma corrigido — o idioma escolhido agora é aplicado totalmente em todas as telas.
+• ⚡ Os pacotes de stickers carregam muito mais rápido e fluido; o carregamento em partes foi resolvido.
+• ✨ Pacotes recém-adicionados aparecem instantaneamente na tela inicial.
+• 💎 Capas e nomes dos pacotes premium são exibidos corretamente.
+• 🐛 Correções de bugs e melhorias de estabilidade.
 </pt-BR>
 <ru-RU>
-⚡ Sticly v4.9.0 — Быстрый запуск и обновление производительности!
-• 🚀 Время холодного старта значительно сокращено, главный экран загружается мгновенно.
-• 📦 Стикер-паки отображаются сразу благодаря предзагрузке локальных данных.
-• 🧹 Устранена блокировка главного потока, запуск приложения ускорен.
-• 🐛 Мелкие исправления ошибок и улучшения стабильности.
+🌍 Sticly v5.0.0 — Обновление языка и скорости!
+• 🌍 Исправлена проблема с языком — выбранный язык теперь полностью применяется на всех экранах.
+• ⚡ Стикер-паки загружаются гораздо быстрее и плавнее; рывковая загрузка устранена.
+• ✨ Недавно добавленные паки сразу появляются на главном экране.
+• 💎 Обложки и названия премиум-паков отображаются правильно.
+• 🐛 Исправления ошибок и улучшения стабильности.
 </ru-RU>
 <th>
-⚡ Sticly v4.9.0 — อัปเดตการเริ่มต้นเร็วและประสิทธิภาพ!
-• 🚀 ลดเวลา cold start ลงอย่างมาก หน้าหลักโหลดทันที
-• 📦 แสดงแพ็กสติกเกอร์ทันทีผ่านการโหลดข้อมูลล่วงหน้าในเครื่อง
-• 🧹 ลบการบล็อกเธรดหลัก เร่งการเริ่มต้นแอป
-• 🐛 แก้ไขข้อบกพร่องเล็กน้อยและปรับปรุงความเสถียร
+🌍 Sticly v5.0.0 — อัปเดตภาษาและความเร็ว!
+• 🌍 แก้ไขปัญหาภาษา — ภาษาที่คุณเลือกถูกใช้งานครบทุกหน้าจอแล้ว
+• ⚡ แพ็กสติกเกอร์โหลดเร็วและลื่นไหลขึ้นมาก แก้ปัญหาการโหลดเป็นช่วง ๆ แล้ว
+• ✨ แพ็กที่เพิ่งเพิ่มจะแสดงบนหน้าหลักทันที
+• 💎 ภาพปกและชื่อแพ็กพรีเมียมแสดงผลถูกต้อง
+• 🐛 แก้ไขข้อบกพร่องและปรับปรุงความเสถียร
 </th>
 <vi>
-⚡ Sticly v4.9.0 — Cập nhật khởi động nhanh & hiệu suất!
-• 🚀 Giảm đáng kể thời gian khởi động nguội, màn hình chính tải ngay lập tức.
-• 📦 Gói sticker hiển thị ngay nhờ tải trước dữ liệu cục bộ.
-• 🧹 Loại bỏ chặn luồng chính, tăng tốc khởi động ứng dụng.
-• 🐛 Sửa lỗi nhỏ và cải thiện độ ổn định.
+🌍 Sticly v5.0.0 — Cập nhật ngôn ngữ & tốc độ!
+• 🌍 Đã sửa lỗi ngôn ngữ — ngôn ngữ bạn chọn nay được áp dụng đầy đủ trên mọi màn hình.
+• ⚡ Gói sticker tải nhanh và mượt hơn nhiều; đã khắc phục tình trạng tải ngắt quãng.
+• ✨ Các gói mới thêm hiển thị ngay trên màn hình chính.
+• 💎 Ảnh bìa và tên gói premium hiển thị chính xác.
+• 🐛 Sửa lỗi và cải thiện độ ổn định.
 </vi>
 <zh-CN>
-⚡ Sticly v4.9.0 — 快速启动与性能更新！
-• 🚀 冷启动时间大幅缩短，主页即时加载。
-• 📦 通过本地数据预加载，贴纸包立即显示。
-• 🧹 移除主线程阻塞，加速应用启动。
-• 🐛 小错误修复和稳定性改进。
+🌍 Sticly v5.0.0 — 语言与速度更新！
+• 🌍 修复语言问题——所选语言现已完整应用于所有界面。
+• ⚡ 贴纸包加载速度更快更流畅，解决了分段加载的问题。
+• ✨ 新添加的贴纸包立即显示在主页。
+• 💎 高级贴纸包的封面和名称正确显示。
+• 🐛 错误修复和稳定性改进。
 </zh-CN>
