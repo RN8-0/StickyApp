@@ -9,7 +9,6 @@ import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.graphics.drawable.Animatable
 import android.graphics.drawable.ColorDrawable
-import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.view.LayoutInflater
@@ -19,6 +18,7 @@ import android.view.Window
 import android.view.WindowManager
 import android.view.animation.AccelerateDecelerateInterpolator
 import android.view.animation.OvershootInterpolator
+import android.webkit.WebView
 import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -34,8 +34,6 @@ import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
-import com.bumptech.glide.request.target.CustomTarget
-import com.bumptech.glide.request.transition.Transition
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import kotlinx.coroutines.*
@@ -365,6 +363,7 @@ class DetailsActivity : AppCompatActivity() {
         )
         rv.adapter = adapter
         isPackReady = true
+        rv.post { preloadStickerThumbnails(pack, displayStickers) }
 
         // Butonları ayarla
         setupButtons(pack, hasAccess)
@@ -379,6 +378,44 @@ class DetailsActivity : AppCompatActivity() {
             delay(900)
             if (!isFinishing && !isDestroyed) setupRelatedPacks(pack)
         }
+    }
+
+    private fun preloadStickerThumbnails(pack: Pack, stickers: List<Sticker>) {
+        if (stickers.isEmpty() || isDestroyed || isFinishing) return
+        val glide = Glide.with(this)
+
+        fun sourceFor(sticker: Sticker): Any? {
+            if (pack.id.startsWith("custom_")) {
+                return CustomStickerManager.getCustomStickerPath(this, pack.id, sticker.file)
+                    .takeIf { it.exists() && it.length() > 0 }
+            }
+            val cachedFile = StickerRepository.getCachedStickerPath(this, pack.id, sticker.file)
+            return when {
+                cachedFile.exists() && cachedFile.length() > 0 -> cachedFile
+                sticker.url.isNotBlank() -> sticker.url
+                pack.storagePath.isNotBlank() -> StickerRepository.getStickerDirectUrl(pack.id, sticker.file, pack.storagePath)
+                else -> android.net.Uri.parse("file:///android_asset/${pack.id}/${sticker.file}")
+            }
+        }
+
+        fun preloadBatch(batch: List<Sticker>) {
+            batch.forEach { sticker ->
+                val source = sourceFor(sticker) ?: return@forEach
+                glide.asBitmap()
+                    .load(source)
+                    .override(256, 256)
+                    .priority(com.bumptech.glide.Priority.LOW)
+                    .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.RESOURCE)
+                    .preload(256, 256)
+            }
+        }
+
+        findViewById<RecyclerView>(R.id.rv).postDelayed({
+            if (!isDestroyed && !isFinishing) preloadBatch(stickers.take(12))
+        }, 180)
+        findViewById<RecyclerView>(R.id.rv).postDelayed({
+            if (!isDestroyed && !isFinishing) preloadBatch(stickers.drop(12).take(24))
+        }, 900)
     }
 
     private fun toggleDeleteMode() {
@@ -1978,7 +2015,7 @@ class DetailsActivity : AppCompatActivity() {
         val imageView = view.findViewById<ImageView>(R.id.previewImage)
         val lockOverlay = view.findViewById<ImageView>(R.id.lockOverlay)
         val unlockHint = view.findViewById<android.widget.TextView>(R.id.unlockHint)
-        var animatedTarget: CustomTarget<Drawable>? = null
+        var fallbackWebView: WebView? = null
 
         dialog.setContentView(view)
 
@@ -2024,38 +2061,12 @@ class DetailsActivity : AppCompatActivity() {
             if (loadSource == null) {
                 imageView.setImageResource(R.drawable.transparent_placeholder)
             } else if (animatedPreview) {
-                imageView.visibility = View.VISIBLE
-                imageView.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
-                imageView.setImageResource(R.drawable.transparent_placeholder)
-
-                animatedTarget?.let { Glide.with(this@DetailsActivity).clear(it) }
-                animatedTarget = object : CustomTarget<Drawable>() {
-                    override fun onResourceReady(resource: Drawable, transition: Transition<in Drawable>?) {
-                        if (!dialog.isShowing) return
-                        Log.d(
-                            "DetailsActivity",
-                            "Animated preview loaded file=${sticker.file} source=${loadSource::class.java.simpleName} drawable=${resource::class.java.name} animatable=${resource is Animatable}"
-                        )
-                        imageView.setImageDrawable(null)
-                        imageView.setImageDrawable(resource)
-                        startAnimatedPreview(imageView)
-                    }
-
-                    override fun onLoadCleared(placeholder: Drawable?) {
-                        (imageView.drawable as? Animatable)?.stop()
-                        imageView.setImageDrawable(placeholder)
-                    }
+                imageView.setImageDrawable(null)
+                showAnimatedPreviewFallback(view as ViewGroup, imageView, loadSource) {
+                    dialog.dismiss()
+                }?.let {
+                    fallbackWebView = it
                 }
-
-                Glide.with(this@DetailsActivity)
-                    .asDrawable()
-                    .load(loadSource)
-                    .placeholder(R.drawable.transparent_placeholder)
-                    .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.DATA)
-                    .skipMemoryCache(true)
-                    .dontTransform()
-                    .error(R.drawable.transparent_placeholder)
-                    .into(animatedTarget!!)
             } else {
                 Glide.with(this@DetailsActivity)
                     .load(loadSource)
@@ -2070,8 +2081,10 @@ class DetailsActivity : AppCompatActivity() {
 
         dialog.setOnDismissListener {
             (imageView.drawable as? Animatable)?.stop()
-            animatedTarget?.let { Glide.with(this@DetailsActivity).clear(it) }
-            animatedTarget = null
+            fallbackWebView?.stopLoading()
+            fallbackWebView?.loadUrl("about:blank")
+            fallbackWebView?.destroy()
+            fallbackWebView = null
             Glide.with(this@DetailsActivity).clear(imageView)
             imageView.setImageDrawable(null)
         }
@@ -2114,6 +2127,72 @@ class DetailsActivity : AppCompatActivity() {
         }
 
         dialog.show()
+    }
+
+    private fun showAnimatedPreviewFallback(
+        container: ViewGroup,
+        imageView: ImageView,
+        loadSource: Any,
+        onTap: () -> Unit
+    ): WebView? {
+        val src = when (loadSource) {
+            is String -> loadSource
+            is File -> android.net.Uri.fromFile(loadSource).toString()
+            is android.net.Uri -> loadSource.toString()
+            else -> return null
+        }
+        val safeSrc = src
+            .replace("&", "&amp;")
+            .replace("\"", "&quot;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+
+        imageView.visibility = View.GONE
+        val existing = container.findViewWithTag<WebView>("animated_preview_webview")
+        val webView = existing ?: WebView(this).apply {
+            tag = "animated_preview_webview"
+            setBackgroundColor(Color.TRANSPARENT)
+            settings.javaScriptEnabled = false
+            settings.domStorageEnabled = false
+            settings.loadsImagesAutomatically = true
+            settings.allowFileAccess = true
+            settings.allowContentAccess = true
+            isVerticalScrollBarEnabled = false
+            isHorizontalScrollBarEnabled = false
+            isLongClickable = false
+            container.addView(
+                this,
+                android.widget.FrameLayout.LayoutParams(
+                    android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+                    android.widget.FrameLayout.LayoutParams.MATCH_PARENT
+                )
+            )
+        }
+
+        webView.visibility = View.VISIBLE
+        webView.isLongClickable = false
+        webView.setOnClickListener { onTap() }
+        webView.loadDataWithBaseURL(
+            null,
+            """
+            <html>
+              <head>
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <style>
+                  html,body{margin:0;width:100%;height:100%;background:transparent;overflow:hidden;}
+                  body{display:flex;align-items:center;justify-content:center;}
+                  img{max-width:82vw;max-height:82vh;object-fit:contain;}
+                </style>
+              </head>
+              <body><img src="$safeSrc"></body>
+            </html>
+            """.trimIndent(),
+            "text/html",
+            "UTF-8",
+            null
+        )
+        Log.d("DetailsActivity", "Animated preview fallback WebView fileSource=${loadSource::class.java.simpleName}")
+        return webView
     }
 
     private fun startAnimatedPreview(imageView: ImageView) {
