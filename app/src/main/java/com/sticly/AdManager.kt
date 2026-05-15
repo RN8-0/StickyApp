@@ -256,8 +256,49 @@ object AdManager {
      * Her 2 pakette bir interstitial göster (2., 4., 6. indirme).
      * @param onComplete Reklam bittikten veya gösterilemezse çağrılır
      */
-    fun showInterstitialIfNeeded(_activity: Activity, onComplete: () -> Unit) {
-        Log.d(TAG, "Interstitial disabled for smoother sticker add flow")
-        onComplete()
+    fun showInterstitialIfNeeded(activity: Activity, onComplete: () -> Unit) {
+        if (PreferencesHelper.isPremium(activity)) {
+            Log.d(TAG, "Interstitial skip: premium user")
+            onComplete()
+            return
+        }
+
+        val prefs = activity.getSharedPreferences(INTERSTITIAL_PREFS_NAME, 0)
+        downloadCount = prefs.getInt(KEY_DOWNLOAD_COUNT, 0) + 1
+        prefs.edit().putInt(KEY_DOWNLOAD_COUNT, downloadCount).apply()
+
+        Log.d(TAG, "Interstitial check: downloadCount=$downloadCount")
+        if (downloadCount % 2 != 0) {
+            Log.d(TAG, "Interstitial skip: not every 2nd (count=$downloadCount)")
+            loadInterstitialAd(activity)
+            onComplete()
+            return
+        }
+
+        val ad = interstitialAd
+        if (ad == null) {
+            Log.e(TAG, "Interstitial null, continuing and loading next ad")
+            loadInterstitialAd(activity)
+            onComplete()
+            return
+        }
+
+        Log.d(TAG, "Showing interstitial ad now")
+        adShownThisSession = true
+        interstitialAd = null
+        ad.fullScreenContentCallback = object : FullScreenContentCallback() {
+            override fun onAdDismissedFullScreenContent() {
+                Log.d(TAG, "Interstitial dismissed")
+                loadInterstitialAd(activity)
+                onComplete()
+            }
+
+            override fun onAdFailedToShowFullScreenContent(error: AdError) {
+                Log.e(TAG, "Interstitial show failed: ${error.message}")
+                loadInterstitialAd(activity)
+                onComplete()
+            }
+        }
+        ad.show(activity)
     }
 }

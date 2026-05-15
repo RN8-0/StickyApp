@@ -3975,7 +3975,20 @@ Rules:
             }
 
             val withAds = mutableListOf<Any>()
-            withAds.addAll(sorted)
+            val userIsPremium = PreferencesHelper.isPremium(this@MainActivity)
+            if (!userIsPremium && (currentFilter == FilterType.ALL || currentFilter == FilterType.PREMIUM)) {
+                var adSlot = 0
+                sorted.forEachIndexed { index, pack ->
+                    withAds.add(pack)
+                    val firstAd = index == 3
+                    val recurringAd = index > 3 && (index - 3) % 8 == 0
+                    if (firstAd || recurringAd) {
+                        withAds.add(BannerAdPlaceholder(adSlot++))
+                    }
+                }
+            } else {
+                withAds.addAll(sorted)
+            }
 
             // Calculate Diff on Background (oldList captured on Main before coroutine launch)
             val newList: List<Any> = withAds

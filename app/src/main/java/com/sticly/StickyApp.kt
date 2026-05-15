@@ -48,7 +48,19 @@ class StickyApp : Application() {
             com.airbnb.lottie.LottieCompositionFactory.fromAsset(this, name)
         }
 
-        // AdMob is initialized on demand. Starting it during launch causes visible
-        // jank on low/mid devices because the SDK loads Dynamite modules on Main.
+        // Start monetization after the first home frames have had time to render.
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+            try {
+                Log.d("StickyApp", "Starting AdManager initialization...")
+                AdManager.initialize(this)
+                Log.d("StickyApp", "AdManager.initialize() called successfully")
+
+                val adMgr = AppOpenAdManager(this)
+                adMgr.init()
+                appOpenAdInstance = adMgr
+            } catch (e: Exception) {
+                Log.e("StickyApp", "AdMob initialization failed: ${e.message}", e)
+            }
+        }, 8_000)
     }
 }
