@@ -44,7 +44,10 @@ class StickyGlideModule : AppGlideModule() {
 
     override fun registerComponents(context: Context, glide: Glide, registry: Registry) {
         val client = OkHttpClient.Builder()
-            .connectionPool(ConnectionPool(10, 2, TimeUnit.MINUTES))
+            .connectionPool(ConnectionPool(16, 2, TimeUnit.MINUTES))
+            // OkHttp varsayılanı host başına 5 eşzamanlı istek — bir paket sayfasında
+            // tüm çıkartmalar aynı sunucudan geldiği için ilk 5'ten sonrası bekliyordu.
+            .dispatcher(okhttp3.Dispatcher().apply { maxRequestsPerHost = 16 })
             .connectTimeout(8, TimeUnit.SECONDS)
             .readTimeout(10, TimeUnit.SECONDS)
             .build()

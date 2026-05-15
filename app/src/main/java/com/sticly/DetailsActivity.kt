@@ -401,11 +401,13 @@ class DetailsActivity : AppCompatActivity() {
         fun preloadBatch(batch: List<Sticker>) {
             batch.forEach { sticker ->
                 val source = sourceFor(sticker) ?: return@forEach
-                // Grid asDrawable ile yüklendiği için preload de aynı yolu kullanır.
+                // Sadece kaynak veriyi cache'e ısıt — hafif statik decode yeterli;
+                // grid'in animasyonlu yüklemesi bu cache'ten beslenir.
                 glide.asDrawable()
                     .load(source)
                     .override(256, 256)
                     .priority(com.bumptech.glide.Priority.LOW)
+                    .dontAnimate()
                     .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.AUTOMATIC)
                     .preload(256, 256)
             }

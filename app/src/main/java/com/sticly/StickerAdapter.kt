@@ -141,18 +141,31 @@ class StickerAdapter(
             return
         }
 
-        // Her zaman asDrawable: animasyonlu WebP'ler grid'de canlı oynar, statik
-        // olanlar normal görünür. asBitmap kullanılırsa animasyon donar.
+        val signature = if (source is java.io.File) ObjectKey(source.lastModified()) else null
+
+        // İki aşamalı yükleme:
+        // 1) Statik ilk kare (dontAnimate) — hafif ve hızlı, her sticker hemen görünür.
+        // 2) Animasyonlu tam sürüm — hazır olunca statik karenin yerine geçer.
+        // Böylece animasyonlu paketlerde grid canlı oynar ama ağır decode yüzünden
+        // hiçbir sticker gri placeholder'da takılı kalmaz.
+        var staticFrame = glideManager.asDrawable()
+            .load(source)
+            .override(256, 256)
+            .diskCacheStrategy(DiskCacheStrategy.AUTOMATIC)
+            .priority(com.bumptech.glide.Priority.HIGH)
+            .dontAnimate()
+        if (signature != null) staticFrame = staticFrame.signature(signature)
+
         var request = glideManager.asDrawable()
             .load(source)
             .override(256, 256)
             .placeholder(R.drawable.sticker_placeholder)
             .error(R.drawable.sticker_placeholder)
             .diskCacheStrategy(DiskCacheStrategy.AUTOMATIC)
+            .priority(com.bumptech.glide.Priority.NORMAL)
+            .thumbnail(staticFrame)
             .listener(clearBgDrawableListener)
-        if (source is java.io.File) {
-            request = request.signature(ObjectKey(source.lastModified()))
-        }
+        if (signature != null) request = request.signature(signature)
         request.into(h.img)
     }
 

@@ -1,136 +1,136 @@
 <tr-TR>
-🌍 Sticly v5.0.0 — Dil & Hız Güncellemesi!
-• 🌍 Dil sorunu giderildi — seçtiğiniz dil artık tüm ekranlarda eksiksiz uygulanıyor.
-• ⚡ Çıkartma paketleri çok daha hızlı ve akıcı yükleniyor, parça parça yüklenme sorunu giderildi.
-• ✨ Yeni eklenen paketler ana sayfada anında görünüyor.
-• 💎 Premium paket görselleri ve isimleri düzgün gösteriliyor.
-• 🐛 Hata düzeltmeleri ve kararlılık iyileştirmeleri.
+🎬 Sticly v5.0.1 — Çıkartmalar Canlandı!
+• 🎬 Animasyonlu çıkartmalar artık paket sayfasında canlı oynuyor.
+• 👆 Çıkartma önizlemesini kapatmak için ekranda herhangi bir yere dokunmanız yeterli.
+• 🚀 Açılış ekranı yenilendi; gereksiz bekleme ekranları kaldırıldı.
+• 🖼️ Paket sayfasındaki tüm çıkartmalar artık eksiksiz yükleniyor.
+• 🐛 Hata düzeltmeleri ve hız iyileştirmeleri.
 </tr-TR>
 <ar>
-🌍 Sticly v5.0.0 — تحديث اللغة والسرعة!
-• 🌍 تم إصلاح مشكلة اللغة — اللغة التي تختارها تُطبَّق الآن بالكامل على جميع الشاشات.
-• ⚡ تحميل حزم الملصقات أصبح أسرع وأكثر سلاسة، وتم حل مشكلة التحميل المتقطع.
-• ✨ الحزم المضافة حديثاً تظهر فوراً في الصفحة الرئيسية.
-• 💎 صور وأسماء الحزم المميزة تُعرض بشكل صحيح.
-• 🐛 إصلاحات للأخطاء وتحسينات في الاستقرار.
+🎬 Sticly v5.0.1 — الملصقات تنبض بالحياة!
+• 🎬 الملصقات المتحركة تعمل الآن مباشرةً في صفحة الحزمة.
+• 👆 المس أي مكان على الشاشة لإغلاق معاينة الملصق.
+• 🚀 تم تجديد شاشة البدء وإزالة شاشات التحميل غير الضرورية.
+• 🖼️ جميع الملصقات في صفحة الحزمة تُحمَّل الآن بالكامل.
+• 🐛 إصلاحات للأخطاء وتحسينات في السرعة.
 </ar>
 <de-DE>
-🌍 Sticly v5.0.0 — Sprach- & Geschwindigkeitsupdate!
-• 🌍 Sprachproblem behoben — die gewählte Sprache wird jetzt auf allen Bildschirmen vollständig angewendet.
-• ⚡ Stickerpakete laden viel schneller und flüssiger, das stückweise Laden wurde behoben.
-• ✨ Neu hinzugefügte Pakete erscheinen sofort auf der Startseite.
-• 💎 Premium-Paketbilder und -Namen werden korrekt angezeigt.
-• 🐛 Fehlerbehebungen und Stabilitätsverbesserungen.
+🎬 Sticly v5.0.1 — Sticker werden lebendig!
+• 🎬 Animierte Sticker werden jetzt direkt auf der Paketseite abgespielt.
+• 👆 Tippe an eine beliebige Stelle des Bildschirms, um die Sticker-Vorschau zu schließen.
+• 🚀 Erneuerter Startbildschirm — unnötige Ladebildschirme entfernt.
+• 🖼️ Alle Sticker auf der Paketseite laden jetzt vollständig.
+• 🐛 Fehlerbehebungen und Geschwindigkeitsverbesserungen.
 </de-DE>
 <en-US>
-🌍 Sticly v5.0.0 — Language & Speed Update!
-• 🌍 Language issue fixed — your chosen language now applies fully across every screen.
-• ⚡ Sticker packs load far faster and smoother; the choppy "loads in chunks" issue is gone.
-• ✨ Newly added packs now show up instantly on the home screen.
-• 💎 Premium pack covers and names display correctly.
-• 🐛 Bug fixes and stability improvements.
+🎬 Sticly v5.0.1 — Stickers Come Alive!
+• 🎬 Animated stickers now play live right on the pack page.
+• 👆 Tap anywhere on the screen to close the sticker preview.
+• 🚀 Refreshed launch screen — unnecessary loading screens removed.
+• 🖼️ All stickers on the pack page now load completely.
+• 🐛 Bug fixes and speed improvements.
 </en-US>
 <es-419>
-🌍 Sticly v5.0.0 — ¡Actualización de idioma y velocidad!
-• 🌍 Problema de idioma corregido: el idioma elegido ahora se aplica por completo en todas las pantallas.
-• ⚡ Los paquetes de stickers cargan mucho más rápido y fluido; se solucionó la carga por partes.
-• ✨ Los paquetes recién añadidos aparecen al instante en la pantalla principal.
-• 💎 Las portadas y nombres de los paquetes premium se muestran correctamente.
-• 🐛 Correcciones de errores y mejoras de estabilidad.
+🎬 Sticly v5.0.1 — ¡Los stickers cobran vida!
+• 🎬 Los stickers animados ahora se reproducen en vivo en la página del paquete.
+• 👆 Toca cualquier parte de la pantalla para cerrar la vista previa del sticker.
+• 🚀 Pantalla de inicio renovada; se eliminaron las pantallas de carga innecesarias.
+• 🖼️ Todos los stickers de la página del paquete ahora cargan por completo.
+• 🐛 Correcciones de errores y mejoras de velocidad.
 </es-419>
 <fil>
-🌍 Sticly v5.0.0 — Update sa Wika at Bilis!
-• 🌍 Naayos ang isyu sa wika — ang piniling wika mo ay buong nailalapat na sa lahat ng screen.
-• ⚡ Mas mabilis at mas maayos nang mag-load ang mga sticker pack; ayos na ang paunti-unting pag-load.
-• ✨ Ang mga bagong dagdag na pack ay agad nang lumalabas sa home screen.
-• 💎 Tama nang ipinapakita ang mga cover at pangalan ng premium pack.
-• 🐛 Mga pag-aayos ng bug at pagpapahusay ng katatagan.
+🎬 Sticly v5.0.1 — Buhay na ang mga Sticker!
+• 🎬 Ang mga animated na sticker ay gumagalaw na nang live sa pahina ng pack.
+• 👆 I-tap ang kahit saan sa screen para isara ang preview ng sticker.
+• 🚀 Bagong launch screen — inalis na ang mga di-kailangang loading screen.
+• 🖼️ Buong nai-load na ngayon ang lahat ng sticker sa pahina ng pack.
+• 🐛 Mga pag-aayos ng bug at pagpapabilis.
 </fil>
 <fr-FR>
-🌍 Sticly v5.0.0 — Mise à jour langue et vitesse !
-• 🌍 Problème de langue corrigé — la langue choisie s'applique désormais entièrement sur tous les écrans.
-• ⚡ Les packs de stickers se chargent bien plus vite et en fluidité ; le chargement par à-coups est résolu.
-• ✨ Les packs récemment ajoutés apparaissent instantanément sur l'écran d'accueil.
-• 💎 Les couvertures et noms des packs premium s'affichent correctement.
-• 🐛 Corrections de bugs et améliorations de la stabilité.
+🎬 Sticly v5.0.1 — Les stickers prennent vie !
+• 🎬 Les stickers animés s'affichent désormais en direct sur la page du pack.
+• 👆 Touchez n'importe où sur l'écran pour fermer l'aperçu du sticker.
+• 🚀 Écran de démarrage repensé — les écrans de chargement inutiles ont été supprimés.
+• 🖼️ Tous les stickers de la page du pack se chargent maintenant entièrement.
+• 🐛 Corrections de bugs et améliorations de la vitesse.
 </fr-FR>
 <hi-IN>
-🌍 Sticly v5.0.0 — भाषा और गति अपडेट!
-• 🌍 भाषा समस्या ठीक की गई — आपकी चुनी हुई भाषा अब हर स्क्रीन पर पूरी तरह लागू होती है।
-• ⚡ स्टिकर पैक बहुत तेज़ और सहज लोड होते हैं; टुकड़ों में लोड होने की समस्या हल हुई।
-• ✨ नए जोड़े गए पैक अब होम स्क्रीन पर तुरंत दिखते हैं।
-• 💎 प्रीमियम पैक के कवर और नाम सही ढंग से दिखते हैं।
-• 🐛 बग फिक्स और स्थिरता सुधार।
+🎬 Sticly v5.0.1 — स्टिकर हुए जीवंत!
+• 🎬 एनिमेटेड स्टिकर अब पैक पेज पर सीधे चलते हैं।
+• 👆 स्टिकर प्रीव्यू बंद करने के लिए स्क्रीन पर कहीं भी टैप करें।
+• 🚀 नया लॉन्च स्क्रीन — गैर-ज़रूरी लोडिंग स्क्रीन हटाई गईं।
+• 🖼️ पैक पेज के सभी स्टिकर अब पूरी तरह लोड होते हैं।
+• 🐛 बग फिक्स और गति सुधार।
 </hi-IN>
 <id>
-🌍 Sticly v5.0.0 — Pembaruan Bahasa & Kecepatan!
-• 🌍 Masalah bahasa diperbaiki — bahasa yang Anda pilih kini diterapkan penuh di semua layar.
-• ⚡ Paket stiker termuat jauh lebih cepat dan mulus; masalah pemuatan bertahap teratasi.
-• ✨ Paket yang baru ditambahkan kini langsung muncul di layar utama.
-• 💎 Sampul dan nama paket premium ditampilkan dengan benar.
-• 🐛 Perbaikan bug dan peningkatan stabilitas.
+🎬 Sticly v5.0.1 — Stiker Jadi Hidup!
+• 🎬 Stiker animasi kini diputar langsung di halaman paket.
+• 👆 Ketuk di mana saja pada layar untuk menutup pratinjau stiker.
+• 🚀 Layar pembuka diperbarui — layar pemuatan yang tidak perlu dihapus.
+• 🖼️ Semua stiker di halaman paket kini termuat sepenuhnya.
+• 🐛 Perbaikan bug dan peningkatan kecepatan.
 </id>
 <it-IT>
-🌍 Sticly v5.0.0 — Aggiornamento lingua e velocità!
-• 🌍 Problema della lingua risolto — la lingua scelta ora si applica completamente in ogni schermata.
-• ⚡ I pacchetti sticker si caricano molto più velocemente e fluidi; risolto il caricamento a blocchi.
-• ✨ I pacchetti appena aggiunti compaiono subito nella schermata principale.
-• 💎 Copertine e nomi dei pacchetti premium vengono mostrati correttamente.
-• 🐛 Correzioni di bug e miglioramenti della stabilità.
+🎬 Sticly v5.0.1 — Gli sticker prendono vita!
+• 🎬 Gli sticker animati ora vengono riprodotti dal vivo nella pagina del pacchetto.
+• 👆 Tocca un punto qualsiasi dello schermo per chiudere l'anteprima dello sticker.
+• 🚀 Schermata di avvio rinnovata — rimosse le schermate di caricamento superflue.
+• 🖼️ Tutti gli sticker nella pagina del pacchetto ora si caricano completamente.
+• 🐛 Correzioni di bug e miglioramenti della velocità.
 </it-IT>
 <ja-JP>
-🌍 Sticly v5.0.0 — 言語＆スピードアップデート！
-• 🌍 言語の問題を修正 — 選択した言語がすべての画面に完全に適用されるようになりました。
-• ⚡ ステッカーパックの読み込みが大幅に高速かつスムーズに。途切れる読み込みを解消しました。
-• ✨ 新しく追加されたパックがホーム画面にすぐ表示されます。
-• 💎 プレミアムパックのカバーと名前が正しく表示されます。
-• 🐛 バグ修正と安定性の向上。
+🎬 Sticly v5.0.1 — ステッカーが動き出す！
+• 🎬 アニメーションステッカーがパックページでそのまま再生されるようになりました。
+• 👆 画面のどこをタップしてもステッカーのプレビューを閉じられます。
+• 🚀 起動画面を一新し、不要な読み込み画面をなくしました。
+• 🖼️ パックページのすべてのステッカーが完全に読み込まれるようになりました。
+• 🐛 バグ修正と速度の向上。
 </ja-JP>
 <ko-KR>
-🌍 Sticly v5.0.0 — 언어 & 속도 업데이트!
-• 🌍 언어 문제 해결 — 선택한 언어가 이제 모든 화면에 완전히 적용됩니다.
-• ⚡ 스티커 팩이 훨씬 빠르고 부드럽게 로드되며, 끊겨서 로드되던 문제가 해결되었습니다.
-• ✨ 새로 추가된 팩이 홈 화면에 즉시 표시됩니다.
-• 💎 프리미엄 팩의 커버와 이름이 올바르게 표시됩니다.
-• 🐛 버그 수정 및 안정성 개선.
+🎬 Sticly v5.0.1 — 스티커가 살아납니다!
+• 🎬 애니메이션 스티커가 이제 팩 페이지에서 바로 재생됩니다.
+• 👆 화면 아무 곳이나 탭하면 스티커 미리보기가 닫힙니다.
+• 🚀 시작 화면을 새롭게 바꾸고 불필요한 로딩 화면을 없앴습니다.
+• 🖼️ 팩 페이지의 모든 스티커가 이제 완전히 로드됩니다.
+• 🐛 버그 수정 및 속도 개선.
 </ko-KR>
 <pt-BR>
-🌍 Sticly v5.0.0 — Atualização de idioma e velocidade!
-• 🌍 Problema de idioma corrigido — o idioma escolhido agora é aplicado totalmente em todas as telas.
-• ⚡ Os pacotes de stickers carregam muito mais rápido e fluido; o carregamento em partes foi resolvido.
-• ✨ Pacotes recém-adicionados aparecem instantaneamente na tela inicial.
-• 💎 Capas e nomes dos pacotes premium são exibidos corretamente.
-• 🐛 Correções de bugs e melhorias de estabilidade.
+🎬 Sticly v5.0.1 — Os stickers ganham vida!
+• 🎬 Os stickers animados agora são reproduzidos ao vivo na página do pacote.
+• 👆 Toque em qualquer lugar da tela para fechar a prévia do sticker.
+• 🚀 Tela de inicialização renovada — telas de carregamento desnecessárias removidas.
+• 🖼️ Todos os stickers da página do pacote agora carregam completamente.
+• 🐛 Correções de bugs e melhorias de velocidade.
 </pt-BR>
 <ru-RU>
-🌍 Sticly v5.0.0 — Обновление языка и скорости!
-• 🌍 Исправлена проблема с языком — выбранный язык теперь полностью применяется на всех экранах.
-• ⚡ Стикер-паки загружаются гораздо быстрее и плавнее; рывковая загрузка устранена.
-• ✨ Недавно добавленные паки сразу появляются на главном экране.
-• 💎 Обложки и названия премиум-паков отображаются правильно.
-• 🐛 Исправления ошибок и улучшения стабильности.
+🎬 Sticly v5.0.1 — Стикеры оживают!
+• 🎬 Анимированные стикеры теперь воспроизводятся прямо на странице пака.
+• 👆 Коснитесь любого места экрана, чтобы закрыть предпросмотр стикера.
+• 🚀 Обновлённый экран запуска — лишние экраны загрузки убраны.
+• 🖼️ Все стикеры на странице пака теперь загружаются полностью.
+• 🐛 Исправления ошибок и улучшение скорости.
 </ru-RU>
 <th>
-🌍 Sticly v5.0.0 — อัปเดตภาษาและความเร็ว!
-• 🌍 แก้ไขปัญหาภาษา — ภาษาที่คุณเลือกถูกใช้งานครบทุกหน้าจอแล้ว
-• ⚡ แพ็กสติกเกอร์โหลดเร็วและลื่นไหลขึ้นมาก แก้ปัญหาการโหลดเป็นช่วง ๆ แล้ว
-• ✨ แพ็กที่เพิ่งเพิ่มจะแสดงบนหน้าหลักทันที
-• 💎 ภาพปกและชื่อแพ็กพรีเมียมแสดงผลถูกต้อง
-• 🐛 แก้ไขข้อบกพร่องและปรับปรุงความเสถียร
+🎬 Sticly v5.0.1 — สติกเกอร์มีชีวิตชีวา!
+• 🎬 สติกเกอร์เคลื่อนไหวเล่นแบบสดในหน้าแพ็กแล้ว
+• 👆 แตะที่ใดก็ได้บนหน้าจอเพื่อปิดตัวอย่างสติกเกอร์
+• 🚀 ปรับหน้าจอเริ่มต้นใหม่ ลบหน้าจอโหลดที่ไม่จำเป็นออก
+• 🖼️ สติกเกอร์ทั้งหมดในหน้าแพ็กโหลดครบถ้วนแล้ว
+• 🐛 แก้ไขข้อบกพร่องและปรับปรุงความเร็ว
 </th>
 <vi>
-🌍 Sticly v5.0.0 — Cập nhật ngôn ngữ & tốc độ!
-• 🌍 Đã sửa lỗi ngôn ngữ — ngôn ngữ bạn chọn nay được áp dụng đầy đủ trên mọi màn hình.
-• ⚡ Gói sticker tải nhanh và mượt hơn nhiều; đã khắc phục tình trạng tải ngắt quãng.
-• ✨ Các gói mới thêm hiển thị ngay trên màn hình chính.
-• 💎 Ảnh bìa và tên gói premium hiển thị chính xác.
-• 🐛 Sửa lỗi và cải thiện độ ổn định.
+🎬 Sticly v5.0.1 — Sticker trở nên sống động!
+• 🎬 Sticker động giờ phát trực tiếp ngay trên trang gói.
+• 👆 Chạm vào bất kỳ đâu trên màn hình để đóng bản xem trước sticker.
+• 🚀 Làm mới màn hình khởi động — đã bỏ các màn hình tải không cần thiết.
+• 🖼️ Tất cả sticker trên trang gói giờ tải đầy đủ.
+• 🐛 Sửa lỗi và cải thiện tốc độ.
 </vi>
 <zh-CN>
-🌍 Sticly v5.0.0 — 语言与速度更新！
-• 🌍 修复语言问题——所选语言现已完整应用于所有界面。
-• ⚡ 贴纸包加载速度更快更流畅，解决了分段加载的问题。
-• ✨ 新添加的贴纸包立即显示在主页。
-• 💎 高级贴纸包的封面和名称正确显示。
-• 🐛 错误修复和稳定性改进。
+🎬 Sticly v5.0.1 — 贴纸动起来了！
+• 🎬 动态贴纸现在可在贴纸包页面直接播放。
+• 👆 点按屏幕任意位置即可关闭贴纸预览。
+• 🚀 全新启动画面，移除多余的加载界面。
+• 🖼️ 贴纸包页面的所有贴纸现在都能完整加载。
+• 🐛 错误修复和速度优化。
 </zh-CN>
