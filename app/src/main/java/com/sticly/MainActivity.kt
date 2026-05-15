@@ -56,6 +56,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -491,8 +492,11 @@ class MainActivity : AppCompatActivity() {
             observePacksUpdateFlow()
             if (StickerRepository.allPacksCache.isNotEmpty()) {
                 displayPacks(StickerRepository.allPacksCache)
+                rv.postDelayed({ loadPacks(forceRefresh = true) }, 2_000)
+            } else {
+                // Önbellek yoksa beklemeden yükle — açılışta boş bekleme süresini kısaltır.
+                loadPacks(forceRefresh = true)
             }
-            rv.postDelayed({ loadPacks(forceRefresh = true) }, 2_000)
         }
         
         // Delay real-time observer start to avoid cascading reloads during initial load
@@ -3808,7 +3812,13 @@ Rules:
             updateStoryPacks(packs)
         }
         applyFilters()
-        showContent()
+        if (contentShown) {
+            showContent()
+        } else {
+            // İlk açılış: feed tamamen hazır olana kadar loading ekranı korunur,
+            // sonra tek seferde gösterilir (boş ekran / placeholder ara adımları olmadan).
+            scheduleFirstReveal()
+        }
         if (deferHomeSections) {
             rv.postDelayed({
                 setupCategoryChips()
@@ -3861,11 +3871,72 @@ Rules:
         if (contentShown) return
         contentShown = true
         hideSkeleton()
-        loadingOverlay.visibility = View.GONE
         mainContent.visibility = View.VISIBLE
         mainContent.alpha = 1f
         swipeRefresh.visibility = View.VISIBLE
         rv.visibility = View.VISIBLE
+        // Loading ekranını yumuşak bir geçişle kapat — hazır feed tek seferde belirir.
+        if (loadingOverlay.visibility == View.VISIBLE) {
+            loadingOverlay.animate()
+                .alpha(0f)
+                .setDuration(220)
+                .withEndAction {
+                    loadingOverlay.visibility = View.GONE
+                    loadingOverlay.alpha = 1f
+                }
+                .start()
+        } else {
+            loadingOverlay.visibility = View.GONE
+        }
+    }
+
+    private var firstRevealScheduled = false
+
+    /**
+     * İlk açılışta feed verisi geldikten sonra, ilk ekrandaki çıkartma küçük
+     * resimleri de hazır olana kadar bekler; ardından loading ekranını kapatır.
+     * Böylece boş ekran / gri placeholder ara adımları hiç görünmez.
+     */
+    private fun scheduleFirstReveal() {
+        if (firstRevealScheduled || contentShown) return
+        firstRevealScheduled = true
+        lifecycleScope.launch {
+            val firstPacks = allPacks
+                .filter { it.category != "custom" && !it.id.startsWith("custom_") }
+                .take(4)
+            withTimeoutOrNull(3000) { preloadFirstScreenThumbnails(firstPacks) }
+            // Kartların önbellekten gelen görselleri çizmesi için kısa bir an bekle.
+            delay(150)
+            showContent()
+        }
+    }
+
+    private suspend fun preloadFirstScreenThumbnails(packs: List<Pack>) = withContext(Dispatchers.IO) {
+        if (packs.isEmpty()) return@withContext
+        val urls = ArrayList<String>()
+        packs.forEach { pack ->
+            pack.stickers.take(5).forEach { sticker ->
+                val url = when {
+                    sticker.url.isNotEmpty() -> sticker.url
+                    pack.storagePath.isNotEmpty() ->
+                        StickerRepository.getStickerDirectUrl(pack.id, sticker.file, pack.storagePath)
+                    else -> ""
+                }
+                if (url.isNotEmpty()) urls.add(url)
+            }
+        }
+        urls.map { url ->
+            async {
+                try {
+                    com.bumptech.glide.Glide.with(applicationContext)
+                        .asFile()
+                        .load(url)
+                        .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.DATA)
+                        .submit()
+                        .get(4, java.util.concurrent.TimeUnit.SECONDS)
+                } catch (_: Exception) { null }
+            }
+        }.awaitAll()
     }
 
     private var lastPacksUpdateTime = 0L
