@@ -1,6 +1,7 @@
 package com.sticly
 
 import android.graphics.Bitmap
+import android.graphics.drawable.Drawable
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -32,6 +33,16 @@ class StickerAdapter(
     private val clearBgBitmapListener = object : RequestListener<Bitmap> {
         override fun onLoadFailed(e: GlideException?, model: Any?, target: Target<Bitmap>, isFirstResource: Boolean): Boolean = false
         override fun onResourceReady(resource: Bitmap, model: Any, target: Target<Bitmap>, dataSource: DataSource, isFirstResource: Boolean): Boolean {
+            (target as? com.bumptech.glide.request.target.ImageViewTarget<*>)?.view?.background = null
+            return false
+        }
+    }
+
+    // Animasyonlu paketler asBitmap yerine asDrawable ile yüklenir; aksi halde
+    // animasyonlu WebP'lerin sadece ilk karesi gösterilir (grid'de durağan görünür).
+    private val clearBgDrawableListener = object : RequestListener<Drawable> {
+        override fun onLoadFailed(e: GlideException?, model: Any?, target: Target<Drawable>, isFirstResource: Boolean): Boolean = false
+        override fun onResourceReady(resource: Drawable, model: Any, target: Target<Drawable>, dataSource: DataSource, isFirstResource: Boolean): Boolean {
             (target as? com.bumptech.glide.request.target.ImageViewTarget<*>)?.view?.background = null
             return false
         }
@@ -115,6 +126,40 @@ class StickerAdapter(
 
         // Hide progressBar (placeholder is enough)
         h.progressBar.visibility = View.GONE
+
+        // Animasyonlu paket: drawable olarak yükle ki grid'de canlı oynasın.
+        // Statik paketler aşağıdaki asBitmap hızlı yolunu kullanmaya devam eder.
+        if (isAnimated) {
+            val source: Any? = when {
+                packId.startsWith("custom_") -> {
+                    val customFile = CustomStickerManager.getCustomStickerPath(context, packId, sticker.file)
+                    if (customFile.exists()) customFile else null
+                }
+                cachedFile.exists() && cachedFile.length() > 0 -> cachedFile
+                sticker.url.isNotEmpty() -> sticker.url
+                storagePath.isNotEmpty() -> {
+                    StickerRepository.getStickerDirectUrl(packId, sticker.file, storagePath)
+                        .also { sticker.url = it }
+                }
+                else -> android.net.Uri.parse("file:///android_asset/$packId/${sticker.file}")
+            }
+            if (source == null) {
+                h.img.setImageResource(R.drawable.sticker_placeholder)
+                return
+            }
+            var request = glideManager.asDrawable()
+                .load(source)
+                .override(256, 256)
+                .placeholder(R.drawable.sticker_placeholder)
+                .error(R.drawable.sticker_placeholder)
+                .diskCacheStrategy(DiskCacheStrategy.AUTOMATIC)
+                .listener(clearBgDrawableListener)
+            if (source is java.io.File) {
+                request = request.signature(ObjectKey(source.lastModified()))
+            }
+            request.into(h.img)
+            return
+        }
 
         when {
             // 0. Özel paket kontrolü

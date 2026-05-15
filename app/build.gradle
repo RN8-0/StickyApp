@@ -123,6 +123,8 @@ dependencies {
     kapt 'com.github.bumptech.glide:compiler:4.16.0'
     implementation 'com.github.bumptech.glide:okhttp3-integration:4.16.0'
     implementation 'jp.wasabeef:glide-transformations:4.3.0'
+    // Animasyonlu WebP desteği (Glide tek başına animasyonlu WebP'yi güvenilir oynatmıyor)
+    implementation 'com.github.zjupure:webpdecoder:2.6.4.16.0'
 
     // Coroutines
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3'

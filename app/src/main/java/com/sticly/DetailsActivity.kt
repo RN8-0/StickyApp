@@ -401,12 +401,23 @@ class DetailsActivity : AppCompatActivity() {
         fun preloadBatch(batch: List<Sticker>) {
             batch.forEach { sticker ->
                 val source = sourceFor(sticker) ?: return@forEach
-                glide.asBitmap()
-                    .load(source)
-                    .override(256, 256)
-                    .priority(com.bumptech.glide.Priority.LOW)
-                    .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.RESOURCE)
-                    .preload(256, 256)
+                if (pack.isAnimated) {
+                    // Animasyonlu paketlerde grid asDrawable ile yükleniyor; preload de
+                    // aynı yolu kullanmalı ki doğru cache ısınsın.
+                    glide.asDrawable()
+                        .load(source)
+                        .override(256, 256)
+                        .priority(com.bumptech.glide.Priority.LOW)
+                        .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.AUTOMATIC)
+                        .preload(256, 256)
+                } else {
+                    glide.asBitmap()
+                        .load(source)
+                        .override(256, 256)
+                        .priority(com.bumptech.glide.Priority.LOW)
+                        .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.RESOURCE)
+                        .preload(256, 256)
+                }
             }
         }
 
@@ -2057,13 +2068,27 @@ class DetailsActivity : AppCompatActivity() {
             "Preview click pack=$packId file=${sticker.file} isAnimatedPack=$isAnimatedPack animatedPreview=$animatedPreview source=${loadSource?.javaClass?.simpleName} url=${sticker.url.take(80)}"
         )
 
+        // Önizlemeyi kapatan ortak fonksiyon — hem boş alana hem de animasyonlu
+        // sticker'ın üstüne dokununca çalışır.
+        val dismissWithAnimation = {
+            val closeAnimation = view.animate()
+                .alpha(0f)
+                .setDuration(if (animatedPreview) 120 else 200)
+                .setInterpolator(AccelerateDecelerateInterpolator())
+                .withEndAction { dialog.dismiss() }
+            if (!animatedPreview) {
+                closeAnimation.scaleX(0.7f).scaleY(0.7f)
+            }
+            closeAnimation.start()
+        }
+
         val startPreviewLoad = {
             if (loadSource == null) {
                 imageView.setImageResource(R.drawable.transparent_placeholder)
             } else if (animatedPreview) {
                 imageView.setImageDrawable(null)
                 showAnimatedPreviewFallback(view as ViewGroup, imageView, loadSource) {
-                    dialog.dismiss()
+                    dismissWithAnimation()
                 }?.let {
                     fallbackWebView = it
                 }
@@ -2114,17 +2139,7 @@ class DetailsActivity : AppCompatActivity() {
         }
 
         // Ekrana tıklandığında da kapat (Referans projeyle aynı)
-        view.setOnClickListener {
-            val closeAnimation = view.animate()
-                .alpha(0f)
-                .setDuration(if (animatedPreview) 120 else 200)
-                .setInterpolator(AccelerateDecelerateInterpolator())
-                .withEndAction { dialog.dismiss() }
-            if (!animatedPreview) {
-                closeAnimation.scaleX(0.7f).scaleY(0.7f)
-            }
-            closeAnimation.start()
-        }
+        view.setOnClickListener { dismissWithAnimation() }
 
         dialog.show()
     }
@@ -2172,6 +2187,24 @@ class DetailsActivity : AppCompatActivity() {
         webView.visibility = View.VISIBLE
         webView.isLongClickable = false
         webView.setOnClickListener { onTap() }
+
+        // WebView'in kendi tıklama olayı güvenilir tetiklenmiyor; üstüne saydam bir
+        // katman koyup ekranın herhangi bir yerine dokununca önizleme kapansın.
+        val tapCatcher = container.findViewWithTag<View>("animated_preview_tap")
+            ?: View(this).apply {
+                tag = "animated_preview_tap"
+                isClickable = true
+                container.addView(
+                    this,
+                    android.widget.FrameLayout.LayoutParams(
+                        android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+                        android.widget.FrameLayout.LayoutParams.MATCH_PARENT
+                    )
+                )
+            }
+        tapCatcher.bringToFront()
+        tapCatcher.setOnClickListener { onTap() }
+
         webView.loadDataWithBaseURL(
             null,
             """
