@@ -3980,8 +3980,8 @@ Rules:
                 var adSlot = 0
                 sorted.forEachIndexed { index, pack ->
                     withAds.add(pack)
-                    val firstAd = index == 3
-                    val recurringAd = index > 3 && (index - 3) % 8 == 0
+                    val firstAd = index == 1
+                    val recurringAd = index > 1 && (index - 1) % 5 == 0
                     if (firstAd || recurringAd) {
                         withAds.add(BannerAdPlaceholder(adSlot++))
                     }
@@ -4050,7 +4050,7 @@ Rules:
                 if (!hasPreloadedOnce && newList.isNotEmpty()) {
                     hasPreloadedOnce = true
                     rv.postDelayed({
-                        StickyGlideModule.preloadFeedPacks(this@MainActivity, newList, 4)
+                        StickyGlideModule.preloadFeedPacks(this@MainActivity, newList, preloadCount = 2, stickersPerPack = 3)
                     }, 1500)
                 }
 

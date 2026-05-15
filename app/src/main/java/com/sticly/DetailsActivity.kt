@@ -1992,6 +1992,10 @@ class DetailsActivity : AppCompatActivity() {
         lockOverlay?.visibility = View.GONE
         unlockHint?.visibility = View.GONE
 
+        val animatedPreview = isAnimatedPack ||
+            sticker.file.endsWith(".webp", ignoreCase = true) ||
+            sticker.file.endsWith(".gif", ignoreCase = true)
+
         // Determine the load source
         val loadSource: Any? = if (packId.startsWith("custom_")) {
             val customFile = CustomStickerManager.getCustomStickerPath(this, packId, sticker.file)
@@ -1999,7 +2003,6 @@ class DetailsActivity : AppCompatActivity() {
         } else {
             val cachedFile = StickerRepository.getCachedStickerPath(this, packId, sticker.file)
             when {
-                isAnimatedPack && sticker.url.isNotEmpty() -> sticker.url
                 cachedFile.exists() && cachedFile.length() > 0 -> cachedFile
                 sticker.url.isNotEmpty() -> sticker.url
                 else -> android.net.Uri.parse("file:///android_asset/$packId/${sticker.file}")
@@ -2010,7 +2013,7 @@ class DetailsActivity : AppCompatActivity() {
             imageView.setImageResource(R.drawable.transparent_placeholder)
         } else {
             // Animated WebP: must use DATA cache (Glide has no encoder for AnimatedImageDrawable)
-            val cacheStrategy = if (isAnimatedPack)
+            val cacheStrategy = if (animatedPreview)
                 com.bumptech.glide.load.engine.DiskCacheStrategy.DATA
             else
                 com.bumptech.glide.load.engine.DiskCacheStrategy.RESOURCE
@@ -2022,37 +2025,49 @@ class DetailsActivity : AppCompatActivity() {
                 .dontTransform()
                 .error(R.drawable.transparent_placeholder)
 
-            if (!isAnimatedPack) {
+            if (!animatedPreview) {
                 request.override(512, 512)
             }
             request.into(imageView)
         }
 
-        // Tasarımdaki animasyonlu açılış
-        view.scaleX = 0.7f
-        view.scaleY = 0.7f
-        view.alpha = 0f
+        dialog.setOnDismissListener {
+            Glide.with(this@DetailsActivity).clear(imageView)
+            imageView.setImageDrawable(null)
+        }
 
-        view.animate()
-            .scaleX(1f)
-            .scaleY(1f)
-            .alpha(1f)
-            .setDuration(250)
-            .setInterpolator(android.view.animation.OvershootInterpolator(1.1f))
-            .start()
+        // Animated sticker oynarken parent scale animasyonu decode/render işlemini takabiliyor.
+        view.alpha = 0f
+        if (animatedPreview) {
+            view.scaleX = 1f
+            view.scaleY = 1f
+            view.animate()
+                .alpha(1f)
+                .setDuration(120)
+                .start()
+        } else {
+            view.scaleX = 0.7f
+            view.scaleY = 0.7f
+            view.animate()
+                .scaleX(1f)
+                .scaleY(1f)
+                .alpha(1f)
+                .setDuration(250)
+                .setInterpolator(android.view.animation.OvershootInterpolator(1.1f))
+                .start()
+        }
 
         // Ekrana tıklandığında da kapat (Referans projeyle aynı)
         view.setOnClickListener {
-            view.animate()
-                .scaleX(0.7f)
-                .scaleY(0.7f)
+            val closeAnimation = view.animate()
                 .alpha(0f)
-                .setDuration(200)
+                .setDuration(if (animatedPreview) 120 else 200)
                 .setInterpolator(AccelerateDecelerateInterpolator())
-                .withEndAction {
-                    dialog.dismiss()
-                }
-                .start()
+                .withEndAction { dialog.dismiss() }
+            if (!animatedPreview) {
+                closeAnimation.scaleX(0.7f).scaleY(0.7f)
+            }
+            closeAnimation.start()
         }
 
         dialog.show()

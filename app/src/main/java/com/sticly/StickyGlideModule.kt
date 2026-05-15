@@ -94,9 +94,14 @@ class StickyGlideModule : AppGlideModule() {
         }
 
         /**
-         * Ana listedeki ilk N paketi agresif ön yükle — ilk scroll anında her şey hazır olsun
+         * Ana listedeki ilk birkaç paketi hafifçe ön yükle.
          */
-        fun preloadFeedPacks(context: Context, packs: List<Any>, preloadCount: Int = 20) {
+        fun preloadFeedPacks(
+            context: Context,
+            packs: List<Any>,
+            preloadCount: Int = 3,
+            stickersPerPack: Int = 3
+        ) {
             CoroutineScope(Dispatchers.IO).launch {
                 try {
                     val urls = mutableListOf<String>()
@@ -105,7 +110,7 @@ class StickyGlideModule : AppGlideModule() {
                         if (count >= preloadCount) break
                         val pack = item as? Pack ?: continue
                         if (pack.category == "custom") continue
-                        pack.stickers.take(5).forEach { sticker ->
+                        pack.stickers.take(stickersPerPack).forEach { sticker ->
                             val url = if (sticker.url.isNotEmpty()) sticker.url
                             else if (pack.storagePath.isNotEmpty()) StickerRepository.getStickerDirectUrl(pack.id, sticker.file, pack.storagePath)
                             else ""
@@ -116,12 +121,10 @@ class StickyGlideModule : AppGlideModule() {
 
                     Log.d(TAG, "Preloading ${urls.size} sticker URLs from first $count packs")
 
-                    // Priority tiers: first 30 URLs (visible) = HIGH, rest = LOW
-                    val highPriority = urls.take(30)
-                    val lowPriority = urls.drop(30)
+                    val highPriority = urls.take(9)
+                    val lowPriority = urls.drop(9)
 
-                    // Visible items first — 8 parallel downloads
-                    highPriority.chunked(8).forEach { batch ->
+                    highPriority.chunked(3).forEach { batch ->
                         batch.map { url ->
                             async(Dispatchers.IO) {
                                 try {
@@ -137,8 +140,7 @@ class StickyGlideModule : AppGlideModule() {
                         }.awaitAll()
                     }
 
-                    // Rest at low priority — 4 parallel
-                    lowPriority.chunked(4).forEach { batch ->
+                    lowPriority.chunked(2).forEach { batch ->
                         batch.map { url ->
                             async(Dispatchers.IO) {
                                 try {
