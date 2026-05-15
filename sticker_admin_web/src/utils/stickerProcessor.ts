@@ -609,6 +609,18 @@ class StickerProcessor {
     async processFromPngFrames(pngBlobs: Blob[], fps: number, onProgress?: (p: StickerProgress) => void): Promise<Blob> {
         await this.load();
         const ffmpeg = this.ffmpeg!;
+        // Remove frames left behind by a previous sticker. A crashed or aborted
+        // encode can leave stale frame_*.png in the shared WASM FS; createWebPFromFrames
+        // globs frame_%04d.png, so those stale frames would be muxed into THIS
+        // sticker's WebP and produce a corrupted ("broken") result.
+        try {
+            const stale = await ffmpeg.listDir('.');
+            await Promise.all(
+                stale
+                    .filter((f: { name: string }) => f.name.startsWith('frame_') || f.name === 'output.webp')
+                    .map((f: { name: string }) => ffmpeg.deleteFile(f.name).catch(() => {}))
+            );
+        } catch { /* listing/cleanup is best-effort */ }
         onProgress?.({ message: `Writing ${pngBlobs.length} frames...`, percentage: 40 });
 
         for (let i = 0; i < pngBlobs.length; i++) {

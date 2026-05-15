@@ -59,7 +59,19 @@ function normalizeBotToken(token: string): string {
         .replace(/[\u200B-\u200D\uFEFF\s]/g, '');
 }
 
-async function telegramApiPost(botToken: string, method: string, params: Record<string, string> = {}): Promise<any> {
+// Telegram flood-control (HTTP 429) is the usual reason a multi-pack import
+// "loops": after a few hundred getFile/download calls Telegram starts rejecting
+// requests. Respecting `retry_after` and retrying turns a hard failure into a
+// short pause instead of a broken pack.
+const MAX_TG_RETRIES = 4;
+const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
+
+async function telegramApiPost(
+    botToken: string,
+    method: string,
+    params: Record<string, string> = {},
+    attempt = 0
+): Promise<any> {
     const cleanToken = normalizeBotToken(botToken);
     const response = await fetch(TELEGRAM_PROXY, {
         method: 'POST',
@@ -68,21 +80,39 @@ async function telegramApiPost(botToken: string, method: string, params: Record<
     });
     if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
+        const retryAfter = Number(errorData?.parameters?.retry_after) || 0;
+        if ((response.status === 429 || errorData.error_code === 429) && attempt < MAX_TG_RETRIES) {
+            await sleep((retryAfter || 2) * 1000 + 500);
+            return telegramApiPost(botToken, method, params, attempt + 1);
+        }
         throw new Error(errorData.description || errorData.message || `Telegram API error: ${response.status}`);
     }
     const data = await response.json();
-    if (!data.ok) throw new Error(data.description || 'Failed to get sticker set');
+    if (!data.ok) {
+        const retryAfter = Number(data?.parameters?.retry_after) || 0;
+        if (data.error_code === 429 && attempt < MAX_TG_RETRIES) {
+            await sleep((retryAfter || 2) * 1000 + 500);
+            return telegramApiPost(botToken, method, params, attempt + 1);
+        }
+        throw new Error(data.description || 'Failed to get sticker set');
+    }
     return data;
 }
 
-async function telegramFilePost(botToken: string, filePath: string): Promise<Blob> {
+async function telegramFilePost(botToken: string, filePath: string, attempt = 0): Promise<Blob> {
     const cleanToken = normalizeBotToken(botToken);
     const response = await fetch(TELEGRAM_PROXY, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token: cleanToken, file_path: filePath }),
     });
-    if (!response.ok) throw new Error(`Telegram file download error: ${response.status}`);
+    if (!response.ok) {
+        if (response.status === 429 && attempt < MAX_TG_RETRIES) {
+            await sleep(3000);
+            return telegramFilePost(botToken, filePath, attempt + 1);
+        }
+        throw new Error(`Telegram file download error: ${response.status}`);
+    }
     return await response.blob();
 }
 
@@ -316,6 +346,20 @@ async function processTelegramSticker(
         })] : [])
     ]);
     clearTimeout(timeoutId!);
+    // FFmpeg WASM can crash silently mid-encode. Once crashed, the dead worker
+    // is reused and every following animated sticker hangs until its full 240s
+    // timeout — to the user this looks like the whole import freezing in a loop.
+    // After an animated/video sticker fails, reload FFmpeg so the next sticker
+    // starts from a fresh worker. Safe here: animated stickers run serially
+    // (PARALLEL_BATCH = 1), so no concurrent encode is interrupted.
+    if (result === null && (sticker.is_animated || sticker.is_video)) {
+        try {
+            onProgress?.(`♻️ Resetting encoder after sticker #${index + 1} failure...`);
+            await stickerProcessor.forceReload();
+        } catch {
+            // next sticker's load() will retry from scratch
+        }
+    }
     return result;
 }
 
