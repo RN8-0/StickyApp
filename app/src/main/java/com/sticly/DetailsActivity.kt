@@ -842,7 +842,7 @@ class DetailsActivity : AppCompatActivity() {
     private fun setupPublisherStrip(pack: Pack) {
         val isCustom = pack.category == "custom" || pack.id.startsWith("custom_")
         val strip = findViewById<LinearLayout>(R.id.publisherStrip) ?: return
-        if (isCustom || pack.pub.isBlank()) {
+        if (isCustom) {
             strip.visibility = View.GONE
             return
         }
@@ -854,19 +854,26 @@ class DetailsActivity : AppCompatActivity() {
         followButton?.visibility = View.GONE
         strip.visibility = View.VISIBLE
 
-        if (pack.pub.equals("Sticky", ignoreCase = true)) {
-            avatar?.visibility = View.GONE
-            identityContainer?.visibility = View.INVISIBLE
+        val publisherName = pack.pub.ifBlank { getString(R.string.app_name) }
+        if (publisherName.equals("Sticky", ignoreCase = true)) {
+            avatar?.visibility = View.VISIBLE
+            identityContainer?.visibility = View.VISIBLE
+            avatar?.setImageResource(R.mipmap.ic_launcher_round)
+            name?.text = getString(R.string.app_name)
+            hint?.visibility = View.GONE
             strip.setOnClickListener(null)
             strip.isClickable = false
+            avatar?.setOnClickListener(null)
+            avatar?.isClickable = false
             return
         }
 
         avatar?.visibility = View.VISIBLE
         identityContainer?.visibility = View.VISIBLE
-        hint?.text = getString(R.string.view_profile)
-        name?.text = pack.pub
+        hint?.visibility = View.GONE
+        name?.text = publisherName
         val clickListener = View.OnClickListener { openPublisherProfile(pack) }
+        strip.isClickable = true
         strip.setOnClickListener(clickListener)
         avatar?.setOnClickListener(clickListener)
 
