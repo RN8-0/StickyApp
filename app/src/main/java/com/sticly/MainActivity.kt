@@ -3075,6 +3075,7 @@ Rules:
 
         if (regionalTopPacks.isEmpty()) {
             regionalPopularContainer.visibility = View.GONE
+            findViewById<com.google.android.material.appbar.AppBarLayout>(R.id.mainAppBarLayout)?.requestLayout()
             return
         }
 
@@ -3092,6 +3093,9 @@ Rules:
         }
 
         regionalAdapter?.updateData(regionalTopPacks)
+        regionalPopularContainer.post {
+            findViewById<com.google.android.material.appbar.AppBarLayout>(R.id.mainAppBarLayout)?.requestLayout()
+        }
     }
 
     private fun startAutoScroll() { /* disabled — manual swipe only */ }
@@ -3128,6 +3132,9 @@ Rules:
             storyAdapter?.updateData(recentPacks)
         } else {
             storyContainer.visibility = View.GONE
+        }
+        storyContainer.post {
+            findViewById<com.google.android.material.appbar.AppBarLayout>(R.id.mainAppBarLayout)?.requestLayout()
         }
     }
 
@@ -3737,8 +3744,12 @@ Rules:
 
     private fun displayPacks(packs: List<Pack>) {
         val distinctPacks = packs.distinctBy { it.id }
-        val oldSignature = allPacks.sortedBy { it.id }.joinToString("|") { "${it.id}:${it.version}:${it.stickers.size}:${it.isActive}" }
-        val newSignature = distinctPacks.sortedBy { it.id }.joinToString("|") { "${it.id}:${it.version}:${it.stickers.size}:${it.isActive}" }
+        fun visiblePackSignature(packList: List<Pack>) = packList.sortedBy { it.id }.joinToString("|") {
+            val stickers = it.stickers.joinToString(",") { sticker -> "${sticker.file}:${sticker.url}" }
+            "${it.id}:${it.version}:${it.name}:${it.pub}:${it.category}:${it.tray}:${it.trayUrl}:${it.isActive}:${it.isPremium}:${it.productId}:${it.isAnimated}:${it.isPopular}:${it.priceTRY}:${it.priceUSD}:${it.priceEUR}:${it.downloadCount}:${it.favoriteCount}:${it.likeCount}:${it.commentCount}:${it.viewCount}:${it.stickers.size}:$stickers"
+        }
+        val oldSignature = visiblePackSignature(allPacks)
+        val newSignature = visiblePackSignature(distinctPacks)
         // Cold start triggers loadPacks() from several sources (StickyApp preload,
         // MainActivity, the realtime observer). When the pack set has not actually
         // changed, skip the whole rebuild — the repeated rebuilds are exactly what
@@ -3810,9 +3821,9 @@ Rules:
     private fun observePacksUpdateFlow() {
         lifecycleScope.launch {
             StickerRepository.packsUpdateFlow.collect { updatedPacks ->
-                // Debounce rapid updates (at most once every 2s)
+                // Debounce rapid updates without hiding admin-side edits for long.
                 val now = System.currentTimeMillis()
-                if (now - lastPacksUpdateTime < 2000) return@collect
+                if (now - lastPacksUpdateTime < 750) return@collect
                 lastPacksUpdateTime = now
                 Log.d("MainActivity", "Real-time update received: ${updatedPacks.size} packs")
                 displayPacks(updatedPacks)

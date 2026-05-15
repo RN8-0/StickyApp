@@ -299,7 +299,7 @@ object StickerRepository {
         val appContext = context.applicationContext
         lastObservedSignature = packSignature(allPacksCache)
         observerJob = repositoryScope.launch {
-            delay(2_000)
+            delay(1_000)
             while (isActive) {
                 try {
                     val packs = loadPacks(appContext, forceRefresh = true)
@@ -312,7 +312,7 @@ object StickerRepository {
                 } catch (e: Exception) {
                     Log.e(TAG, "PocketBase poll failed: ${e.message}")
                 }
-                delay(6_000)
+                delay(2_000)
             }
         }
     }
@@ -326,8 +326,8 @@ object StickerRepository {
         .filter { !it.id.startsWith("custom_") }
         .sortedBy { it.id }
         .joinToString("|") { pack ->
-            val files = pack.stickers.joinToString(",") { it.file }
-            "${pack.id}:${pack.version}:${pack.name}:${pack.isActive}:${pack.isPremium}:${pack.isAnimated}:${pack.stickers.size}:$files"
+            val stickers = pack.stickers.joinToString(",") { "${it.file}:${it.url}" }
+            "${pack.id}:${pack.version}:${pack.name}:${pack.pub}:${pack.category}:${pack.tray}:${pack.trayUrl}:${pack.isActive}:${pack.isPremium}:${pack.productId}:${pack.isAnimated}:${pack.isPopular}:${pack.priceTRY}:${pack.priceUSD}:${pack.priceEUR}:${pack.downloadCount}:${pack.favoriteCount}:${pack.likeCount}:${pack.commentCount}:${pack.viewCount}:${pack.stickers.size}:$stickers"
         }
 
     private fun clearChangedPackCaches(context: Context, oldPacks: List<Pack>, newPacks: List<Pack>) {
@@ -984,47 +984,10 @@ object TranslationHelper {
  * Paketin mevcut dile uygun ismini döner
  */
 val Pack.localizedName: String
-    get() = localizedNameFor(java.util.Locale.getDefault().language)
+    get() = name.ifBlank { nameTr.ifBlank { id } }
 
 fun Pack.localizedNameFor(language: String): String {
-        val locale = language.substringBefore('-').substringBefore('_').lowercase()
-
-        // 1. Check dynamic translations map (Populated from Gemini)
-        val dynamicName = translations[locale]
-        if (!dynamicName.isNullOrBlank()) return dynamicName
-        if (locale == "en") {
-            val englishName = translations["en"].orEmpty().ifBlank { TranslationHelper.translate(name.ifBlank { nameTr }) }
-            if (englishName.isNotBlank()) return englishName
-        }
-
-        // 2. Check legacy hardcoded fields
-        when (locale) {
-            "tr" -> if (nameTr.isNotBlank()) return nameTr
-            "zh" -> if (nameZh.isNotBlank()) return nameZh
-            "es" -> if (nameEs.isNotBlank()) return nameEs
-            "ar" -> if (nameAr.isNotBlank()) return nameAr
-            "hi" -> if (nameHi.isNotBlank()) return nameHi
-            "pt" -> if (namePt.isNotBlank()) return namePt
-        }
-        
-        // 3. If no match, use primary name or English fallback
-        return if (locale == "tr") {
-            if (nameTr.isNotBlank()) nameTr else name
-        } else {
-            // ENGLISH/GLOBAL MODE (for en, zh, es, ar, hi, pt etc.)
-            val englishFallback = translations["en"].orEmpty().ifBlank { TranslationHelper.translate(name.ifBlank { nameTr }) }
-            if (englishFallback.isNotBlank() && englishFallback != name) return englishFallback
-            
-            // 1. Try name directly if it looks non-Turkish
-            if (name.isNotBlank() && !isLikelyTurkish(name)) return name
-            
-            // 2. Fallback to Turkish name if it looks like English (rare case)
-            if (nameTr.isNotBlank() && !isLikelyTurkish(nameTr)) return nameTr
-            
-            
-            // Fallback to name, then nameTr
-            if (name.isNotBlank()) name else nameTr
-        }
+        return name.ifBlank { nameTr.ifBlank { id } }
     }
 
 private fun isLikelyTurkish(text: String): Boolean {

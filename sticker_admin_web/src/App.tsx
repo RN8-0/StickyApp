@@ -50,7 +50,7 @@ import {
   UserPlus,
   Inbox,
 } from 'lucide-react';
-import { translateTextAllLanguages, TARGET_LANGUAGES } from './utils/translator';
+import { TARGET_LANGUAGES } from './utils/translator';
 import {
   BarChart,
   Bar,
@@ -1318,6 +1318,14 @@ function App() {
     }
   };
 
+  const packNameLocaleFields = (packName: string): Record<string, string> => {
+    const cleanName = packName.trim();
+    return TARGET_LANGUAGES.reduce<Record<string, string>>((acc, lang) => {
+      acc[`name_${lang.code}`] = cleanName;
+      return acc;
+    }, { name_en: cleanName });
+  };
+
   const stripDraftPublishMeta = (draft: StickerPack, translations: Record<string, string>, currentName: string) => {
     if (!currentName?.trim()) {
       throw new Error('Pack name is empty. Please edit the draft and set a name before publishing.');
@@ -1336,19 +1344,10 @@ function App() {
       'draft_data',
     ].forEach((key) => delete packDataWithoutMeta[key]);
 
-    // Filter out empty translation values to avoid overwriting with blanks
-    const cleanTranslations: Record<string, string> = {};
-    for (const [key, val] of Object.entries(translations)) {
-      if (val?.trim()) {
-        cleanTranslations[key] = val;
-      }
-    }
-
     return {
       ...packDataWithoutMeta,
-      ...cleanTranslations,
       name: currentName,
-      name_en: currentName,
+      ...packNameLocaleFields(currentName),
       is_active: true,
     };
   };
@@ -1548,11 +1547,8 @@ function App() {
       const currentName = draft.name;
       const stickerCount = draft.sticker_count || draft.stickers?.length || 0;
 
-      setSinglePublishProgress({ step: `Translating "${currentName}" to 33 languages...`, percent: 15 });
-      let translations: Record<string, string> = {};
-      if (deepseekService.isConfigured()) {
-        try { translations = await deepseekService.translatePackName(currentName); } catch { translations = {}; }
-      }
+      setSinglePublishProgress({ step: `Preparing "${currentName}"...`, percent: 15 });
+      const translations: Record<string, string> = {};
 
       setSinglePublishProgress({ step: `Publishing ${stickerCount} stickers to database...`, percent: 55 });
       const targetCollection = draft.is_premium ? 'premium_stickers' : 'stickers';
@@ -1604,11 +1600,8 @@ function App() {
       setDraftPublishing(draft.id);
       setPublishAllProgress({ current: idx, total, currentName: draft.name });
       try {
-        let translations: Record<string, string> = {};
+        const translations: Record<string, string> = {};
         const currentName = draft.name;
-        if (deepseekService.isConfigured()) {
-          try { translations = await deepseekService.translatePackName(currentName); } catch { translations = {}; }
-        }
         const targetCollection = draft.is_premium ? 'premium_stickers' : 'stickers';
         const packData = stripDraftPublishMeta(draft, translations, currentName);
         await publishDraftRecord(draft, targetCollection, packData);
@@ -1678,7 +1671,7 @@ function App() {
       const trimmedName = draftEditData.name.trim();
       const updatedData: any = {
         name: trimmedName,
-        name_en: trimmedName,
+        ...packNameLocaleFields(trimmedName),
         category: draftEditData.category ?? selectedDraft.category,
         is_premium: draftEditData.is_premium ?? (selectedDraft as any).is_premium ?? false,
         is_animated: draftEditData.is_animated ?? (selectedDraft as any).is_animated ?? false,
@@ -1707,10 +1700,6 @@ function App() {
       } else if (firstDraftSticker?.image_file) {
         updatedData.tray_image_file = firstDraftSticker.image_file;
       }
-      TARGET_LANGUAGES.forEach(lang => {
-        const key = `name_${lang.code}`;
-        if (draftEditData[key]) updatedData[key] = draftEditData[key];
-      });
       await pb.collection('draft_stickers').update(selectedDraft.id, updatedData);
       const saved = await pb.collection('draft_stickers').getOne(selectedDraft.id);
       const updated = { ...selectedDraft, ...updatedData, name: saved.name, name_en: saved.name_en, sticker_count: saved.sticker_count } as StickerPack;
@@ -2192,31 +2181,7 @@ function App() {
         created_at: new Date().toISOString()
       };
 
-      // Tüm name_ ile başlayan alanları kopyala (Çeviriler)
-      const hasTranslations = Object.keys(newPackData).some(key => key.startsWith('name_') && key !== 'name_en' && (newPackData as any)[key]);
-      Object.keys(newPackData).forEach(key => {
-        if (key.startsWith('name_')) {
-          packData[key] = (newPackData as any)[key] || '';
-        }
-      });
-
-      // Otomatik çeviri: Eğer çeviriler boşsa ve isim varsa, DeepSeek veya Google Translate ile çevir
-      if (!hasTranslations && newPackData.name) {
-        try {
-          let translations: Record<string, string>;
-          if (deepseekService.isConfigured()) {
-            translations = await deepseekService.translatePackName(newPackData.name);
-          } else {
-            translations = await translateTextAllLanguages(newPackData.name);
-          }
-          Object.entries(translations).forEach(([key, value]) => {
-            packData[key] = value;
-          });
-          console.log('[AUTO-TRANSLATE] Paket oluşturulurken otomatik çeviri yapıldı');
-        } catch (translateErr) {
-          console.warn('[AUTO-TRANSLATE] Otomatik çeviri hatası:', translateErr);
-        }
-      }
+      Object.assign(packData, packNameLocaleFields(newPackData.name));
 
       // PocketBase'e kaydet (birincil)
       let createdId = packId;
@@ -2264,26 +2229,26 @@ function App() {
   };
 
   const handleAutoTranslate = async (isEdit: boolean, isDraft: boolean = false) => {
-    const textToTranslate = isDraft ? draftEditData.name : (isEdit ? editFormData.name : newPackData.name);
-    if (!textToTranslate) {
-      alert("Please enter a main name (English) first.");
+    const packName = isDraft ? draftEditData.name : (isEdit ? editFormData.name : newPackData.name);
+    if (!packName) {
+      alert("Please enter a pack name first.");
       return;
     }
 
     setIsTranslating(true);
     try {
-      const translations = await translateTextAllLanguages(textToTranslate);
+      const syncedNames = packNameLocaleFields(packName);
       if (isDraft) {
-        setDraftEditData((prev: any) => ({ ...prev, ...translations }));
+        setDraftEditData((prev: any) => ({ ...prev, ...syncedNames }));
       } else if (isEdit) {
-        setEditFormData((prev: any) => ({ ...prev, ...translations }));
+        setEditFormData((prev: any) => ({ ...prev, ...syncedNames }));
       } else {
-        setNewPackData((prev: any) => ({ ...prev, ...translations }));
+        setNewPackData((prev: any) => ({ ...prev, ...syncedNames }));
       }
-      alert("✅ Gemini translated all languages successfully!");
+      alert("Pack name synced to all language fields without translation.");
     } catch (error) {
-      console.error("Gemini Error:", error);
-      alert("⚠️ An error occurred during translation. Please try again.");
+      console.error("Name sync error:", error);
+      alert("An error occurred while syncing the pack name. Please try again.");
     } finally {
       setIsTranslating(false);
     }
@@ -2332,32 +2297,15 @@ function App() {
           ((selectedPack as any).telegram_set_title || '').toString().trim() ||
           `Pack ${selectedPack.id.slice(-6).toUpperCase()}`;
         updatedData.name = fallbackName;
-        updatedData.name_en = fallbackName;
+        Object.assign(updatedData, packNameLocaleFields(fallbackName));
       } else {
-        // Always keep name_en in sync with name so the Android English locale
-        // and the auto-translate hook both see the correct primary name.
-        updatedData.name_en = normalizedName;
+        Object.assign(updatedData, packNameLocaleFields(normalizedName));
       }
 
-      // The Android app shows name_<locale> (e.g. name_tr) for non-English users.
-      // If only `name` is edited, those per-language fields stay stale and the app
-      // keeps showing the OLD name. So whenever the name actually changes, rewrite
-      // every name_xx the admin did NOT explicitly re-translate in this edit, so
-      // the rename shows up on every device immediately.
       const previousName = (selectedPack.name ?? '').toString().trim();
       const finalName = ((updatedData.name ?? normalizedName) ?? '').toString().trim();
       if (finalName && finalName !== previousName) {
-        for (const lang of TARGET_LANGUAGES) {
-          const key = `name_${lang.code}`;
-          const editedVal = (editFormData as any)[key];
-          const oldVal = (selectedPack as any)[key];
-          // Keep a per-language value only if the admin explicitly changed it
-          // (e.g. via the translate button); otherwise sync it to the new name.
-          if (editedVal == null || editedVal === '' || editedVal === oldVal) {
-            updatedData[key] = finalName;
-          }
-        }
-        updatedData.name_en = finalName;
+        Object.assign(updatedData, packNameLocaleFields(finalName));
       }
 
       updatedData.image_data_version = (Number(selectedPack.image_data_version || 0) + 1).toString();
@@ -4965,28 +4913,6 @@ function App() {
                 </div>
               </div>
 
-              {/* Users/Publishers Sub-Tabs */}
-              <div className="flex gap-2">
-                {[
-                  { id: 'users' as const, label: 'Users', icon: Users },
-                  { id: 'publishers' as const, label: 'Publisher Users', icon: UserPlus }
-                ].map(tab => (
-                  <button
-                    key={tab.id}
-                    onClick={() => setUsersSubTab(tab.id)}
-                    className={cn(
-                      "flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all border",
-                      usersSubTab === tab.id
-                        ? "bg-primary/20 text-primary border-primary/30"
-                        : "bg-white/5 text-textSec border-transparent hover:bg-white/10"
-                    )}
-                  >
-                    <tab.icon size={14} />
-                    {tab.label}
-                  </button>
-                ))}
-              </div>
-
               {usersSubTab === 'users' ? (<>
               {/* Stats Cards */}
               <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
@@ -6367,7 +6293,7 @@ function App() {
                       try {
                         await importTelegramPacks(telegramBotToken.trim(), packs, {
                           useAiNaming: !telegramKeepOriginalName,
-                          useAiTranslation: true,
+                          useAiTranslation: false,
                           stickerLimit: telegramStickerLimit,
                           maxStickers: telegramMaxStickers,
                           splitPacks: telegramSplitPacks,
@@ -6887,7 +6813,7 @@ function App() {
                             <span className="text-sm font-bold text-white">Multi-Language Support</span>
                           </div>
                           <p className="text-xs text-textSec">
-                            🌍 Translations are handled automatically. Pack names will be translated to all supported languages via Cloud Function when saved.
+                            Pack names are saved exactly as written and shown the same in every app language.
                           </p>
                         </div>
 
@@ -7143,7 +7069,7 @@ function App() {
               <span className="text-sm font-bold text-white">Multi-Language Support</span>
             </div>
             <p className="text-xs text-textSec">
-              🌍 Translations are handled automatically. Pack names will be translated to all supported languages via Cloud Function when saved.
+              Pack names are saved exactly as written and shown the same in every app language.
             </p>
           </div>
           <Input
@@ -7185,7 +7111,7 @@ function App() {
                 <span className="text-sm font-bold text-white">Multi-Language Support</span>
               </div>
               <p className="text-xs text-textSec">
-                🌍 Translations are handled automatically. Pack names will be translated to all supported languages via Cloud Function when saved.
+                Pack names are saved exactly as written and shown the same in every app language.
               </p>
             </div>
             <div className="space-y-3">
