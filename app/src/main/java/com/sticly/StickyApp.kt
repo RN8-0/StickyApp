@@ -61,6 +61,6 @@ class StickyApp : Application() {
             } catch (e: Exception) {
                 Log.e("StickyApp", "AdMob initialization failed: ${e.message}", e)
             }
-        }, 2_500)
+        }, 8_000)
     }
 }

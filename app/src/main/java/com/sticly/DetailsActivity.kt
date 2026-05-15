@@ -7,9 +7,7 @@ import android.content.Intent
 import android.content.res.ColorStateList
 import android.graphics.BitmapFactory
 import android.graphics.Color
-import android.graphics.drawable.Animatable
 import android.graphics.drawable.ColorDrawable
-import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.view.LayoutInflater
@@ -23,6 +21,7 @@ import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.*
+import android.webkit.WebView
 import androidx.core.view.ViewCompat
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.view.WindowInsetsCompat
@@ -34,10 +33,6 @@ import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
-import com.bumptech.glide.load.DataSource
-import com.bumptech.glide.load.engine.GlideException
-import com.bumptech.glide.request.RequestListener
-import com.bumptech.glide.request.target.Target
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import kotlinx.coroutines.*
@@ -832,23 +827,8 @@ class DetailsActivity : AppCompatActivity() {
         rvRelated.itemAnimator = null
         installCenteredListPadding(rvRelated)
 
-        val relatedItems = mutableListOf<Any>()
-        if (!PreferencesHelper.isPremium(this)) {
-            var adSlot = 1000
-            relatedPacks.forEachIndexed { index, pack ->
-                relatedItems.add(pack)
-                val firstAd = index == 1
-                val recurringAd = index > 1 && (index - 1) % 5 == 0
-                if (firstAd || recurringAd) {
-                    relatedItems.add(BannerAdPlaceholder(adSlot++))
-                }
-            }
-        } else {
-            relatedItems.addAll(relatedPacks)
-        }
-
         val relatedAdapter = PackAdapter(
-            items = relatedItems,
+            items = relatedPacks,
             click = { pack ->
                 startActivity(Intent(this, DetailsActivity::class.java).putExtra("id", pack.id))
             },
@@ -2007,6 +1987,7 @@ class DetailsActivity : AppCompatActivity() {
         val imageView = view.findViewById<ImageView>(R.id.previewImage)
         val lockOverlay = view.findViewById<ImageView>(R.id.lockOverlay)
         val unlockHint = view.findViewById<android.widget.TextView>(R.id.unlockHint)
+        var previewWebView: WebView? = null
 
         dialog.setContentView(view)
 
@@ -2035,56 +2016,72 @@ class DetailsActivity : AppCompatActivity() {
         val startPreviewLoad = {
             if (loadSource == null) {
                 imageView.setImageResource(R.drawable.transparent_placeholder)
+            } else if (animatedPreview) {
+                imageView.visibility = View.GONE
+                val sourceUrl = when (loadSource) {
+                    is File -> android.net.Uri.fromFile(loadSource).toString()
+                    is android.net.Uri -> loadSource.toString()
+                    else -> loadSource.toString()
+                }
+                val webView = WebView(this@DetailsActivity).apply {
+                    setBackgroundColor(Color.TRANSPARENT)
+                    isVerticalScrollBarEnabled = false
+                    isHorizontalScrollBarEnabled = false
+                    overScrollMode = View.OVER_SCROLL_NEVER
+                    settings.javaScriptEnabled = false
+                    settings.loadsImagesAutomatically = true
+                    settings.allowFileAccess = true
+                    settings.allowContentAccess = true
+                    settings.loadWithOverviewMode = true
+                    settings.useWideViewPort = true
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
+                        settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                    }
+                }
+                previewWebView = webView
+                (view as? ViewGroup)?.addView(
+                    webView,
+                    android.widget.FrameLayout.LayoutParams(300.dp(), 300.dp()).apply {
+                        gravity = android.view.Gravity.CENTER
+                    }
+                )
+                val safeUrl = android.text.TextUtils.htmlEncode(sourceUrl)
+                val html = """
+                    <!doctype html>
+                    <html>
+                    <head>
+                      <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+                      <style>
+                        html,body{margin:0;padding:0;width:100%;height:100%;background:transparent;overflow:hidden;}
+                        body{display:flex;align-items:center;justify-content:center;}
+                        img{max-width:100%;max-height:100%;object-fit:contain;}
+                      </style>
+                    </head>
+                    <body><img src="$safeUrl"></body>
+                    </html>
+                """.trimIndent()
+                webView.loadDataWithBaseURL(null, html, "text/html", "UTF-8", null)
             } else {
-                // Animated WebP: must use DATA cache (Glide has no encoder for AnimatedImageDrawable)
-                val cacheStrategy = if (animatedPreview)
-                    com.bumptech.glide.load.engine.DiskCacheStrategy.DATA
-                else
-                    com.bumptech.glide.load.engine.DiskCacheStrategy.RESOURCE
-
-                val request = Glide.with(this@DetailsActivity)
-                    .asDrawable()
+                Glide.with(this@DetailsActivity)
                     .load(loadSource)
                     .placeholder(R.drawable.transparent_placeholder)
-                    .diskCacheStrategy(cacheStrategy)
+                    .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.RESOURCE)
                     .dontTransform()
                     .error(R.drawable.transparent_placeholder)
-                    .listener(object : RequestListener<Drawable> {
-                        override fun onLoadFailed(
-                            e: GlideException?,
-                            model: Any?,
-                            target: Target<Drawable>,
-                            isFirstResource: Boolean
-                        ): Boolean = false
-
-                        override fun onResourceReady(
-                            resource: Drawable,
-                            model: Any,
-                            target: Target<Drawable>,
-                            dataSource: DataSource,
-                            isFirstResource: Boolean
-                        ): Boolean {
-                            if (animatedPreview) {
-                                resource.setVisible(true, true)
-                                (resource as? Animatable)?.start()
-                                imageView.post {
-                                    (imageView.drawable as? Animatable)?.start()
-                                }
-                            }
-                            return false
-                        }
-                    })
-
-                if (!animatedPreview) {
-                    request.override(512, 512)
-                }
-                request.into(imageView)
+                    .override(512, 512)
+                    .into(imageView)
             }
         }
 
         dialog.setOnDismissListener {
             Glide.with(this@DetailsActivity).clear(imageView)
             imageView.setImageDrawable(null)
+            previewWebView?.apply {
+                stopLoading()
+                loadUrl("about:blank")
+                destroy()
+            }
+            previewWebView = null
         }
         dialog.setOnShowListener {
             imageView.post { startPreviewLoad() }

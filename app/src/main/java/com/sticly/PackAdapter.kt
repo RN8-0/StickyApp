@@ -206,7 +206,6 @@ class PackAdapter(
 
             val adLoader = AdLoader.Builder(holder.itemView.context, AdManager.FEED_AD_ID)
                 .forNativeAd { nativeAd ->
-                    Log.d("PackAdapter", "Feed ad loaded slot=$slotIndex")
                     nativeAdCache.put(slotIndex, nativeAd)
                     pendingSlots.remove(slotIndex)
                     // Only update the view if this ViewHolder is still bound to this slot
@@ -221,16 +220,6 @@ class PackAdapter(
                         if (adView.tag == slotIndex) {
                             adView.visibility = View.GONE
                             adView.layoutParams.height = 0
-                            adView.postDelayed({
-                                val adapterPosition = holder.bindingAdapterPosition
-                                if (adView.tag == slotIndex &&
-                                    adapterPosition != RecyclerView.NO_POSITION &&
-                                    nativeAdCache[slotIndex] == null &&
-                                    !pendingSlots.contains(slotIndex)
-                                ) {
-                                    notifyItemChanged(adapterPosition)
-                                }
-                            }, 20_000L)
                         }
                     }
                 })
