@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical">
+
+    <LinearLayout
+        android:id="@+id/storyContainer"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingTop="8dp"
+        android:paddingBottom="4dp"
+        android:visibility="gone"
+        tools:visibility="visible">
+
+        <TextView
+            android:id="@+id/storyTitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="@color/text_primary"
+            android:textSize="15sp"
+            android:fontFamily="sans-serif-medium"
+            android:textStyle="bold"
+            android:paddingHorizontal="16dp"
+            android:paddingBottom="8dp"
+            android:text="@string/home_recently_added" />
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/rvStories"
+            android:layout_width="match_parent"
+            android:layout_height="92dp"
+            android:paddingHorizontal="12dp"
+            android:clipToPadding="false"
+            android:overScrollMode="never"
+            android:nestedScrollingEnabled="false" />
+
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/regionalPopularContainer"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:layout_marginBottom="8dp"
+        android:visibility="gone"
+        tools:visibility="visible">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingHorizontal="16dp"
+            android:paddingBottom="6dp">
+
+            <TextView
+                android:id="@+id/regionalPopularTitle"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:textColor="@color/text_primary"
+                android:textSize="15sp"
+                android:fontFamily="sans-serif-medium"
+                android:textStyle="bold"
+                tools:text="🔥 Popular Stickers" />
+
+        </LinearLayout>
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/rvRegional"
+            android:layout_width="match_parent"
+            android:layout_height="130dp"
+            android:paddingHorizontal="12dp"
+            android:clipToPadding="false"
+            android:overScrollMode="never"
+            android:nestedScrollingEnabled="false" />
+
+    </LinearLayout>
+
+    <HorizontalScrollView
+        android:id="@+id/categoryScrollView"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:scrollbars="none"
+        android:paddingVertical="4dp"
+        android:clipToPadding="false">
+
+        <com.google.android.material.chip.ChipGroup
+            android:id="@+id/categoryChipGroup"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:paddingHorizontal="16dp"
+            app:singleSelection="true"
+            app:chipSpacingHorizontal="6dp" />
+
+    </HorizontalScrollView>
+
+</LinearLayout>

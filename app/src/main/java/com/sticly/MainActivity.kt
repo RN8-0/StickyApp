@@ -27,6 +27,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.GravityCompat
 import androidx.drawerlayout.widget.DrawerLayout
 import androidx.lifecycle.lifecycleScope
+import androidx.recyclerview.widget.ConcatAdapter
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import androidx.recyclerview.widget.DiffUtil
@@ -72,6 +73,17 @@ import com.google.android.material.button.MaterialButton
 import androidx.cardview.widget.CardView
 import android.app.Activity
 
+private class SingleViewAdapter(private val contentView: View) : RecyclerView.Adapter<SingleViewAdapter.VH>() {
+    init { setHasStableIds(true) }
+
+    class VH(view: View) : RecyclerView.ViewHolder(view)
+
+    override fun getItemId(position: Int): Long = Long.MIN_VALUE + 10
+    override fun getItemCount(): Int = 1
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH = VH(contentView)
+    override fun onBindViewHolder(holder: VH, position: Int) = Unit
+}
+
 class MainActivity : AppCompatActivity() {
 
     private lateinit var drawer: DrawerLayout
@@ -83,9 +95,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tvDirectAddSubtitle: TextView
     // skeleton removed
     private lateinit var swipeRefresh: SwipeRefreshLayout
-    private lateinit var homeScroll: androidx.core.widget.NestedScrollView
     private lateinit var mainContent: View
     private lateinit var adapter: PackAdapter
+    private lateinit var homeHeaderAdapter: SingleViewAdapter
     private lateinit var menuBtn: ImageButton
     private lateinit var toolbarTitle: TextView
     private lateinit var toolbarSubtitle: TextView
@@ -517,14 +529,13 @@ class MainActivity : AppCompatActivity() {
         tvDirectAddSubtitle = findViewById(R.id.tvDirectAddSubtitle)
 
         swipeRefresh = findViewById(R.id.swipeRefresh)
-        homeScroll = findViewById(R.id.homeScroll)
         menuBtn = findViewById(R.id.menuBtn)
         toolbarTitle = findViewById(R.id.toolbarTitle)
         toolbarSubtitle = findViewById(R.id.toolbarSubtitle)
 
         // Toolbar'a tıklayınca en üste scroll
         findViewById<View>(R.id.toolbarLayout).setOnClickListener {
-            homeScroll.smoothScrollTo(0, 0)
+            rv.smoothScrollToPosition(0)
         }
 
         mainContent = findViewById(R.id.mainContent)
@@ -543,24 +554,21 @@ class MainActivity : AppCompatActivity() {
         // FAB: scroll-to-top
         val btnScrollToTop = findViewById<com.google.android.material.floatingactionbutton.FloatingActionButton>(R.id.btnScrollToTop)
         btnScrollToTop?.setOnClickListener {
-            homeScroll.smoothScrollTo(0, 0)
-        }
-        homeScroll.setOnScrollChangeListener { _, _, scrollY, _, _ ->
-            // Only show on the home/ALL tab — Favorites, AI, Custom, Profile etc.
-            // each have their own UI and should not show this floating button.
-            val visible = currentFilter == FilterType.ALL && scrollY >= (resources.displayMetrics.density * 420).toInt()
-            btnScrollToTop?.visibility = if (visible) View.VISIBLE else View.GONE
+            rv.smoothScrollToPosition(0)
         }
 
-        categoryChipGroup = findViewById(R.id.categoryChipGroup)
+        val homeHeaderView = layoutInflater.inflate(R.layout.item_home_header, rv, false)
+        homeHeaderAdapter = SingleViewAdapter(homeHeaderView)
+
+        categoryChipGroup = homeHeaderView.findViewById(R.id.categoryChipGroup)
         
-        regionalPopularContainer = findViewById(R.id.regionalPopularContainer)
-        regionalPopularTitle = findViewById(R.id.regionalPopularTitle)
-        rvRegional = findViewById(R.id.rvRegional)
+        regionalPopularContainer = homeHeaderView.findViewById(R.id.regionalPopularContainer)
+        regionalPopularTitle = homeHeaderView.findViewById(R.id.regionalPopularTitle)
+        rvRegional = homeHeaderView.findViewById(R.id.rvRegional)
         setupRegionalSection()
 
-        storyContainer = findViewById(R.id.storyContainer)
-        rvStories = findViewById(R.id.rvStories)
+        storyContainer = homeHeaderView.findViewById(R.id.storyContainer)
+        rvStories = homeHeaderView.findViewById(R.id.rvStories)
         setupStorySection()
 
         // Bottom Nav
@@ -587,8 +595,7 @@ class MainActivity : AppCompatActivity() {
         swipeRefresh.isEnabled = false
 
         rv.layoutManager = LinearLayoutManager(this)
-        rv.setHasFixedSize(false)
-        rv.isNestedScrollingEnabled = false
+        rv.setHasFixedSize(true)
         rv.setItemViewCacheSize(10)
         rv.itemAnimator = null
         installCenteredListPadding(rv)
@@ -688,7 +695,16 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         )
-        rv.adapter = adapter
+        rv.adapter = ConcatAdapter(homeHeaderAdapter, adapter)
+        rv.addOnScrollListener(object : androidx.recyclerview.widget.RecyclerView.OnScrollListener() {
+            override fun onScrolled(recyclerView: androidx.recyclerview.widget.RecyclerView, dx: Int, dy: Int) {
+                val firstVisible = (recyclerView.layoutManager as? androidx.recyclerview.widget.LinearLayoutManager)
+                    ?.findFirstVisibleItemPosition() ?: 0
+                // Header is item 0, so show after several real pack rows.
+                val visible = currentFilter == FilterType.ALL && firstVisible >= 6
+                btnScrollToTop?.visibility = if (visible) View.VISIBLE else View.GONE
+            }
+        })
 
         menuBtn.setOnClickListener {
             startActivity(Intent(this, SettingsActivity::class.java))
@@ -3467,7 +3483,7 @@ Rules:
                     currentSearchQuery = query
                     applyFilters()
                     if (!wasSearching && currentSearchQuery.isNotBlank()) {
-                        homeScroll.scrollTo(0, 0)
+                        rv.scrollToPosition(0)
                     }
                     // If search returns no results, silently refresh from server once
                     if (currentSearchQuery.isNotEmpty() && ::adapter.isInitialized && adapter.getItems().isEmpty()) {
@@ -4028,7 +4044,7 @@ Rules:
                 // Scroll handling after adapter update
                 if (pendingScrollToTop) {
                     pendingScrollToTop = false
-                    homeScroll.post { homeScroll.scrollTo(0, 0) }
+                    rv.post { rv.scrollToPosition(0) }
                 }
             }
         }
