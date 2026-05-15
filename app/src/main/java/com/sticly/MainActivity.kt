@@ -83,6 +83,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tvDirectAddSubtitle: TextView
     // skeleton removed
     private lateinit var swipeRefresh: SwipeRefreshLayout
+    private lateinit var homeScroll: androidx.core.widget.NestedScrollView
     private lateinit var mainContent: View
     private lateinit var adapter: PackAdapter
     private lateinit var menuBtn: ImageButton
@@ -516,13 +517,14 @@ class MainActivity : AppCompatActivity() {
         tvDirectAddSubtitle = findViewById(R.id.tvDirectAddSubtitle)
 
         swipeRefresh = findViewById(R.id.swipeRefresh)
+        homeScroll = findViewById(R.id.homeScroll)
         menuBtn = findViewById(R.id.menuBtn)
         toolbarTitle = findViewById(R.id.toolbarTitle)
         toolbarSubtitle = findViewById(R.id.toolbarSubtitle)
 
         // Toolbar'a tıklayınca en üste scroll
         findViewById<View>(R.id.toolbarLayout).setOnClickListener {
-            rv.smoothScrollToPosition(0)
+            homeScroll.smoothScrollTo(0, 0)
         }
 
         mainContent = findViewById(R.id.mainContent)
@@ -541,20 +543,14 @@ class MainActivity : AppCompatActivity() {
         // FAB: scroll-to-top
         val btnScrollToTop = findViewById<com.google.android.material.floatingactionbutton.FloatingActionButton>(R.id.btnScrollToTop)
         btnScrollToTop?.setOnClickListener {
-            val appBar = findViewById<com.google.android.material.appbar.AppBarLayout>(R.id.mainAppBarLayout)
-            appBar?.setExpanded(true, true)
-            rv.smoothScrollToPosition(0)
+            homeScroll.smoothScrollTo(0, 0)
         }
-        rv.addOnScrollListener(object : androidx.recyclerview.widget.RecyclerView.OnScrollListener() {
-            override fun onScrolled(recyclerView: androidx.recyclerview.widget.RecyclerView, dx: Int, dy: Int) {
-                val totalScrolled = (recyclerView.layoutManager as? androidx.recyclerview.widget.LinearLayoutManager)
-                    ?.findFirstVisibleItemPosition() ?: 0
-                // Only show on the home/ALL tab — Favorites, AI, Custom, Profile etc.
-                // each have their own UI and should not show this floating button.
-                val visible = currentFilter == FilterType.ALL && totalScrolled >= 6
-                btnScrollToTop?.visibility = if (visible) View.VISIBLE else View.GONE
-            }
-        })
+        homeScroll.setOnScrollChangeListener { _, _, scrollY, _, _ ->
+            // Only show on the home/ALL tab — Favorites, AI, Custom, Profile etc.
+            // each have their own UI and should not show this floating button.
+            val visible = currentFilter == FilterType.ALL && scrollY >= (resources.displayMetrics.density * 420).toInt()
+            btnScrollToTop?.visibility = if (visible) View.VISIBLE else View.GONE
+        }
 
         categoryChipGroup = findViewById(R.id.categoryChipGroup)
         
@@ -591,7 +587,8 @@ class MainActivity : AppCompatActivity() {
         swipeRefresh.isEnabled = false
 
         rv.layoutManager = LinearLayoutManager(this)
-        rv.setHasFixedSize(true)
+        rv.setHasFixedSize(false)
+        rv.isNestedScrollingEnabled = false
         rv.setItemViewCacheSize(10)
         rv.itemAnimator = null
         installCenteredListPadding(rv)
@@ -750,8 +747,6 @@ class MainActivity : AppCompatActivity() {
                 updateCategoryChipSelection()
                 categoryChipGroup.visibility = View.VISIBLE
                 showHomeSections()
-                // Expand app bar when explicitly switching to explore tab
-                findViewById<com.google.android.material.appbar.AppBarLayout>(R.id.mainAppBarLayout)?.setExpanded(true, false)
                 tabExplore.post {
                     if (!restoreExploreState()) {
                         applyFilters()
@@ -947,7 +942,6 @@ class MainActivity : AppCompatActivity() {
                 toolbarSubtitle.text = getString(R.string.your_stickers)
                 categoryChipGroup.visibility = View.GONE
                 hideHomeSections()
-                ((mainContent as? android.view.ViewGroup)?.getChildAt(0) as? com.google.android.material.appbar.AppBarLayout)?.setExpanded(false, false)
             }
             else -> {
                 searchBarLayoutCached?.visibility = View.VISIBLE
@@ -3075,7 +3069,7 @@ Rules:
 
         if (regionalTopPacks.isEmpty()) {
             regionalPopularContainer.visibility = View.GONE
-            findViewById<com.google.android.material.appbar.AppBarLayout>(R.id.mainAppBarLayout)?.requestLayout()
+            mainContent.requestLayout()
             return
         }
 
@@ -3094,7 +3088,7 @@ Rules:
 
         regionalAdapter?.updateData(regionalTopPacks)
         regionalPopularContainer.post {
-            findViewById<com.google.android.material.appbar.AppBarLayout>(R.id.mainAppBarLayout)?.requestLayout()
+            mainContent.requestLayout()
         }
     }
 
@@ -3134,7 +3128,7 @@ Rules:
             storyContainer.visibility = View.GONE
         }
         storyContainer.post {
-            findViewById<com.google.android.material.appbar.AppBarLayout>(R.id.mainAppBarLayout)?.requestLayout()
+            mainContent.requestLayout()
         }
     }
 
@@ -3473,7 +3467,7 @@ Rules:
                     currentSearchQuery = query
                     applyFilters()
                     if (!wasSearching && currentSearchQuery.isNotBlank()) {
-                        findViewById<RecyclerView>(R.id.rv)?.scrollToPosition(0)
+                        homeScroll.scrollTo(0, 0)
                     }
                     // If search returns no results, silently refresh from server once
                     if (currentSearchQuery.isNotEmpty() && ::adapter.isInitialized && adapter.getItems().isEmpty()) {
@@ -4034,7 +4028,7 @@ Rules:
                 // Scroll handling after adapter update
                 if (pendingScrollToTop) {
                     pendingScrollToTop = false
-                    rv.scrollToPosition(0)
+                    homeScroll.post { homeScroll.scrollTo(0, 0) }
                 }
             }
         }
