@@ -2,7 +2,9 @@
 <resources>
     <style name="SplashTheme" parent="AppTheme">
         <item name="android:windowSplashScreenBackground">@color/white</item>
-        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_splash_ring</item>
+        <!-- Dönen yükleme halkası — beyaz ekran yerine açık bir yüklenme göstergesi -->
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/avd_splash_spinner</item>
         <item name="android:windowSplashScreenIconBackgroundColor">@color/white</item>
+        <item name="android:windowSplashScreenAnimationDuration">1000</item>
     </style>
 </resources>

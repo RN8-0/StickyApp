@@ -9,4 +9,10 @@
             <solid android:color="#5A4BD1" />
         </shape>
     </item>
+    <!-- Ortada yükleme halkası -->
+    <item
+        android:width="56dp"
+        android:height="56dp"
+        android:gravity="center"
+        android:drawable="@drawable/splash_spinner" />
 </layer-list>

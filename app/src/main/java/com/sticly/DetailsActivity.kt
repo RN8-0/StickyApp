@@ -401,23 +401,13 @@ class DetailsActivity : AppCompatActivity() {
         fun preloadBatch(batch: List<Sticker>) {
             batch.forEach { sticker ->
                 val source = sourceFor(sticker) ?: return@forEach
-                if (pack.isAnimated) {
-                    // Animasyonlu paketlerde grid asDrawable ile yükleniyor; preload de
-                    // aynı yolu kullanmalı ki doğru cache ısınsın.
-                    glide.asDrawable()
-                        .load(source)
-                        .override(256, 256)
-                        .priority(com.bumptech.glide.Priority.LOW)
-                        .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.AUTOMATIC)
-                        .preload(256, 256)
-                } else {
-                    glide.asBitmap()
-                        .load(source)
-                        .override(256, 256)
-                        .priority(com.bumptech.glide.Priority.LOW)
-                        .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.RESOURCE)
-                        .preload(256, 256)
-                }
+                // Grid asDrawable ile yüklendiği için preload de aynı yolu kullanır.
+                glide.asDrawable()
+                    .load(source)
+                    .override(256, 256)
+                    .priority(com.bumptech.glide.Priority.LOW)
+                    .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.AUTOMATIC)
+                    .preload(256, 256)
             }
         }
 

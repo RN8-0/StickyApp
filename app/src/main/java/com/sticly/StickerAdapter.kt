@@ -1,6 +1,6 @@
 package com.sticly
 
-import android.graphics.Bitmap
+import android.graphics.drawable.Animatable
 import android.graphics.drawable.Drawable
 import android.view.LayoutInflater
 import android.view.View
@@ -30,20 +30,14 @@ class StickerAdapter(
     private val onSelectionChanged: ((Int) -> Unit)? = null
 ) : RecyclerView.Adapter<StickerAdapter.VH>() {
 
-    private val clearBgBitmapListener = object : RequestListener<Bitmap> {
-        override fun onLoadFailed(e: GlideException?, model: Any?, target: Target<Bitmap>, isFirstResource: Boolean): Boolean = false
-        override fun onResourceReady(resource: Bitmap, model: Any, target: Target<Bitmap>, dataSource: DataSource, isFirstResource: Boolean): Boolean {
-            (target as? com.bumptech.glide.request.target.ImageViewTarget<*>)?.view?.background = null
-            return false
-        }
-    }
-
-    // Animasyonlu paketler asBitmap yerine asDrawable ile yüklenir; aksi halde
-    // animasyonlu WebP'lerin sadece ilk karesi gösterilir (grid'de durağan görünür).
+    // Tüm sticker'lar asDrawable ile yüklenir; asBitmap kullanılırsa animasyonlu
+    // WebP'ler grid'de sadece ilk kareyle donar. Bu listener arka planı temizler
+    // ve bellek cache'inden gelen animasyonlu drawable'ı yeniden başlatır.
     private val clearBgDrawableListener = object : RequestListener<Drawable> {
         override fun onLoadFailed(e: GlideException?, model: Any?, target: Target<Drawable>, isFirstResource: Boolean): Boolean = false
         override fun onResourceReady(resource: Drawable, model: Any, target: Target<Drawable>, dataSource: DataSource, isFirstResource: Boolean): Boolean {
             (target as? com.bumptech.glide.request.target.ImageViewTarget<*>)?.view?.background = null
+            (resource as? Animatable)?.start()
             return false
         }
     }
@@ -127,112 +121,39 @@ class StickerAdapter(
         // Hide progressBar (placeholder is enough)
         h.progressBar.visibility = View.GONE
 
-        // Animasyonlu paket: drawable olarak yükle ki grid'de canlı oynasın.
-        // Statik paketler aşağıdaki asBitmap hızlı yolunu kullanmaya devam eder.
-        if (isAnimated) {
-            val source: Any? = when {
-                packId.startsWith("custom_") -> {
-                    val customFile = CustomStickerManager.getCustomStickerPath(context, packId, sticker.file)
-                    if (customFile.exists()) customFile else null
-                }
-                cachedFile.exists() && cachedFile.length() > 0 -> cachedFile
-                sticker.url.isNotEmpty() -> sticker.url
-                storagePath.isNotEmpty() -> {
-                    StickerRepository.getStickerDirectUrl(packId, sticker.file, storagePath)
-                        .also { sticker.url = it }
-                }
-                else -> android.net.Uri.parse("file:///android_asset/$packId/${sticker.file}")
+        // Yüklenecek kaynağı belirle (cache > url > storage > yerel asset sırasıyla).
+        val source: Any? = when {
+            packId.startsWith("custom_") -> {
+                val customFile = CustomStickerManager.getCustomStickerPath(context, packId, sticker.file)
+                if (customFile.exists()) customFile else null
             }
-            if (source == null) {
-                h.img.setImageResource(R.drawable.sticker_placeholder)
-                return
+            cachedFile.exists() && cachedFile.length() > 0 -> cachedFile
+            sticker.url.isNotEmpty() -> sticker.url
+            storagePath.isNotEmpty() -> {
+                StickerRepository.getStickerDirectUrl(packId, sticker.file, storagePath)
+                    .also { sticker.url = it }
             }
-            var request = glideManager.asDrawable()
-                .load(source)
-                .override(256, 256)
-                .placeholder(R.drawable.sticker_placeholder)
-                .error(R.drawable.sticker_placeholder)
-                .diskCacheStrategy(DiskCacheStrategy.AUTOMATIC)
-                .listener(clearBgDrawableListener)
-            if (source is java.io.File) {
-                request = request.signature(ObjectKey(source.lastModified()))
-            }
-            request.into(h.img)
+            else -> android.net.Uri.parse("file:///android_asset/$packId/${sticker.file}")
+        }
+
+        if (source == null) {
+            h.img.setImageResource(R.drawable.sticker_placeholder)
             return
         }
 
-        when {
-            // 0. Özel paket kontrolü
-            packId.startsWith("custom_") -> {
-                val customFile = CustomStickerManager.getCustomStickerPath(context, packId, sticker.file)
-                if (customFile.exists()) {
-                    glideManager.asBitmap()
-                        .load(customFile)
-                        .signature(ObjectKey(customFile.lastModified()))
-                        .override(256, 256)
-                        .placeholder(R.drawable.sticker_placeholder)
-                        .error(R.drawable.sticker_placeholder)
-                        .diskCacheStrategy(DiskCacheStrategy.RESOURCE)
-                        .listener(clearBgBitmapListener)
-                        .into(h.img)
-                } else {
-                    h.img.setImageResource(R.drawable.sticker_placeholder)
-                }
-            }
-            // 1. Cache'de varsa oradan yükle
-            cachedFile.exists() && cachedFile.length() > 0 -> {
-                glideManager.asBitmap()
-                    .load(cachedFile)
-                    .signature(ObjectKey(cachedFile.lastModified()))
-                    .override(256, 256)
-                    .placeholder(R.drawable.sticker_placeholder)
-                    .error(R.drawable.sticker_placeholder)
-                    .diskCacheStrategy(DiskCacheStrategy.RESOURCE)
-                    .listener(clearBgBitmapListener)
-                    .into(h.img)
-            }
-            // 2. Firebase URL varsa oradan yükle
-            sticker.url.isNotEmpty() -> {
-                val request = glideManager.asBitmap()
-                    .load(sticker.url)
-                    .thumbnail(0.25f) // Show blurred thumbnail instantly while full image loads
-                    .placeholder(R.drawable.sticker_placeholder)
-                    .error(R.drawable.sticker_placeholder)
-                    .diskCacheStrategy(DiskCacheStrategy.RESOURCE)
-                    .listener(clearBgBitmapListener)
-
-                request.override(256, 256)
-                request.into(h.img)
-            }
-            // 3. URL yoksa direkt storage URL hesapla ve yükle
-            storagePath.isNotEmpty() -> {
-                val directUrl = StickerRepository.getStickerDirectUrl(packId, sticker.file, storagePath)
-                // Update the sticker URL for future use
-                sticker.url = directUrl
-                val request = glideManager.asBitmap()
-                    .load(directUrl)
-                    .thumbnail(0.25f)
-                    .placeholder(R.drawable.sticker_placeholder)
-                    .error(R.drawable.sticker_placeholder)
-                    .diskCacheStrategy(DiskCacheStrategy.RESOURCE)
-                    .listener(clearBgBitmapListener)
-
-                request.override(256, 256)
-                request.into(h.img)
-            }
-            // 4. Lokal assets'ten yükle
-            else -> {
-                val assetPath = "file:///android_asset/$packId/${sticker.file}"
-                glideManager.asBitmap()
-                    .load(android.net.Uri.parse(assetPath))
-                    .override(256, 256)
-                    .placeholder(R.drawable.sticker_placeholder)
-                    .error(R.drawable.sticker_placeholder)
-                    .diskCacheStrategy(DiskCacheStrategy.RESOURCE)
-                    .listener(clearBgBitmapListener)
-                    .into(h.img)
-            }
+        // Her zaman asDrawable: animasyonlu WebP'ler grid'de canlı oynar, statik
+        // olanlar normal görünür. asBitmap kullanılırsa animasyon donar.
+        var request = glideManager.asDrawable()
+            .load(source)
+            .override(256, 256)
+            .placeholder(R.drawable.sticker_placeholder)
+            .error(R.drawable.sticker_placeholder)
+            .diskCacheStrategy(DiskCacheStrategy.AUTOMATIC)
+            .listener(clearBgDrawableListener)
+        if (source is java.io.File) {
+            request = request.signature(ObjectKey(source.lastModified()))
         }
+        request.into(h.img)
     }
 
     fun setDeleteMode(enabled: Boolean) {
