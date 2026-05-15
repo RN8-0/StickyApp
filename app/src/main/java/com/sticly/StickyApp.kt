@@ -39,11 +39,6 @@ class StickyApp : Application() {
                 if (diskPacks.isNotEmpty()) {
                     StickerRepository.allPacksCache = diskPacks
                 }
-                // PocketBase'den guncel veriyi cek
-                val packs = StickerRepository.loadPacks(this@StickyApp, forceRefresh = false)
-                if (packs.isNotEmpty()) {
-                    StickyGlideModule.preloadStickerPreviews(this@StickyApp, packs, packCount = 8, stickersPerPack = 2)
-                }
             } catch (_: Exception) {}
         }
 
@@ -53,20 +48,7 @@ class StickyApp : Application() {
             com.airbnb.lottie.LottieCompositionFactory.fromAsset(this, name)
         }
 
-        // Reklam sistemini gecikmeli başlat (ilk karelerin hızlı render olması için)
-        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-            try {
-                Log.d("StickyApp", "Starting AdManager initialization...")
-                AdManager.initialize(this)
-                Log.d("StickyApp", "AdManager.initialize() called successfully")
-
-                // App Open Ad — günde bir kez, 3. paket açılışında
-                val adMgr = AppOpenAdManager(this)
-                adMgr.init()
-                appOpenAdInstance = adMgr
-            } catch (e: Exception) {
-                Log.e("StickyApp", "AdMob initialization failed: ${e.message}", e)
-            }
-        }, 2500)
+        // AdMob is initialized on demand. Starting it during launch causes visible
+        // jank on low/mid devices because the SDK loads Dynamite modules on Main.
     }
 }

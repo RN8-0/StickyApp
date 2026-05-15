@@ -9,6 +9,10 @@ import com.google.gson.Gson
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.sync.withPermit
 import java.io.ByteArrayOutputStream
 import java.io.File
 import kotlin.math.pow
@@ -35,12 +39,22 @@ object StickerRepository {
     val packsUpdateFlow = _packsUpdateFlow.asSharedFlow()
     private var observerJob: Job? = null
     private var lastObservedSignature: String = ""
+    private val loadMutex = Mutex()
+    private const val MIN_REMOTE_RELOAD_MS = 12_000L
+    private const val STALE_REMOTE_MS = 30_000L
+    private var lastRemoteAttemptAt = 0L
+    private var lastRemoteLoadAt = 0L
 
     /**
      * HIZLI YUKLEME: Lokal verileri (disk cache + ozel paketler + assets) aninda dondurur.
      * Ag istegi YAPMAZ. UI'in ilk karede veri gostermesi icin kullanilir.
      */
     suspend fun loadLocalPacks(context: Context): List<Pack> = withContext(Dispatchers.IO) {
+        if (allPacksCache.isNotEmpty()) {
+            Log.d(TAG, "loadLocalPacks: ${allPacksCache.size} packs (memory path)")
+            return@withContext allPacksCache
+        }
+
         val packs = mutableListOf<Pack>()
 
         // 1. Disk cache (en hizli)
@@ -106,13 +120,19 @@ object StickerRepository {
      * Tum paketleri yukler (PocketBase + Ozel + Lokal Assets)
      */
     suspend fun loadPacks(context: Context, forceRefresh: Boolean = false): List<Pack> = withContext(Dispatchers.IO) {
-        if (!forceRefresh && allPacksCache.isNotEmpty()) {
-            return@withContext allPacksCache
-        }
+        loadMutex.withLock {
+            val now = System.currentTimeMillis()
+            if (!forceRefresh && allPacksCache.isNotEmpty() && lastRemoteLoadAt > 0L && now - lastRemoteLoadAt < STALE_REMOTE_MS) {
+                return@withLock allPacksCache
+            }
+            if (forceRefresh && allPacksCache.isNotEmpty() && now - lastRemoteAttemptAt < MIN_REMOTE_RELOAD_MS) {
+                return@withLock allPacksCache
+            }
+            lastRemoteAttemptAt = now
 
-        val allPacks = mutableListOf<Pack>()
+            val allPacks = mutableListOf<Pack>()
 
-        try {
+            try {
             // 1. Lokal verileri hizlica yukle (disk cache + custom + assets)
             val localPacks = loadLocalPacks(context)
             allPacks.addAll(localPacks)
@@ -139,6 +159,7 @@ object StickerRepository {
                 })
                 
                 Log.d(TAG, "Loaded ${packsFromPocketBase.size} packs from PocketBase (authoritative)")
+                lastRemoteLoadAt = System.currentTimeMillis()
             }
 
             val previousPacks = allPacksCache
@@ -146,15 +167,15 @@ object StickerRepository {
             clearChangedPackCaches(context, previousPacks, result)
             allPacksCache = result // Statik cache'i guncelle
             saveCacheToDisk(context, result) // Diske kaydet (Provider icin)
-            return@withContext result
+            return@withLock result
 
-        } catch (e: Exception) {
+            } catch (e: Exception) {
             Log.e(TAG, "Error loading packs: ${e.message}")
             // Hata durumunda disk cache'ini dene
             val diskCache = loadCacheFromDisk(context)
             if (diskCache.isNotEmpty()) {
                 allPacksCache = diskCache
-                return@withContext diskCache
+                return@withLock diskCache
             }
             
             // Disk de bossa lokal assets'ten yukle
@@ -165,14 +186,20 @@ object StickerRepository {
             }
             val result = shufflePacks(localPacks + allPacks)
             allPacksCache = result // Statik cache'i guncelle
-            return@withContext result
+            return@withLock result
+            }
         }
     }
 
     fun saveCacheToDisk(context: Context, packs: List<Pack>) {
         try {
             val file = File(context.filesDir, "packs_cache.json")
-            file.writeText(Gson().toJson(packs))
+            val tmp = File(context.filesDir, "packs_cache.json.tmp")
+            tmp.writeText(Gson().toJson(packs))
+            if (!tmp.renameTo(file)) {
+                file.delete()
+                tmp.renameTo(file)
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Error saving cache to disk: ${e.message}")
         }
@@ -187,6 +214,7 @@ object StickerRepository {
             } else emptyList()
         } catch (e: Exception) {
             Log.e(TAG, "Error loading cache from disk: ${e.message}")
+            runCatching { File(context.filesDir, "packs_cache.json").delete() }
             emptyList()
         }
     }
@@ -312,7 +340,7 @@ object StickerRepository {
                 } catch (e: Exception) {
                     Log.e(TAG, "PocketBase poll failed: ${e.message}")
                 }
-                delay(2_000)
+                delay(15_000)
             }
         }
     }
@@ -576,10 +604,12 @@ object StickerRepository {
                         downloadStickerToCache(context, pack.id, pack.tray, storagePath, pack.trayUrl)
                     }
 
-                    // Tüm stickerları paralel olarak indir (maksimum 6 eşzamanlı)
+                    val semaphore = Semaphore(3)
                     val stickerJobs = pack.stickers.map { sticker ->
                         async {
-                            downloadStickerToCache(context, pack.id, sticker.file, storagePath, sticker.url, allowCompression = !pack.isAnimated)
+                            semaphore.withPermit {
+                                downloadStickerToCache(context, pack.id, sticker.file, storagePath, sticker.url, allowCompression = !pack.isAnimated)
+                            }
                         }
                     }
 

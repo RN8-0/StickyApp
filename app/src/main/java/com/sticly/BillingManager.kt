@@ -131,7 +131,6 @@ class BillingManager(
             if (billingResult.responseCode == BillingClient.BillingResponseCode.OK) {
                 productDetailsList.forEach { premiumProductDetails[it.productId] = it }
                 Log.d(TAG, "Loaded ${productDetailsList.size} subscription products")
-                writePricesToFirebase()
             }
             billingScope.launch(Dispatchers.Main) {
                 onBillingReady?.invoke()

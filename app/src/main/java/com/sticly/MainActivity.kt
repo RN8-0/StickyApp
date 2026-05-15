@@ -440,8 +440,8 @@ class MainActivity : AppCompatActivity() {
         setupCategoryChips()
         setupDrawerMenu()
 
-        // Defer heavier UI setup to after first frame
-        window.decorView.post {
+        // Defer heavier network/account setup so the home feed can draw first.
+        window.decorView.postDelayed({
             aiRestoreCount()
 
             try {
@@ -485,17 +485,19 @@ class MainActivity : AppCompatActivity() {
             favs.filter { it.startsWith("custom_") }.forEach { PreferencesHelper.removeFavoritePack(this, it) }
 
             // Premium promo artık indirme sonrası gösteriliyor (2. paketten sonra)
-        }
+        }, 5_000)
 
-        // Start data loading (will update UI when complete)
         if (NetworkUtils.isOnline(this)) {
             observePacksUpdateFlow()
-            loadPacks(forceRefresh = true)
+            if (StickerRepository.allPacksCache.isNotEmpty()) {
+                displayPacks(StickerRepository.allPacksCache)
+            }
+            rv.postDelayed({ loadPacks(forceRefresh = true) }, 2_000)
         }
         
         // Delay real-time observer start to avoid cascading reloads during initial load
         lifecycleScope.launch {
-            delay(2_500)
+            delay(15_000)
             StickerRepository.startObservingPacks(this@MainActivity)
         }
     }
@@ -3758,8 +3760,8 @@ Rules:
             val stickers = it.stickers.joinToString(",") { sticker -> "${sticker.file}:${sticker.url}" }
             "${it.id}:${it.version}:${it.name}:${it.pub}:${it.category}:${it.tray}:${it.trayUrl}:${it.isActive}:${it.isPremium}:${it.productId}:${it.isAnimated}:${it.isPopular}:${it.priceTRY}:${it.priceUSD}:${it.priceEUR}:${it.downloadCount}:${it.favoriteCount}:${it.likeCount}:${it.commentCount}:${it.viewCount}:${it.stickers.size}:$stickers"
         }
-        val oldSignature = visiblePackSignature(allPacks)
-        val newSignature = visiblePackSignature(distinctPacks)
+        val oldSignature = if (contentShown) visiblePackSignature(allPacks) else ""
+        val newSignature = if (contentShown) visiblePackSignature(distinctPacks) else ""
         // Cold start triggers loadPacks() from several sources (StickyApp preload,
         // MainActivity, the realtime observer). When the pack set has not actually
         // changed, skip the whole rebuild — the repeated rebuilds are exactly what
@@ -3769,11 +3771,21 @@ Rules:
         }
         if (oldSignature != newSignature) savedExploreList = null
         allPacks = distinctPacks
-        setupCategoryChips()
-        updateRegionalPacks(packs)
-        updateStoryPacks(packs)
+        val deferHomeSections = !contentShown
+        if (!deferHomeSections) {
+            setupCategoryChips()
+            updateRegionalPacks(packs)
+            updateStoryPacks(packs)
+        }
         applyFilters()
         showContent()
+        if (deferHomeSections) {
+            rv.postDelayed({
+                setupCategoryChips()
+                updateRegionalPacks(allPacks)
+                updateStoryPacks(allPacks)
+            }, 700)
+        }
     }
 
     private fun loadPacks(forceRefresh: Boolean = false) {
@@ -3962,20 +3974,8 @@ Rules:
                 }
             }
 
-            // Insert banner ads every 10 packs (only in ALL/PREMIUM filters, not for premium users)
             val withAds = mutableListOf<Any>()
-            val userIsPremium = PreferencesHelper.isPremium(this@MainActivity)
-            if (!userIsPremium && (currentFilter == FilterType.ALL || currentFilter == FilterType.PREMIUM)) {
-                var adSlot = 0
-                sorted.forEachIndexed { index, pack ->
-                    withAds.add(pack)
-                    if ((index + 1) % 10 == 0) {
-                        withAds.add(BannerAdPlaceholder(adSlot++))
-                    }
-                }
-            } else {
-                withAds.addAll(sorted)
-            }
+            withAds.addAll(sorted)
 
             // Calculate Diff on Background (oldList captured on Main before coroutine launch)
             val newList: List<Any> = withAds
@@ -4037,7 +4037,7 @@ Rules:
                 if (!hasPreloadedOnce && newList.isNotEmpty()) {
                     hasPreloadedOnce = true
                     rv.postDelayed({
-                        StickyGlideModule.preloadFeedPacks(this@MainActivity, newList, 12)
+                        StickyGlideModule.preloadFeedPacks(this@MainActivity, newList, 4)
                     }, 1500)
                 }
 

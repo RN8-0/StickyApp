@@ -256,49 +256,8 @@ object AdManager {
      * Her 2 pakette bir interstitial göster (2., 4., 6. indirme).
      * @param onComplete Reklam bittikten veya gösterilemezse çağrılır
      */
-    fun showInterstitialIfNeeded(activity: Activity, onComplete: () -> Unit) {
-        if (PreferencesHelper.isPremium(activity)) {
-            Log.d(TAG, "Interstitial skip: premium user")
-            onComplete()
-            return
-        }
-
-        // Persist download count across app restarts so every 2nd download triggers an ad
-        val prefs = activity.getSharedPreferences(INTERSTITIAL_PREFS_NAME, 0)
-        downloadCount = prefs.getInt(KEY_DOWNLOAD_COUNT, 0) + 1
-        prefs.edit().putInt(KEY_DOWNLOAD_COUNT, downloadCount).apply()
-
-        Log.d(TAG, "Interstitial check: downloadCount=$downloadCount")
-        if (downloadCount % 2 != 0) {
-            Log.d(TAG, "Interstitial skip: not every 2nd (count=$downloadCount)")
-            onComplete()
-            return
-        }
-
-        val ad = interstitialAd
-        if (ad == null) {
-            Log.e(TAG, "Interstitial null! Loading new one...")
-            loadInterstitialAd(activity)
-            onComplete()
-            return
-        }
-
-        Log.d(TAG, "Showing interstitial ad now!")
-        adShownThisSession = true
-        ad.fullScreenContentCallback = object : FullScreenContentCallback() {
-            override fun onAdDismissedFullScreenContent() {
-                Log.d(TAG, "Interstitial dismissed")
-                interstitialAd = null
-                loadInterstitialAd(activity)
-                onComplete()
-            }
-            override fun onAdFailedToShowFullScreenContent(error: AdError) {
-                Log.e(TAG, "Interstitial show failed: ${error.message}")
-                interstitialAd = null
-                loadInterstitialAd(activity)
-                onComplete()
-            }
-        }
-        ad.show(activity)
+    fun showInterstitialIfNeeded(_activity: Activity, onComplete: () -> Unit) {
+        Log.d(TAG, "Interstitial disabled for smoother sticker add flow")
+        onComplete()
     }
 }
