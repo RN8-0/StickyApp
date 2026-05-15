@@ -471,7 +471,6 @@ class PackAdapter(
     private fun loadStickerPreviews(h: VH, pack: Pack, isCustomPack: Boolean) {
         val context = h.itemView.context
         val container = h.stickerPreviewContainer
-        val isAnimatedPack = pack.isAnimated
 
         val stickersToShow = pack.stickers.take(STICKER_PREVIEW_COUNT)
         val neededCount = stickersToShow.size
@@ -530,8 +529,8 @@ class PackAdapter(
                     .skipMemoryCache(true)
                     .signature(com.bumptech.glide.signature.ObjectKey("${pack.id}_${pack.version}_${sticker.file}"))
                     .dontTransform()
+                    .dontAnimate()
                     .listener(clearBgListener)
-                if (!isAnimatedPack) req.dontAnimate()
                 req.into(previewView)
             } else {
                 var urlToLoad = sticker.url
@@ -545,8 +544,8 @@ class PackAdapter(
                         .priority(Priority.NORMAL)
                         .diskCacheStrategy(DiskCacheStrategy.DATA)
                         .dontTransform()
+                        .dontAnimate()
                         .listener(clearBgListener)
-                    if (!isAnimatedPack) req.dontAnimate()
                     req.into(previewView)
                 } else {
                     val cachedSticker = StickerRepository.getCachedStickerPath(context, pack.id, sticker.file)
@@ -557,6 +556,7 @@ class PackAdapter(
                         .priority(Priority.NORMAL)
                         .diskCacheStrategy(DiskCacheStrategy.DATA)
                         .dontTransform()
+                        .dontAnimate()
                         .listener(clearBgListener)
                         .error(
                             glide.load(android.net.Uri.parse(assetPath))
@@ -564,9 +564,9 @@ class PackAdapter(
                                 .priority(Priority.LOW)
                                 .diskCacheStrategy(DiskCacheStrategy.DATA)
                                 .dontTransform()
+                                .dontAnimate()
                                 .listener(clearBgListener)
                         )
-                    if (!isAnimatedPack) req.dontAnimate()
                     req.into(previewView)
                 }
             }

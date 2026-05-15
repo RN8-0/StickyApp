@@ -141,6 +141,7 @@ class StickerAdapter(
                         .signature(ObjectKey(customFile.lastModified()))
                         .placeholder(R.drawable.sticker_placeholder)
                         .error(R.drawable.sticker_placeholder)
+                        .dontAnimate()
                         .listener(clearBgListener)
                         .into(h.img)
                 } else {
@@ -156,6 +157,7 @@ class StickerAdapter(
                     .placeholder(R.drawable.sticker_placeholder)
                     .error(R.drawable.sticker_placeholder)
                     .diskCacheStrategy(DiskCacheStrategy.AUTOMATIC)
+                    .dontAnimate()
                     .listener(clearBgListener)
                     .into(h.img)
             }
@@ -169,9 +171,7 @@ class StickerAdapter(
                     .diskCacheStrategy(DiskCacheStrategy.DATA)
                     .listener(clearBgListener)
 
-                if (!isAnimated) {
-                    request.override(256, 256).dontAnimate()
-                }
+                request.override(256, 256).dontAnimate()
                 request.into(h.img)
             }
             // 3. URL yoksa direkt storage URL hesapla ve yükle
@@ -187,9 +187,7 @@ class StickerAdapter(
                     .diskCacheStrategy(DiskCacheStrategy.DATA)
                     .listener(clearBgListener)
 
-                if (!isAnimated) {
-                    request.override(256, 256).dontAnimate()
-                }
+                request.override(256, 256).dontAnimate()
                 request.into(h.img)
             }
             // 4. Lokal assets'ten yükle
@@ -200,6 +198,7 @@ class StickerAdapter(
                     .placeholder(R.drawable.sticker_placeholder)
                     .error(R.drawable.sticker_placeholder)
                     .diskCacheStrategy(DiskCacheStrategy.DATA)
+                    .dontAnimate()
                     .listener(clearBgListener)
                     .into(h.img)
             }

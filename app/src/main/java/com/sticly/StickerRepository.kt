@@ -559,6 +559,10 @@ object StickerRepository {
     private fun compressForWhatsApp(file: File) {
         val maxSize = 100 * 1024L // WhatsApp statik sticker limiti 100KB
         if (file.length() <= maxSize) return
+        if (isAnimatedWebpFile(file)) {
+            Log.d(TAG, "Compression skipped for animated WebP: ${file.name}")
+            return
+        }
 
         val original = BitmapFactory.decodeFile(file.absolutePath) ?: return // animated WebP → null → atla
 
@@ -584,6 +588,37 @@ object StickerRepository {
 
         if (targetSize !== original) targetSize.recycle()
         original.recycle()
+    }
+
+    private fun isAnimatedWebpFile(file: File): Boolean {
+        if (!file.name.endsWith(".webp", ignoreCase = true) || file.length() < 32) return false
+        return try {
+            file.inputStream().use { input ->
+                val bytes = input.readBytes()
+                if (bytes.size < 32) return false
+                val riff = String(bytes, 0, 4, Charsets.US_ASCII)
+                val webp = String(bytes, 8, 4, Charsets.US_ASCII)
+                if (riff != "RIFF" || webp != "WEBP") return false
+
+                var offset = 12
+                while (offset + 8 <= bytes.size) {
+                    val chunk = String(bytes, offset, 4, Charsets.US_ASCII)
+                    val size = (bytes[offset + 4].toInt() and 0xFF) or
+                        ((bytes[offset + 5].toInt() and 0xFF) shl 8) or
+                        ((bytes[offset + 6].toInt() and 0xFF) shl 16) or
+                        ((bytes[offset + 7].toInt() and 0xFF) shl 24)
+                    if (chunk == "ANMF") return true
+                    if (chunk == "VP8X" && offset + 12 < bytes.size) {
+                        val flags = bytes[offset + 8].toInt() and 0xFF
+                        if ((flags and 0x02) != 0) return true
+                    }
+                    offset += 8 + size + (size and 1)
+                }
+                false
+            }
+        } catch (_: Exception) {
+            false
+        }
     }
 
     /**

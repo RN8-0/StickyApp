@@ -7,12 +7,10 @@ import android.content.Intent
 import android.content.res.ColorStateList
 import android.graphics.BitmapFactory
 import android.graphics.Color
-import android.graphics.ImageDecoder
 import android.graphics.drawable.Animatable
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
-import android.os.Build
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -36,6 +34,8 @@ import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
+import com.bumptech.glide.request.target.CustomTarget
+import com.bumptech.glide.request.transition.Transition
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import kotlinx.coroutines.*
@@ -45,9 +45,7 @@ import java.io.File
 import java.io.OutputStreamWriter
 import java.net.HttpURLConnection
 import java.net.URL
-import java.nio.ByteBuffer
 import java.util.concurrent.atomic.AtomicInteger
-import java.util.concurrent.TimeUnit
 import android.animation.ValueAnimator
 import android.animation.ObjectAnimator
 import android.util.Log
@@ -342,11 +340,6 @@ class DetailsActivity : AppCompatActivity() {
             pack.stickers
         }
 
-        // Arka planda preload başlat — adapter zaten render ediyor, bu sadece cache ısıtma
-        lifecycleScope.launch(Dispatchers.IO) {
-            preloadAllStickers(pack, displayStickers)
-        }
-
         adapter = StickerAdapter(
             packId = pack.id,
             items = displayStickers,
@@ -373,23 +366,6 @@ class DetailsActivity : AppCompatActivity() {
         rv.adapter = adapter
         isPackReady = true
 
-        // Arka planda cache'e indir (WhatsApp için gerekli) — preload bittikten sonra
-        lifecycleScope.launch(Dispatchers.IO) {
-            kotlinx.coroutines.delay(1500) // Preload'un bitmesini bekle
-            pack.stickers.forEach { sticker ->
-                try {
-                    StickerRepository.downloadStickerToCache(
-                        this@DetailsActivity,
-                        pack.id,
-                        sticker.file,
-                        storagePath,
-                        sticker.url,
-                        allowCompression = !pack.isAnimated
-                    )
-                } catch (_: Exception) {}
-            }
-        }
-
         // Butonları ayarla
         setupButtons(pack, hasAccess)
 
@@ -399,7 +375,10 @@ class DetailsActivity : AppCompatActivity() {
         }
 
         // İlgili paketleri gecikmeli yükle (ilk render'ı bloklamasın)
-        rv.post { setupRelatedPacks(pack) }
+        lifecycleScope.launch {
+            delay(900)
+            if (!isFinishing && !isDestroyed) setupRelatedPacks(pack)
+        }
     }
 
     private fun toggleDeleteMode() {
@@ -863,7 +842,7 @@ class DetailsActivity : AppCompatActivity() {
     private fun setupPublisherStrip(pack: Pack) {
         val isCustom = pack.category == "custom" || pack.id.startsWith("custom_")
         val strip = findViewById<LinearLayout>(R.id.publisherStrip) ?: return
-        if (isCustom || pack.pub.isBlank()) {
+        if (isCustom || pack.pub.isBlank() || pack.pub.equals("Sticky", ignoreCase = true)) {
             strip.visibility = View.GONE
             return
         }
@@ -873,17 +852,6 @@ class DetailsActivity : AppCompatActivity() {
         val followButton = findViewById<MaterialButton>(R.id.btnFollowPublisher)
         followButton?.visibility = View.GONE
         strip.visibility = View.VISIBLE
-
-        if (pack.pub.equals("Sticky", ignoreCase = true)) {
-            name?.text = getString(R.string.app_name)
-            hint?.text = getString(R.string.shared_by_sticky)
-            followButton?.visibility = View.GONE
-            avatar?.setImageResource(R.mipmap.ic_launcher_round)
-            val stickyClick = View.OnClickListener { showThemedSnackbar(getString(R.string.shared_by_sticky)) }
-            strip.setOnClickListener(stickyClick)
-            avatar?.setOnClickListener(stickyClick)
-            return
-        }
 
         hint?.text = getString(R.string.view_profile)
         name?.text = pack.pub
@@ -1992,7 +1960,7 @@ class DetailsActivity : AppCompatActivity() {
         val imageView = view.findViewById<ImageView>(R.id.previewImage)
         val lockOverlay = view.findViewById<ImageView>(R.id.lockOverlay)
         val unlockHint = view.findViewById<android.widget.TextView>(R.id.unlockHint)
-        var previewJob: Job? = null
+        var animatedTarget: CustomTarget<Drawable>? = null
 
         dialog.setContentView(view)
 
@@ -2005,48 +1973,71 @@ class DetailsActivity : AppCompatActivity() {
             sticker.url.contains(".webp", ignoreCase = true) ||
             sticker.url.contains(".gif", ignoreCase = true)
 
-        // Determine the load source
+        // Animated previews must use the original source first. Old local cache files
+        // can be static/optimized first frames from previous versions.
+        val cachedFile = StickerRepository.getCachedStickerPath(this, packId, sticker.file)
+        val directUrl = currentPack?.storagePath
+            ?.takeIf { it.isNotBlank() }
+            ?.let { StickerRepository.getStickerDirectUrl(packId, sticker.file, it) }
         val loadSource: Any? = if (packId.startsWith("custom_")) {
             val customFile = CustomStickerManager.getCustomStickerPath(this, packId, sticker.file)
             if (customFile.exists()) customFile else null
+        } else if (animatedPreview) {
+            when {
+                sticker.url.isNotEmpty() -> sticker.url
+                !directUrl.isNullOrBlank() -> directUrl
+                cachedFile.exists() && cachedFile.length() > 0 -> cachedFile
+                else -> android.net.Uri.parse("file:///android_asset/$packId/${sticker.file}")
+            }
         } else {
-            val cachedFile = StickerRepository.getCachedStickerPath(this, packId, sticker.file)
             when {
                 cachedFile.exists() && cachedFile.length() > 0 -> cachedFile
                 sticker.url.isNotEmpty() -> sticker.url
+                !directUrl.isNullOrBlank() -> directUrl
                 else -> android.net.Uri.parse("file:///android_asset/$packId/${sticker.file}")
             }
         }
+        Log.d(
+            "DetailsActivity",
+            "Preview click pack=$packId file=${sticker.file} isAnimatedPack=$isAnimatedPack animatedPreview=$animatedPreview source=${loadSource?.javaClass?.simpleName} url=${sticker.url.take(80)}"
+        )
 
         val startPreviewLoad = {
             if (loadSource == null) {
                 imageView.setImageResource(R.drawable.transparent_placeholder)
             } else if (animatedPreview) {
                 imageView.visibility = View.VISIBLE
+                imageView.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
                 imageView.setImageResource(R.drawable.transparent_placeholder)
-                previewJob?.cancel()
-                previewJob = lifecycleScope.launch {
-                    val drawable = withContext(Dispatchers.IO) {
-                        decodeAnimatedPreviewDrawable(loadSource)
+
+                animatedTarget?.let { Glide.with(this@DetailsActivity).clear(it) }
+                animatedTarget = object : CustomTarget<Drawable>() {
+                    override fun onResourceReady(resource: Drawable, transition: Transition<in Drawable>?) {
+                        if (!dialog.isShowing) return
+                        Log.d(
+                            "DetailsActivity",
+                            "Animated preview loaded file=${sticker.file} source=${loadSource::class.java.simpleName} drawable=${resource::class.java.name} animatable=${resource is Animatable}"
+                        )
+                        imageView.setImageDrawable(null)
+                        imageView.setImageDrawable(resource)
+                        startAnimatedPreview(imageView)
                     }
-                    if (!dialog.isShowing) return@launch
-                    if (drawable != null) {
-                        imageView.setImageDrawable(drawable)
-                        drawable.setVisible(true, true)
-                        (drawable as? Animatable)?.start()
-                        imageView.post {
-                            (imageView.drawable as? Animatable)?.start()
-                        }
-                    } else {
-                        Glide.with(this@DetailsActivity)
-                            .asGif()
-                            .load(loadSource)
-                            .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.DATA)
-                            .dontTransform()
-                            .error(R.drawable.transparent_placeholder)
-                            .into(imageView)
+
+                    override fun onLoadCleared(placeholder: Drawable?) {
+                        (imageView.drawable as? Animatable)?.stop()
+                        imageView.setImageDrawable(placeholder)
                     }
                 }
+
+                Glide.with(this@DetailsActivity)
+                    .asDrawable()
+                    .load(loadSource)
+                    .placeholder(R.drawable.transparent_placeholder)
+                    .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.DATA)
+                    .skipMemoryCache(true)
+                    .dontTransform()
+                    .error(R.drawable.transparent_placeholder)
+                    .into(animatedTarget!!)
             } else {
                 Glide.with(this@DetailsActivity)
                     .load(loadSource)
@@ -2060,9 +2051,9 @@ class DetailsActivity : AppCompatActivity() {
         }
 
         dialog.setOnDismissListener {
-            previewJob?.cancel()
-            previewJob = null
             (imageView.drawable as? Animatable)?.stop()
+            animatedTarget?.let { Glide.with(this@DetailsActivity).clear(it) }
+            animatedTarget = null
             Glide.with(this@DetailsActivity).clear(imageView)
             imageView.setImageDrawable(null)
         }
@@ -2107,52 +2098,15 @@ class DetailsActivity : AppCompatActivity() {
         dialog.show()
     }
 
-    private fun decodeAnimatedPreviewDrawable(loadSource: Any): Drawable? {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return null
-
-        return try {
-            val bytes = when (loadSource) {
-                is File -> loadSource.takeIf { it.exists() && it.length() > 0 }?.readBytes()
-                is android.net.Uri -> readPreviewBytesFromUri(loadSource)
-                is String -> {
-                    if (loadSource.startsWith("http://") || loadSource.startsWith("https://")) {
-                        Glide.with(applicationContext)
-                            .downloadOnly()
-                            .load(loadSource)
-                            .submit()
-                            .get(10, TimeUnit.SECONDS)
-                            ?.takeIf { it.exists() && it.length() > 0 }
-                            ?.readBytes()
-                    } else {
-                        File(loadSource).takeIf { it.exists() && it.length() > 0 }?.readBytes()
-                    }
-                }
-                else -> null
-            } ?: return null
-
-            ImageDecoder.decodeDrawable(
-                ImageDecoder.createSource(ByteBuffer.wrap(bytes))
-            ) { decoder, _, _ ->
-                decoder.setOnPartialImageListener { true }
-            }
-        } catch (e: Exception) {
-            Log.e("DetailsActivity", "Animated preview decode failed: ${e.message}")
-            null
+    private fun startAnimatedPreview(imageView: ImageView) {
+        val start = Runnable {
+            val drawable = imageView.drawable
+            drawable?.setVisible(true, true)
+            (drawable as? Animatable)?.start()
         }
-    }
-
-    private fun readPreviewBytesFromUri(uri: android.net.Uri): ByteArray? {
-        return try {
-            val path = uri.path.orEmpty()
-            if (uri.scheme == "file" && path.startsWith("/android_asset/")) {
-                assets.open(path.removePrefix("/android_asset/")).use { it.readBytes() }
-            } else {
-                contentResolver.openInputStream(uri)?.use { it.readBytes() }
-            }
-        } catch (e: Exception) {
-            Log.e("DetailsActivity", "Animated preview uri read failed: ${e.message}")
-            null
-        }
+        imageView.post(start)
+        imageView.postDelayed(start, 120)
+        imageView.postDelayed(start, 350)
     }
 
     private fun isWhatsAppInstalled(): Boolean {
