@@ -7,7 +7,9 @@ import android.content.Intent
 import android.content.res.ColorStateList
 import android.graphics.BitmapFactory
 import android.graphics.Color
+import android.graphics.drawable.Animatable
 import android.graphics.drawable.ColorDrawable
+import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.view.LayoutInflater
@@ -32,6 +34,10 @@ import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
+import com.bumptech.glide.load.DataSource
+import com.bumptech.glide.load.engine.GlideException
+import com.bumptech.glide.request.RequestListener
+import com.bumptech.glide.request.target.Target
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import kotlinx.coroutines.*
@@ -826,8 +832,23 @@ class DetailsActivity : AppCompatActivity() {
         rvRelated.itemAnimator = null
         installCenteredListPadding(rvRelated)
 
+        val relatedItems = mutableListOf<Any>()
+        if (!PreferencesHelper.isPremium(this)) {
+            var adSlot = 1000
+            relatedPacks.forEachIndexed { index, pack ->
+                relatedItems.add(pack)
+                val firstAd = index == 1
+                val recurringAd = index > 1 && (index - 1) % 5 == 0
+                if (firstAd || recurringAd) {
+                    relatedItems.add(BannerAdPlaceholder(adSlot++))
+                }
+            }
+        } else {
+            relatedItems.addAll(relatedPacks)
+        }
+
         val relatedAdapter = PackAdapter(
-            items = relatedPacks,
+            items = relatedItems,
             click = { pack ->
                 startActivity(Intent(this, DetailsActivity::class.java).putExtra("id", pack.id))
             },
@@ -1993,8 +2014,10 @@ class DetailsActivity : AppCompatActivity() {
         unlockHint?.visibility = View.GONE
 
         val animatedPreview = isAnimatedPack ||
-            sticker.file.endsWith(".webp", ignoreCase = true) ||
-            sticker.file.endsWith(".gif", ignoreCase = true)
+            sticker.file.contains(".webp", ignoreCase = true) ||
+            sticker.file.contains(".gif", ignoreCase = true) ||
+            sticker.url.contains(".webp", ignoreCase = true) ||
+            sticker.url.contains(".gif", ignoreCase = true)
 
         // Determine the load source
         val loadSource: Any? = if (packId.startsWith("custom_")) {
@@ -2009,31 +2032,62 @@ class DetailsActivity : AppCompatActivity() {
             }
         }
 
-        if (loadSource == null) {
-            imageView.setImageResource(R.drawable.transparent_placeholder)
-        } else {
-            // Animated WebP: must use DATA cache (Glide has no encoder for AnimatedImageDrawable)
-            val cacheStrategy = if (animatedPreview)
-                com.bumptech.glide.load.engine.DiskCacheStrategy.DATA
-            else
-                com.bumptech.glide.load.engine.DiskCacheStrategy.RESOURCE
+        val startPreviewLoad = {
+            if (loadSource == null) {
+                imageView.setImageResource(R.drawable.transparent_placeholder)
+            } else {
+                // Animated WebP: must use DATA cache (Glide has no encoder for AnimatedImageDrawable)
+                val cacheStrategy = if (animatedPreview)
+                    com.bumptech.glide.load.engine.DiskCacheStrategy.DATA
+                else
+                    com.bumptech.glide.load.engine.DiskCacheStrategy.RESOURCE
 
-            val request = Glide.with(this)
-                .load(loadSource)
-                .placeholder(R.drawable.transparent_placeholder)
-                .diskCacheStrategy(cacheStrategy)
-                .dontTransform()
-                .error(R.drawable.transparent_placeholder)
+                val request = Glide.with(this@DetailsActivity)
+                    .asDrawable()
+                    .load(loadSource)
+                    .placeholder(R.drawable.transparent_placeholder)
+                    .diskCacheStrategy(cacheStrategy)
+                    .dontTransform()
+                    .error(R.drawable.transparent_placeholder)
+                    .listener(object : RequestListener<Drawable> {
+                        override fun onLoadFailed(
+                            e: GlideException?,
+                            model: Any?,
+                            target: Target<Drawable>,
+                            isFirstResource: Boolean
+                        ): Boolean = false
 
-            if (!animatedPreview) {
-                request.override(512, 512)
+                        override fun onResourceReady(
+                            resource: Drawable,
+                            model: Any,
+                            target: Target<Drawable>,
+                            dataSource: DataSource,
+                            isFirstResource: Boolean
+                        ): Boolean {
+                            if (animatedPreview) {
+                                resource.setVisible(true, true)
+                                (resource as? Animatable)?.start()
+                                imageView.post {
+                                    (imageView.drawable as? Animatable)?.start()
+                                }
+                            }
+                            return false
+                        }
+                    })
+
+                if (!animatedPreview) {
+                    request.override(512, 512)
+                }
+                request.into(imageView)
             }
-            request.into(imageView)
         }
 
         dialog.setOnDismissListener {
             Glide.with(this@DetailsActivity).clear(imageView)
             imageView.setImageDrawable(null)
+        }
+        dialog.setOnShowListener {
+            imageView.post { startPreviewLoad() }
         }
 
         // Animated sticker oynarken parent scale animasyonu decode/render işlemini takabiliyor.

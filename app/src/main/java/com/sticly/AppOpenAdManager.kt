@@ -32,7 +32,7 @@ class AppOpenAdManager(private val application: Application) :
         private const val KEY_LAST_SHOWN_DATE = "last_shown_date"
         private const val KEY_SHOWN_COUNT = "shown_count_today"
         private const val MAX_SHOWS_PER_DAY = 6
-        private const val MIN_BACKGROUND_MS = 10000L // 10 saniye arka planda kaldıysa göster
+        private const val MIN_BACKGROUND_MS = 3000L // 3 saniye arka planda kaldıysa göster
     }
 
     private var appOpenAd: AppOpenAd? = null
@@ -42,6 +42,7 @@ class AppOpenAdManager(private val application: Application) :
     private var currentActivity: Activity? = null
     private var backgroundTime = 0L
     private var shownCountToday = 0
+    private var showWhenLoaded = false
 
     fun init() {
         application.registerActivityLifecycleCallbacks(this)
@@ -95,6 +96,12 @@ class AppOpenAdManager(private val application: Application) :
                     isLoadingAd = false
                     loadTime = System.currentTimeMillis()
                     Log.d(TAG, "App open ad loaded")
+                    if (showWhenLoaded) {
+                        showWhenLoaded = false
+                        android.os.Handler(android.os.Looper.getMainLooper()).post {
+                            showAdIfAvailable()
+                        }
+                    }
                 }
 
                 override fun onAdFailedToLoad(error: LoadAdError) {
@@ -126,6 +133,7 @@ class AppOpenAdManager(private val application: Application) :
         if (activity is OnboardingActivity || activity is LoginActivity) return
 
         if (!isAdAvailable()) {
+            showWhenLoaded = true
             loadAd()
             return
         }
