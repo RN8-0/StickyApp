@@ -571,26 +571,31 @@ object StickerRepository {
             Bitmap.createScaledBitmap(original, (original.width * scale).toInt(), (original.height * scale).toInt(), true)
         } else original
 
+        @Suppress("DEPRECATION")
+        val format = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R)
+            Bitmap.CompressFormat.WEBP_LOSSY else Bitmap.CompressFormat.WEBP
         var quality = 85
-        while (quality >= 30) {
+        var smallest: ByteArray? = null
+        while (quality >= 10) {
             val baos = ByteArrayOutputStream()
-            @Suppress("DEPRECATION")
-            val format = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R)
-                Bitmap.CompressFormat.WEBP_LOSSY else Bitmap.CompressFormat.WEBP
             targetSize.compress(format, quality, baos)
-            if (baos.size() <= maxSize) {
-                file.writeBytes(baos.toByteArray())
-                Log.d(TAG, "Compressed ${file.name}: ${file.length()/1024}KB at quality=$quality")
-                break
-            }
-            quality -= 10
+            val bytes = baos.toByteArray()
+            if (smallest == null || bytes.size < smallest!!.size) smallest = bytes
+            if (bytes.size <= maxSize) break
+            quality -= 15
+        }
+        // Limitin altına inen ilk sürümü, inemiyorsa en küçük sürümü yaz —
+        // dosya asla sıkıştırılmadan büyük halde kalmaz.
+        smallest?.let {
+            file.writeBytes(it)
+            Log.d(TAG, "Compressed ${file.name}: ${it.size / 1024}KB")
         }
 
         if (targetSize !== original) targetSize.recycle()
         original.recycle()
     }
 
-    private fun isAnimatedWebpFile(file: File): Boolean {
+    fun isAnimatedWebpFile(file: File): Boolean {
         if (!file.name.endsWith(".webp", ignoreCase = true) || file.length() < 32) return false
         return try {
             file.inputStream().use { input ->

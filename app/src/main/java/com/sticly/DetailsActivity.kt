@@ -401,14 +401,11 @@ class DetailsActivity : AppCompatActivity() {
         fun preloadBatch(batch: List<Sticker>) {
             batch.forEach { sticker ->
                 val source = sourceFor(sticker) ?: return@forEach
-                // Sadece kaynak veriyi cache'e ısıt — hafif statik decode yeterli;
-                // grid'in animasyonlu yüklemesi bu cache'ten beslenir.
-                glide.asDrawable()
+                glide.asBitmap()
                     .load(source)
                     .override(256, 256)
                     .priority(com.bumptech.glide.Priority.LOW)
-                    .dontAnimate()
-                    .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.AUTOMATIC)
+                    .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.RESOURCE)
                     .preload(256, 256)
             }
         }
@@ -2479,14 +2476,15 @@ class DetailsActivity : AppCompatActivity() {
         var largestSize = 0L
 
         // Sticker dosyalarını kontrol et
+        var anyAnimated = false
         for (sticker in pack.stickers) {
             val file = java.io.File(cacheDir, sticker.file)
             if (!file.exists()) continue
             val fileSize = file.length()
-            // Dosya animated mı? pack.isAnimated flag'i yanlış olabilir (taşıma sırasında);
-            // BitmapFactory null döndürüyorsa dosya animated WebP'dir → 500KB limiti uygula
-            val isAnimatedFile = pack.isAnimated ||
-                (fileSize > maxStaticSize && android.graphics.BitmapFactory.decodeFile(file.absolutePath) == null)
+            // Dosyanın kendisi animated WebP mi? pack.isAnimated flag'i yanlış olabilir;
+            // dosya içeriğinden (RIFF/ANMF/VP8X) güvenilir biçimde tespit et.
+            val isAnimatedFile = pack.isAnimated || StickerRepository.isAnimatedWebpFile(file)
+            if (isAnimatedFile) anyAnimated = true
             val limit = if (isAnimatedFile) maxAnimatedSize else maxStaticSize
             if (fileSize > limit) {
                 oversizedCount++
@@ -2497,7 +2495,7 @@ class DetailsActivity : AppCompatActivity() {
         }
 
         if (oversizedCount > 0) {
-            val limitKB = if (pack.isAnimated) maxAnimatedSize / 1024 else maxStaticSize / 1024
+            val limitKB = if (pack.isAnimated || anyAnimated) maxAnimatedSize / 1024 else maxStaticSize / 1024
             val largestKB = largestSize / 1024
             return getString(R.string.sticker_size_error, oversizedCount, limitKB, largestKB)
         }

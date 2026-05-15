@@ -1,136 +1,136 @@
 <tr-TR>
-🎬 Sticly v5.0.1 — Çıkartmalar Canlandı!
-• 🎬 Animasyonlu çıkartmalar artık paket sayfasında canlı oynuyor.
+🚀 Sticly v5.0.2 — Daha Akıcı!
+• ✅ Bazı paketlerin WhatsApp'a eklenmesini engelleyen dosya boyutu sorunu giderildi.
 • 👆 Çıkartma önizlemesini kapatmak için ekranda herhangi bir yere dokunmanız yeterli.
 • 🚀 Açılış ekranı yenilendi; gereksiz bekleme ekranları kaldırıldı.
-• 🖼️ Paket sayfasındaki tüm çıkartmalar artık eksiksiz yükleniyor.
-• 🐛 Hata düzeltmeleri ve hız iyileştirmeleri.
+• ⚡ Paket sayfasındaki çıkartmalar daha hızlı ve eksiksiz yükleniyor.
+• 🐛 Hata düzeltmeleri ve kararlılık iyileştirmeleri.
 </tr-TR>
 <ar>
-🎬 Sticly v5.0.1 — الملصقات تنبض بالحياة!
-• 🎬 الملصقات المتحركة تعمل الآن مباشرةً في صفحة الحزمة.
+🚀 Sticly v5.0.2 — أكثر سلاسة!
+• ✅ تم إصلاح مشكلة حجم الملف التي منعت إضافة بعض الحزم إلى WhatsApp.
 • 👆 المس أي مكان على الشاشة لإغلاق معاينة الملصق.
 • 🚀 تم تجديد شاشة البدء وإزالة شاشات التحميل غير الضرورية.
-• 🖼️ جميع الملصقات في صفحة الحزمة تُحمَّل الآن بالكامل.
-• 🐛 إصلاحات للأخطاء وتحسينات في السرعة.
+• ⚡ الملصقات في صفحة الحزمة تُحمَّل بشكل أسرع وأكمل.
+• 🐛 إصلاحات للأخطاء وتحسينات في الاستقرار.
 </ar>
 <de-DE>
-🎬 Sticly v5.0.1 — Sticker werden lebendig!
-• 🎬 Animierte Sticker werden jetzt direkt auf der Paketseite abgespielt.
+🚀 Sticly v5.0.2 — Noch flüssiger!
+• ✅ Ein Dateigrößen-Problem behoben, das das Hinzufügen einiger Pakete zu WhatsApp verhinderte.
 • 👆 Tippe an eine beliebige Stelle des Bildschirms, um die Sticker-Vorschau zu schließen.
 • 🚀 Erneuerter Startbildschirm — unnötige Ladebildschirme entfernt.
-• 🖼️ Alle Sticker auf der Paketseite laden jetzt vollständig.
-• 🐛 Fehlerbehebungen und Geschwindigkeitsverbesserungen.
+• ⚡ Sticker auf der Paketseite laden schneller und vollständiger.
+• 🐛 Fehlerbehebungen und Stabilitätsverbesserungen.
 </de-DE>
 <en-US>
-🎬 Sticly v5.0.1 — Stickers Come Alive!
-• 🎬 Animated stickers now play live right on the pack page.
+🚀 Sticly v5.0.2 — Smoother Sticky!
+• ✅ Fixed a file-size issue that stopped some packs from being added to WhatsApp.
 • 👆 Tap anywhere on the screen to close the sticker preview.
 • 🚀 Refreshed launch screen — unnecessary loading screens removed.
-• 🖼️ All stickers on the pack page now load completely.
-• 🐛 Bug fixes and speed improvements.
+• ⚡ Stickers on the pack page load faster and more reliably.
+• 🐛 Bug fixes and stability improvements.
 </en-US>
 <es-419>
-🎬 Sticly v5.0.1 — ¡Los stickers cobran vida!
-• 🎬 Los stickers animados ahora se reproducen en vivo en la página del paquete.
+🚀 Sticly v5.0.2 — ¡Aún más fluido!
+• ✅ Se corrigió un problema de tamaño de archivo que impedía agregar algunos paquetes a WhatsApp.
 • 👆 Toca cualquier parte de la pantalla para cerrar la vista previa del sticker.
 • 🚀 Pantalla de inicio renovada; se eliminaron las pantallas de carga innecesarias.
-• 🖼️ Todos los stickers de la página del paquete ahora cargan por completo.
-• 🐛 Correcciones de errores y mejoras de velocidad.
+• ⚡ Los stickers de la página del paquete cargan más rápido y completos.
+• 🐛 Correcciones de errores y mejoras de estabilidad.
 </es-419>
 <fil>
-🎬 Sticly v5.0.1 — Buhay na ang mga Sticker!
-• 🎬 Ang mga animated na sticker ay gumagalaw na nang live sa pahina ng pack.
+🚀 Sticly v5.0.2 — Mas Maayos!
+• ✅ Inayos ang isyu sa laki ng file na pumipigil sa pagdagdag ng ilang pack sa WhatsApp.
 • 👆 I-tap ang kahit saan sa screen para isara ang preview ng sticker.
 • 🚀 Bagong launch screen — inalis na ang mga di-kailangang loading screen.
-• 🖼️ Buong nai-load na ngayon ang lahat ng sticker sa pahina ng pack.
-• 🐛 Mga pag-aayos ng bug at pagpapabilis.
+• ⚡ Mas mabilis at mas kumpletong nai-load ang mga sticker sa pahina ng pack.
+• 🐛 Mga pag-aayos ng bug at pagpapahusay ng katatagan.
 </fil>
 <fr-FR>
-🎬 Sticly v5.0.1 — Les stickers prennent vie !
-• 🎬 Les stickers animés s'affichent désormais en direct sur la page du pack.
+🚀 Sticly v5.0.2 — Encore plus fluide !
+• ✅ Correction d'un problème de taille de fichier qui empêchait l'ajout de certains packs à WhatsApp.
 • 👆 Touchez n'importe où sur l'écran pour fermer l'aperçu du sticker.
 • 🚀 Écran de démarrage repensé — les écrans de chargement inutiles ont été supprimés.
-• 🖼️ Tous les stickers de la page du pack se chargent maintenant entièrement.
-• 🐛 Corrections de bugs et améliorations de la vitesse.
+• ⚡ Les stickers de la page du pack se chargent plus vite et entièrement.
+• 🐛 Corrections de bugs et améliorations de la stabilité.
 </fr-FR>
 <hi-IN>
-🎬 Sticly v5.0.1 — स्टिकर हुए जीवंत!
-• 🎬 एनिमेटेड स्टिकर अब पैक पेज पर सीधे चलते हैं।
+🚀 Sticly v5.0.2 — और भी स्मूद!
+• ✅ फ़ाइल आकार की वह समस्या ठीक की गई जो कुछ पैक को WhatsApp में जोड़ने से रोक रही थी।
 • 👆 स्टिकर प्रीव्यू बंद करने के लिए स्क्रीन पर कहीं भी टैप करें।
 • 🚀 नया लॉन्च स्क्रीन — गैर-ज़रूरी लोडिंग स्क्रीन हटाई गईं।
-• 🖼️ पैक पेज के सभी स्टिकर अब पूरी तरह लोड होते हैं।
-• 🐛 बग फिक्स और गति सुधार।
+• ⚡ पैक पेज के स्टिकर तेज़ और पूरी तरह लोड होते हैं।
+• 🐛 बग फिक्स और स्थिरता सुधार।
 </hi-IN>
 <id>
-🎬 Sticly v5.0.1 — Stiker Jadi Hidup!
-• 🎬 Stiker animasi kini diputar langsung di halaman paket.
+🚀 Sticly v5.0.2 — Makin Mulus!
+• ✅ Memperbaiki masalah ukuran file yang membuat sebagian paket gagal ditambahkan ke WhatsApp.
 • 👆 Ketuk di mana saja pada layar untuk menutup pratinjau stiker.
 • 🚀 Layar pembuka diperbarui — layar pemuatan yang tidak perlu dihapus.
-• 🖼️ Semua stiker di halaman paket kini termuat sepenuhnya.
-• 🐛 Perbaikan bug dan peningkatan kecepatan.
+• ⚡ Stiker di halaman paket termuat lebih cepat dan lengkap.
+• 🐛 Perbaikan bug dan peningkatan stabilitas.
 </id>
 <it-IT>
-🎬 Sticly v5.0.1 — Gli sticker prendono vita!
-• 🎬 Gli sticker animati ora vengono riprodotti dal vivo nella pagina del pacchetto.
+🚀 Sticly v5.0.2 — Ancora più fluido!
+• ✅ Risolto un problema di dimensione dei file che impediva di aggiungere alcuni pacchetti a WhatsApp.
 • 👆 Tocca un punto qualsiasi dello schermo per chiudere l'anteprima dello sticker.
 • 🚀 Schermata di avvio rinnovata — rimosse le schermate di caricamento superflue.
-• 🖼️ Tutti gli sticker nella pagina del pacchetto ora si caricano completamente.
-• 🐛 Correzioni di bug e miglioramenti della velocità.
+• ⚡ Gli sticker nella pagina del pacchetto si caricano più velocemente e per intero.
+• 🐛 Correzioni di bug e miglioramenti della stabilità.
 </it-IT>
 <ja-JP>
-🎬 Sticly v5.0.1 — ステッカーが動き出す！
-• 🎬 アニメーションステッカーがパックページでそのまま再生されるようになりました。
+🚀 Sticly v5.0.2 — もっとスムーズに！
+• ✅ 一部のパックを WhatsApp に追加できなくなるファイルサイズの問題を修正しました。
 • 👆 画面のどこをタップしてもステッカーのプレビューを閉じられます。
 • 🚀 起動画面を一新し、不要な読み込み画面をなくしました。
-• 🖼️ パックページのすべてのステッカーが完全に読み込まれるようになりました。
-• 🐛 バグ修正と速度の向上。
+• ⚡ パックページのステッカーがより速く、もれなく読み込まれます。
+• 🐛 バグ修正と安定性の向上。
 </ja-JP>
 <ko-KR>
-🎬 Sticly v5.0.1 — 스티커가 살아납니다!
-• 🎬 애니메이션 스티커가 이제 팩 페이지에서 바로 재생됩니다.
+🚀 Sticly v5.0.2 — 더 부드럽게!
+• ✅ 일부 팩이 WhatsApp에 추가되지 않던 파일 크기 문제를 해결했습니다.
 • 👆 화면 아무 곳이나 탭하면 스티커 미리보기가 닫힙니다.
 • 🚀 시작 화면을 새롭게 바꾸고 불필요한 로딩 화면을 없앴습니다.
-• 🖼️ 팩 페이지의 모든 스티커가 이제 완전히 로드됩니다.
-• 🐛 버그 수정 및 속도 개선.
+• ⚡ 팩 페이지의 스티커가 더 빠르고 완전하게 로드됩니다.
+• 🐛 버그 수정 및 안정성 개선.
 </ko-KR>
 <pt-BR>
-🎬 Sticly v5.0.1 — Os stickers ganham vida!
-• 🎬 Os stickers animados agora são reproduzidos ao vivo na página do pacote.
+🚀 Sticly v5.0.2 — Mais fluido!
+• ✅ Corrigido um problema de tamanho de arquivo que impedia adicionar alguns pacotes ao WhatsApp.
 • 👆 Toque em qualquer lugar da tela para fechar a prévia do sticker.
 • 🚀 Tela de inicialização renovada — telas de carregamento desnecessárias removidas.
-• 🖼️ Todos os stickers da página do pacote agora carregam completamente.
-• 🐛 Correções de bugs e melhorias de velocidade.
+• ⚡ Os stickers da página do pacote carregam mais rápido e completos.
+• 🐛 Correções de bugs e melhorias de estabilidade.
 </pt-BR>
 <ru-RU>
-🎬 Sticly v5.0.1 — Стикеры оживают!
-• 🎬 Анимированные стикеры теперь воспроизводятся прямо на странице пака.
+🚀 Sticly v5.0.2 — Ещё плавнее!
+• ✅ Исправлена проблема с размером файла, из-за которой некоторые паки не добавлялись в WhatsApp.
 • 👆 Коснитесь любого места экрана, чтобы закрыть предпросмотр стикера.
 • 🚀 Обновлённый экран запуска — лишние экраны загрузки убраны.
-• 🖼️ Все стикеры на странице пака теперь загружаются полностью.
-• 🐛 Исправления ошибок и улучшение скорости.
+• ⚡ Стикеры на странице пака загружаются быстрее и полностью.
+• 🐛 Исправления ошибок и улучшения стабильности.
 </ru-RU>
 <th>
-🎬 Sticly v5.0.1 — สติกเกอร์มีชีวิตชีวา!
-• 🎬 สติกเกอร์เคลื่อนไหวเล่นแบบสดในหน้าแพ็กแล้ว
+🚀 Sticly v5.0.2 — ลื่นไหลยิ่งขึ้น!
+• ✅ แก้ปัญหาขนาดไฟล์ที่ทำให้บางแพ็กเพิ่มลง WhatsApp ไม่ได้
 • 👆 แตะที่ใดก็ได้บนหน้าจอเพื่อปิดตัวอย่างสติกเกอร์
 • 🚀 ปรับหน้าจอเริ่มต้นใหม่ ลบหน้าจอโหลดที่ไม่จำเป็นออก
-• 🖼️ สติกเกอร์ทั้งหมดในหน้าแพ็กโหลดครบถ้วนแล้ว
-• 🐛 แก้ไขข้อบกพร่องและปรับปรุงความเร็ว
+• ⚡ สติกเกอร์ในหน้าแพ็กโหลดเร็วขึ้นและครบถ้วน
+• 🐛 แก้ไขข้อบกพร่องและปรับปรุงความเสถียร
 </th>
 <vi>
-🎬 Sticly v5.0.1 — Sticker trở nên sống động!
-• 🎬 Sticker động giờ phát trực tiếp ngay trên trang gói.
+🚀 Sticly v5.0.2 — Mượt mà hơn!
+• ✅ Đã sửa lỗi kích thước tệp khiến một số gói không thêm được vào WhatsApp.
 • 👆 Chạm vào bất kỳ đâu trên màn hình để đóng bản xem trước sticker.
 • 🚀 Làm mới màn hình khởi động — đã bỏ các màn hình tải không cần thiết.
-• 🖼️ Tất cả sticker trên trang gói giờ tải đầy đủ.
-• 🐛 Sửa lỗi và cải thiện tốc độ.
+• ⚡ Sticker trên trang gói tải nhanh và đầy đủ hơn.
+• 🐛 Sửa lỗi và cải thiện độ ổn định.
 </vi>
 <zh-CN>
-🎬 Sticly v5.0.1 — 贴纸动起来了！
-• 🎬 动态贴纸现在可在贴纸包页面直接播放。
+🚀 Sticly v5.0.2 — 更加流畅！
+• ✅ 修复了导致部分贴纸包无法添加到 WhatsApp 的文件大小问题。
 • 👆 点按屏幕任意位置即可关闭贴纸预览。
 • 🚀 全新启动画面，移除多余的加载界面。
-• 🖼️ 贴纸包页面的所有贴纸现在都能完整加载。
-• 🐛 错误修复和速度优化。
+• ⚡ 贴纸包页面的贴纸加载更快、更完整。
+• 🐛 错误修复和稳定性改进。
 </zh-CN>
