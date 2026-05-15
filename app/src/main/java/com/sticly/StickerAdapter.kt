@@ -1,14 +1,12 @@
 package com.sticly
 
-import android.graphics.BitmapFactory
-import android.graphics.drawable.Drawable
+import android.graphics.Bitmap
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.ProgressBar
 import androidx.recyclerview.widget.RecyclerView
-import androidx.swiperefreshlayout.widget.CircularProgressDrawable
 import com.bumptech.glide.Glide
 import com.bumptech.glide.load.DataSource
 import com.bumptech.glide.load.engine.DiskCacheStrategy
@@ -16,7 +14,6 @@ import com.bumptech.glide.load.engine.GlideException
 import com.bumptech.glide.request.RequestListener
 import com.bumptech.glide.request.target.Target
 import com.bumptech.glide.signature.ObjectKey
-import java.io.File
 
 class StickerAdapter(
     private val packId: String,
@@ -32,10 +29,9 @@ class StickerAdapter(
     private val onSelectionChanged: ((Int) -> Unit)? = null
 ) : RecyclerView.Adapter<StickerAdapter.VH>() {
 
-    // Reusable listener to avoid allocation in onBind
-    private val clearBgListener = object : RequestListener<Drawable> {
-        override fun onLoadFailed(e: GlideException?, model: Any?, target: Target<Drawable>, isFirstResource: Boolean): Boolean = false
-        override fun onResourceReady(resource: Drawable, model: Any, target: Target<Drawable>, dataSource: DataSource, isFirstResource: Boolean): Boolean {
+    private val clearBgBitmapListener = object : RequestListener<Bitmap> {
+        override fun onLoadFailed(e: GlideException?, model: Any?, target: Target<Bitmap>, isFirstResource: Boolean): Boolean = false
+        override fun onResourceReady(resource: Bitmap, model: Any, target: Target<Bitmap>, dataSource: DataSource, isFirstResource: Boolean): Boolean {
             (target as? com.bumptech.glide.request.target.ImageViewTarget<*>)?.view?.background = null
             return false
         }
@@ -66,17 +62,6 @@ class StickerAdapter(
 
     override fun onCreateViewHolder(p: ViewGroup, vt: Int) =
         VH(LayoutInflater.from(p.context).inflate(R.layout.item_sticker, p, false))
-
-    // Lazy progress drawable for better performance
-    private fun getProgressDrawable(context: android.content.Context) = CircularProgressDrawable(context).apply {
-        strokeWidth = 5f
-        centerRadius = 30f
-        setColorSchemeColors(
-            context.getColor(R.color.primary),
-            context.getColor(R.color.premium_gold)
-        )
-        start()
-    }
 
     override fun onViewRecycled(holder: VH) {
         super.onViewRecycled(holder)
@@ -136,13 +121,14 @@ class StickerAdapter(
             packId.startsWith("custom_") -> {
                 val customFile = CustomStickerManager.getCustomStickerPath(context, packId, sticker.file)
                 if (customFile.exists()) {
-                    glideManager.asDrawable()
+                    glideManager.asBitmap()
                         .load(customFile)
                         .signature(ObjectKey(customFile.lastModified()))
+                        .override(256, 256)
                         .placeholder(R.drawable.sticker_placeholder)
                         .error(R.drawable.sticker_placeholder)
-                        .dontAnimate()
-                        .listener(clearBgListener)
+                        .diskCacheStrategy(DiskCacheStrategy.RESOURCE)
+                        .listener(clearBgBitmapListener)
                         .into(h.img)
                 } else {
                     h.img.setImageResource(R.drawable.sticker_placeholder)
@@ -150,28 +136,27 @@ class StickerAdapter(
             }
             // 1. Cache'de varsa oradan yükle
             cachedFile.exists() && cachedFile.length() > 0 -> {
-                glideManager.asDrawable()
+                glideManager.asBitmap()
                     .load(cachedFile)
                     .signature(ObjectKey(cachedFile.lastModified()))
-                    .override(384, 384)
+                    .override(256, 256)
                     .placeholder(R.drawable.sticker_placeholder)
                     .error(R.drawable.sticker_placeholder)
-                    .diskCacheStrategy(DiskCacheStrategy.AUTOMATIC)
-                    .dontAnimate()
-                    .listener(clearBgListener)
+                    .diskCacheStrategy(DiskCacheStrategy.RESOURCE)
+                    .listener(clearBgBitmapListener)
                     .into(h.img)
             }
             // 2. Firebase URL varsa oradan yükle
             sticker.url.isNotEmpty() -> {
-                val request = glideManager.asDrawable()
+                val request = glideManager.asBitmap()
                     .load(sticker.url)
                     .thumbnail(0.25f) // Show blurred thumbnail instantly while full image loads
                     .placeholder(R.drawable.sticker_placeholder)
                     .error(R.drawable.sticker_placeholder)
-                    .diskCacheStrategy(DiskCacheStrategy.DATA)
-                    .listener(clearBgListener)
+                    .diskCacheStrategy(DiskCacheStrategy.RESOURCE)
+                    .listener(clearBgBitmapListener)
 
-                request.override(256, 256).dontAnimate()
+                request.override(256, 256)
                 request.into(h.img)
             }
             // 3. URL yoksa direkt storage URL hesapla ve yükle
@@ -179,27 +164,27 @@ class StickerAdapter(
                 val directUrl = StickerRepository.getStickerDirectUrl(packId, sticker.file, storagePath)
                 // Update the sticker URL for future use
                 sticker.url = directUrl
-                val request = glideManager.asDrawable()
+                val request = glideManager.asBitmap()
                     .load(directUrl)
                     .thumbnail(0.25f)
                     .placeholder(R.drawable.sticker_placeholder)
                     .error(R.drawable.sticker_placeholder)
-                    .diskCacheStrategy(DiskCacheStrategy.DATA)
-                    .listener(clearBgListener)
+                    .diskCacheStrategy(DiskCacheStrategy.RESOURCE)
+                    .listener(clearBgBitmapListener)
 
-                request.override(256, 256).dontAnimate()
+                request.override(256, 256)
                 request.into(h.img)
             }
             // 4. Lokal assets'ten yükle
             else -> {
                 val assetPath = "file:///android_asset/$packId/${sticker.file}"
-                glideManager.asDrawable()
+                glideManager.asBitmap()
                     .load(android.net.Uri.parse(assetPath))
+                    .override(256, 256)
                     .placeholder(R.drawable.sticker_placeholder)
                     .error(R.drawable.sticker_placeholder)
-                    .diskCacheStrategy(DiskCacheStrategy.DATA)
-                    .dontAnimate()
-                    .listener(clearBgListener)
+                    .diskCacheStrategy(DiskCacheStrategy.RESOURCE)
+                    .listener(clearBgBitmapListener)
                     .into(h.img)
             }
         }

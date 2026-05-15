@@ -842,17 +842,28 @@ class DetailsActivity : AppCompatActivity() {
     private fun setupPublisherStrip(pack: Pack) {
         val isCustom = pack.category == "custom" || pack.id.startsWith("custom_")
         val strip = findViewById<LinearLayout>(R.id.publisherStrip) ?: return
-        if (isCustom || pack.pub.isBlank() || pack.pub.equals("Sticky", ignoreCase = true)) {
+        if (isCustom || pack.pub.isBlank()) {
             strip.visibility = View.GONE
             return
         }
         val avatar = findViewById<ImageView>(R.id.publisherAvatar)
+        val identityContainer = findViewById<View>(R.id.publisherIdentityContainer)
         val name = findViewById<TextView>(R.id.tvPublisherName)
         val hint = findViewById<TextView>(R.id.tvPublisherHint)
         val followButton = findViewById<MaterialButton>(R.id.btnFollowPublisher)
         followButton?.visibility = View.GONE
         strip.visibility = View.VISIBLE
 
+        if (pack.pub.equals("Sticky", ignoreCase = true)) {
+            avatar?.visibility = View.GONE
+            identityContainer?.visibility = View.INVISIBLE
+            strip.setOnClickListener(null)
+            strip.isClickable = false
+            return
+        }
+
+        avatar?.visibility = View.VISIBLE
+        identityContainer?.visibility = View.VISIBLE
         hint?.text = getString(R.string.view_profile)
         name?.text = pack.pub
         val clickListener = View.OnClickListener { openPublisherProfile(pack) }
