@@ -522,6 +522,7 @@ class MainActivity : AppCompatActivity() {
         // Prevent swipe-to-open drawer from intercepting bottom nav tab clicks
         drawer.setDrawerLockMode(androidx.drawerlayout.widget.DrawerLayout.LOCK_MODE_LOCKED_CLOSED)
         rv = findViewById(R.id.rv)
+        rv.layoutManager = LinearLayoutManager(this)
         loadingOverlay = findViewById(R.id.loadingOverlay)
         addLoadingOverlay = findViewById(R.id.addLoadingOverlay)
         circularProgressDirect = findViewById(R.id.circularProgressDirect)
@@ -594,7 +595,6 @@ class MainActivity : AppCompatActivity() {
 
         swipeRefresh.isEnabled = false
 
-        rv.layoutManager = LinearLayoutManager(this)
         rv.setHasFixedSize(true)
         rv.setItemViewCacheSize(10)
         rv.itemAnimator = null
