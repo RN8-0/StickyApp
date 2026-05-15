@@ -2339,6 +2339,27 @@ function App() {
         updatedData.name_en = normalizedName;
       }
 
+      // The Android app shows name_<locale> (e.g. name_tr) for non-English users.
+      // If only `name` is edited, those per-language fields stay stale and the app
+      // keeps showing the OLD name. So whenever the name actually changes, rewrite
+      // every name_xx the admin did NOT explicitly re-translate in this edit, so
+      // the rename shows up on every device immediately.
+      const previousName = (selectedPack.name ?? '').toString().trim();
+      const finalName = ((updatedData.name ?? normalizedName) ?? '').toString().trim();
+      if (finalName && finalName !== previousName) {
+        for (const lang of TARGET_LANGUAGES) {
+          const key = `name_${lang.code}`;
+          const editedVal = (editFormData as any)[key];
+          const oldVal = (selectedPack as any)[key];
+          // Keep a per-language value only if the admin explicitly changed it
+          // (e.g. via the translate button); otherwise sync it to the new name.
+          if (editedVal == null || editedVal === '' || editedVal === oldVal) {
+            updatedData[key] = finalName;
+          }
+        }
+        updatedData.name_en = finalName;
+      }
+
       updatedData.image_data_version = (Number(selectedPack.image_data_version || 0) + 1).toString();
       if (updatedData.is_premium) {
         if (!updatedData.price_try) updatedData.price_try = '69,99 TL';
