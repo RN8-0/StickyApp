@@ -7,8 +7,12 @@ import android.content.Intent
 import android.content.res.ColorStateList
 import android.graphics.BitmapFactory
 import android.graphics.Color
+import android.graphics.ImageDecoder
+import android.graphics.drawable.Animatable
 import android.graphics.drawable.ColorDrawable
+import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
+import android.os.Build
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -21,7 +25,6 @@ import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.*
-import android.webkit.WebView
 import androidx.core.view.ViewCompat
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.view.WindowInsetsCompat
@@ -42,7 +45,9 @@ import java.io.File
 import java.io.OutputStreamWriter
 import java.net.HttpURLConnection
 import java.net.URL
+import java.nio.ByteBuffer
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.TimeUnit
 import android.animation.ValueAnimator
 import android.animation.ObjectAnimator
 import android.util.Log
@@ -1987,7 +1992,7 @@ class DetailsActivity : AppCompatActivity() {
         val imageView = view.findViewById<ImageView>(R.id.previewImage)
         val lockOverlay = view.findViewById<ImageView>(R.id.lockOverlay)
         val unlockHint = view.findViewById<android.widget.TextView>(R.id.unlockHint)
-        var previewWebView: WebView? = null
+        var previewJob: Job? = null
 
         dialog.setContentView(view)
 
@@ -2017,50 +2022,31 @@ class DetailsActivity : AppCompatActivity() {
             if (loadSource == null) {
                 imageView.setImageResource(R.drawable.transparent_placeholder)
             } else if (animatedPreview) {
-                imageView.visibility = View.GONE
-                val sourceUrl = when (loadSource) {
-                    is File -> android.net.Uri.fromFile(loadSource).toString()
-                    is android.net.Uri -> loadSource.toString()
-                    else -> loadSource.toString()
-                }
-                val webView = WebView(this@DetailsActivity).apply {
-                    setBackgroundColor(Color.TRANSPARENT)
-                    isVerticalScrollBarEnabled = false
-                    isHorizontalScrollBarEnabled = false
-                    overScrollMode = View.OVER_SCROLL_NEVER
-                    settings.javaScriptEnabled = false
-                    settings.loadsImagesAutomatically = true
-                    settings.allowFileAccess = true
-                    settings.allowContentAccess = true
-                    settings.loadWithOverviewMode = true
-                    settings.useWideViewPort = true
-                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
-                        settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                imageView.visibility = View.VISIBLE
+                imageView.setImageResource(R.drawable.transparent_placeholder)
+                previewJob?.cancel()
+                previewJob = lifecycleScope.launch {
+                    val drawable = withContext(Dispatchers.IO) {
+                        decodeAnimatedPreviewDrawable(loadSource)
+                    }
+                    if (!dialog.isShowing) return@launch
+                    if (drawable != null) {
+                        imageView.setImageDrawable(drawable)
+                        drawable.setVisible(true, true)
+                        (drawable as? Animatable)?.start()
+                        imageView.post {
+                            (imageView.drawable as? Animatable)?.start()
+                        }
+                    } else {
+                        Glide.with(this@DetailsActivity)
+                            .asGif()
+                            .load(loadSource)
+                            .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.DATA)
+                            .dontTransform()
+                            .error(R.drawable.transparent_placeholder)
+                            .into(imageView)
                     }
                 }
-                previewWebView = webView
-                (view as? ViewGroup)?.addView(
-                    webView,
-                    android.widget.FrameLayout.LayoutParams(300.dp(), 300.dp()).apply {
-                        gravity = android.view.Gravity.CENTER
-                    }
-                )
-                val safeUrl = android.text.TextUtils.htmlEncode(sourceUrl)
-                val html = """
-                    <!doctype html>
-                    <html>
-                    <head>
-                      <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-                      <style>
-                        html,body{margin:0;padding:0;width:100%;height:100%;background:transparent;overflow:hidden;}
-                        body{display:flex;align-items:center;justify-content:center;}
-                        img{max-width:100%;max-height:100%;object-fit:contain;}
-                      </style>
-                    </head>
-                    <body><img src="$safeUrl"></body>
-                    </html>
-                """.trimIndent()
-                webView.loadDataWithBaseURL(null, html, "text/html", "UTF-8", null)
             } else {
                 Glide.with(this@DetailsActivity)
                     .load(loadSource)
@@ -2074,14 +2060,11 @@ class DetailsActivity : AppCompatActivity() {
         }
 
         dialog.setOnDismissListener {
+            previewJob?.cancel()
+            previewJob = null
+            (imageView.drawable as? Animatable)?.stop()
             Glide.with(this@DetailsActivity).clear(imageView)
             imageView.setImageDrawable(null)
-            previewWebView?.apply {
-                stopLoading()
-                loadUrl("about:blank")
-                destroy()
-            }
-            previewWebView = null
         }
         dialog.setOnShowListener {
             imageView.post { startPreviewLoad() }
@@ -2122,6 +2105,54 @@ class DetailsActivity : AppCompatActivity() {
         }
 
         dialog.show()
+    }
+
+    private fun decodeAnimatedPreviewDrawable(loadSource: Any): Drawable? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return null
+
+        return try {
+            val bytes = when (loadSource) {
+                is File -> loadSource.takeIf { it.exists() && it.length() > 0 }?.readBytes()
+                is android.net.Uri -> readPreviewBytesFromUri(loadSource)
+                is String -> {
+                    if (loadSource.startsWith("http://") || loadSource.startsWith("https://")) {
+                        Glide.with(applicationContext)
+                            .downloadOnly()
+                            .load(loadSource)
+                            .submit()
+                            .get(10, TimeUnit.SECONDS)
+                            ?.takeIf { it.exists() && it.length() > 0 }
+                            ?.readBytes()
+                    } else {
+                        File(loadSource).takeIf { it.exists() && it.length() > 0 }?.readBytes()
+                    }
+                }
+                else -> null
+            } ?: return null
+
+            ImageDecoder.decodeDrawable(
+                ImageDecoder.createSource(ByteBuffer.wrap(bytes))
+            ) { decoder, _, _ ->
+                decoder.setOnPartialImageListener { true }
+            }
+        } catch (e: Exception) {
+            Log.e("DetailsActivity", "Animated preview decode failed: ${e.message}")
+            null
+        }
+    }
+
+    private fun readPreviewBytesFromUri(uri: android.net.Uri): ByteArray? {
+        return try {
+            val path = uri.path.orEmpty()
+            if (uri.scheme == "file" && path.startsWith("/android_asset/")) {
+                assets.open(path.removePrefix("/android_asset/")).use { it.readBytes() }
+            } else {
+                contentResolver.openInputStream(uri)?.use { it.readBytes() }
+            }
+        } catch (e: Exception) {
+            Log.e("DetailsActivity", "Animated preview uri read failed: ${e.message}")
+            null
+        }
     }
 
     private fun isWhatsAppInstalled(): Boolean {

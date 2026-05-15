@@ -4046,13 +4046,7 @@ Rules:
                     hideHomeSections()
                 }
 
-                // İlk ekran çizildikten sonra küçük bir ön yükleme yap; açılışta main thread'i boğmasın.
-                if (!hasPreloadedOnce && newList.isNotEmpty()) {
-                    hasPreloadedOnce = true
-                    rv.postDelayed({
-                        StickyGlideModule.preloadFeedPacks(this@MainActivity, newList, preloadCount = 2, stickersPerPack = 3)
-                    }, 1500)
-                }
+                hasPreloadedOnce = hasPreloadedOnce || newList.isNotEmpty()
 
                 // Scroll handling after adapter update
                 if (pendingScrollToTop) {
