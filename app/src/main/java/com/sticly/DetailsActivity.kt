@@ -405,7 +405,7 @@ class DetailsActivity : AppCompatActivity() {
                     .load(source)
                     .override(256, 256)
                     .priority(com.bumptech.glide.Priority.LOW)
-                    .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.RESOURCE)
+                    .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.AUTOMATIC)
                     .preload(256, 256)
             }
         }

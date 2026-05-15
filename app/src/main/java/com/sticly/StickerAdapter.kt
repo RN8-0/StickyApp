@@ -148,32 +148,31 @@ class StickerAdapter(
             }
             // 2. Firebase URL varsa oradan yükle
             sticker.url.isNotEmpty() -> {
-                val request = glideManager.asBitmap()
+                // thumbnail(0.25f) kaldırıldı: RESOURCE stratejisiyle her sticker'ı
+                // İKİ kez indiriyordu (önizleme + tam boy). Tek istek + AUTOMATIC ile
+                // ana sayfada inen veri tekrar kullanılır → çok daha hızlı.
+                glideManager.asBitmap()
                     .load(sticker.url)
-                    .thumbnail(0.25f) // Show blurred thumbnail instantly while full image loads
+                    .override(256, 256)
                     .placeholder(R.drawable.sticker_placeholder)
                     .error(R.drawable.sticker_placeholder)
-                    .diskCacheStrategy(DiskCacheStrategy.RESOURCE)
+                    .diskCacheStrategy(DiskCacheStrategy.AUTOMATIC)
                     .listener(clearBgBitmapListener)
-
-                request.override(256, 256)
-                request.into(h.img)
+                    .into(h.img)
             }
             // 3. URL yoksa direkt storage URL hesapla ve yükle
             storagePath.isNotEmpty() -> {
                 val directUrl = StickerRepository.getStickerDirectUrl(packId, sticker.file, storagePath)
                 // Update the sticker URL for future use
                 sticker.url = directUrl
-                val request = glideManager.asBitmap()
+                glideManager.asBitmap()
                     .load(directUrl)
-                    .thumbnail(0.25f)
+                    .override(256, 256)
                     .placeholder(R.drawable.sticker_placeholder)
                     .error(R.drawable.sticker_placeholder)
-                    .diskCacheStrategy(DiskCacheStrategy.RESOURCE)
+                    .diskCacheStrategy(DiskCacheStrategy.AUTOMATIC)
                     .listener(clearBgBitmapListener)
-
-                request.override(256, 256)
-                request.into(h.img)
+                    .into(h.img)
             }
             // 4. Lokal assets'ten yükle
             else -> {
