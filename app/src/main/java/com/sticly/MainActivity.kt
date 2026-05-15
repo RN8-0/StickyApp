@@ -175,6 +175,7 @@ class MainActivity : AppCompatActivity() {
 
     // Category Chips
     private lateinit var categoryChipGroup: ChipGroup
+    private var categoryScrollView: View? = null
     private var currentCategory: String = "all"
 
     private var allPacks: List<Pack> = emptyList()
@@ -437,7 +438,6 @@ class MainActivity : AppCompatActivity() {
         // Setup essential UI components
         setupBottomNav()
         setupSearch()
-        setupCategoryChips()
         setupDrawerMenu()
 
         // Defer heavier network/account setup so the home feed can draw first.
@@ -564,6 +564,9 @@ class MainActivity : AppCompatActivity() {
         homeHeaderAdapter = SingleViewAdapter(homeHeaderView)
 
         categoryChipGroup = homeHeaderView.findViewById(R.id.categoryChipGroup)
+        categoryScrollView = homeHeaderView.findViewById(R.id.categoryScrollView)
+        categoryScrollView?.visibility = View.GONE
+        categoryChipGroup.visibility = View.GONE
         
         regionalPopularContainer = homeHeaderView.findViewById(R.id.regionalPopularContainer)
         regionalPopularTitle = homeHeaderView.findViewById(R.id.regionalPopularTitle)
@@ -763,7 +766,7 @@ class MainActivity : AppCompatActivity() {
                 currentCategory = "all"
                 updateBottomNavUI()
                 updateCategoryChipSelection()
-                categoryChipGroup.visibility = View.VISIBLE
+                showCategoryChipsIfReady()
                 showHomeSections()
                 tabExplore.post {
                     if (!restoreExploreState()) {
@@ -807,6 +810,7 @@ class MainActivity : AppCompatActivity() {
                 currentFilter = FilterType.CUSTOM
                 pendingScrollToTop = true
                 updateBottomNavUI()
+                categoryScrollView?.visibility = View.GONE
                 categoryChipGroup.visibility = View.GONE
                 hideHomeSections()
                 tabMyStickers.post { applyFilters() }
@@ -863,6 +867,7 @@ class MainActivity : AppCompatActivity() {
             mainContent.visibility = View.GONE
             emptyStateView.visibility = View.GONE
             searchBarLayoutCached?.visibility = View.GONE
+            categoryScrollView?.visibility = View.GONE
             categoryChipGroup.visibility = View.GONE
             hideHomeSections()
             btnAddStickerHeader.visibility = View.GONE
@@ -884,6 +889,7 @@ class MainActivity : AppCompatActivity() {
             mainContent.visibility = View.GONE
             emptyStateView.visibility = View.GONE
             searchBarLayoutCached?.visibility = View.GONE
+            categoryScrollView?.visibility = View.GONE
             categoryChipGroup.visibility = View.GONE
             hideHomeSections()
             btnAddStickerHeader.visibility = View.GONE
@@ -923,7 +929,7 @@ class MainActivity : AppCompatActivity() {
                 
                 menuBtn.setImageResource(R.drawable.ic_menu)
                 toolbarSubtitle.visibility = View.GONE
-                categoryChipGroup.visibility = View.VISIBLE
+                showCategoryChipsIfReady()
                 showHomeSections()
             }
             FilterType.FAVORITES -> {
@@ -934,6 +940,7 @@ class MainActivity : AppCompatActivity() {
                 menuBtn.setImageResource(R.drawable.ic_menu)
                 toolbarSubtitle.visibility = View.VISIBLE
                 toolbarSubtitle.text = getString(R.string.filter_favorites)
+                categoryScrollView?.visibility = View.GONE
                 categoryChipGroup.visibility = View.GONE
                 hideHomeSections()
             }
@@ -945,6 +952,7 @@ class MainActivity : AppCompatActivity() {
                 menuBtn.setImageResource(R.drawable.ic_menu)
                 toolbarSubtitle.visibility = View.VISIBLE
                 toolbarSubtitle.text = getString(R.string.filter_favorites)
+                categoryScrollView?.visibility = View.GONE
                 categoryChipGroup.visibility = View.GONE
                 hideHomeSections()
             }
@@ -958,6 +966,7 @@ class MainActivity : AppCompatActivity() {
                 menuBtn.setImageResource(R.drawable.ic_menu)
                 toolbarSubtitle.visibility = View.VISIBLE
                 toolbarSubtitle.text = getString(R.string.your_stickers)
+                categoryScrollView?.visibility = View.GONE
                 categoryChipGroup.visibility = View.GONE
                 hideHomeSections()
             }
@@ -1638,6 +1647,7 @@ Rules:
                         refreshPacks()
                         // Navigate to My Stickers tab
                         currentFilter = FilterType.CUSTOM
+                        categoryScrollView?.visibility = View.GONE
                         categoryChipGroup.visibility = View.GONE
                         hideHomeSections()
                         updateBottomNavUI()
@@ -3155,6 +3165,14 @@ Rules:
         storyContainer.visibility = View.GONE
     }
 
+    private fun showCategoryChipsIfReady() {
+        val ready = ::categoryChipGroup.isInitialized && categoryChipGroup.childCount > 0
+        categoryScrollView?.visibility = if (ready) View.VISIBLE else View.GONE
+        if (::categoryChipGroup.isInitialized) {
+            categoryChipGroup.visibility = if (ready) View.VISIBLE else View.GONE
+        }
+    }
+
     private fun showHomeSections() {
         if (regionalAdapter?.getRealCount() ?: 0 > 0) regionalPopularContainer.visibility = View.VISIBLE
         if (storyAdapter?.itemCount ?: 0 > 0) storyContainer.visibility = View.VISIBLE
@@ -3268,6 +3286,12 @@ Rules:
 
     private fun setupCategoryChips() {
         if (!::categoryChipGroup.isInitialized) return
+        if (allPacks.isEmpty()) {
+            categoryChipGroup.removeAllViews()
+            categoryChipGroup.visibility = View.GONE
+            categoryScrollView?.visibility = View.GONE
+            return
+        }
 
         // Firebase'den gelen paketlerdeki benzersiz kategorileri al
         val uniqueCategories = allPacks
@@ -3279,6 +3303,7 @@ Rules:
         // Skip rebuild if categories haven't changed
         val newSet = uniqueCategories.toSet()
         if (newSet == lastCategorySet && categoryChipGroup.childCount > 0) {
+            showCategoryChipsIfReady()
             refreshChipStates()
             return
         }
@@ -3365,6 +3390,9 @@ Rules:
             }
             categoryChipGroup.addView(chip)
         }
+
+        categoryScrollView?.visibility = View.VISIBLE
+        categoryChipGroup.visibility = View.VISIBLE
     }
 
     private fun refreshChipStates() {
@@ -3393,6 +3421,8 @@ Rules:
 
     private fun setupFavoritesChips() {
         categoryChipGroup.removeAllViews()
+        categoryScrollView?.visibility = View.VISIBLE
+        categoryChipGroup.visibility = View.VISIBLE
 
         data class FavChipInfo(val id: String, val label: String, val filterType: FilterType)
         val chips = listOf(
@@ -4065,7 +4095,7 @@ Rules:
             currentFilter = FilterType.ALL
             applyFilters()
             updateBottomNavUI()
-            categoryChipGroup.visibility = View.VISIBLE
+            showCategoryChipsIfReady()
             updateCategoryChipSelection()
         } else {
             super.onBackPressed()
@@ -4660,6 +4690,7 @@ Rules:
 
                 // Switch to My Stickers tab to show the newly added sticker
                 currentFilter = FilterType.CUSTOM
+                categoryScrollView?.visibility = View.GONE
                 categoryChipGroup.visibility = View.GONE
                 hideHomeSections()
                 updateBottomNavUI()
