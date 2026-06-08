@@ -18,7 +18,10 @@ http:
     sticky-images-svc:
       loadBalancer:
         servers:
-          - url: "http://10.0.1.14:80"
+          # Route by Docker DNS container name, not a hardcoded IP. Docker's
+          # embedded DNS always resolves this to the container's current IP, so
+          # routing survives restarts/redeploys that reshuffle container IPs.
+          - url: "http://sticky-images:80"
   middlewares:
     sticky-images-redirect-to-https:
       redirectScheme:

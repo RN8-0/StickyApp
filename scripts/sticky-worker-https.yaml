@@ -18,7 +18,9 @@ http:
     sticky-worker-svc:
       loadBalancer:
         servers:
-          - url: "http://10.0.1.15:3000"
+          # Route by Docker DNS container name, not a hardcoded IP (survives
+          # restarts/redeploys that reshuffle container IPs).
+          - url: "http://sticky-worker:3000"
   middlewares:
     sticky-worker-redirect-to-https:
       redirectScheme:
