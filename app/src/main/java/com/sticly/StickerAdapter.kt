@@ -1,11 +1,15 @@
 package com.sticly
 
+import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.drawable.Drawable
+import android.os.Build
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.ProgressBar
+import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
 import com.bumptech.glide.load.DataSource
@@ -37,14 +41,54 @@ class StickerAdapter(
         }
     }
 
+    // Same background-clear behaviour as above, but for the animated Drawable upgrade.
+    private val clearBgDrawableListener = object : RequestListener<Drawable> {
+        override fun onLoadFailed(e: GlideException?, model: Any?, target: Target<Drawable>, isFirstResource: Boolean): Boolean = false
+        override fun onResourceReady(resource: Drawable, model: Any, target: Target<Drawable>, dataSource: DataSource, isFirstResource: Boolean): Boolean {
+            (target as? com.bumptech.glide.request.target.ImageViewTarget<*>)?.view?.background = null
+            return false
+        }
+    }
+
     private var glideManager: com.bumptech.glide.RequestManager? = null
 
     private fun getGlide(context: android.content.Context): com.bumptech.glide.RequestManager {
         return glideManager ?: Glide.with(context).also { glideManager = it }
     }
 
+    // ── Animated grid playback ────────────────────────────────────────────────
+    // Opt-in per animated pack and only on API 28+, where Glide's ImageDecoder path can decode
+    // animated WebP without an extra decoder library. The fast, reliable static asBitmap() load
+    // stays the base; we upgrade ONLY the currently-visible items to animated drawables when
+    // scrolling is idle. This bounds concurrent animated decodes to the visible set (~9-12),
+    // avoiding the old "only the first few load" regression and keeping scrolling smooth.
+    private val animateOnIdle = isAnimated && Build.VERSION.SDK_INT >= Build.VERSION_CODES.P
+    private var recyclerView: RecyclerView? = null
+    private var animateScheduled = false
+
+    private val scrollListener = object : RecyclerView.OnScrollListener() {
+        override fun onScrollStateChanged(rv: RecyclerView, newState: Int) {
+            if (newState == RecyclerView.SCROLL_STATE_IDLE) scheduleAnimateVisible()
+        }
+    }
+
     init {
         setHasStableIds(true)
+    }
+
+    override fun onAttachedToRecyclerView(rv: RecyclerView) {
+        super.onAttachedToRecyclerView(rv)
+        recyclerView = rv
+        if (animateOnIdle) {
+            rv.addOnScrollListener(scrollListener)
+            scheduleAnimateVisible()
+        }
+    }
+
+    override fun onDetachedFromRecyclerView(rv: RecyclerView) {
+        super.onDetachedFromRecyclerView(rv)
+        rv.removeOnScrollListener(scrollListener)
+        recyclerView = null
     }
 
     override fun getItemId(position: Int): Long {
@@ -58,6 +102,8 @@ class StickerAdapter(
         val selectionOverlay: View = v.findViewById(R.id.selectionOverlay)
         val checkboxContainer: View = v.findViewById(R.id.checkboxContainer)
         val selectedCheck: ImageView = v.findViewById(R.id.selectedCheck)
+        // True once this holder has been upgraded to animated playback (reset on bind/recycle).
+        var animated: Boolean = false
     }
 
     override fun onCreateViewHolder(p: ViewGroup, vt: Int) =
@@ -65,6 +111,7 @@ class StickerAdapter(
 
     override fun onViewRecycled(holder: VH) {
         super.onViewRecycled(holder)
+        holder.animated = false
         try { getGlide(holder.itemView.context).clear(holder.img) } catch (_: Exception) {}
     }
 
@@ -73,6 +120,7 @@ class StickerAdapter(
         val context = h.itemView.context
 
         // Reset state
+        h.animated = false
         h.lockIcon.visibility = View.GONE
         h.img.alpha = 1f
         h.img.rotation = 0f
@@ -90,7 +138,7 @@ class StickerAdapter(
                 onStickerClick?.invoke(sticker, pos)
             }
         }
-        
+
         h.itemView.setOnLongClickListener {
             if (!isSelectionMode) {
                 onStickerLongClick?.invoke(sticker, pos)
@@ -187,6 +235,64 @@ class StickerAdapter(
                     .into(h.img)
             }
         }
+
+        // After the static frame is bound, queue an idle upgrade of the visible items to animated.
+        if (animateOnIdle && !isSelectionMode) scheduleAnimateVisible()
+    }
+
+    /** Posts a single debounced pass that animates the visible items once scrolling is idle. */
+    private fun scheduleAnimateVisible() {
+        if (!animateOnIdle) return
+        val rv = recyclerView ?: return
+        if (animateScheduled) return
+        animateScheduled = true
+        rv.post {
+            animateScheduled = false
+            if (rv.scrollState == RecyclerView.SCROLL_STATE_IDLE) upgradeVisibleToAnimated()
+        }
+    }
+
+    private fun upgradeVisibleToAnimated() {
+        if (isSelectionMode) return
+        val rv = recyclerView ?: return
+        val lm = rv.layoutManager as? LinearLayoutManager ?: return
+        val first = lm.findFirstVisibleItemPosition()
+        val last = lm.findLastVisibleItemPosition()
+        if (first < 0 || last < 0) return
+        for (pos in first..last) {
+            val h = rv.findViewHolderForAdapterPosition(pos) as? VH ?: continue
+            upgradeHolderToAnimated(h, pos)
+        }
+    }
+
+    /** Upgrades one already-bound (visible) holder from the static frame to animated playback. */
+    private fun upgradeHolderToAnimated(h: VH, pos: Int) {
+        if (h.animated || isSelectionMode) return
+        val context = h.itemView.context
+        val source = resolveSource(context, pos) ?: return
+        h.animated = true
+        var req = getGlide(context).asDrawable()
+            .load(source)
+            .override(256, 256)
+            .dontTransform()
+            .diskCacheStrategy(DiskCacheStrategy.AUTOMATIC)
+            .listener(clearBgDrawableListener)
+        if (source is java.io.File) req = req.signature(ObjectKey(source.lastModified()))
+        req.into(h.img)
+    }
+
+    /** Resolves the same load source the static bind uses, so the animated upgrade matches it. */
+    private fun resolveSource(context: Context, pos: Int): Any? {
+        val sticker = items.getOrNull(pos) ?: return null
+        if (packId.startsWith("custom_")) {
+            val customFile = CustomStickerManager.getCustomStickerPath(context, packId, sticker.file)
+            return if (customFile.exists()) customFile else null
+        }
+        val cachedFile = StickerRepository.getCachedStickerPath(context, packId, sticker.file)
+        if (cachedFile.exists() && cachedFile.length() > 0) return cachedFile
+        if (sticker.url.isNotEmpty()) return sticker.url
+        if (storagePath.isNotEmpty()) return StickerRepository.getStickerDirectUrl(packId, sticker.file, storagePath)
+        return android.net.Uri.parse("file:///android_asset/$packId/${sticker.file}")
     }
 
     fun setDeleteMode(enabled: Boolean) {

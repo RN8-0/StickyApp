@@ -64,6 +64,7 @@ class AIStickerActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_ai_sticker)
+        DisplayUtils.applyMaxRefreshRate(this)
 
         window.statusBarColor = ContextCompat.getColor(this, R.color.primary_dark)
 

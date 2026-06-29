@@ -180,6 +180,9 @@ class MainActivity : AppCompatActivity() {
     private var currentCategory: String = "all"
 
     private var allPacks: List<Pack> = emptyList()
+    // Locally-created (custom_) packs as Pack models. Kept as a single source of truth so that
+    // server refreshes / realtime updates (displayPacks) never wipe user packs from allPacks.
+    private var customPacksCache: List<Pack> = emptyList()
     private var billingManager: BillingManager? = null
     private var currentFilter: FilterType = FilterType.ALL
     private var currentSearchQuery: String = ""
@@ -404,6 +407,7 @@ class MainActivity : AppCompatActivity() {
             return
         }
         setContentView(R.layout.activity_main)
+        DisplayUtils.applyMaxRefreshRate(this)
         createdWithLanguage = PreferencesHelper.getLanguage(this)
 
         // Restore state if activity was recreated
@@ -817,7 +821,9 @@ class MainActivity : AppCompatActivity() {
                 categoryScrollView?.visibility = View.GONE
                 categoryChipGroup.visibility = View.GONE
                 hideHomeSections()
-                tabMyStickers.post { applyFilters() }
+                // Rebuild custom packs from disk first so packs added via gallery/AI/maker show
+                // immediately (the cache may be stale if they were created on another tab).
+                refreshCustomPacksThenApply()
             } catch (e: Exception) {
                 android.util.Log.e("BottomNav", "MyStickers tab error", e)
             }
@@ -1632,13 +1638,10 @@ Rules:
             try {
                 val success = CustomStickerManager.addStickerToPack(this@MainActivity, packId, bitmap)
                 if (success) {
-                    // Only refresh the changed pack, not all custom packs
-                    val updatedPack = CustomStickerManager.toWhatsAppPack(this@MainActivity, packId)?.copy(category = "custom")
-                    if (updatedPack != null) {
-                        allPacks = allPacks.map { if (it.id == packId) updatedPack else it }.let { list ->
-                            if (list.none { it.id == packId }) list + updatedPack else list
-                        }
-                    }
+                    // Rebuild the custom-pack cache so the new/updated pack survives any server
+                    // refresh and shows in My Stickers immediately.
+                    customPacksCache = loadCustomPacksAsPacks()
+                    allPacks = mergeCustomPacks(allPacks)
                 }
                 withContext(Dispatchers.Main) {
                     if (success) {
@@ -1647,8 +1650,6 @@ Rules:
                         aiRawBitmap = null
                         aiPreviewCard?.visibility = View.GONE
                         aiEtPrompt?.text?.clear()
-                        // Full refresh to show new pack immediately
-                        refreshPacks()
                         // Navigate to My Stickers tab
                         currentFilter = FilterType.CUSTOM
                         categoryScrollView?.visibility = View.GONE
@@ -3648,20 +3649,9 @@ Rules:
             loadPacks()
         }
 
-        // Only reload custom packs if user is specifically on CUSTOM tab
+        // Reload custom packs when on the My Stickers tab so edits/additions show after returning.
         if (::adapter.isInitialized && currentFilter == FilterType.CUSTOM) {
-            lifecycleScope.launch {
-                val updatedPacks = withContext(Dispatchers.IO) {
-                    val customPacks = CustomStickerManager.getCustomPacks(this@MainActivity).mapNotNull { cp ->
-                        val pack = CustomStickerManager.toWhatsAppPack(this@MainActivity, cp.id)?.copy(category = "custom")
-                        if (pack != null && pack.stickers.isNotEmpty()) pack else null
-                    }
-                    val firebasePacks = allPacks.filter { it.category != "custom" }
-                    firebasePacks + customPacks
-                }
-                allPacks = updatedPacks.distinctBy { it.id }
-                applyFilters()
-            }
+            refreshCustomPacksThenApply()
         }
 
         // Show ad promo once per session after first fullscreen ad is shown
@@ -3788,8 +3778,45 @@ Rules:
     private var hasPreloadedOnce = false
     private var hasPreloadedPopular = false
 
+    /** Loads locally-created custom packs as Pack models (off the main thread). */
+    private suspend fun loadCustomPacksAsPacks(): List<Pack> = withContext(Dispatchers.IO) {
+        CustomStickerManager.getCustomPacks(this@MainActivity).mapNotNull { cp ->
+            CustomStickerManager.toWhatsAppPack(this@MainActivity, cp.id)?.copy(category = "custom")
+                ?.takeIf { it.stickers.isNotEmpty() }
+        }
+    }
+
+    /**
+     * Merges custom packs into a server pack list so user packs always survive refreshes.
+     * customPacksCache (refreshed from disk on every mutation / tab entry) is authoritative when
+     * populated — this makes the merge immune to StickerRepository.loadPacks() returning a stale
+     * cache and correctly drops deleted packs. Before the cache is first populated (cold start) it
+     * falls back to any custom packs already present in the input so nothing is lost.
+     */
+    private fun mergeCustomPacks(packs: List<Pack>): List<Pack> {
+        val server = packs.filter { !it.id.startsWith("custom_") }
+        val custom = if (customPacksCache.isNotEmpty()) customPacksCache
+                     else packs.filter { it.id.startsWith("custom_") }
+        return (server + custom).distinctBy { it.id }
+    }
+
+    /**
+     * Refreshes customPacksCache from disk, re-merges into allPacks and re-applies filters.
+     * Call after any custom-pack mutation or when entering My Stickers so newly created/edited
+     * packs appear immediately without an app restart.
+     */
+    private fun refreshCustomPacksThenApply() {
+        lifecycleScope.launch {
+            customPacksCache = loadCustomPacksAsPacks()
+            allPacks = mergeCustomPacks(allPacks)
+            applyFilters()
+        }
+    }
+
     private fun displayPacks(packs: List<Pack>) {
-        val distinctPacks = packs.distinctBy { it.id }
+        // Always re-merge the user's custom packs: server refreshes / realtime updates would
+        // otherwise replace allPacks with server-only packs and drop user packs from My Stickers.
+        val distinctPacks = mergeCustomPacks(packs)
         fun visiblePackSignature(packList: List<Pack>) = packList.sortedBy { it.id }.joinToString("|") {
             val stickers = it.stickers.joinToString(",") { sticker -> "${sticker.file}:${sticker.url}" }
             "${it.id}:${it.version}:${it.name}:${it.pub}:${it.category}:${it.tray}:${it.trayUrl}:${it.isActive}:${it.isPremium}:${it.productId}:${it.isAnimated}:${it.isPopular}:${it.priceTRY}:${it.priceUSD}:${it.priceEUR}:${it.downloadCount}:${it.favoriteCount}:${it.likeCount}:${it.commentCount}:${it.viewCount}:${it.stickers.size}:$stickers"
@@ -4427,6 +4454,9 @@ Rules:
             return
         }
 
+        // Reklam gereken bu işlem çevrimdışıyken reklamı atlayıp bedavaya gelemez (açık kapatıldı).
+        if (AdManager.requiresOnlineForAd(this)) return
+
         val hasAccess = !pack.isPremium || PreferencesHelper.hasAccessToPack(this, pack.id)
         if (!hasAccess) {
             showRewardedAdForDirectAdd(pack)
@@ -4744,7 +4774,10 @@ Rules:
                         PreferencesHelper.removeInstalledPack(this@MainActivity, packId)
                         deletePackAndPocketBase(packId)
                         Toast.makeText(this@MainActivity, R.string.pack_deleted_success, Toast.LENGTH_SHORT).show()
-                        refreshPacks()
+                        // Rebuild the cache so the deleted pack does not reappear on the next merge.
+                        customPacksCache = loadCustomPacksAsPacks()
+                        allPacks = mergeCustomPacks(allPacks)
+                        applyFilters()
                     }
                 }
             }
@@ -4753,11 +4786,8 @@ Rules:
         // Handle sticker maker result - refresh custom packs immediately and switch to My Stickers
         if (requestCode == REQUEST_STICKER_MAKER && resultCode == RESULT_OK) {
             lifecycleScope.launch {
-                val customPacks = CustomStickerManager.getCustomPacks(this@MainActivity).mapNotNull { cp ->
-                    CustomStickerManager.toWhatsAppPack(this@MainActivity, cp.id)?.copy(category = "custom")
-                }
-                val firebasePacks = allPacks.filter { it.category != "custom" }
-                allPacks = (firebasePacks + customPacks).distinctBy { it.id }
+                customPacksCache = loadCustomPacksAsPacks()
+                allPacks = mergeCustomPacks(allPacks)
 
                 // Switch to My Stickers tab to show the newly added sticker
                 currentFilter = FilterType.CUSTOM

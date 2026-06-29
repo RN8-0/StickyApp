@@ -207,6 +207,10 @@ class NotificationsActivity : AppCompatActivity() {
                     actorPhoto = data.optString("actor_photo")
                 )
             }.sortedByDescending { it.timestamp }
+                // A single like/follow is stored once per owner identity key (user_id, email,
+                // device_id, …), so a recipient matching several keys would otherwise see the same
+                // event multiple times. Collapse records that represent the same event.
+                .distinctBy { "${it.type}|${it.actorId}|${it.actorEmail}|${it.body}" }
         }.getOrElse { emptyList() }
     }
 

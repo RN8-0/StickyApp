@@ -130,6 +130,7 @@ class DetailsActivity : AppCompatActivity() {
     override fun onCreate(s: Bundle?) {
         super.onCreate(s)
         setContentView(R.layout.activity_details)
+        DisplayUtils.applyMaxRefreshRate(this)
 
         packId = intent.getStringExtra("id") ?: return finish()
 
@@ -2256,6 +2257,9 @@ class DetailsActivity : AppCompatActivity() {
             showWhatsAppNotAvailableDialog()
             return
         }
+
+        // Reklam gereken bu işlem çevrimdışıyken reklamı atlayıp bedavaya gelemez (açık kapatıldı).
+        if (AdManager.requiresOnlineForAd(this)) return
 
         val hasAccess = !pack.isPremium || PreferencesHelper.hasAccessToPack(this, pack.id)
 

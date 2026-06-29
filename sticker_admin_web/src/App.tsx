@@ -312,8 +312,6 @@ function App() {
   const statsFilterRef = useRef<HTMLButtonElement>(null);
 
   // Login form state (must be declared at top level, before any early returns)
-  const [loginEmail, setLoginEmail] = useState('');
-  const [loginPassword, setLoginPassword] = useState('');
 
   // Mail System States
   const [messages, setMessages] = useState<ContactMessage[]>([]);
@@ -650,11 +648,17 @@ function App() {
     const recipientId = getSubmissionRecipientId(submission);
     if (!recipientId) throw new Error('Submission has no recipient identifier.');
 
-    const basePayload = {
+    // Store ONE record but make it findable by the recipient's app regardless of how it currently
+    // identifies itself: user_id holds the most stable identity (signed-in user_id/email), and the
+    // device_id field is set so a device-only (not-signed-in) recipient still matches. The app's
+    // query is user_id ∈ {firebaseUid, email, deviceId} OR device_id == deviceId.
+    const stableUserId = submission.user_id || submission.user_email || submission.device_id || recipientId;
+    const basePayload: Record<string, unknown> = {
       title,
       body,
       message: body,
-      user_id: recipientId,
+      user_id: stableUserId,
+      ...(submission.device_id ? { device_id: submission.device_id } : {}),
       pack_id: submission.id,
       from: 'admin',
       read: false,
@@ -800,7 +804,11 @@ function App() {
         return;
       }
 
-      // 2. Create the pack with existing submission sticker URLs (no re-upload needed)
+      // 2. Create the pack record, then migrate each sticker's binary INTO this record so the
+      //    approved pack is self-contained. Previously the submission URLs were copied verbatim,
+      //    leaving the files under the user_submissions record. When the app normalises those URLs
+      //    to /api/files/stickers/{newId}/{file} (which never existed) it got 404s → blank grids
+      //    and "can't add to WhatsApp". Uploading here makes that canonical path always resolve.
       const packData: any = {
         name: submission.pack_name,
         publisher: submission.publisher_name || submission.display_name || 'Community Artist',
@@ -816,14 +824,61 @@ function App() {
         like_count: 0,
         comment_count: 0,
         engagement_score: 0,
-        sticker_count: sourceStickerRefs.length,
-        image_data_version: '1',
+        sticker_count: 0,
+        image_data_version: Date.now().toString(),
         is_active: true,
-        stickers: sourceStickerRefs,
-        tray_url: sourceStickerRefs[0]?.url || '',
+        stickers: [],
+        tray_url: '',
         created_at: new Date().toISOString(),
       };
       const created = await pb.collection('stickers').create(packData);
+
+      // Migrate sticker binaries into the new record (sequential — avoids overwhelming PB).
+      const migratedStickers: Sticker[] = [];
+      for (let i = 0; i < sourceStickerRefs.length; i++) {
+        const ref = sourceStickerRefs[i];
+        if (!ref.url) continue;
+        const requestedName = normalizeFileName(ref.image_file || `sticker_${i + 1}.webp`, `sticker_${i + 1}.webp`);
+        try {
+          const file = await fetchAsFile(ref.url, requestedName);
+          const uploadedUrl = await uploadFile('stickers', created.id, 'images', file, requestedName);
+          migratedStickers.push({
+            image_file: filenameFromUrl(uploadedUrl, requestedName),
+            url: uploadedUrl,
+            emojis: ref.emojis && ref.emojis.length > 0 ? ref.emojis : ['⭐'],
+          });
+        } catch (err) {
+          console.error(`[Approve] sticker ${i + 1} migration failed:`, err);
+        }
+      }
+
+      if (migratedStickers.length < 9) {
+        await pb.collection('stickers').delete(created.id).catch(() => {});
+        alert(`Approval failed: only ${migratedStickers.length}/9 sticker images could be migrated (submission files may be unreachable). Please retry or reject.`);
+        setIsProcessing(false);
+        return;
+      }
+
+      // Tray image — upload from the first migrated sticker so the cover is self-contained too.
+      let trayUrl = '';
+      let trayFile = '';
+      try {
+        const trayName = normalizeFileName(migratedStickers[0].image_file || 'tray.webp', 'tray.webp');
+        const trayFileObject = await fetchAsFile(migratedStickers[0].url, trayName);
+        trayUrl = await uploadFile('stickers', created.id, 'tray_image', trayFileObject, trayName);
+        trayFile = filenameFromUrl(trayUrl, trayName);
+      } catch (err) {
+        console.error('[Approve] tray upload failed:', err);
+      }
+
+      // Finalize: write the self-contained sticker list + tray onto the record.
+      await pb.collection('stickers').update(created.id, {
+        stickers: migratedStickers,
+        sticker_count: migratedStickers.length,
+        tray_url: trayUrl || migratedStickers[0].url,
+        tray_image_file: trayFile,
+        image_data_version: Date.now().toString(),
+      });
 
       // 3. Update submission status
       await pb.collection('user_submissions').update(submission.id, {
@@ -1086,37 +1141,6 @@ function App() {
     } catch (error: any) {
       console.error('GitHub login error:', error);
       alert('GitHub sign-in failed: ' + error.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleEmailLogin = async (email: string, password: string) => {
-    setLoading(true);
-    try {
-      const { signInWithEmail } = await import('./pocketbase');
-      const authData = await signInWithEmail(email, password);
-      const userEmail = authData.record?.email;
-      if (!userEmail) throw new Error('Could not get email from login');
-
-      let isAdminUser = false;
-      try {
-        const admins = await pb.collection('admins_list').getFullList({
-          filter: pb.filter('email = {:email}', { email: userEmail })
-        });
-        if (admins.length > 0) isAdminUser = true;
-      } catch (_) {}
-      if (!isAdminUser) {
-        pb.authStore.clear();
-        alert('Access denied: ' + userEmail + ' is not an admin.');
-        return;
-      }
-
-      setUser({ email: userEmail });
-      fetchPacks();
-    } catch (error: any) {
-      console.error('Email login error:', error);
-      alert('Login failed: ' + (error.message || 'Invalid credentials'));
     } finally {
       setLoading(false);
     }
@@ -3004,39 +3028,7 @@ function App() {
               <Lock className="text-white" size={32} />
             </div>
             <h1 className="text-2xl font-bold">Sticky Admin Login</h1>
-            <p className="text-textSec text-sm">Sign in to access the admin panel</p>
-          </div>
-
-          <div className="space-y-3">
-            <input
-              type="email"
-              placeholder="Email"
-              value={loginEmail}
-              onChange={e => setLoginEmail(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleEmailLogin(loginEmail, loginPassword)}
-              className="w-full bg-surface border border-border rounded-xl px-4 py-3 text-sm outline-none focus:border-primary"
-            />
-            <input
-              type="password"
-              placeholder="Password"
-              value={loginPassword}
-              onChange={e => setLoginPassword(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleEmailLogin(loginEmail, loginPassword)}
-              className="w-full bg-surface border border-border rounded-xl px-4 py-3 text-sm outline-none focus:border-primary"
-            />
-            <button
-              onClick={() => handleEmailLogin(loginEmail, loginPassword)}
-              disabled={loading || !loginEmail || !loginPassword}
-              className="w-full bg-primary hover:bg-primary/90 py-3 rounded-xl font-bold text-white transition-all disabled:opacity-50"
-            >
-              {loading ? 'Signing in...' : 'Sign In'}
-            </button>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <div className="flex-1 h-px bg-border" />
-            <span className="text-textSec text-xs">or</span>
-            <div className="flex-1 h-px bg-border" />
+            <p className="text-textSec text-sm">Sign in with GitHub to access the admin panel</p>
           </div>
 
           <button

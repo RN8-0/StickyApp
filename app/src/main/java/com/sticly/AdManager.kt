@@ -7,6 +7,7 @@ import android.view.View
 import android.widget.Button
 import android.widget.ImageView
 import android.widget.TextView
+import android.widget.Toast
 import com.google.android.gms.ads.AdError
 import com.google.android.gms.ads.AdListener
 import com.google.android.gms.ads.AdLoader
@@ -83,6 +84,20 @@ object AdManager {
                 loadInterstitialAd(context)
             }
         }
+    }
+
+    /**
+     * Ad-gated actions (adding a pack to WhatsApp, unlocking a locked pack) must show an ad to
+     * non-premium users. When the device is offline the ad can never load, which previously let
+     * the action proceed for free — an exploit. Call this at the entry of every ad-gated flow:
+     * if it returns true the action must NOT proceed (the user is told to connect first).
+     * Premium users and online users are never blocked. Purely local create/edit is unaffected.
+     */
+    fun requiresOnlineForAd(activity: Activity): Boolean {
+        if (PreferencesHelper.isPremium(activity)) return false
+        if (NetworkUtils.isOnline(activity)) return false
+        Toast.makeText(activity, R.string.no_internet_required, Toast.LENGTH_LONG).show()
+        return true
     }
 
     // ========== REWARDED VIDEO ==========

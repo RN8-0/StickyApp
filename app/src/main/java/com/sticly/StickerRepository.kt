@@ -423,11 +423,17 @@ object StickerRepository {
         }
 
         if (fileName.isNotBlank() && trimmed.contains("/api/files/")) {
-            // Preserve any valid PocketBase file URL from the current host.
-            // Cross-collection URLs are intentional: approved packs in 'stickers' still
-            // serve their image files from the original 'user_submissions' collection.
+            // Preserve any valid PocketBase file URL. Cross-collection URLs are intentional:
+            // approved user packs in 'stickers' still serve their image files from the original
+            // 'user_submissions' record. The file path is identical no matter which Traefik
+            // hostname (sticky-admin / PB host) fronts the same PocketBase instance, so keep the
+            // PATH and just normalize the HOST to the stable PB_URL. Falling back to the canonical
+            // stickers/{packId}/{file} path 404s when the files were never migrated to the new
+            // record (the cause of blank grids + "can't add to WhatsApp" on approved packs).
             val pbHost = PocketBaseHelper.PB_URL.trimEnd('/')
-            return if (trimmed.startsWith(pbHost)) trimmed else canonicalPocketBaseUrl
+            if (trimmed.startsWith(pbHost)) return trimmed
+            val filesIdx = trimmed.indexOf("/api/files/")
+            return if (filesIdx >= 0) pbHost + trimmed.substring(filesIdx) else canonicalPocketBaseUrl
         }
 
         if (trimmed.contains("firebasestorage.googleapis.com") && fileName.isNotBlank()) {

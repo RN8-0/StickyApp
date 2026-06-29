@@ -379,7 +379,17 @@ async function packRecipientKeys(pack) {
   const identifiers = new Set([pack.publisher_user_id, pack.publisher_email, pack.email, pack.publisher].map(lower).filter(Boolean));
   const profiles = await getAllProfiles();
   const profile = profiles.find((item) => userMatches(item, identifiers));
-  return unique([pack.publisher_user_id, pack.publisher_email, pack.email, pack.user_id, pack.user_email, pack.device_id, profile?.user_id, profile?.uid, profile?.email, profile?.device_id]);
+  const keys = [pack.publisher_user_id, pack.publisher_email, pack.email, pack.user_id, pack.user_email, pack.device_id, profile?.user_id, profile?.uid, profile?.email, profile?.device_id];
+  // Approved user packs keep the submitter's identity (incl. device_id for not-signed-in users) on
+  // the linked user_submissions record, not on the pack. Include it so likes also reach owners who
+  // are only identified by a device id. The app de-duplicates events across these keys.
+  try {
+    const submissions = await safeFetchAll('user_submissions');
+    submissions
+      .filter((submission) => [submission.sticker_pack_id, submission.source_pack_id, submission.pack_id].map(clean).includes(clean(pack.id)))
+      .forEach((submission) => { keys.push(submission.device_id, submission.user_id, submission.user_email); });
+  } catch (_) { /* submissions optional */ }
+  return unique(keys.filter(Boolean));
 }
 
 async function deleteRecordsWhere(collection, predicate) {
