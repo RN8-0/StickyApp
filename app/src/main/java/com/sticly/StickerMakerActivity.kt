@@ -1452,14 +1452,15 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
                     items.addAll(newItems)
                     adapter.notifyDataSetChanged()
                     if (newItems.isEmpty()) {
-                        Toast.makeText(this@StickerMakerActivity, getString(R.string.no_custom_stickers_to_add), Toast.LENGTH_SHORT).show()
+                        Toast.makeText(this@StickerMakerActivity, "You have no stickers of your own yet", Toast.LENGTH_SHORT).show()
                     }
                 }
             }
         }
 
         val categories = listOf("mystickers", "trending", "effects", "bubble", "love", "funny", "animals", "food")
-        val displayNames = listOf(getString(R.string.my_stickers_tab), "Trending", "Effects", "Bubble", "Love", "Funny", "Animals", "Food")
+        // English literal to match the sibling tabs (Trending/Effects/…), which are hardcoded English.
+        val displayNames = listOf("My Stickers", "Trending", "Effects", "Bubble", "Love", "Funny", "Animals", "Food")
         var selectedTabView: TextView? = null
 
         categories.forEachIndexed { index, cat ->
