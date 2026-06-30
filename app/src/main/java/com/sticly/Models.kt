@@ -43,7 +43,11 @@ data class Pack(
     // Dinamik çeviriler (Gemini tarafından üretilen name_xx alanları burada toplanır)
     val translations: Map<String, String> = emptyMap(),
     @SerializedName("source") val source: String = "",
-    @SerializedName("publisher_user_id") val publisherUserId: String = ""
+    @SerializedName("publisher_user_id") val publisherUserId: String = "",
+    // True only for genuine user-submitted/community packs. Computed from the RAW publisher_user_id
+    // (no publisher_email fallback) + source — so Sticky packs that merely carry a publisher_email
+    // are NOT misclassified. Used to keep community packs out of "Yeni Eklenenler".
+    val isCommunityPack: Boolean = false
 )
 
 data class BillingSettings(

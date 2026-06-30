@@ -1729,11 +1729,22 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
     override fun onTouchSourceImage(event: MotionEvent) {}
     */
     
-    // Empty implementations for the interface if required
+    // Double-tap-to-edit tracking: the library calls onEditTextChangeListener on every single tap.
+    private var lastTextTapView: View? = null
+    private var lastTextTapTime = 0L
+
     override fun onEditTextChangeListener(rootView: View?, text: String?, colorCode: Int) {
-        // When user clicks on existing text, show edit dialog
-        if (rootView != null && text != null) {
+        // A single tap only SELECTS the text (the library draws the bounding box on touch); the
+        // edit dialog opens only on a DOUBLE tap of the same text element.
+        if (rootView == null || text == null) return
+        val now = System.currentTimeMillis()
+        if (rootView === lastTextTapView && now - lastTextTapTime < 350L) {
+            lastTextTapView = null
+            lastTextTapTime = 0L
             showEditTextDialog(rootView, text, colorCode)
+        } else {
+            lastTextTapView = rootView
+            lastTextTapTime = now
         }
     }
     override fun onAddViewListener(viewType: ViewType?, numberOfAddedViews: Int) {
@@ -1938,7 +1949,14 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
     }
     override fun onStartViewChangeListener(viewType: ViewType?) {}
     override fun onStopViewChangeListener(viewType: ViewType?) {}
-    override fun onTouchSourceImage(event: MotionEvent?) {}
+    override fun onTouchSourceImage(event: MotionEvent?) {
+        // Tapping the empty background deselects the currently-selected sticker/text/emoji
+        // (clears the bounding box). A single tap on empty space is enough.
+        if (event?.action == MotionEvent.ACTION_UP) {
+            photoEditor.clearHelperBox()
+            lastTextTapView = null
+        }
+    }
 
     // ==================== Bitmap History (Undo/Redo) ====================
 

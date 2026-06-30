@@ -310,7 +310,11 @@ object StickerRepository {
                 priceEUR = json.optString("price_eur"),
                 translations = translations,
                 source = json.optString("source"),
-                publisherUserId = json.optString("publisher_user_id").ifBlank { json.optString("publisher_email") }
+                publisherUserId = json.optString("publisher_user_id").ifBlank { json.optString("publisher_email") },
+                // RAW publisher_user_id only (no email fallback): a Sticky pack that merely has a
+                // publisher_email (e.g. "Jake 1") must NOT count as community.
+                isCommunityPack = json.optString("publisher_user_id").isNotBlank() ||
+                    json.optString("source") == "user_submission"
             )
         } catch (e: Exception) {
             Log.e(TAG, "PocketBase pack parse error: ${e.message}")

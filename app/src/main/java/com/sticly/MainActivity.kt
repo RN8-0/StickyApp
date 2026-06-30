@@ -3145,12 +3145,21 @@ Rules:
         rvStories.adapter = storyAdapter
     }
 
+    /**
+     * True only for user-submitted/community packs. Works even on packs loaded from the old disk
+     * cache (which predates the isCommunityPack field): a genuine user pack carries a PocketBase
+     * publisher_user_id (15-char id, never contains '@'), whereas Sticky packs only ever have an
+     * empty publisher_user_id or a publisher_email (always contains '@'). So a non-blank
+     * publisherUserId without '@' reliably marks a community pack.
+     */
+    private fun isCommunityPack(p: Pack): Boolean =
+        p.isCommunityPack || p.source == "user_submission" ||
+            (p.publisherUserId.isNotBlank() && !p.publisherUserId.contains("@"))
+
     private fun updateStoryPacks(packs: List<Pack>) {
         // "Yeni Eklenenler" shows ONLY Sticky's own packs — not user-submitted/community packs.
-        // User packs carry a publisher_user_id (set at approval) and/or source=user_submission.
         val activePacks = packs.filter {
-            it.isActive && it.category != "custom" &&
-                it.source != "user_submission" && it.publisherUserId.isBlank()
+            it.isActive && it.category != "custom" && !isCommunityPack(it)
         }
 
         // Recently added: sorted by creation date (most recent first), up to 20
