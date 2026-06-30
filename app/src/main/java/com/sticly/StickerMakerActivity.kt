@@ -1019,16 +1019,168 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
     private var textEditorOverlay: View? = null
 
     @SuppressLint("ClickableViewAccessibility")
-    private fun showTextDialog() {
+    private fun showTextDialog() = showFullscreenTextEditor(null)
+
+    /**
+     * The fullscreen on-canvas text editor (type directly over the sticker with inline font/color
+     * pickers). editTarget == null → ADD a new text; otherwise EDIT that existing text overlay in
+     * place. This is the editor used for BOTH the "Add Text" tool and double-tap edit.
+     */
+    private fun showFullscreenTextEditor(editTarget: View?) {
         if (currentBitmap == null) {
             Toast.makeText(this, getString(R.string.error_select_image_first), Toast.LENGTH_SHORT).show()
             setActiveToolButton(null)
             return
         }
-        // ADD text uses the SAME modern bottom-sheet dialog as edit (the old fullscreen
-        // "Type something" editor was removed).
-        setActiveToolButton(null)
-        showEditTextDialog(null, "", android.graphics.Color.WHITE)
+
+        val rootView = findViewById<android.widget.FrameLayout>(android.R.id.content)
+        val overlay = layoutInflater.inflate(R.layout.dialog_text_editor_fullscreen, rootView, false)
+        rootView.addView(overlay)
+        textEditorOverlay = overlay
+
+        window.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+
+        val etText = overlay.findViewById<android.widget.EditText>(R.id.etTextOverlay)
+        val btnClose = overlay.findViewById<View>(R.id.btnTextClose)
+        val btnDone = overlay.findViewById<View>(R.id.btnTextDone)
+        val colorDots = overlay.findViewById<LinearLayout>(R.id.textColorDots)
+        val fontRow = overlay.findViewById<LinearLayout>(R.id.textFontRow)
+
+        var selectedColor = android.graphics.Color.WHITE
+        var selectedColorDotView: View? = null
+        var selectedTypeface: Typeface? = null
+        var selectedFontView: TextView? = null
+
+        fun dismissOverlay() {
+            val imm = getSystemService(android.content.Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
+            imm.hideSoftInputFromWindow(etText.windowToken, 0)
+            rootView.removeView(overlay)
+            textEditorOverlay = null
+            window.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_PAN)
+            setActiveToolButton(null)
+        }
+
+        fun assetFont(file: String): Typeface = try {
+            Typeface.createFromAsset(assets, "fonts/$file")
+        } catch (e: Exception) { Typeface.DEFAULT }
+
+        val fontList = listOf(
+            "Roboto"     to assetFont("Roboto.ttf"),
+            "Bold"       to assetFont("DroidSansBold.ttf"),
+            "Serif"      to assetFont("DroidSerif.ttf"),
+            "Serif Bold" to assetFont("DroidSerifBold.ttf"),
+            "Serif It."  to assetFont("DroidSerifItalic.ttf"),
+            "Mono"       to assetFont("DroidSansMono.ttf"),
+            "DroidSans"  to assetFont("DroidSans.ttf"),
+            "Light"      to assetFont("RobotoLight.ttf"),
+            "Thin"       to assetFont("RobotoThin.ttf"),
+            "Medium"     to assetFont("RobotoMedium.ttf"),
+            "Condensed"  to Typeface.create("sans-serif-condensed", Typeface.BOLD),
+            "Black"      to Typeface.create("sans-serif-black", Typeface.NORMAL)
+        )
+        selectedTypeface = fontList[0].second
+
+        fun selectFont(chip: TextView, tf: Typeface) {
+            selectedFontView?.let { prev ->
+                prev.setTextColor(android.graphics.Color.parseColor("#AAAAAA"))
+                prev.setBackgroundResource(R.drawable.bg_style_chip_inactive)
+            }
+            chip.setTextColor(android.graphics.Color.BLACK)
+            chip.setBackgroundResource(R.drawable.bg_style_chip_active)
+            selectedFontView = chip
+            selectedTypeface = tf
+            etText.typeface = tf
+        }
+
+        fontList.forEachIndexed { index, (name, tf) ->
+            val chip = TextView(this).apply {
+                text = "Abc"
+                textSize = 15f
+                typeface = tf
+                gravity = android.view.Gravity.CENTER
+                setPadding(12.dpToPx(), 6.dpToPx(), 12.dpToPx(), 6.dpToPx())
+                val params = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    36.dpToPx()
+                ).apply { marginEnd = 6.dpToPx() }
+                layoutParams = params
+                contentDescription = name
+            }
+            chip.setOnClickListener { selectFont(chip, tf) }
+            if (index == 0) {
+                chip.setTextColor(android.graphics.Color.BLACK)
+                chip.setBackgroundResource(R.drawable.bg_style_chip_active)
+                selectedFontView = chip
+            } else {
+                chip.setTextColor(android.graphics.Color.parseColor("#CCCCCC"))
+                chip.setBackgroundResource(R.drawable.bg_style_chip_inactive)
+            }
+            fontRow.addView(chip)
+        }
+
+        val colors = listOf(
+            0xFFFFFFFF.toInt(), 0xFF000000.toInt(), 0xFFFF0000.toInt(),
+            0xFF00C853.toInt(), 0xFF2196F3.toInt(), 0xFFFF9800.toInt(),
+            0xFFE91E63.toInt(), 0xFF9C27B0.toInt(), 0xFFFFEB3B.toInt(),
+            0xFF00BCD4.toInt(), 0xFFFF5722.toInt(), 0xFF607D8B.toInt()
+        )
+        colors.forEachIndexed { index, color ->
+            val dot = View(this).apply {
+                val dotSize = 34.dpToPx()
+                layoutParams = LinearLayout.LayoutParams(dotSize, dotSize).apply { marginEnd = 8.dpToPx() }
+                val bg = GradientDrawable().apply {
+                    shape = GradientDrawable.OVAL
+                    setColor(color)
+                    if (index == 0) setStroke(3.dpToPx(), Color.parseColor("#6C5CE7"))
+                }
+                background = bg
+                setOnClickListener {
+                    selectedColorDotView?.let { prev ->
+                        (prev.background as? GradientDrawable)?.setStroke(0, 0)
+                    }
+                    bg.setStroke(3.dpToPx(), Color.parseColor("#6C5CE7"))
+                    selectedColor = color
+                    selectedColorDotView = this
+                    etText.setTextColor(color)
+                }
+            }
+            if (index == 0) selectedColorDotView = dot
+            colorDots.addView(dot)
+        }
+
+        // EDIT mode: pre-fill with the existing text + its colour.
+        if (editTarget != null) {
+            findTextViewIn(editTarget)?.let { tv ->
+                etText.setText(tv.text)
+                etText.setSelection(etText.text?.length ?: 0)
+                selectedColor = tv.currentTextColor
+                etText.setTextColor(selectedColor)
+            }
+        }
+
+        etText.requestFocus()
+        etText.postDelayed({
+            val imm = getSystemService(android.content.Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
+            imm.showSoftInput(etText, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT)
+        }, 150)
+
+        btnClose.setOnClickListener { dismissOverlay() }
+
+        btnDone.setOnClickListener {
+            val text = etText.text?.toString()?.trim() ?: ""
+            if (text.isNotEmpty()) {
+                val tsb = TextStyleBuilder()
+                tsb.withTextColor(selectedColor)
+                tsb.withTextSize(28f)
+                selectedTypeface?.let { tsb.withTextFont(it) }
+                if (editTarget != null) {
+                    photoEditor.editText(editTarget, text, tsb)
+                } else {
+                    photoEditor.addText(text, tsb)
+                }
+            }
+            dismissOverlay()
+        }
     }
 
     // ==================== Emoji ====================
@@ -1665,7 +1817,7 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
         // selects, tapping the same selected text again opens the editor.
         if (rootView === selectedOverlayView) {
             selectedOverlayView = null
-            showEditTextDialog(rootView, text, colorCode)
+            showFullscreenTextEditor(rootView)
         } else {
             selectedOverlayView = rootView
         }
@@ -1686,8 +1838,8 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
             ) continue
             if (!child.getGlobalVisibleRect(rect)) continue
             if (rect.contains(rawX.toInt(), rawY.toInt())) {
-                val tv = findTextViewIn(child) ?: continue // emoji/sticker overlay, not text
-                showEditTextDialog(child, tv.text?.toString() ?: "", tv.currentTextColor)
+                if (findTextViewIn(child) == null) continue // emoji/sticker overlay, not text
+                showFullscreenTextEditor(child) // open the fullscreen editor in EDIT mode
                 return true
             }
         }
