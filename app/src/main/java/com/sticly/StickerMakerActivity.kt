@@ -123,6 +123,20 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
     private var historyIndex = -1
     private val maxHistorySize = 15
 
+    // Unified ordered undo/redo. Each entry records the KIND of the operation so undo/redo reverse
+    // them in the EXACT order they were performed. Previously two independent stacks (PhotoEditor
+    // for overlays/brush + bitmapHistory for source edits) were used, so undo always emptied the
+    // overlay stack first regardless of order — causing "undoes 2-3 at once / skips one / redo
+    // leaves the background".
+    private enum class EditOp { LIBRARY, BITMAP }
+    private val undoOps = kotlin.collections.ArrayDeque<EditOp>()
+    private val redoOps = kotlin.collections.ArrayDeque<EditOp>()
+    // True while WE drive an undo/redo, so the library's add/remove callbacks don't re-record ops.
+    private var suppressOpTracking = false
+
+    // Sticker-selection tracking for tap-to-select / tap-again-to-edit and tap-empty-to-deselect.
+    private var selectedOverlayView: View? = null
+
     // Shape/Brush State
     private lateinit var shapeBuilder: ShapeBuilder
     private var currentBrushSize = 40f
@@ -264,6 +278,20 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
             .setPinchTextScalable(true)
             .build()
         photoEditor.setOnPhotoEditorListener(this)
+
+        // Deselect when tapping an EMPTY area of the canvas (the transparent margin around the
+        // photo). onTouchSourceImage only covers taps ON the photo; this covers the rest. The
+        // listener is only reached when no overlay/source consumed the touch, so the library's
+        // drag/scale/select behaviour is untouched.
+        val deselectDetector = GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
+            override fun onDown(e: MotionEvent): Boolean = true
+            override fun onSingleTapUp(e: MotionEvent): Boolean {
+                // Clears the box for ANY selected overlay (text, emoji or sticker).
+                if (!isBrushModeActive && !isEraserMode) clearOverlaySelection()
+                return true
+            }
+        })
+        photoEditorView.setOnTouchListener { _, ev -> deselectDetector.onTouchEvent(ev) }
 
         shapeBuilder = ShapeBuilder()
 
@@ -1310,7 +1338,7 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
         val categoryTabs = view.findViewById<LinearLayout>(R.id.giphyCategoryTabs)
         val btnCancel = view.findViewById<View>(R.id.btnGiphyCancel)
 
-        data class GiphyItem(val id: String, val previewUrl: String, val originalUrl: String)
+        data class GiphyItem(val id: String, val previewUrl: String, val originalUrl: String, val localFile: java.io.File? = null)
         val items = mutableListOf<GiphyItem>()
 
         val adapter = object : androidx.recyclerview.widget.RecyclerView.Adapter<androidx.recyclerview.widget.RecyclerView.ViewHolder>() {
@@ -1329,23 +1357,31 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
             override fun onBindViewHolder(holder: androidx.recyclerview.widget.RecyclerView.ViewHolder, position: Int) {
                 val item = items[position]
                 val iv = holder.itemView as android.widget.ImageView
-                com.bumptech.glide.Glide.with(this@StickerMakerActivity)
-                    .asGif()
-                    .load(item.previewUrl)
-                    .placeholder(R.drawable.sticker_placeholder)
-                    .into(iv)
+                if (item.localFile != null) {
+                    com.bumptech.glide.Glide.with(this@StickerMakerActivity)
+                        .load(item.localFile)
+                        .placeholder(R.drawable.sticker_placeholder)
+                        .into(iv)
+                } else {
+                    com.bumptech.glide.Glide.with(this@StickerMakerActivity)
+                        .asGif()
+                        .load(item.previewUrl)
+                        .placeholder(R.drawable.sticker_placeholder)
+                        .into(iv)
+                }
                 iv.setOnClickListener {
                     dialog.dismiss()
                     lifecycleScope.launch(Dispatchers.IO) {
                         try {
-                            val url = java.net.URL(item.originalUrl)
-                            val connection = url.openConnection() as java.net.HttpURLConnection
-                            connection.connect()
-                            val input = connection.inputStream
-                            val gifBytes = input.readBytes()
-                            connection.disconnect()
-                            val bmp = android.graphics.BitmapFactory.decodeByteArray(gifBytes, 0, gifBytes.size)
-                                ?: return@launch
+                            val bmp = if (item.localFile != null) {
+                                android.graphics.BitmapFactory.decodeFile(item.localFile.absolutePath)
+                            } else {
+                                val connection = java.net.URL(item.originalUrl).openConnection() as java.net.HttpURLConnection
+                                connection.connect()
+                                val gifBytes = connection.inputStream.readBytes()
+                                connection.disconnect()
+                                android.graphics.BitmapFactory.decodeByteArray(gifBytes, 0, gifBytes.size)
+                            } ?: return@launch
                             val scaled = android.graphics.Bitmap.createScaledBitmap(bmp, 200, 200, true)
                             withContext(Dispatchers.Main) {
                                 photoEditor.addImage(scaled)
@@ -1400,8 +1436,30 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
             }
         }
 
-        val categories = listOf("trending", "effects", "bubble", "love", "funny", "animals", "food")
-        val displayNames = listOf("Trending", "Effects", "Bubble", "Love", "Funny", "Animals", "Food")
+        // Loads the user's own previously-created stickers (from their local custom packs) so they
+        // can be added onto the sticker being edited.
+        fun loadMyStickers() {
+            lifecycleScope.launch(Dispatchers.IO) {
+                val files = mutableListOf<java.io.File>()
+                try {
+                    CustomStickerManager.getCustomPacks(this@StickerMakerActivity).forEach { pack ->
+                        files.addAll(CustomStickerManager.getStickerFiles(this@StickerMakerActivity, pack.id))
+                    }
+                } catch (_: Exception) {}
+                val newItems = files.map { GiphyItem(it.absolutePath, "", "", it) }
+                withContext(Dispatchers.Main) {
+                    items.clear()
+                    items.addAll(newItems)
+                    adapter.notifyDataSetChanged()
+                    if (newItems.isEmpty()) {
+                        Toast.makeText(this@StickerMakerActivity, getString(R.string.no_custom_stickers_to_add), Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        }
+
+        val categories = listOf("mystickers", "trending", "effects", "bubble", "love", "funny", "animals", "food")
+        val displayNames = listOf(getString(R.string.my_stickers_tab), "Trending", "Effects", "Bubble", "Love", "Funny", "Animals", "Food")
         var selectedTabView: TextView? = null
 
         categories.forEachIndexed { index, cat ->
@@ -1434,7 +1492,7 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
                         setColor(android.graphics.Color.parseColor("#6C5CE7"))
                     }
                     selectedTabView = this
-                    loadGiphy(cat)
+                    if (cat == "mystickers") loadMyStickers() else loadGiphy(cat)
                 }
             }
             categoryTabs.addView(tab)
@@ -1449,7 +1507,8 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
         btnCancel.setOnClickListener { dialog.dismiss() }
         dialog.setOnDismissListener { setActiveToolButton(null) }
 
-        loadGiphy("trending")
+        // First tab is the user's own stickers (selected by default).
+        loadMyStickers()
         dialog.show()
     }
 
@@ -1729,25 +1788,23 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
     override fun onTouchSourceImage(event: MotionEvent) {}
     */
     
-    // Double-tap-to-edit tracking: the library calls onEditTextChangeListener on every single tap.
-    private var lastTextTapView: View? = null
-    private var lastTextTapTime = 0L
-
     override fun onEditTextChangeListener(rootView: View?, text: String?, colorCode: Int) {
-        // A single tap only SELECTS the text (the library draws the bounding box on touch); the
-        // edit dialog opens only on a DOUBLE tap of the same text element.
         if (rootView == null || text == null) return
-        val now = System.currentTimeMillis()
-        if (rootView === lastTextTapView && now - lastTextTapTime < 350L) {
-            lastTextTapView = null
-            lastTextTapTime = 0L
+        // First tap SELECTS the text (the library draws the box). Tapping the SAME, already-selected
+        // text again opens the editor. The gesture engine swallows a fast double-tap, so editing is
+        // a deliberate tap-then-tap rather than a rapid double-tap.
+        if (rootView === selectedOverlayView) {
             showEditTextDialog(rootView, text, colorCode)
         } else {
-            lastTextTapView = rootView
-            lastTextTapTime = now
+            selectedOverlayView = rootView
         }
     }
     override fun onAddViewListener(viewType: ViewType?, numberOfAddedViews: Int) {
+        // A library overlay/brush stroke was added by the user (not during our own redo).
+        if (!suppressOpTracking) {
+            undoOps.addLast(EditOp.LIBRARY)
+            redoOps.clear()
+        }
         updateUndoRedoState()
         if (viewType == ViewType.TEXT || viewType == ViewType.EMOJI || viewType == ViewType.IMAGE) {
             photoEditorView.post {
@@ -1950,12 +2007,8 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
     override fun onStartViewChangeListener(viewType: ViewType?) {}
     override fun onStopViewChangeListener(viewType: ViewType?) {}
     override fun onTouchSourceImage(event: MotionEvent?) {
-        // Tapping the empty background deselects the currently-selected sticker/text/emoji
-        // (clears the bounding box). A single tap on empty space is enough.
-        if (event?.action == MotionEvent.ACTION_UP) {
-            photoEditor.clearHelperBox()
-            lastTextTapView = null
-        }
+        // Tapping ON the source photo deselects the selected overlay.
+        if (event?.action == MotionEvent.ACTION_UP) clearOverlaySelection()
     }
 
     // ==================== Bitmap History (Undo/Redo) ====================
@@ -1975,6 +2028,12 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
             while (bitmapHistory.size > maxHistorySize) {
                 bitmapHistory.removeAt(0)
                 historyIndex--
+            }
+
+            // Record an undoable BITMAP step (the first snapshot is the base image, not a step).
+            if (!suppressOpTracking && bitmapHistory.size > 1) {
+                undoOps.addLast(EditOp.BITMAP)
+                redoOps.clear()
             }
 
             updateUndoRedoState()
@@ -1998,40 +2057,51 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
     }
 
     private fun undoSticker() {
-        // Try PhotoEditor undo first (brush, text, emoji — most recent actions)
-        if (!photoEditor.undo()) {
-            // If PhotoEditor has nothing to undo, try bitmap history
-            if (historyIndex > 0) {
-                undoBitmap()
-            }
+        val op = undoOps.removeLastOrNull()
+        suppressOpTracking = true
+        when (op) {
+            EditOp.LIBRARY -> { photoEditor.undo(); redoOps.addLast(EditOp.LIBRARY) }
+            EditOp.BITMAP -> { undoBitmap(); redoOps.addLast(EditOp.BITMAP) }
+            null -> if (photoEditor.undo()) redoOps.addLast(EditOp.LIBRARY) // untracked (e.g. brush)
         }
+        suppressOpTracking = false
+        clearOverlaySelection()
         updateUndoRedoState()
     }
 
     private fun redoSticker() {
-        // Try PhotoEditor redo first
-        if (!photoEditor.redo()) {
-            // If PhotoEditor has nothing to redo, try bitmap history
-            if (historyIndex < bitmapHistory.size - 1) {
-                redoBitmap()
-            }
+        val op = redoOps.removeLastOrNull()
+        suppressOpTracking = true
+        when (op) {
+            EditOp.LIBRARY -> { photoEditor.redo(); undoOps.addLast(EditOp.LIBRARY) }
+            EditOp.BITMAP -> { redoBitmap(); undoOps.addLast(EditOp.BITMAP) }
+            null -> if (photoEditor.redo()) undoOps.addLast(EditOp.LIBRARY)
         }
+        suppressOpTracking = false
+        clearOverlaySelection()
         updateUndoRedoState()
     }
 
-    private fun updateUndoRedoState() {
-        val canUndoBitmap = historyIndex > 0
-        btnUndo.alpha = if (canUndoBitmap) 1f else 0.5f
-        btnUndo.isEnabled = true
+    /** Clears the current sticker/text selection box (used after undo/redo and on empty-tap). */
+    private fun clearOverlaySelection() {
+        try { photoEditor.clearHelperBox() } catch (_: Exception) {}
+        selectedOverlayView = null
+    }
 
-        val canRedoBitmap = historyIndex < bitmapHistory.size - 1
-        btnRedo.alpha = if (canRedoBitmap) 1f else 0.5f
+    private fun updateUndoRedoState() {
+        // Buttons stay tappable (a fallback covers any untracked library content), but the alpha
+        // reflects the real undo/redo availability so they no longer look disabled after edits.
+        btnUndo.alpha = if (undoOps.isNotEmpty()) 1f else 0.4f
+        btnUndo.isEnabled = true
+        btnRedo.alpha = if (redoOps.isNotEmpty()) 1f else 0.4f
         btnRedo.isEnabled = true
     }
 
     private fun clearHistory() {
         bitmapHistory.clear()
         historyIndex = -1
+        undoOps.clear()
+        redoOps.clear()
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {

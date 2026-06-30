@@ -772,15 +772,15 @@ class MainActivity : AppCompatActivity() {
             try {
                 currentFilter = FilterType.ALL
                 currentCategory = "all"
+                // Tapping the Home tab always returns to the TOP of the feed (it used to restore the
+                // previous scroll position, so coming back from another tab left you mid-list).
+                savedExploreList = null
+                pendingScrollToTop = true
                 updateBottomNavUI()
                 updateCategoryChipSelection()
                 showCategoryChipsIfReady()
                 showHomeSections()
-                tabExplore.post {
-                    if (!restoreExploreState()) {
-                        applyFilters()
-                    }
-                }
+                tabExplore.post { applyFilters() }
             } catch (e: Exception) {
                 android.util.Log.e("BottomNav", "Explore tab error", e)
             }

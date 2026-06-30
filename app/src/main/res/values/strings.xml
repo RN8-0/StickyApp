@@ -348,6 +348,7 @@
     <string name="buy_premium_with_price">Get Premium - %s</string>
     <string name="explore">Explore</string>
     <string name="my_stickers_tab">My Stickers</string>
+    <string name="no_custom_stickers_to_add">You have no stickers of your own yet</string>
     <string name="select_plan">Select Your Plan</string>
     <string name="premium_experience_detail">Upgrade your Sticky experience</string>
     <string name="premium_experience_detail_long">Take your Sticky experience to the next level</string>

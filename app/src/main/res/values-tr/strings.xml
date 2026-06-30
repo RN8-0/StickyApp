@@ -274,6 +274,7 @@
     <string name="buy_premium_with_price">Premium\'u Alın - %s</string>
     <string name="explore">Keşfetmek</string>
     <string name="my_stickers_tab">Çıkartmalarım</string>
+    <string name="no_custom_stickers_to_add">Henüz eklenebilecek kendi çıkartmanız yok</string>
     <string name="select_plan">Planınızı Seçin</string>
     <string name="premium_experience_detail">Yapışkan deneyiminizi yükseltin</string>
     <string name="premium_experience_detail_long">Yapışkan deneyiminizi bir sonraki seviyeye taşıyın</string>
