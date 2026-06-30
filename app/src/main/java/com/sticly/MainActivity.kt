@@ -717,6 +717,9 @@ class MainActivity : AppCompatActivity() {
                 val visible = currentFilter == FilterType.ALL && firstVisible >= 6
                 btnScrollToTop?.visibility = if (visible) View.VISIBLE else View.GONE
             }
+            override fun onScrollStateChanged(recyclerView: androidx.recyclerview.widget.RecyclerView, newState: Int) {
+                if (newState == androidx.recyclerview.widget.RecyclerView.SCROLL_STATE_IDLE) prefetchVisiblePacks()
+            }
         })
 
         menuBtn.setOnClickListener {
@@ -3828,6 +3831,44 @@ Rules:
         }
     }
 
+    // Packs whose full sticker set has already been prefetched into Glide's cache (so a pack opens
+    // instantly when tapped). Deduped so each visible pack is only fetched once per session.
+    private val prefetchedPackIds = java.util.Collections.synchronizedSet(HashSet<String>())
+
+    /** Warms the FULL sticker set of the currently-visible feed packs so opening them is instant. */
+    private fun prefetchVisiblePacks() {
+        if (currentFilter != FilterType.ALL && currentFilter != FilterType.PREMIUM) return
+        if (!::adapter.isInitialized) return
+        val lm = rv.layoutManager as? LinearLayoutManager ?: return
+        val first = lm.findFirstVisibleItemPosition().coerceAtLeast(0)
+        val last = lm.findLastVisibleItemPosition()
+        if (last < first) return
+        val items = adapter.getItems()
+        val packs = (first..last).mapNotNull { items.getOrNull(it) as? Pack }
+            .filter { !it.id.startsWith("custom_") && prefetchedPackIds.add(it.id) }
+        if (packs.isEmpty()) return
+        lifecycleScope.launch(Dispatchers.IO) {
+            packs.forEach { pack ->
+                pack.stickers.forEach { s ->
+                    val url = when {
+                        s.url.isNotEmpty() -> s.url
+                        pack.storagePath.isNotEmpty() ->
+                            StickerRepository.getStickerDirectUrl(pack.id, s.file, pack.storagePath)
+                        else -> ""
+                    }
+                    if (url.isNotEmpty()) {
+                        try {
+                            com.bumptech.glide.Glide.with(applicationContext)
+                                .asFile().load(url)
+                                .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.DATA)
+                                .submit()
+                        } catch (_: Exception) {}
+                    }
+                }
+            }
+        }
+    }
+
     private fun displayPacks(packs: List<Pack>) {
         // Always re-merge the user's custom packs: server refreshes / realtime updates would
         // otherwise replace allPacks with server-only packs and drop user packs from My Stickers.
@@ -3847,12 +3888,12 @@ Rules:
         }
         if (oldSignature != newSignature) savedExploreList = null
         allPacks = distinctPacks
-        val deferHomeSections = !contentShown
-        if (!deferHomeSections) {
-            setupCategoryChips()
-            updateRegionalPacks(packs)
-            updateStoryPacks(packs)
-        }
+        // Build the home sections (category chips, Popular, Recently Added) UP FRONT so they appear
+        // together with the feed on the first reveal. They used to be deferred by 700ms, which made
+        // the top of Home pop in ~1 second after the pack list was already visible.
+        setupCategoryChips()
+        updateRegionalPacks(packs)
+        updateStoryPacks(packs)
         applyFilters()
         if (contentShown) {
             showContent()
@@ -3860,13 +3901,6 @@ Rules:
             // İlk açılış: feed tamamen hazır olana kadar loading ekranı korunur,
             // sonra tek seferde gösterilir (boş ekran / placeholder ara adımları olmadan).
             scheduleFirstReveal()
-        }
-        if (deferHomeSections) {
-            rv.postDelayed({
-                setupCategoryChips()
-                updateRegionalPacks(allPacks)
-                updateStoryPacks(allPacks)
-            }, 700)
         }
     }
 
@@ -3930,6 +3964,8 @@ Rules:
         } else {
             loadingOverlay.visibility = View.GONE
         }
+        // Warm the first screen's packs so the first tap opens instantly (no scroll needed).
+        rv.postDelayed({ prefetchVisiblePacks() }, 400)
     }
 
     private var firstRevealScheduled = false
