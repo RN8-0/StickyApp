@@ -136,6 +136,7 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
 
     // Sticker-selection tracking for tap-to-select / tap-again-to-edit and tap-empty-to-deselect.
     private var selectedOverlayView: View? = null
+    private var lastTextTapTime = 0L
 
     // Shape/Brush State
     private lateinit var shapeBuilder: ShapeBuilder
@@ -292,6 +293,10 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
             }
         })
         photoEditorView.setOnTouchListener { _, ev -> deselectDetector.onTouchEvent(ev) }
+
+        // Double-tapping a text sticker re-opens its editor (handled in the zoom container, which
+        // observes touches on overlays too). Returns false for empty-canvas double-taps → zoom reset.
+        findViewById<ZoomableFrameLayout>(R.id.canvasContainer)?.onOverlayDoubleTap = { editSelectedTextOverlay() }
 
         shapeBuilder = ShapeBuilder()
 
@@ -1791,14 +1796,34 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
     
     override fun onEditTextChangeListener(rootView: View?, text: String?, colorCode: Int) {
         if (rootView == null || text == null) return
-        // First tap SELECTS the text (the library draws the box). Tapping the SAME, already-selected
-        // text again opens the editor. The gesture engine swallows a fast double-tap, so editing is
-        // a deliberate tap-then-tap rather than a rapid double-tap.
+        lastTextTapTime = System.currentTimeMillis()
+        // FAST double-tap is handled by ZoomableFrameLayout.onOverlayDoubleTap (the library swallows
+        // the 2nd tap, so onClick fires once here). SLOW tap-then-tap is handled here: first tap
+        // selects, tapping the same selected text again opens the editor.
         if (rootView === selectedOverlayView) {
+            selectedOverlayView = null
             showEditTextDialog(rootView, text, colorCode)
         } else {
             selectedOverlayView = rootView
         }
+    }
+
+    /** Opens the text editor for the text sticker that was just double-tapped (FAST double-tap path). */
+    private fun editSelectedTextOverlay(): Boolean {
+        if (System.currentTimeMillis() - lastTextTapTime > 700) return false
+        val view = selectedOverlayView ?: return false
+        val tv = findTextViewIn(view) ?: return false
+        lastTextTapTime = 0L
+        showEditTextDialog(view, tv.text?.toString() ?: "", tv.currentTextColor)
+        return true
+    }
+
+    private fun findTextViewIn(v: View): TextView? {
+        if (v is TextView) return v
+        if (v is android.view.ViewGroup) {
+            for (i in 0 until v.childCount) findTextViewIn(v.getChildAt(i))?.let { return it }
+        }
+        return null
     }
     override fun onAddViewListener(viewType: ViewType?, numberOfAddedViews: Int) {
         // A library overlay/brush stroke was added by the user (not during our own redo).

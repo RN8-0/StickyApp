@@ -632,6 +632,8 @@ Rules:
             .setView(reportView)
             .setNegativeButton(android.R.string.cancel, null)
             .create()
+        // Transparent window so only the rounded (24dp) dialog background shows — no sharp corners.
+        dialog.window?.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
 
         for (i in reasons.indices) {
             reportView.findViewById<View>(optionIds[i])?.setOnClickListener {

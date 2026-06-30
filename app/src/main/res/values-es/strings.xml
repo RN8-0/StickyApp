@@ -310,7 +310,7 @@
     <string name="home_desc">Hogar</string>
     <string name="change_media_short">Cambiar</string>
     <string name="crop_short">Cultivo</string>
-    <string name="remove_bg_short">Eliminar glucemia</string>
+    <string name="remove_bg_short">Quitar fondo</string>
     <string name="add_text_short">Agregar texto</string>
     <string name="add_emoji_short">emojis</string>
     <string name="reset_short">Reiniciar</string>

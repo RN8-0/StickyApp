@@ -40,6 +40,32 @@ class StickyApp : Application() {
                     StickerRepository.allPacksCache = diskPacks
                 }
             } catch (_: Exception) {}
+
+            // Uygulama acilir acilmaz ag verisini + ilk ekran kucuk resimlerini arka planda isit;
+            // boylece MainActivity acildiginda Home hazir gelir ve pack onizlemeleri aninda cizilir.
+            try {
+                val packs = StickerRepository.loadPacks(this@StickyApp, forceRefresh = false)
+                val urls = ArrayList<String>()
+                packs.filter { !it.id.startsWith("custom_") }.take(10).forEach { pack ->
+                    pack.stickers.take(5).forEach { s ->
+                        val u = when {
+                            s.url.isNotEmpty() -> s.url
+                            pack.storagePath.isNotEmpty() ->
+                                StickerRepository.getStickerDirectUrl(pack.id, s.file, pack.storagePath)
+                            else -> ""
+                        }
+                        if (u.isNotEmpty()) urls.add(u)
+                    }
+                }
+                urls.forEach { url ->
+                    try {
+                        com.bumptech.glide.Glide.with(applicationContext)
+                            .asFile().load(url)
+                            .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.DATA)
+                            .submit()
+                    } catch (_: Exception) {}
+                }
+            } catch (_: Exception) {}
         }
 
         // Preload frequently used Lottie compositions into memory cache (async, non-blocking)

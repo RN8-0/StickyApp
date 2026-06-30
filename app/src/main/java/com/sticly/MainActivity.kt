@@ -1687,6 +1687,7 @@ Rules:
             .setView(reportView)
             .setNegativeButton(android.R.string.cancel, null)
             .create()
+        dialog.window?.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
 
         for (i in reasons.indices) {
             reportView.findViewById<View>(optionIds[i])?.setOnClickListener {

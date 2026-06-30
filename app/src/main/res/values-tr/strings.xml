@@ -313,8 +313,9 @@
     <string name="error_occurred">Bir hata oluştu</string>
     <string name="home_desc">Ev</string>
     <string name="change_media_short">Değiştirmek</string>
-    <string name="crop_short">Mahsul</string>
-    <string name="remove_bg_short">BG\'yi kaldır</string>
+    <string name="crop_short">Kırp</string>
+    <string name="sticker_short">Çıkartma</string>
+    <string name="remove_bg_short">Arka planı kaldır</string>
     <string name="add_text_short">Metin Ekle</string>
     <string name="add_emoji_short">Emoji</string>
     <string name="reset_short">Sıfırla</string>

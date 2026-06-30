@@ -310,7 +310,7 @@
     <string name="home_desc">Maison</string>
     <string name="change_media_short">Changement</string>
     <string name="crop_short">Recadrer</string>
-    <string name="remove_bg_short">Supprimer la glycémie</string>
+    <string name="remove_bg_short">Retirer le fond</string>
     <string name="add_text_short">Ajouter du texte</string>
     <string name="add_emoji_short">Émoji</string>
     <string name="reset_short">Réinitialiser</string>

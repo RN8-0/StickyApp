@@ -41,6 +41,13 @@ class ZoomableFrameLayout @JvmOverloads constructor(
     var targetView: android.view.View? = null
     var zoomEnabled = true
 
+    /**
+     * Invoked on a double-tap. The activity returns true if the tap landed on an editable overlay
+     * (e.g. a text sticker) and it handled it (opened the editor); false means "empty area" and we
+     * reset the zoom instead.
+     */
+    var onOverlayDoubleTap: ((MotionEvent) -> Boolean)? = null
+
     private val scaleDetector = ScaleGestureDetector(context, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
         override fun onScale(detector: ScaleGestureDetector): Boolean {
             val target = targetView ?: return false
@@ -58,6 +65,9 @@ class ZoomableFrameLayout @JvmOverloads constructor(
 
     private val doubleTapDetector = GestureDetector(context, object : GestureDetector.SimpleOnGestureListener() {
         override fun onDoubleTap(e: MotionEvent): Boolean {
+            // Give the activity first chance (double-tap on a text sticker → edit). If it didn't
+            // handle it, the double-tap was on empty canvas → reset zoom.
+            if (onOverlayDoubleTap?.invoke(e) == true) return true
             resetZoom()
             return true
         }
@@ -73,6 +83,10 @@ class ZoomableFrameLayout @JvmOverloads constructor(
     }
 
     override fun onInterceptTouchEvent(ev: MotionEvent): Boolean {
+        // Observe EVERY touch for double-tap detection — even when a child (sticker/text) consumes
+        // it — without intercepting, so double-tapping a text sticker is detected. Returning false
+        // below keeps the library's drag/scale/select untouched.
+        doubleTapDetector.onTouchEvent(ev)
         if (!zoomEnabled) return false
         return when (ev.actionMasked) {
             // Never intercept first touch — let children (stickers/text) handle it first
@@ -88,7 +102,7 @@ class ZoomableFrameLayout @JvmOverloads constructor(
         if (!zoomEnabled) return false
 
         scaleDetector.onTouchEvent(event)
-        doubleTapDetector.onTouchEvent(event)
+        // (double-tap is fed from onInterceptTouchEvent so it also sees taps on child overlays)
 
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
