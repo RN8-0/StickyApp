@@ -816,6 +816,7 @@ function App() {
         publisher_user_id: submission.user_id || submission.user_email || '',
         publisher_photo_url: (submission as any).photo_url || (submission as any).user_photo_url || '',
         category: submission.category || 'other',
+        source: 'user_submission',
         is_premium: false,
         is_animated: false,
         download_count: 0,

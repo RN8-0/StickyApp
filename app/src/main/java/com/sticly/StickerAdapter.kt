@@ -57,12 +57,17 @@ class StickerAdapter(
     }
 
     // ── Animated grid playback ────────────────────────────────────────────────
-    // Opt-in per animated pack and only on API 28+, where Glide's ImageDecoder path can decode
-    // animated WebP without an extra decoder library. The fast, reliable static asBitmap() load
-    // stays the base; we upgrade ONLY the currently-visible items to animated drawables when
-    // scrolling is idle. This bounds concurrent animated decodes to the visible set (~9-12),
+    // Enabled on API 28+, where Glide's ImageDecoder path can decode animated WebP without an
+    // extra decoder library. The fast, reliable static asBitmap() load stays the base; we upgrade
+    // ONLY the currently-visible items to drawables when scrolling is idle — animated WebPs then
+    // play, static images stay static. This bounds concurrent decodes to the visible set (~9-12),
     // avoiding the old "only the first few load" regression and keeping scrolling smooth.
-    private val animateOnIdle = isAnimated && Build.VERSION.SDK_INT >= Build.VERSION_CODES.P
+    //
+    // NOTE: we deliberately do NOT gate on pack.isAnimated — that DB flag has false negatives
+    // (e.g. "Animated Emojis 1" / "Shaun the Sheep" are animated but flagged is_animated=false),
+    // which left genuinely-animated packs showing a single frame. Upgrading every visible item is
+    // cheap and correct regardless of the flag.
+    private val animateOnIdle = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P
     private var recyclerView: RecyclerView? = null
     private var animateScheduled = false
 

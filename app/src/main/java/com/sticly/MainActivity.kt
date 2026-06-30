@@ -3146,7 +3146,12 @@ Rules:
     }
 
     private fun updateStoryPacks(packs: List<Pack>) {
-        val activePacks = packs.filter { it.isActive && it.category != "custom" }
+        // "Yeni Eklenenler" shows ONLY Sticky's own packs — not user-submitted/community packs.
+        // User packs carry a publisher_user_id (set at approval) and/or source=user_submission.
+        val activePacks = packs.filter {
+            it.isActive && it.category != "custom" &&
+                it.source != "user_submission" && it.publisherUserId.isBlank()
+        }
 
         // Recently added: sorted by creation date (most recent first), up to 20
         val recentPacks = activePacks
