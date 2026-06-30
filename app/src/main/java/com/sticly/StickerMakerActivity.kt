@@ -296,7 +296,7 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
 
         // Double-tapping a text sticker re-opens its editor (handled in the zoom container, which
         // observes touches on overlays too). Returns false for empty-canvas double-taps → zoom reset.
-        findViewById<ZoomableFrameLayout>(R.id.canvasContainer)?.onOverlayDoubleTap = { editSelectedTextOverlay() }
+        findViewById<ZoomableFrameLayout>(R.id.canvasContainer)?.onOverlayDoubleTap = { e -> hitTestTextOverlay(e.rawX, e.rawY) }
 
         shapeBuilder = ShapeBuilder()
 
@@ -1808,14 +1808,27 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
         }
     }
 
-    /** Opens the text editor for the text sticker that was just double-tapped (FAST double-tap path). */
-    private fun editSelectedTextOverlay(): Boolean {
-        if (System.currentTimeMillis() - lastTextTapTime > 700) return false
-        val view = selectedOverlayView ?: return false
-        val tv = findTextViewIn(view) ?: return false
-        lastTextTapTime = 0L
-        showEditTextDialog(view, tv.text?.toString() ?: "", tv.currentTextColor)
-        return true
+    /**
+     * Double-tap handler: finds a TEXT overlay under the tap point and opens its editor. Uses an
+     * on-screen hit-test (getGlobalVisibleRect) so it does NOT depend on the library's tap callbacks
+     * firing. Returns false when the tap is on empty canvas (→ ZoomableFrameLayout resets zoom).
+     */
+    private fun hitTestTextOverlay(rawX: Float, rawY: Float): Boolean {
+        val rect = android.graphics.Rect()
+        for (i in photoEditorView.childCount - 1 downTo 0) {
+            val child = photoEditorView.getChildAt(i)
+            val name = child.javaClass.simpleName
+            if (name.contains("DrawingView") || name.contains("FilterImageView") ||
+                name.contains("ImageFilterView") || name == "ImageView"
+            ) continue
+            if (!child.getGlobalVisibleRect(rect)) continue
+            if (rect.contains(rawX.toInt(), rawY.toInt())) {
+                val tv = findTextViewIn(child) ?: continue // emoji/sticker overlay, not text
+                showEditTextDialog(child, tv.text?.toString() ?: "", tv.currentTextColor)
+                return true
+            }
+        }
+        return false
     }
 
     private fun findTextViewIn(v: View): TextView? {

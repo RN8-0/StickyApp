@@ -3835,7 +3835,12 @@ Rules:
     // instantly when tapped). Deduped so each visible pack is only fetched once per session.
     private val prefetchedPackIds = java.util.Collections.synchronizedSet(HashSet<String>())
 
-    /** Warms the FULL sticker set of the currently-visible feed packs so opening them is instant. */
+    /**
+     * Warms the visible feed packs' stickers so opening them is fast — at LOW priority so it NEVER
+     * competes with the visible preview thumbnails (a previous version used default priority and
+     * flooded Glide's executor, starving the on-screen thumbnails for ~20s). Runs on the main
+     * thread (Glide requirement), deduped per pack, capped per pack.
+     */
     private fun prefetchVisiblePacks() {
         if (currentFilter != FilterType.ALL && currentFilter != FilterType.PREMIUM) return
         if (!::adapter.isInitialized) return
@@ -3846,24 +3851,23 @@ Rules:
         val items = adapter.getItems()
         val packs = (first..last).mapNotNull { items.getOrNull(it) as? Pack }
             .filter { !it.id.startsWith("custom_") && prefetchedPackIds.add(it.id) }
-        if (packs.isEmpty()) return
-        lifecycleScope.launch(Dispatchers.IO) {
-            packs.forEach { pack ->
-                pack.stickers.forEach { s ->
-                    val url = when {
-                        s.url.isNotEmpty() -> s.url
-                        pack.storagePath.isNotEmpty() ->
-                            StickerRepository.getStickerDirectUrl(pack.id, s.file, pack.storagePath)
-                        else -> ""
-                    }
-                    if (url.isNotEmpty()) {
-                        try {
-                            com.bumptech.glide.Glide.with(applicationContext)
-                                .asFile().load(url)
-                                .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.DATA)
-                                .submit()
-                        } catch (_: Exception) {}
-                    }
+        packs.forEach { pack ->
+            pack.stickers.take(12).forEach { s ->
+                val url = when {
+                    s.url.isNotEmpty() -> s.url
+                    pack.storagePath.isNotEmpty() ->
+                        StickerRepository.getStickerDirectUrl(pack.id, s.file, pack.storagePath)
+                    else -> ""
+                }
+                if (url.isNotEmpty()) {
+                    try {
+                        com.bumptech.glide.Glide.with(applicationContext)
+                            .asBitmap().load(url)
+                            .override(256, 256)
+                            .priority(com.bumptech.glide.Priority.LOW)
+                            .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.AUTOMATIC)
+                            .preload()
+                    } catch (_: Exception) {}
                 }
             }
         }
