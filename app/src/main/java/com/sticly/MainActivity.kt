@@ -2855,7 +2855,7 @@ Rules:
                         background = androidx.core.content.ContextCompat.getDrawable(this@MainActivity, R.drawable.bg_category_unselected)
                         clipToOutline = true
                     }
-                    com.bumptech.glide.Glide.with(this@MainActivity).load(url).centerCrop().into(img)
+                    com.bumptech.glide.Glide.with(this@MainActivity).load(StickerRepository.thumbUrl(url)).centerCrop().into(img)
                     holder.stickerPreviewRow.addView(img)
                 }
             } else {
@@ -3862,7 +3862,7 @@ Rules:
                 if (url.isNotEmpty()) {
                     try {
                         com.bumptech.glide.Glide.with(applicationContext)
-                            .asBitmap().load(url)
+                            .asBitmap().load(StickerRepository.thumbUrl(url))
                             .override(256, 256)
                             .priority(com.bumptech.glide.Priority.LOW)
                             .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.AUTOMATIC)
@@ -4004,7 +4004,7 @@ Rules:
                         StickerRepository.getStickerDirectUrl(pack.id, sticker.file, pack.storagePath)
                     else -> ""
                 }
-                if (url.isNotEmpty()) urls.add(url)
+                if (url.isNotEmpty()) urls.add(StickerRepository.thumbUrl(url))
             }
         }
         urls.map { url ->

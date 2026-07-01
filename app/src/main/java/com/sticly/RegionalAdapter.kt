@@ -211,7 +211,7 @@ class RegionalAdapter(
 
             when {
                 urlToLoad.isNotEmpty() -> {
-                    glide.load(urlToLoad)
+                    glide.load(StickerRepository.thumbUrl(urlToLoad))
                         .override(GLIDE_OVERRIDE)
                         .priority(Priority.NORMAL)
                         .diskCacheStrategy(DiskCacheStrategy.DATA)

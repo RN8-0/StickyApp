@@ -47,7 +47,7 @@ class StoryAdapter(
         val imageUrl = firstStickerUrl ?: pack.trayUrl.ifEmpty { null }
         if (!imageUrl.isNullOrEmpty()) {
             Glide.with(holder.image.context)
-                .load(imageUrl)
+                .load(StickerRepository.thumbUrl(imageUrl))
                 .override(STORY_SIZE)
                 .diskCacheStrategy(DiskCacheStrategy.DATA)
                 .placeholder(R.drawable.ic_launcher_foreground)

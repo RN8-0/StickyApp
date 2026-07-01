@@ -211,11 +211,10 @@ class StickerAdapter(
             }
             // 2. Firebase URL varsa oradan yükle
             sticker.url.isNotEmpty() -> {
-                // thumbnail(0.25f) kaldırıldı: RESOURCE stratejisiyle her sticker'ı
-                // İKİ kez indiriyordu (önizleme + tam boy). Tek istek + AUTOMATIC ile
-                // ana sayfada inen veri tekrar kullanılır → çok daha hızlı.
+                // Statik kare imgproxy küçük resmi olarak iner (~5KB) → grid anında dolar.
+                // Animasyon yükseltmesi (resolveSource) ORİJİNAL URL'i kullanmaya devam eder.
                 glideManager.asBitmap()
-                    .load(sticker.url)
+                    .load(StickerRepository.thumbUrl(sticker.url))
                     .override(256, 256)
                     .placeholder(R.drawable.sticker_placeholder)
                     .error(R.drawable.sticker_placeholder)
@@ -229,7 +228,7 @@ class StickerAdapter(
                 // Update the sticker URL for future use
                 sticker.url = directUrl
                 glideManager.asBitmap()
-                    .load(directUrl)
+                    .load(StickerRepository.thumbUrl(directUrl))
                     .override(256, 256)
                     .placeholder(R.drawable.sticker_placeholder)
                     .error(R.drawable.sticker_placeholder)
@@ -296,6 +295,8 @@ class StickerAdapter(
             .dontTransform()
             // Animasyon hazır olana kadar mevcut statik kare ekranda kalsın (gri kutu yok).
             .placeholder(h.img.drawable)
+            // Tam boy dosya arka planda insin; görünür statik thumb'ların önüne geçmesin.
+            .priority(com.bumptech.glide.Priority.LOW)
             .diskCacheStrategy(DiskCacheStrategy.AUTOMATIC)
             .listener(clearBgDrawableListener)
         if (source is java.io.File) req = req.signature(ObjectKey(source.lastModified()))

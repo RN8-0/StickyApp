@@ -1,0 +1,27 @@
+http:
+  routers:
+    sticky-thumbs-https:
+      entryPoints:
+        - https
+      service: sticky-thumbs-svc
+      rule: "Host(`sticky-thumbs.46.225.95.201.sslip.io`)"
+      tls:
+        certresolver: letsencrypt
+    sticky-thumbs-http-redirect:
+      entryPoints:
+        - http
+      rule: "Host(`sticky-thumbs.46.225.95.201.sslip.io`)"
+      middlewares:
+        - sticky-thumbs-redirect-to-https
+      service: sticky-thumbs-svc
+  services:
+    sticky-thumbs-svc:
+      loadBalancer:
+        servers:
+          # Route by Docker DNS container name, not a hardcoded IP (see sticky-images-https.yaml).
+          - url: "http://sticky-thumbs:8080"
+  middlewares:
+    sticky-thumbs-redirect-to-https:
+      redirectScheme:
+        scheme: https
+        permanent: true

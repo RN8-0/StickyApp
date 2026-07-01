@@ -69,7 +69,7 @@ class StickyGlideModule : AppGlideModule() {
                                 val url = if (sticker.url.isNotEmpty()) sticker.url
                                 else if (pack.storagePath.isNotEmpty()) StickerRepository.getStickerDirectUrl(pack.id, sticker.file, pack.storagePath)
                                 else ""
-                                if (url.isNotEmpty()) urls.add(url)
+                                if (url.isNotEmpty()) urls.add(StickerRepository.thumbUrl(url))
                             }
                         }
                     }
@@ -117,7 +117,7 @@ class StickyGlideModule : AppGlideModule() {
                             val url = if (sticker.url.isNotEmpty()) sticker.url
                             else if (pack.storagePath.isNotEmpty()) StickerRepository.getStickerDirectUrl(pack.id, sticker.file, pack.storagePath)
                             else ""
-                            if (url.isNotEmpty()) urls.add(url)
+                            if (url.isNotEmpty()) urls.add(StickerRepository.thumbUrl(url))
                         }
                         count++
                     }
@@ -176,7 +176,7 @@ class StickyGlideModule : AppGlideModule() {
                                 val url = if (sticker.url.isNotEmpty()) sticker.url
                                 else if (pack.storagePath.isNotEmpty()) StickerRepository.getStickerDirectUrl(pack.id, sticker.file, pack.storagePath)
                                 else ""
-                                if (url.isNotEmpty()) urls.add(url)
+                                if (url.isNotEmpty()) urls.add(StickerRepository.thumbUrl(url))
                             }
                         }
                     }

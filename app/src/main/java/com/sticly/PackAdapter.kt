@@ -539,7 +539,7 @@ class PackAdapter(
                 }
 
                 if (urlToLoad.isNotEmpty()) {
-                    val req = glide.load(urlToLoad)
+                    val req = glide.load(StickerRepository.thumbUrl(urlToLoad))
                         .override(GLIDE_OVERRIDE_SIZE)
                         .priority(Priority.NORMAL)
                         .diskCacheStrategy(DiskCacheStrategy.DATA)

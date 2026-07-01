@@ -457,6 +457,27 @@ object StickerRepository {
         return "${PocketBaseHelper.PB_URL}/api/files/$path"
     }
 
+    // ── Sunucu tarafı küçük resim (imgproxy: sticky-thumbs) ──────────────────
+    const val THUMBS_URL = "https://sticky-thumbs.46.225.95.201.sslip.io"
+
+    /**
+     * Grid/kart küçük resmi: imgproxy üzerinden 256px STATİK webp döner (~4-6KB,
+     * orijinal ~164KB). Animasyonlu kaynaklarda ilk kareyi verir. Yalnızca kendi
+     * sslip.io sunucularımızdaki sorgusuz http(s) kaynakları küçültülür.
+     *
+     * DİKKAT: Animasyon oynatma, tam boy önizleme ve WhatsApp indirmeleri
+     * ORİJİNAL URL ile kalmalı — bu yardımcı yalnız grid/thumb yüklemeleri için.
+     * Preload ve bind AYNI thumbUrl stringini kullanmalı ki Glide cache anahtarı tutsun.
+     */
+    fun thumbUrl(url: String, size: Int = 256): String {
+        val u = url.trim()
+        if (!u.startsWith("http")) return u
+        if (u.startsWith(THUMBS_URL)) return u
+        if (!u.contains(".sslip.io")) return u
+        if (u.contains('?') || u.contains('@')) return u
+        return "$THUMBS_URL/insecure/rs:fit:$size:$size/plain/$u@webp"
+    }
+
     /**
      * Firebase Storage URL'ini HIZLI hesaplar (API çağrısı yapmaz)
      * Public read izni olan dosyalar için çalışır

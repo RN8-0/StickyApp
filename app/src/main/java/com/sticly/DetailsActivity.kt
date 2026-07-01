@@ -388,7 +388,7 @@ class DetailsActivity : AppCompatActivity() {
 
     private fun preloadStickerThumbnails(pack: Pack, stickers: List<Sticker>) {
         if (stickers.isEmpty() || isDestroyed || isFinishing) return
-        val glide = Glide.with(this)
+        val appContext = applicationContext
 
         fun sourceFor(sticker: Sticker): Any? {
             if (pack.id.startsWith("custom_")) {
@@ -398,30 +398,37 @@ class DetailsActivity : AppCompatActivity() {
             val cachedFile = StickerRepository.getCachedStickerPath(this, pack.id, sticker.file)
             return when {
                 cachedFile.exists() && cachedFile.length() > 0 -> cachedFile
-                sticker.url.isNotBlank() -> sticker.url
-                pack.storagePath.isNotBlank() -> StickerRepository.getStickerDirectUrl(pack.id, sticker.file, pack.storagePath)
+                // Bind ile AYNI model (thumbUrl) — cache anahtarı birebir tutmalı.
+                sticker.url.isNotBlank() -> StickerRepository.thumbUrl(sticker.url)
+                pack.storagePath.isNotBlank() ->
+                    StickerRepository.thumbUrl(StickerRepository.getStickerDirectUrl(pack.id, sticker.file, pack.storagePath))
                 else -> android.net.Uri.parse("file:///android_asset/${pack.id}/${sticker.file}")
             }
         }
 
-        fun preloadBatch(batch: List<Sticker>) {
-            batch.forEach { sticker ->
-                val source = sourceFor(sticker) ?: return@forEach
-                glide.asBitmap()
-                    .load(source)
-                    .override(256, 256)
-                    .priority(com.bumptech.glide.Priority.LOW)
-                    .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.AUTOMATIC)
-                    .preload(256, 256)
+        // Sınırlı eşzamanlılık: eskiden 36 preload birden OkHttp kuyruğunu dolduruyordu;
+        // kaydırınca görünen hücreler kuyruğun arkasında 20+ sn bekliyordu. 6'şar indir.
+        lifecycleScope.launch(Dispatchers.IO) {
+            delay(150)
+            val glide = Glide.with(appContext)
+            stickers.take(36).chunked(6).forEach { batch ->
+                if (isDestroyed || isFinishing) return@launch
+                val futures = batch.mapNotNull { sticker ->
+                    val source = sourceFor(sticker) ?: return@mapNotNull null
+                    try {
+                        glide.asBitmap()
+                            .load(source)
+                            .override(256, 256)
+                            .priority(com.bumptech.glide.Priority.LOW)
+                            .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.AUTOMATIC)
+                            .submit(256, 256)
+                    } catch (_: Exception) { null }
+                }
+                futures.forEach { f ->
+                    try { f.get(8, java.util.concurrent.TimeUnit.SECONDS) } catch (_: Exception) {}
+                }
             }
         }
-
-        findViewById<RecyclerView>(R.id.rv).postDelayed({
-            if (!isDestroyed && !isFinishing) preloadBatch(stickers.take(12))
-        }, 180)
-        findViewById<RecyclerView>(R.id.rv).postDelayed({
-            if (!isDestroyed && !isFinishing) preloadBatch(stickers.drop(12).take(24))
-        }, 900)
     }
 
     private fun toggleDeleteMode() {
@@ -2081,21 +2088,46 @@ class DetailsActivity : AppCompatActivity() {
             if (loadSource == null) {
                 imageView.setImageResource(R.drawable.transparent_placeholder)
             } else if (animatedPreview) {
-                imageView.setImageDrawable(null)
+                // Grid'in statik küçük resmi cache'te hazır: önce onu ANINDA göster.
+                // WebView animasyonu görünmez yüklenir; hazır olunca tek karede yer değiştirir.
+                imageView.visibility = View.VISIBLE
+                val instantThumb: Any? = when (loadSource) {
+                    is String -> StickerRepository.thumbUrl(loadSource)
+                    is File -> loadSource
+                    else -> null
+                }
+                if (instantThumb != null) {
+                    Glide.with(this@DetailsActivity)
+                        .load(instantThumb)
+                        .dontTransform()
+                        .override(512, 512)
+                        .into(imageView)
+                } else {
+                    imageView.setImageDrawable(null)
+                }
                 showAnimatedPreviewFallback(view as ViewGroup, imageView, loadSource) {
                     dismissWithAnimation()
                 }?.let {
                     fallbackWebView = it
                 }
             } else {
-                Glide.with(this@DetailsActivity)
+                var fullReq = Glide.with(this@DetailsActivity)
                     .load(loadSource)
                     .placeholder(R.drawable.transparent_placeholder)
                     .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.RESOURCE)
                     .dontTransform()
                     .error(R.drawable.transparent_placeholder)
                     .override(512, 512)
-                    .into(imageView)
+                if (loadSource is String) {
+                    // Grid'in cache'teki küçük resmi anında görünür; tam boy arkada gelir.
+                    fullReq = fullReq.thumbnail(
+                        Glide.with(this@DetailsActivity)
+                            .load(StickerRepository.thumbUrl(loadSource))
+                            .dontTransform()
+                            .override(256, 256)
+                    )
+                }
+                fullReq.into(imageView)
             }
         }
 
@@ -2157,7 +2189,7 @@ class DetailsActivity : AppCompatActivity() {
             .replace("<", "&lt;")
             .replace(">", "&gt;")
 
-        imageView.visibility = View.GONE
+        // imageView'ı GİZLEME: statik küçük resim, animasyon hazır olana kadar ekranda kalır.
         val existing = container.findViewWithTag<WebView>("animated_preview_webview")
         val webView = existing ?: WebView(this).apply {
             tag = "animated_preview_webview"
@@ -2179,7 +2211,21 @@ class DetailsActivity : AppCompatActivity() {
             )
         }
 
-        webView.visibility = View.VISIBLE
+        // Görünmez başlat: sayfa (animasyonlu görsel) tamamen yüklenince statik kare ile
+        // tek karede yer değiştirir — gri/boş an ve çift görüntü olmaz.
+        webView.visibility = View.INVISIBLE
+        webView.webChromeClient = object : android.webkit.WebChromeClient() {
+            override fun onProgressChanged(v: WebView?, newProgress: Int) {
+                if (newProgress >= 100 && v != null) {
+                    v.postDelayed({
+                        if (v.parent != null) {
+                            v.visibility = View.VISIBLE
+                            imageView.visibility = View.GONE
+                        }
+                    }, 120)
+                }
+            }
+        }
         webView.isLongClickable = false
         webView.setOnClickListener { onTap() }
 

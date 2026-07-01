@@ -54,7 +54,7 @@ class StickyApp : Application() {
                                 StickerRepository.getStickerDirectUrl(pack.id, s.file, pack.storagePath)
                             else -> ""
                         }
-                        if (u.isNotEmpty()) urls.add(u)
+                        if (u.isNotEmpty()) urls.add(StickerRepository.thumbUrl(u))
                     }
                 }
                 urls.forEach { url ->

@@ -81,6 +81,7 @@ probe() {
 #   soft = Coolify-managed; only start if exited, never auto-restart a running one
 CHECKS=(
   "images|https://sticky-images.46.225.95.201.sslip.io/stickers/3d_party_/1771939538542_3.webp|200|sticky-images|full"
+  "thumbs|https://sticky-thumbs.46.225.95.201.sslip.io/insecure/rs:fit:64:64/plain/https://sticky-images.46.225.95.201.sslip.io/stickers/3d_party_/1771939538542_3.webp@webp|200|sticky-thumbs|full"
   "ntfy|https://sticky-ntfy.46.225.95.201.sslip.io/|200|sticky-ntfy|full"
   "admin|https://sticky-admin.46.225.95.201.sslip.io/|200|sticky-admin-|soft"
   "pocketbase|https://sh3xlf9j7symlj3otlw6s8rx.46.225.95.201.sslip.io/api/health|200|sh3xlf9j7symlj3otlw6s8rx-|soft"
