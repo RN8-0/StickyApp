@@ -267,7 +267,12 @@ class DetailsActivity : AppCompatActivity() {
         lifecycleScope.launch(Dispatchers.IO) {
             StickerRepository.incrementViewCount(pack.id, pack.isPremium)
         }
-        lifecycleScope.launch { AdManager.loadInterstitialAd(this@DetailsActivity) }
+        lifecycleScope.launch {
+            // İlk saniyelerde bant genişliği çıkartma görsellerinin: reklam yüklemesi
+            // grid dolarken ağı paylaşmasın diye kısa bir gecikmeyle başlar.
+            delay(2500)
+            if (!isFinishing && !isDestroyed) AdManager.loadInterstitialAd(this@DetailsActivity)
+        }
 
         findViewById<android.widget.TextView>(R.id.name).text = pack.localizedName
         setupPublisherStrip(pack)

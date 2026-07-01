@@ -9,7 +9,7 @@
     <string name="theme_system">Sistema (predeterminado)</string>
     <string name="theme_light">Luz</string>
     <string name="theme_dark">Oscuro</string>
-    <string name="about_title">Acerca de pegajoso</string>
+    <string name="about_title">Acerca de Sticky</string>
     <string name="about_message">Sticky v2.0\n\nAplicación de paquetes de pegatinas para WhatsApp.\n\nDesarrollador: Sticky Team</string>
     <string name="faq_title">Preguntas frecuentes</string>
     <string name="faq_content">¿Cómo agregar stickers?\nSelecciona un paquete y haz clic en el botón \"Agregar a WhatsApp\".\n\n¿Por qué no se agregan stickers?\nAsegúrate de que WhatsApp esté actualizado.\n\n¿Cuántos stickers puedo agregar?\nPuedes agregar tantos paquetes como quieras.</string>
@@ -297,7 +297,7 @@
     <string name="coming_soon_badge">🔜 Próximamente</string>
     <string name="tips_title">💡 Consejos</string>
     <string name="tips_content">• 🖼️ Usa fotos claras y de alta calidad\n• ✂️ Elimina el fondo automáticamente con IA\n• 🎯 Se requieren al menos 3 stickers para WhatsApp</string>
-    <string name="custom_pack_publisher">Usuario pegajoso</string>
+    <string name="custom_pack_publisher">Usuario de Sticky</string>
     <string name="tap_to_select_file">Toca para seleccionar un archivo</string>
     <string name="change_media">Cambiar medios</string>
     <string name="ai_remove_bg">AI eliminar fondo</string>

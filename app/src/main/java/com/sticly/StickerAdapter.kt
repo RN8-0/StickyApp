@@ -36,7 +36,13 @@ class StickerAdapter(
     private val clearBgBitmapListener = object : RequestListener<Bitmap> {
         override fun onLoadFailed(e: GlideException?, model: Any?, target: Target<Bitmap>, isFirstResource: Boolean): Boolean = false
         override fun onResourceReady(resource: Bitmap, model: Any, target: Target<Bitmap>, dataSource: DataSource, isFirstResource: Boolean): Boolean {
-            (target as? com.bumptech.glide.request.target.ImageViewTarget<*>)?.view?.background = null
+            val view = (target as? com.bumptech.glide.request.target.ImageViewTarget<*>)?.view ?: return false
+            view.background = null
+            // Statik kare ekranda: bu holder artık animasyona yükseltilebilir.
+            (recyclerView?.findContainingViewHolder(view) as? VH)?.let { holder ->
+                holder.staticReady = true
+                scheduleAnimateVisible()
+            }
             return false
         }
     }
@@ -109,6 +115,8 @@ class StickerAdapter(
         val selectedCheck: ImageView = v.findViewById(R.id.selectedCheck)
         // True once this holder has been upgraded to animated playback (reset on bind/recycle).
         var animated: Boolean = false
+        // True once the static frame has actually rendered (reset on bind/recycle).
+        var staticReady: Boolean = false
     }
 
     override fun onCreateViewHolder(p: ViewGroup, vt: Int) =
@@ -117,6 +125,7 @@ class StickerAdapter(
     override fun onViewRecycled(holder: VH) {
         super.onViewRecycled(holder)
         holder.animated = false
+        holder.staticReady = false
         try { getGlide(holder.itemView.context).clear(holder.img) } catch (_: Exception) {}
     }
 
@@ -126,6 +135,7 @@ class StickerAdapter(
 
         // Reset state
         h.animated = false
+        h.staticReady = false
         h.lockIcon.visibility = View.GONE
         h.img.alpha = 1f
         h.img.rotation = 0f
@@ -273,6 +283,10 @@ class StickerAdapter(
     /** Upgrades one already-bound (visible) holder from the static frame to animated playback. */
     private fun upgradeHolderToAnimated(h: VH, pos: Int) {
         if (h.animated || isSelectionMode) return
+        // into() aynı ImageView'daki isteği iptal ettiği için, statik kare inmeden yükseltme
+        // yapmak hücreyi animasyon çözülene kadar boş bırakıyordu. Statik kare gelene kadar bekle;
+        // onResourceReady zaten yeni bir yükseltme turu tetikliyor.
+        if (!h.staticReady) return
         val context = h.itemView.context
         val source = resolveSource(context, pos) ?: return
         h.animated = true
@@ -280,6 +294,8 @@ class StickerAdapter(
             .load(source)
             .override(256, 256)
             .dontTransform()
+            // Animasyon hazır olana kadar mevcut statik kare ekranda kalsın (gri kutu yok).
+            .placeholder(h.img.drawable)
             .diskCacheStrategy(DiskCacheStrategy.AUTOMATIC)
             .listener(clearBgDrawableListener)
         if (source is java.io.File) req = req.signature(ObjectKey(source.lastModified()))

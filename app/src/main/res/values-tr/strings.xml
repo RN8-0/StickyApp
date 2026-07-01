@@ -12,7 +12,7 @@
     <string name="theme_system">Sistem (Varsayılan)</string>
     <string name="theme_light">Işık</string>
     <string name="theme_dark">Karanlık</string>
-    <string name="about_title">Yapışkan Hakkında</string>
+    <string name="about_title">Sticky Hakkında</string>
     <string name="about_message">Sticky v2.0\n\nWhatsApp için çıkartma paketleri uygulaması.\n\nGeliştirici: Sticky Team</string>
     <string name="faq_title">Sıkça Sorulan Sorular</string>
     <string name="faq_content">Çıkartma nasıl eklenir?\nBir paket seçin ve \"WhatsApp\'a Ekle\" düğmesini tıklayın.\n\nÇıkartmalar neden eklenmiyor?\nWhatsApp\'ın güncel olduğundan emin olun.\n\nKaç çıkartma ekleyebilirim?\nİstediğiniz kadar paket ekleyebilirsiniz.</string>
@@ -276,8 +276,8 @@
     <string name="my_stickers_tab">Çıkartmalarım</string>
     <string name="no_custom_stickers_to_add">Henüz eklenebilecek kendi çıkartmanız yok</string>
     <string name="select_plan">Planınızı Seçin</string>
-    <string name="premium_experience_detail">Yapışkan deneyiminizi yükseltin</string>
-    <string name="premium_experience_detail_long">Yapışkan deneyiminizi bir sonraki seviyeye taşıyın</string>
+    <string name="premium_experience_detail">Sticky deneyiminizi yükseltin</string>
+    <string name="premium_experience_detail_long">Sticky deneyiminizi bir sonraki seviyeye taşıyın</string>
     <string name="forever">sonsuza kadar</string>
     <string name="basic_packs">Standart Paketler</string>
     <string name="create_stickers">Çıkartmalar oluştur</string>
@@ -301,7 +301,7 @@
     <string name="coming_soon_badge">🔜 Çok Yakında</string>
     <string name="tips_title">💡 İpuçları</string>
     <string name="tips_content">• 🖼️ Net, yüksek kaliteli fotoğraflar kullanın\n• ✂️ AI ile arka planı otomatik olarak kaldırın\n• 🎯 WhatsApp için en az 3 çıkartma gereklidir</string>
-    <string name="custom_pack_publisher">Yapışkan Kullanıcı</string>
+    <string name="custom_pack_publisher">Sticky Kullanıcısı</string>
     <string name="tap_to_select_file">Bir dosya seçmek için dokunun</string>
     <string name="change_media">Medyayı Değiştir</string>
     <string name="ai_remove_bg">AI Arka Planı Kaldır</string>
@@ -349,7 +349,7 @@
     <string name="onboarding_skip">Atla</string>
     <string name="onboarding_next">Sonraki</string>
     <string name="onboarding_start">Başlayın</string>
-    <string name="onboarding_1_title">✨ Yapışkan\'a hoş geldiniz</string>
+    <string name="onboarding_1_title">✨ Sticky\'e hoş geldiniz</string>
     <string name="onboarding_1_desc">Yüzlerce profesyonel çıkartma paketini keşfedin ve bunları tek tıklamayla WhatsApp\'ınıza ekleyin! 🎉</string>
     <string name="onboarding_2_title">🎨 Kendinizinkini Yaratın</string>
     <string name="onboarding_2_desc">Gelişmiş AI arka plan kaldırma özelliğimizle fotoğraflarınızı, videolarınızı ve GIF\'lerinizi özel çıkartmalara dönüştürün! ✂️</string>
@@ -503,7 +503,7 @@
     <string name="feature_support_title">Öncelikli Destek</string>
     <string name="feature_support_desc">Ekibimizden daha hızlı yanıtlar ve özel yardım alın.</string>
     <string name="feature_ai_sticker_title">Sınırsız Yapay Zeka Çıkartmaları</string>
-    <string name="feature_ai_sticker_desc">Yapışkan AI ile sınırsız AI destekli çıkartmalar oluşturun - günlük sınır yok!</string>
+    <string name="feature_ai_sticker_desc">Sticky AI ile sınırsız AI destekli çıkartmalar oluşturun - günlük sınır yok!</string>
     <string name="edit_video">Videoyu Düzenle</string>
     <string name="save">Kaydet</string>
     <string name="select_trim_portion">Kırpmak istediğiniz kısmı seçin</string>

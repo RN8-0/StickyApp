@@ -9,7 +9,7 @@
     <string name="theme_system">النظام (الافتراضي)</string>
     <string name="theme_light">ضوء</string>
     <string name="theme_dark">مظلم</string>
-    <string name="about_title">حول لزجة</string>
+    <string name="about_title">حول Sticky</string>
     <string name="about_message">Sticky v2.0\n\nتطبيق حزم الملصقات لتطبيق WhatsApp.\n\nالمطور: Sticky Team</string>
     <string name="faq_title">الأسئلة المتداولة</string>
     <string name="faq_content">كيفية إضافة الملصقات؟\nحدد حزمة وانقر فوق الزر \"إضافة إلى WhatsApp\".\n\nلماذا لا تتم إضافة الملصقات؟\nتأكد من تحديث WhatsApp.\n\nكم عدد الملصقات التي يمكنني إضافتها؟\nيمكنك إضافة أي عدد تريده من الحزم.</string>
@@ -272,8 +272,8 @@
     <string name="explore">يستكشف</string>
     <string name="my_stickers_tab">ملصقاتي</string>
     <string name="select_plan">حدد خطتك</string>
-    <string name="premium_experience_detail">قم بترقية تجربتك اللزجة</string>
-    <string name="premium_experience_detail_long">خذ تجربتك اللزجة إلى المستوى التالي</string>
+    <string name="premium_experience_detail">قم بترقية تجربتك مع Sticky</string>
+    <string name="premium_experience_detail_long">خذ تجربتك مع Sticky إلى المستوى التالي</string>
     <string name="forever">للأبد</string>
     <string name="basic_packs">الحزم القياسية</string>
     <string name="create_stickers">إنشاء ملصقات</string>
@@ -297,7 +297,7 @@
     <string name="coming_soon_badge">🔜قريبا</string>
     <string name="tips_title">💡 نصائح</string>
     <string name="tips_content">• 🖼️ استخدام صور واضحة وعالية الجودة\n• ✂️ إزالة الخلفية تلقائيًا باستخدام الذكاء الاصطناعي\n• 🎯 يلزم وجود 3 ملصقات على الأقل لتطبيق WhatsApp</string>
-    <string name="custom_pack_publisher">المستخدم لزجة</string>
+    <string name="custom_pack_publisher">مستخدم Sticky</string>
     <string name="tap_to_select_file">انقر لتحديد ملف</string>
     <string name="change_media">تغيير الوسائط</string>
     <string name="ai_remove_bg">منظمة العفو الدولية إزالة الخلفية</string>
@@ -344,7 +344,7 @@
     <string name="onboarding_skip">تخطي</string>
     <string name="onboarding_next">التالي</string>
     <string name="onboarding_start">ابدأ</string>
-    <string name="onboarding_1_title">✨ مرحبا بكم في لزجة</string>
+    <string name="onboarding_1_title">✨ مرحبا بكم في Sticky</string>
     <string name="onboarding_1_desc">اكتشف المئات من حزم الملصقات الاحترافية وأضفها إلى WhatsApp الخاص بك بنقرة واحدة! 🎉</string>
     <string name="onboarding_2_title">🎨 اصنع بنفسك</string>
     <string name="onboarding_2_desc">حوّل صورك ومقاطع الفيديو وملفات GIF إلى ملصقات مخصصة من خلال إزالة الخلفية المتقدمة بتقنية الذكاء الاصطناعي! ✂️</string>
