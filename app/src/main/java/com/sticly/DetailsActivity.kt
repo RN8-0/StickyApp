@@ -33,6 +33,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import android.os.Build
 import com.bumptech.glide.Glide
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.bottomsheet.BottomSheetDialog
@@ -426,6 +427,27 @@ class DetailsActivity : AppCompatActivity() {
                 }
                 futures.forEach { f ->
                     try { f.get(8, java.util.concurrent.TimeUnit.SECONDS) } catch (_: Exception) {}
+                }
+            }
+
+            // Animasyonlu pakette TAM dosyaları da peşin indir: görünür hücrelerin
+            // yükseltmeleri ve önizleme cache'ten anında oynasın, alta kaydırınca beklenmesin.
+            if (pack.isAnimated) {
+                stickers.take(18).chunked(3).forEach { batch ->
+                    if (isDestroyed || isFinishing) return@launch
+                    val futures = batch.mapNotNull { sticker ->
+                        val url = sticker.url.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                        try {
+                            glide.asFile()
+                                .load(url)
+                                .priority(com.bumptech.glide.Priority.LOW)
+                                .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.DATA)
+                                .submit()
+                        } catch (_: Exception) { null }
+                    }
+                    futures.forEach { f ->
+                        try { f.get(15, java.util.concurrent.TimeUnit.SECONDS) } catch (_: Exception) {}
+                    }
                 }
             }
         }
@@ -2088,27 +2110,72 @@ class DetailsActivity : AppCompatActivity() {
             if (loadSource == null) {
                 imageView.setImageResource(R.drawable.transparent_placeholder)
             } else if (animatedPreview) {
-                // Grid'in statik küçük resmi cache'te hazır: önce onu ANINDA göster.
-                // WebView animasyonu görünmez yüklenir; hazır olunca tek karede yer değiştirir.
                 imageView.visibility = View.VISIBLE
                 val instantThumb: Any? = when (loadSource) {
                     is String -> StickerRepository.thumbUrl(loadSource)
                     is File -> loadSource
                     else -> null
                 }
-                if (instantThumb != null) {
-                    Glide.with(this@DetailsActivity)
-                        .load(instantThumb)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    // Native oynatma (grid ile aynı ImageDecoder yolu): Glide cache'ten anında
+                    // gelir ve WebView'dan çok daha akıcı oynar. Statik thumb, animasyon
+                    // çözülene kadar thumbnail zinciriyle ekranda kalır. Hata olursa WebView'a düş.
+                    var animReq = Glide.with(this@DetailsActivity)
+                        .load(loadSource)
                         .dontTransform()
-                        .override(512, 512)
-                        .into(imageView)
+                        .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.AUTOMATIC)
+                        .listener(object : com.bumptech.glide.request.RequestListener<android.graphics.drawable.Drawable> {
+                            override fun onLoadFailed(
+                                e: com.bumptech.glide.load.engine.GlideException?,
+                                model: Any?,
+                                target: com.bumptech.glide.request.target.Target<android.graphics.drawable.Drawable>,
+                                isFirstResource: Boolean
+                            ): Boolean {
+                                imageView.post {
+                                    if (!isFinishing && !isDestroyed) {
+                                        showAnimatedPreviewFallback(view as ViewGroup, imageView, loadSource) {
+                                            dismissWithAnimation()
+                                        }?.let { fallbackWebView = it }
+                                    }
+                                }
+                                return true
+                            }
+                            override fun onResourceReady(
+                                resource: android.graphics.drawable.Drawable,
+                                model: Any,
+                                target: com.bumptech.glide.request.target.Target<android.graphics.drawable.Drawable>,
+                                dataSource: com.bumptech.glide.load.DataSource,
+                                isFirstResource: Boolean
+                            ): Boolean {
+                                startAnimatedPreview(imageView)
+                                return false
+                            }
+                        })
+                    if (instantThumb != null) {
+                        animReq = animReq.thumbnail(
+                            Glide.with(this@DetailsActivity)
+                                .load(instantThumb)
+                                .dontTransform()
+                                .override(512, 512)
+                        )
+                    }
+                    animReq.into(imageView)
                 } else {
-                    imageView.setImageDrawable(null)
-                }
-                showAnimatedPreviewFallback(view as ViewGroup, imageView, loadSource) {
-                    dismissWithAnimation()
-                }?.let {
-                    fallbackWebView = it
+                    // API < 28: eski WebView yolu (statik thumb önde kalır, hazır olunca geçer).
+                    if (instantThumb != null) {
+                        Glide.with(this@DetailsActivity)
+                            .load(instantThumb)
+                            .dontTransform()
+                            .override(512, 512)
+                            .into(imageView)
+                    } else {
+                        imageView.setImageDrawable(null)
+                    }
+                    showAnimatedPreviewFallback(view as ViewGroup, imageView, loadSource) {
+                        dismissWithAnimation()
+                    }?.let {
+                        fallbackWebView = it
+                    }
                 }
             } else {
                 var fullReq = Glide.with(this@DetailsActivity)

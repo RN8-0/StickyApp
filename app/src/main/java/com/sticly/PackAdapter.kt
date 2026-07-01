@@ -539,13 +539,30 @@ class PackAdapter(
                 }
 
                 if (urlToLoad.isNotEmpty()) {
-                    val req = glide.load(StickerRepository.thumbUrl(urlToLoad))
-                        .override(GLIDE_OVERRIDE_SIZE)
-                        .priority(Priority.NORMAL)
-                        .diskCacheStrategy(DiskCacheStrategy.DATA)
-                        .dontTransform()
-                        .dontAnimate()
-                        .listener(clearBgListener)
+                    val req = if (pack.isAnimated) {
+                        // Animasyonlu paket kartı OYNAMALI (kullanıcı animated olduğunu görsün).
+                        // Küçük resim (thumbnail zinciri) anında gelir; tam animasyon inince
+                        // yerine geçer — kart boş beklemez, orijinal arka planda düşük öncelikle iner.
+                        glide.load(urlToLoad)
+                            .thumbnail(
+                                glide.load(StickerRepository.thumbUrl(urlToLoad))
+                                    .override(GLIDE_OVERRIDE_SIZE)
+                                    .dontTransform()
+                            )
+                            .override(GLIDE_OVERRIDE_SIZE)
+                            .priority(Priority.LOW)
+                            .diskCacheStrategy(DiskCacheStrategy.AUTOMATIC)
+                            .dontTransform()
+                            .listener(clearBgListener)
+                    } else {
+                        glide.load(StickerRepository.thumbUrl(urlToLoad))
+                            .override(GLIDE_OVERRIDE_SIZE)
+                            .priority(Priority.NORMAL)
+                            .diskCacheStrategy(DiskCacheStrategy.DATA)
+                            .dontTransform()
+                            .dontAnimate()
+                            .listener(clearBgListener)
+                    }
                     req.into(previewView)
                 } else {
                     val cachedSticker = StickerRepository.getCachedStickerPath(context, pack.id, sticker.file)

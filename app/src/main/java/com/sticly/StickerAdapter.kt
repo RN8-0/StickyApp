@@ -295,8 +295,8 @@ class StickerAdapter(
             .dontTransform()
             // Animasyon hazır olana kadar mevcut statik kare ekranda kalsın (gri kutu yok).
             .placeholder(h.img.drawable)
-            // Tam boy dosya arka planda insin; görünür statik thumb'ların önüne geçmesin.
-            .priority(com.bumptech.glide.Priority.LOW)
+            // Thumb'lar ~5KB olduğu için kuyruk hemen boşalıyor; animasyonlar gecikmesin.
+            .priority(com.bumptech.glide.Priority.NORMAL)
             .diskCacheStrategy(DiskCacheStrategy.AUTOMATIC)
             .listener(clearBgDrawableListener)
         if (source is java.io.File) req = req.signature(ObjectKey(source.lastModified()))

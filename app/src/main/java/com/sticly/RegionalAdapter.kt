@@ -211,12 +211,26 @@ class RegionalAdapter(
 
             when {
                 urlToLoad.isNotEmpty() -> {
-                    glide.load(StickerRepository.thumbUrl(urlToLoad))
-                        .override(GLIDE_OVERRIDE)
-                        .priority(Priority.NORMAL)
-                        .diskCacheStrategy(DiskCacheStrategy.DATA)
-                        .listener(clearBgListener)
-                        .into(previewView)
+                    if (pack.isAnimated) {
+                        // Animasyonlu paket: önizleme oynasın; thumb anında, orijinal arkadan.
+                        glide.load(urlToLoad)
+                            .thumbnail(
+                                glide.load(StickerRepository.thumbUrl(urlToLoad))
+                                    .override(GLIDE_OVERRIDE)
+                            )
+                            .override(GLIDE_OVERRIDE)
+                            .priority(Priority.LOW)
+                            .diskCacheStrategy(DiskCacheStrategy.AUTOMATIC)
+                            .listener(clearBgListener)
+                            .into(previewView)
+                    } else {
+                        glide.load(StickerRepository.thumbUrl(urlToLoad))
+                            .override(GLIDE_OVERRIDE)
+                            .priority(Priority.NORMAL)
+                            .diskCacheStrategy(DiskCacheStrategy.DATA)
+                            .listener(clearBgListener)
+                            .into(previewView)
+                    }
                 }
                 else -> {
                     val cachedSticker = StickerRepository.getCachedStickerPath(context, pack.id, sticker.file)
