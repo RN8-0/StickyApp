@@ -348,7 +348,7 @@ class SubmitPackActivity : AppCompatActivity() {
                 ).show()
                 isSubmitting = false
                 btnSubmitPack.isEnabled = true
-                btnSubmitPack.text = "Share pack in Sticky"
+                btnSubmitPack.text = getString(R.string.submit_pack_title)
             }
         }
     }

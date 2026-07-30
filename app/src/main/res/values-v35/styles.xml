@@ -15,6 +15,7 @@
         <item name="android:windowBackground">@color/background</item>
         <item name="materialAlertDialogTheme">@style/MaterialAlertDialogTheme</item>
         <item name="alertDialogTheme">@style/MaterialAlertDialogTheme</item>
-        <item name="android:windowOptOutEdgeToEdgeEnforcement">true</item>
+        <!-- No windowOptOutEdgeToEdgeEnforcement here: it is ignored from targetSdk 36 on.
+             Insets are handled by fitsSystemWindows roots and InsetsUtils instead. -->
     </style>
 </resources>

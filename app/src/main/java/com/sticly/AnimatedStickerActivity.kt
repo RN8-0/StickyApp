@@ -751,6 +751,8 @@ class AnimatedStickerActivity : AppCompatActivity() {
         val overlay = layoutInflater.inflate(R.layout.dialog_text_editor_fullscreen, rootView, false)
         rootView.addView(overlay)
         window.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+        // Keeps DONE out from under the status bar and the font/colour rows above the keyboard.
+        InsetsUtils.padForSystemBarsAndIme(overlay)
 
         val inputText = overlay.findViewById<EditText>(R.id.etTextOverlay)
         val btnClose = overlay.findViewById<View>(R.id.btnTextClose)
@@ -1460,7 +1462,12 @@ class AnimatedStickerActivity : AppCompatActivity() {
     }
 
     override fun onPause() { super.onPause(); exoPlayer?.pause() }
-    override fun onResume() { super.onResume(); exoPlayer?.play() }
+    override fun onResume() {
+        super.onResume()
+        // Only the crop/trim screen shows the player; resuming on the edit screen restarted
+        // playback of a video the user can no longer see.
+        if (cropContainer.visibility == View.VISIBLE) exoPlayer?.play()
+    }
     override fun onDestroy() { super.onDestroy(); releasePlayer(); outputFile?.delete() }
 
     // ══════════════════════════════════════════════

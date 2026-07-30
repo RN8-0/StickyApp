@@ -51,6 +51,7 @@ class NotificationsActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_notifications)
+        InsetsUtils.padBottomForNavBar(findViewById(R.id.rvNotifications))
 
         window.statusBarColor = ContextCompat.getColor(this, R.color.toolbar_bg)
 

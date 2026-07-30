@@ -60,6 +60,9 @@ class SocialListActivity : AppCompatActivity() {
         }
 
         setContentView(root)
+        // This root is built in code, so it has no fitsSystemWindows: without this the toolbar sits
+        // under the status bar on API 35+ (edge-to-edge is always on there).
+        InsetsUtils.padRootForSystemBars(root)
     }
 
     private inner class SocialAdapter(private val items: JSONArray) : RecyclerView.Adapter<SocialAdapter.VH>() {

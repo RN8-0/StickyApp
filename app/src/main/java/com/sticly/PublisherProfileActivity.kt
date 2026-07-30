@@ -47,6 +47,7 @@ class PublisherProfileActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_publisher_profile)
+        InsetsUtils.padBottomForNavBar(findViewById(R.id.publisherPacksContainer))
         window.statusBarColor = ContextCompat.getColor(this, R.color.toolbar_bg)
 
         publisherId = intent.getStringExtra(EXTRA_PUBLISHER_ID).orEmpty()
@@ -187,7 +188,7 @@ class PublisherProfileActivity : AppCompatActivity() {
                 followButton.text = getString(if (isFollowing) R.string.following else R.string.follow)
                 loadPublisherPacks()
             }.onFailure { error ->
-                Toast.makeText(this@PublisherProfileActivity, error.message ?: "Follow failed", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@PublisherProfileActivity, getString(R.string.follow_failed), Toast.LENGTH_SHORT).show()
             }
             followButton.isEnabled = true
         }

@@ -3,4 +3,9 @@
     <external-files-path
         name="pictures"
         path="Pictures/temp" />
+    <!-- Camera shots are written to the internal cache dir (StickerMakerActivity.launchCamera);
+         without this root getUriForFile throws IllegalArgumentException. -->
+    <cache-path
+        name="cache"
+        path="." />
 </paths>

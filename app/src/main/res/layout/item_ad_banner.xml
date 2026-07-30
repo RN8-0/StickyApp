@@ -77,7 +77,7 @@
             android:background="#226C5CE7"
             android:paddingHorizontal="4dp"
             android:paddingVertical="1dp"
-            android:text="Reklam"
+            android:text="@string/ad_label"
             android:textColor="@color/primary"
             android:textSize="8sp" />
 

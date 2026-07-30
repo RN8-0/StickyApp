@@ -87,6 +87,7 @@ object CustomStickerManager {
                     // Eğer yeni dizinde yoksa taşı
                     if (!newPackDir.exists()) {
                         newCustomDir.mkdirs()
+                        packsCache = null
                         packDir.copyRecursively(newPackDir, overwrite = true)
                         packDir.deleteRecursively()
                         android.util.Log.d("CustomStickerManager", "Migrated pack: ${packDir.name}")
@@ -147,7 +148,7 @@ object CustomStickerManager {
 
         // pack_info.json kaydet
         val infoFile = File(packDir, PACK_INFO_FILE)
-        infoFile.writeText(gson.toJson(pack))
+        writePackInfo(infoFile, pack)
 
         // Firebase'e özel paket sayısını artır
         PreferencesHelper.incrementCustomPacksCount(context)
@@ -186,7 +187,7 @@ object CustomStickerManager {
         pack.version += 1 // Versiyonu bir artır
 
         val infoFile = File(packDir, PACK_INFO_FILE)
-        infoFile.writeText(gson.toJson(pack))
+        writePackInfo(infoFile, pack)
 
         // 4. Firebase'e toplam stiker sayısını artır
         PreferencesHelper.incrementTotalStickersAdded(context)
@@ -266,7 +267,7 @@ object CustomStickerManager {
         pack.version += 1
 
         val infoFile = File(packDir, PACK_INFO_FILE)
-        infoFile.writeText(gson.toJson(pack))
+        writePackInfo(infoFile, pack)
 
         // Firebase'e toplam stiker sayısını artır
         PreferencesHelper.incrementTotalStickersAdded(context)
@@ -315,7 +316,7 @@ object CustomStickerManager {
         pack.version += 1
 
         val infoFile = File(packDir, PACK_INFO_FILE)
-        infoFile.writeText(gson.toJson(pack))
+        writePackInfo(infoFile, pack)
 
         // Firebase'e toplam stiker sayısını artır
         PreferencesHelper.incrementTotalStickersAdded(context)
@@ -395,7 +396,7 @@ object CustomStickerManager {
             getPackInfo(context, packId)?.let { pack ->
                 pack.version += 1
                 val infoFile = File(packDir, PACK_INFO_FILE)
-                infoFile.writeText(gson.toJson(pack))
+                writePackInfo(infoFile, pack)
             }
             notifyWhatsApp(context, packId)
         }
@@ -427,7 +428,7 @@ object CustomStickerManager {
             pack.stickerCount--
             pack.version += 1
             val infoFile = File(packDir, PACK_INFO_FILE)
-            infoFile.writeText(gson.toJson(pack))
+            writePackInfo(infoFile, pack)
             notifyWhatsApp(context, packId)
         }
         return deleted
@@ -458,7 +459,7 @@ object CustomStickerManager {
             if (pack.stickerCount < 0) pack.stickerCount = 0
             pack.version += 1
             val infoFile = File(packDir, PACK_INFO_FILE)
-            infoFile.writeText(gson.toJson(pack))
+            writePackInfo(infoFile, pack)
             
             notifyWhatsApp(context, packId)
             return true
@@ -485,10 +486,21 @@ object CustomStickerManager {
         }
     }
 
+    // getCustomPacks() is called straight from dialog-building code on the main thread, so the
+    // directory scan + JSON parse used to run on every open. The list is cached and dropped again
+    // by writePackInfo()/deletePack(), i.e. by every path that can change it.
+    @Volatile private var packsCache: List<CustomPack>? = null
+
+    private fun writePackInfo(infoFile: File, pack: CustomPack) {
+        infoFile.writeText(gson.toJson(pack))
+        packsCache = null
+    }
+
     /**
      * Tüm özel paketleri listeler
      */
     fun getCustomPacks(context: Context): List<CustomPack> {
+        packsCache?.let { return it }
         val customDir = getCustomDir(context)
         val packs = mutableListOf<CustomPack>()
 
@@ -505,7 +517,7 @@ object CustomStickerManager {
             }
         }
 
-        return packs.sortedByDescending { it.createdAt }
+        return packs.sortedByDescending { it.createdAt }.also { packsCache = it }
     }
 
     /**
@@ -563,6 +575,7 @@ object CustomStickerManager {
     fun deletePack(context: Context, packId: String): Boolean {
         val packDir = getPackDir(context, packId)
         val deleted = packDir.deleteRecursively()
+        packsCache = null
 
         if (deleted) {
             // Firebase'de özel paket sayısını azalt
@@ -602,7 +615,7 @@ object CustomStickerManager {
             customPack.stickerCount = stickers.size
             try {
                 val infoFile = File(packDir, PACK_INFO_FILE)
-                infoFile.writeText(gson.toJson(customPack))
+                writePackInfo(infoFile, customPack)
             } catch (_: Exception) {}
         }
         android.util.Log.d("CustomStickerManager", "toWhatsAppPack packId=$packId stickerCount=${customPack.stickerCount} actualStickers=${stickers.size} files=${stickers.map { it.file }}")
@@ -666,7 +679,7 @@ object CustomStickerManager {
 
         // Pack info güncelle
         val infoFile = File(packDir, PACK_INFO_FILE)
-        infoFile.writeText(gson.toJson(pack))
+        writePackInfo(infoFile, pack)
 
         android.util.Log.d("CustomStickerManager", "Force updated pack $packId to version ${pack.version}")
 

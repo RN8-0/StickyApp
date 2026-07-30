@@ -57,6 +57,8 @@ class DetailsActivity : AppCompatActivity() {
 
     private lateinit var packId: String
     private var isAnimatedPack: Boolean = false
+    /** True once anything (flag, cached bytes, or server probe) says this pack animates. */
+    private var animatedPackResolved: Boolean = false
     private lateinit var btnAction: MaterialButton
     private lateinit var btnWatchAd: MaterialButton
     private lateinit var premiumButtonsContainer: LinearLayout
@@ -258,6 +260,18 @@ class DetailsActivity : AppCompatActivity() {
     private fun setupUI(pack: Pack) {
         currentPack = pack
         isAnimatedPack = pack.isAnimated
+        // pack.isAnimated has false negatives, so also trust a locally cached file. The server
+        // probe (32-byte Range request) refines this for packs nothing local can answer for.
+        animatedPackResolved = pack.isAnimated || StickerRepository.looksAnimated(this, pack)
+        if (!animatedPackResolved) {
+            StickerRepository.probeAnimated(this, pack) {
+                if (!isFinishing && !isDestroyed) {
+                    animatedPackResolved = true
+                    isAnimatedPack = true
+                    adapter?.setAnimatedPack(true)
+                }
+            }
+        }
         isPackReady = false // Reset state when setting up new pack
 
         if (pack.isAnimated && !pack.id.startsWith("custom_")) {
@@ -351,7 +365,7 @@ class DetailsActivity : AppCompatActivity() {
             isPackPremium = pack.isPremium,
             hasAccess = hasAccess,
             storagePath = pack.storagePath,
-            isAnimated = pack.isAnimated,
+            isAnimated = animatedPackResolved,
             selectedPositions = selectedIndices,
             onStickerClick = { sticker, _ ->
                 val isLocked = !PreferencesHelper.hasAccessToPack(this, pack.id)
@@ -412,6 +426,33 @@ class DetailsActivity : AppCompatActivity() {
         lifecycleScope.launch(Dispatchers.IO) {
             delay(150)
             val glide = Glide.with(appContext)
+
+            // Animated packs FIRST. Animation cannot start until the full ~164KB file has landed,
+            // and this used to queue behind 36 thumbnail requests at LOW priority — which is why
+            // a pack sat static for many seconds before it began moving. The thumbnails only
+            // matter for the first paint, and the grid gets those from its own thumbnail chain.
+            if (animatedPackResolved) {
+                stickers.take(24).chunked(6).forEach { batch ->
+                    if (isDestroyed || isFinishing) return@launch
+                    val futures = batch.mapNotNull { sticker ->
+                        val url = sticker.url.takeIf { it.isNotBlank() }
+                            ?: pack.storagePath.takeIf { it.isNotBlank() }
+                                ?.let { StickerRepository.getStickerDirectUrl(pack.id, sticker.file, it) }
+                            ?: return@mapNotNull null
+                        try {
+                            glide.asFile()
+                                .load(url)
+                                .priority(com.bumptech.glide.Priority.HIGH)
+                                .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.DATA)
+                                .submit()
+                        } catch (_: Exception) { null }
+                    }
+                    futures.forEach { f ->
+                        try { f.get(15, java.util.concurrent.TimeUnit.SECONDS) } catch (_: Exception) {}
+                    }
+                }
+            }
+
             stickers.take(36).chunked(6).forEach { batch ->
                 if (isDestroyed || isFinishing) return@launch
                 val futures = batch.mapNotNull { sticker ->
@@ -427,27 +468,6 @@ class DetailsActivity : AppCompatActivity() {
                 }
                 futures.forEach { f ->
                     try { f.get(8, java.util.concurrent.TimeUnit.SECONDS) } catch (_: Exception) {}
-                }
-            }
-
-            // Animasyonlu pakette TAM dosyaları da peşin indir: görünür hücrelerin
-            // yükseltmeleri ve önizleme cache'ten anında oynasın, alta kaydırınca beklenmesin.
-            if (pack.isAnimated) {
-                stickers.take(18).chunked(3).forEach { batch ->
-                    if (isDestroyed || isFinishing) return@launch
-                    val futures = batch.mapNotNull { sticker ->
-                        val url = sticker.url.takeIf { it.isNotBlank() } ?: return@mapNotNull null
-                        try {
-                            glide.asFile()
-                                .load(url)
-                                .priority(com.bumptech.glide.Priority.LOW)
-                                .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.DATA)
-                                .submit()
-                        } catch (_: Exception) { null }
-                    }
-                    futures.forEach { f ->
-                        try { f.get(15, java.util.concurrent.TimeUnit.SECONDS) } catch (_: Exception) {}
-                    }
                 }
             }
         }
@@ -587,7 +607,7 @@ class DetailsActivity : AppCompatActivity() {
 
         dialogView.findViewById<TextView>(R.id.tvDeleteTitle).text = getString(R.string.delete_mode)
         dialogView.findViewById<TextView>(R.id.tvDeleteMsg).text =
-            "Are you sure you want to delete ${selectedIndices.size} stickers? This will also update WhatsApp."
+            getString(R.string.delete_stickers_confirm, selectedIndices.size)
 
         dialogView.findViewById<View>(R.id.btnConfirmDelete).setOnClickListener {
             dialog.dismiss()
@@ -848,6 +868,9 @@ class DetailsActivity : AppCompatActivity() {
         showLoadingState(false)
     }
 
+    /** How many related packs are added each time the page is scrolled near its bottom. */
+    private val RELATED_PAGE_SIZE = 12
+
     private fun setupRelatedPacks(currentPack: Pack) {
         val section = findViewById<View>(R.id.relatedPacksSection)
         val rvRelated = findViewById<RecyclerView>(R.id.rvRelatedPacks)
@@ -864,13 +887,19 @@ class DetailsActivity : AppCompatActivity() {
             return
         }
 
-        // Rastgele 25 paket göster (mevcut paket hariç)
-        val relatedPacks = allPacks.filter {
+        val candidates = allPacks.filter {
             it.id != currentPack.id && it.isActive && !it.id.startsWith("custom_") &&
             it.stickers.isNotEmpty()
-        }.shuffled().take(25)
+        }
 
-        if (relatedPacks.isEmpty()) {
+        // Every pack from the SAME category first (that is what the section is for), then the rest
+        // so the list still has something to show for a thinly-populated category.
+        val category = currentPack.category.trim()
+        val sameCategory = candidates.filter { it.category.equals(category, ignoreCase = true) && category.isNotEmpty() }
+        val others = candidates.filter { it !in sameCategory }.shuffled()
+        val orderedRelated = sameCategory + others
+
+        if (orderedRelated.isEmpty()) {
             section.visibility = View.GONE
             return
         }
@@ -884,7 +913,7 @@ class DetailsActivity : AppCompatActivity() {
         installCenteredListPadding(rvRelated)
 
         val relatedAdapter = PackAdapter(
-            items = relatedPacks,
+            items = orderedRelated.take(RELATED_PAGE_SIZE),
             click = { pack ->
                 startActivity(Intent(this, DetailsActivity::class.java).putExtra("id", pack.id))
             },
@@ -893,6 +922,22 @@ class DetailsActivity : AppCompatActivity() {
             }
         )
         rvRelated.adapter = relatedAdapter
+
+        // The RecyclerView is wrap_content inside the page's NestedScrollView (nested scrolling is
+        // off), so paging has to hang off the scroll view, not the list.
+        val scroll = findViewById<androidx.core.widget.NestedScrollView>(R.id.scrollContent)
+        if (scroll == null || orderedRelated.size <= RELATED_PAGE_SIZE) return
+
+        var shown = RELATED_PAGE_SIZE
+        scroll.setOnScrollChangeListener { v: androidx.core.widget.NestedScrollView, _: Int, scrollY: Int, _: Int, _: Int ->
+            if (shown >= orderedRelated.size) return@setOnScrollChangeListener
+            val child = v.getChildAt(0) ?: return@setOnScrollChangeListener
+            val remaining = child.height - (scrollY + v.height)
+            if (remaining <= v.height) { // within one screen of the bottom
+                shown = minOf(shown + RELATED_PAGE_SIZE, orderedRelated.size)
+                relatedAdapter.updateList(orderedRelated.take(shown))
+            }
+        }
     }
 
     private fun installCenteredListPadding(list: RecyclerView) {
@@ -1623,7 +1668,7 @@ class DetailsActivity : AppCompatActivity() {
             setPadding(0, 4, 0, 12)
         }
         val packsText = TextView(this).apply {
-            text = "Loading packs..."
+            text = getString(R.string.publisher_subtitle_loading)
             textSize = 13f
             setTextColor(ContextCompat.getColor(this@DetailsActivity, R.color.text_secondary))
         }
@@ -1632,7 +1677,7 @@ class DetailsActivity : AppCompatActivity() {
         view.addView(packsText)
 
         val dialog = AlertDialog.Builder(this)
-            .setTitle("Publisher profile")
+            .setTitle(getString(R.string.publisher_title))
             .setView(view)
             .setPositiveButton(getString(R.string.view_profile)) { _, _ -> openPublisherProfile(pack) }
             .setNegativeButton(R.string.ok, null)
@@ -1646,7 +1691,7 @@ class DetailsActivity : AppCompatActivity() {
                     } catch (_: Exception) { emptyList() }
                 }
                 packsText.text = if (packs.isEmpty()) {
-                    "No other public packs yet."
+                    getString(R.string.publisher_empty)
                 } else {
                     packs.joinToString("\n") { "• ${it.optString("name", it.optString("pack_name", "Pack"))}" }
                 }
@@ -1711,10 +1756,22 @@ class DetailsActivity : AppCompatActivity() {
         val btnCancel       = view.findViewById<MaterialButton>(R.id.btnCancelPublish)
         val btnSubmit       = view.findViewById<MaterialButton>(R.id.btnSubmitPublish)
 
-        val categories = listOf("General", "Animals", "Memes", "Emotions", "Sports", "Love", "Food", "Nature", "Art", "Pop Culture", "Games", "Music", "Travel", "Holidays", "Other")
-        val catAdapter = android.widget.ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, categories)
+        // The dropdown shows translated labels but the server must keep receiving the canonical
+        // English value, so the two lists are kept parallel and mapped back on submit.
+        val categoryValues = listOf(
+            "general", "animals", "memes", "emotions", "sports", "love", "food", "nature",
+            "art", "pop culture", "games", "music", "travel", "holidays", "other"
+        )
+        val categoryLabels = listOf(
+            R.string.category_general, R.string.category_animals, R.string.category_memes,
+            R.string.category_emotions, R.string.category_sports, R.string.category_love,
+            R.string.category_food, R.string.category_nature, R.string.category_art,
+            R.string.category_pop_culture, R.string.category_gaming, R.string.category_music,
+            R.string.category_travel, R.string.category_holidays, R.string.category_other
+        ).map { getString(it) }
+        val catAdapter = android.widget.ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, categoryLabels)
         spinnerCategory.setAdapter(catAdapter)
-        spinnerCategory.setText("General", false)
+        spinnerCategory.setText(categoryLabels[0], false)
 
         etPackName.setText(pack.localizedName)
         etPublisher.setText(user.displayName ?: "")
@@ -1725,7 +1782,8 @@ class DetailsActivity : AppCompatActivity() {
             val packName      = etPackName.text?.toString()?.trim() ?: ""
             val publisherName = etPublisher.text?.toString()?.trim() ?: ""
             val description   = etDesc.text?.toString()?.trim() ?: ""
-            val category      = spinnerCategory.text?.toString()?.trim()?.lowercase() ?: "general"
+            val pickedLabel   = spinnerCategory.text?.toString()?.trim().orEmpty()
+            val category      = categoryValues.getOrElse(categoryLabels.indexOf(pickedLabel)) { "general" }
 
             tilPackName.error  = null
             tilPublisher.error = null
@@ -2526,7 +2584,7 @@ class DetailsActivity : AppCompatActivity() {
                 }
             } catch (e: Exception) {
                 showLoadingState(false)
-                Toast.makeText(this@DetailsActivity, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@DetailsActivity, getString(R.string.error_generic, e.message), Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -3088,7 +3146,7 @@ class DetailsActivity : AppCompatActivity() {
                         // Eğer bu bir 'silme' işleminin parçasıysa, şimdi dosyaları sil
                         if (pendingDeletePackId == packId) {
                             if (CustomStickerManager.deletePack(this@DetailsActivity, packId)) {
-                                Toast.makeText(this@DetailsActivity, "Paket başarıyla silindi", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(this@DetailsActivity, getString(R.string.pack_deleted_success), Toast.LENGTH_SHORT).show()
                                 finish()
                             }
                         } else {
