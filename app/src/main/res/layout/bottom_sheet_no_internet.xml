@@ -50,7 +50,7 @@
         android:id="@+id/btnRetryConnection"
         android:layout_width="match_parent"
         android:layout_height="52dp"
-        android:text="Retry"
+        android:text="@string/retry"
         android:textColor="@android:color/white"
         android:textSize="16sp"
         android:textStyle="bold"

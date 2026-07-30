@@ -862,4 +862,54 @@
 
     <!-- Home Sections -->
     <string name="home_recently_added">✨ Recently Added</string>
+
+    <!-- Strings that used to be hard-coded in layouts/code (they ignored the selected language) -->
+    <string name="text_editor_hint">Type something</string>
+    <string name="no_notifications_hint">We\'ll notify you when something new arrives</string>
+    <string name="stat_packs">Packs</string>
+    <string name="stat_likes">Likes</string>
+    <string name="pack_details_title">Pack details</string>
+    <string name="delete_submission">Delete Submission</string>
+    <string name="submission_deleted">Submission deleted</string>
+    <string name="search_giphy">Search GIPHY</string>
+    <string name="regenerate">Regenerate</string>
+    <string name="inspire_me">Inspire Me</string>
+    <string name="sticker_preview">Sticker Preview</string>
+    <string name="ad_label">Ad</string>
+    <string name="animated_short">Animated</string>
+    <string name="static_short">Static</string>
+    <string name="ai_server_busy">⚠️ Server busy, please try again in a few seconds</string>
+    <string name="ai_queue_full">⏳ Maximum %1$d generations at once. Please wait.</string>
+    <string name="ai_queued">✨ Queued! (%1$d/%2$d)</string>
+    <string name="ai_prompt_copied">📋 Prompt copied!</string>
+    <string name="ai_sample_not_deletable">Sample images can\'t be deleted</string>
+    <string name="error_add_sticker_failed">Failed to add sticker</string>
+    <string name="error_loading_stickers">Error loading stickers</string>
+    <string name="no_own_stickers_yet">You have no stickers of your own yet</string>
+    <string name="sign_in_failed">Sign-in failed</string>
+    <string name="signed_in_as">Signed in as %1$s</string>
+    <string name="signed_in_restoring">Signed in as %1$s. Restoring purchases…</string>
+    <string name="signed_in_google">Signed in with Google</string>
+    <string name="signed_out">Logged out</string>
+    <string name="signed_out_google">Logged out from Google</string>
+    <string name="follow_failed">Follow failed</string>
+    <string name="cd_menu">Menu</string>
+    <string name="cd_scroll_to_top">Scroll to top</string>
+    <string name="cd_app_logo">App logo</string>
+    <string name="cd_cancel_reply">Cancel reply</string>
+    <string name="edit_short">Edit</string>
+    <string name="delete_stickers_confirm">Are you sure you want to delete %d stickers? This will also update WhatsApp.</string>
+    <string name="status_processing">Processing</string>
+    <string name="delete_submission_confirm">Delete \"%1$s\"? This cannot be undone.</string>
+    <string name="delete_submission_confirm_public">Delete \"%1$s\"? This will also remove it from the public sticker store.</string>
+    <string name="notification_channel_name">Sticker notifications</string>
+    <string name="category_emotions">Emotions</string>
+    <string name="category_art">Art</string>
+    <string name="category_pop_culture">Pop Culture</string>
+    <string name="category_travel">Travel</string>
+    <string name="category_holidays">Holidays</string>
+    <string name="giphy_trending">Trending</string>
+    <string name="giphy_effects">Effects</string>
+    <string name="giphy_bubble">Bubble</string>
+    <string name="giphy_funny">Funny</string>
 </resources>

@@ -21,7 +21,7 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="center_horizontal"
-        android:text="Paket Silme"
+        android:text="@string/delete_pack"
         android:textColor="@color/text_primary"
         android:textSize="20sp"
         android:textStyle="bold" />
@@ -32,7 +32,7 @@
         android:layout_gravity="center_horizontal"
         android:layout_marginTop="8dp"
         android:layout_marginBottom="32dp"
-        android:text="Bu paketi silmek istediğinize emin misiniz?"
+        android:text="@string/delete_pack_confirm"
         android:textColor="@color/text_secondary"
         android:textSize="14sp"
         android:gravity="center" />
@@ -62,7 +62,7 @@
             android:layout_height="56dp"
             android:layout_weight="1"
             android:layout_marginStart="8dp"
-            android:text="Sil"
+            android:text="@string/delete"
             android:textColor="@android:color/white"
             android:textAllCaps="false"
             android:backgroundTint="#FF4B4B"

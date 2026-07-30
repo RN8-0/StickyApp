@@ -69,6 +69,8 @@ class PackAdapter(
         override fun onLoadFailed(e: GlideException?, m: Any?, t: com.bumptech.glide.request.target.Target<Drawable>, f: Boolean) = false
         override fun onResourceReady(r: Drawable, m: Any, t: com.bumptech.glide.request.target.Target<Drawable>, d: com.bumptech.glide.load.DataSource, f: Boolean): Boolean {
             (t as? com.bumptech.glide.request.target.ImageViewTarget<*>)?.view?.background = null
+            // A drawable restored from the memory cache can come back paused.
+            (r as? android.graphics.drawable.Animatable)?.let { if (!it.isRunning) it.start() }
             return false
         }
     }
@@ -310,7 +312,7 @@ class PackAdapter(
         // does not want next to grey text.
         val pubBuilder = android.text.SpannableStringBuilder()
         pubBuilder.append(pack.pub)
-        pubBuilder.append(" • ").append(stickerCount.toString()).append(" stickers")
+        pubBuilder.append(" • ").append(context.getString(R.string.sticker_count, stickerCount))
         if (pack.likeCount > 0) {
             pubBuilder.append(" • ")
             val iconStart = pubBuilder.length
@@ -387,10 +389,10 @@ class PackAdapter(
         if (isCustomPack) {
             h.packTypeBadge?.visibility = View.VISIBLE
             if (pack.isAnimated) {
-                h.packTypeBadge?.text = "ANIMATED"
+                h.packTypeBadge?.text = h.itemView.context.getString(R.string.animated_short)
                 h.packTypeBadge?.setBackgroundColor(0xFFFF6B35.toInt())
             } else {
-                h.packTypeBadge?.text = "STATIC"
+                h.packTypeBadge?.text = h.itemView.context.getString(R.string.static_short)
                 h.packTypeBadge?.setBackgroundColor(0xFF4ECDC4.toInt())
             }
         } else {
@@ -539,7 +541,7 @@ class PackAdapter(
                 }
 
                 if (urlToLoad.isNotEmpty()) {
-                    val req = if (pack.isAnimated) {
+                    val req = if (StickerRepository.looksAnimated(context, pack)) {
                         // Animasyonlu paket kartı OYNAMALI (kullanıcı animated olduğunu görsün).
                         // Küçük resim (thumbnail zinciri) anında gelir; tam animasyon inince
                         // yerine geçer — kart boş beklemez, orijinal arka planda düşük öncelikle iner.

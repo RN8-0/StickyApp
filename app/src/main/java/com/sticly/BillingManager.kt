@@ -127,8 +127,9 @@ class BillingManager(
             .setProductList(subProductList)
             .build()
 
-        billingClient.queryProductDetailsAsync(subParams) { billingResult, productDetailsList ->
+        billingClient.queryProductDetailsAsync(subParams) { billingResult, productDetailsResult ->
             if (billingResult.responseCode == BillingClient.BillingResponseCode.OK) {
+                val productDetailsList = productDetailsResult.productDetailsList
                 productDetailsList.forEach { premiumProductDetails[it.productId] = it }
                 Log.d(TAG, "Loaded ${productDetailsList.size} subscription products")
             }

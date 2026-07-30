@@ -117,7 +117,7 @@
                 android:tint="@color/primary"
                 android:scaleType="fitCenter"
                 android:padding="2dp"
-                android:contentDescription="Like" />
+                android:contentDescription="@string/like" />
 
             <TextView
                 android:id="@+id/tvItemLikeCount"

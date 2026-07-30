@@ -78,7 +78,7 @@
                     <TextView
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="Pack details"
+                        android:text="@string/pack_details_title"
                         android:textSize="13sp"
                         android:textStyle="bold"
                         android:textColor="@color/text_primary"

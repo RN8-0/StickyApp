@@ -91,7 +91,14 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
         val options = SubjectSegmenterOptions.Builder()
             .enableForegroundBitmap()
             .build()
-        subjectSegmenter = SubjectSegmentation.getClient(options)
+        // getClient can throw when Play Services is missing/outdated; leaving the field uninitialized
+        // must not take the whole editor down — only the background-removal tool.
+        subjectSegmenter = try {
+            SubjectSegmentation.getClient(options)
+        } catch (e: Exception) {
+            android.util.Log.e("StickerMaker", "ML Kit segmenter unavailable: ${e.message}")
+            return
+        }
 
         // Pre-warm: ML Kit model indirilmesini tetikle
         // Küçük bir dummy bitmap ile modeli önceden hazırla
@@ -110,6 +117,9 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
             }
         }
     }
+
+    /** Longest edge the editor keeps a photo at. The saved sticker is 512px; this leaves headroom. */
+    private val MAX_EDIT_SIZE = 1024
 
     // State
     private var currentBitmap: Bitmap? = null
@@ -161,18 +171,6 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
         val iconRes: Int
     )
 
-    private val tools by lazy {
-        listOf(
-            EditorTool(ToolType.REMOVE_BG, getString(R.string.remove_bg_short), R.drawable.ic_photo),
-            EditorTool(ToolType.CROP, getString(R.string.crop_short), R.drawable.ic_crop),
-            EditorTool(ToolType.BRUSH, getString(R.string.draw_short), R.drawable.ic_brush),
-            EditorTool(ToolType.ERASER, getString(R.string.eraser_short), R.drawable.ic_eraser),
-            EditorTool(ToolType.TEXT, getString(R.string.add_text_short), R.drawable.ic_text),
-            EditorTool(ToolType.EMOJI, getString(R.string.add_emoji_short), R.drawable.ic_emoji),
-            EditorTool(ToolType.BORDER, getString(R.string.border_short), R.drawable.ic_border),
-            EditorTool(ToolType.REMOVE_BG, getString(R.string.reset_short), R.drawable.ic_restore) // Reset tool
-        )
-    }
 
 
 
@@ -199,6 +197,9 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_sticker_maker)
+
+        // Leftover scratch files from previous sessions (source_*.png / cropped_*.png).
+        clearCropCache()
 
         // ML Kit Subject Segmentation modelini önceden başlat
         initSegmenter()
@@ -516,6 +517,13 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
         cameraImageUri?.let { cameraLauncher.launch(it) } ?: return
     }
 
+    /** uCrop scratch files are only needed between launch and result; nothing cleaned them up. */
+    private fun clearCropCache() {
+        try {
+            File(cacheDir, "crop").listFiles()?.forEach { it.delete() }
+        } catch (_: Exception) {}
+    }
+
     private fun startCropFromUri(uri: Uri) {
         val cropCacheDir = File(cacheDir, "crop")
         if (!cropCacheDir.exists()) cropCacheDir.mkdirs()
@@ -548,6 +556,9 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
 
         val intent = UCrop.of(sourceUri, destUri)
             .withOptions(options)
+            // Stickers end up at 512px. Without a cap a 50MP camera shot stays full size through
+            // the editor — three ARGB_8888 copies plus a 15-deep undo history — and OOMs.
+            .withMaxResultSize(MAX_EDIT_SIZE, MAX_EDIT_SIZE)
             .getIntent(this)
 
         cropLauncher.launch(intent)
@@ -568,8 +579,17 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
                 return uri
             }
 
+            // Decode down-sampled: this runs before uCrop caps the size, so a full-res camera shot
+            // would otherwise be decoded at native resolution just to rotate it.
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
+            val decodeOptions = BitmapFactory.Options().apply {
+                var sample = 1
+                while (maxOf(bounds.outWidth, bounds.outHeight) / sample > MAX_EDIT_SIZE * 2) sample *= 2
+                inSampleSize = sample
+            }
             val bitmap = contentResolver.openInputStream(uri)?.use { stream ->
-                BitmapFactory.decodeStream(stream)
+                BitmapFactory.decodeStream(stream, null, decodeOptions)
             } ?: return uri
 
             val matrix = Matrix()
@@ -724,7 +744,6 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
 
     // ==================== Remove Background (ML Kit) ====================
 
-    private var bgRemovalRetryCount = 0
     private val MAX_BG_RETRY = 3
 
     private fun removeBackground() {
@@ -743,62 +762,65 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
             return
         }
 
-        bgRemovalRetryCount = 0
+        if (!::subjectSegmenter.isInitialized) {
+            Toast.makeText(this, getString(R.string.bg_removal_error), Toast.LENGTH_SHORT).show()
+            return
+        }
+
         attemptRemoveBackground(bitmap)
     }
 
+    /**
+     * Retries live INSIDE the one background coroutine. The retry used to re-enter this function from
+     * the catch block, which ran showLoading() — and therefore Lottie's playAnimation() — on the IO
+     * dispatcher, crashing with "The current thread must have a looper!". Every UI touch here now
+     * happens on the main thread.
+     */
     private fun attemptRemoveBackground(bitmap: Bitmap) {
-        showLoading()
+        showLoading() // main thread: called from removeBackground()
 
         lifecycleScope.launch(Dispatchers.IO) {
-            try {
-                android.util.Log.d("StickerMaker", "Starting ML Kit background removal (attempt ${bgRemovalRetryCount + 1}/$MAX_BG_RETRY), bitmap: ${bitmap.width}x${bitmap.height}")
+            for (attempt in 1..MAX_BG_RETRY) {
+                try {
+                    android.util.Log.d("StickerMaker", "Starting ML Kit background removal (attempt $attempt/$MAX_BG_RETRY), bitmap: ${bitmap.width}x${bitmap.height}")
 
-                // Bitmap'i ARGB_8888 formatına çevir
-                val processedBitmap = if (bitmap.config != Bitmap.Config.ARGB_8888) {
-                    bitmap.copy(Bitmap.Config.ARGB_8888, false)
-                } else {
-                    bitmap
-                }
-
-                val inputImage = InputImage.fromBitmap(processedBitmap, 0)
-                android.util.Log.d("StickerMaker", "InputImage created, running ML Kit segmentation...")
-
-                // ML Kit Subject Segmentation
-                val result = Tasks.await(subjectSegmenter.process(inputImage))
-                android.util.Log.d("StickerMaker", "ML Kit segmentation completed")
-
-                val foregroundBitmap = result.foregroundBitmap
-                if (foregroundBitmap == null) {
-                    android.util.Log.e("StickerMaker", "Foreground bitmap is null")
-                    throw Exception("Subject not found")
-                }
-
-                // Add thin white contour around the subject
-                val finalBitmap = addContour(foregroundBitmap, 4, Color.WHITE)
-
-                withContext(Dispatchers.Main) {
-                    bgRemovalRetryCount = 0
-                    saveBitmapToHistory()
-                    setEditorImage(finalBitmap)
-                    backgroundRemoved = true
-                    hideLoading()
-                }
-            } catch (e: Exception) {
-                android.util.Log.e("StickerMaker", "ML Kit background removal error (attempt ${bgRemovalRetryCount + 1}): ${e.message}", e)
-                bgRemovalRetryCount++
-
-                if (bgRemovalRetryCount < MAX_BG_RETRY) {
-                    // Model henüz hazır olmayabilir, 1 saniye bekle ve tekrar dene
-                    android.util.Log.d("StickerMaker", "Retrying background removal in 1 second... (attempt ${bgRemovalRetryCount + 1})")
-                    delay(1000L)
-                    attemptRemoveBackground(bitmap)
-                } else {
-                    withContext(Dispatchers.Main) {
-                        hideLoading()
-                        Toast.makeText(this@StickerMakerActivity, getString(R.string.bg_removal_error), Toast.LENGTH_SHORT).show()
+                    // Bitmap'i ARGB_8888 formatına çevir
+                    val processedBitmap = if (bitmap.config != Bitmap.Config.ARGB_8888) {
+                        bitmap.copy(Bitmap.Config.ARGB_8888, false)
+                    } else {
+                        bitmap
                     }
+
+                    val inputImage = InputImage.fromBitmap(processedBitmap, 0)
+                    android.util.Log.d("StickerMaker", "InputImage created, running ML Kit segmentation...")
+
+                    // ML Kit Subject Segmentation
+                    val result = Tasks.await(subjectSegmenter.process(inputImage))
+                    android.util.Log.d("StickerMaker", "ML Kit segmentation completed")
+
+                    val foregroundBitmap = result.foregroundBitmap
+                        ?: throw Exception("Subject not found")
+
+                    // Add thin white contour around the subject
+                    val finalBitmap = addContour(foregroundBitmap, 4, Color.WHITE)
+
+                    withContext(Dispatchers.Main) {
+                        saveBitmapToHistory()
+                        setEditorImage(finalBitmap)
+                        backgroundRemoved = true
+                        hideLoading()
+                    }
+                    return@launch
+                } catch (e: Exception) {
+                    android.util.Log.e("StickerMaker", "ML Kit background removal error (attempt $attempt): ${e.message}", e)
+                    // Model henüz hazır olmayabilir, 1 saniye bekle ve tekrar dene
+                    if (attempt < MAX_BG_RETRY) delay(1000L)
                 }
+            }
+
+            withContext(Dispatchers.Main) {
+                hideLoading()
+                Toast.makeText(this@StickerMakerActivity, getString(R.string.bg_removal_error), Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -889,6 +911,7 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
 
         val intent = UCrop.of(sourceUri, destUri)
             .withOptions(options)
+            .withMaxResultSize(MAX_EDIT_SIZE, MAX_EDIT_SIZE)
             .getIntent(this)
 
         cropLauncher.launch(intent)
@@ -1039,6 +1062,8 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
         textEditorOverlay = overlay
 
         window.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+        // Keeps DONE out from under the status bar and the font/colour rows above the keyboard.
+        InsetsUtils.padForSystemBarsAndIme(overlay)
 
         val etText = overlay.findViewById<android.widget.EditText>(R.id.etTextOverlay)
         val btnClose = overlay.findViewById<View>(R.id.btnTextClose)
@@ -1332,7 +1357,7 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
 
     // ==================== GIPHY Sticker Picker ====================
 
-    private val giphyApiKey = "LLWhfEaYJSNyuhTXUEnSol15YU00raps"
+    private val giphyApiKey = BuildConfig.GIPHY_API_KEY
 
     private fun showGiphyStickerPicker() {
         if (currentBitmap == null) {
@@ -1397,6 +1422,8 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
                                 android.graphics.BitmapFactory.decodeFile(item.localFile.absolutePath)
                             } else {
                                 val connection = java.net.URL(item.originalUrl).openConnection() as java.net.HttpURLConnection
+                                connection.connectTimeout = 15000
+                                connection.readTimeout = 20000
                                 connection.connect()
                                 val gifBytes = connection.inputStream.readBytes()
                                 connection.disconnect()
@@ -1408,7 +1435,7 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
                             }
                         } catch (e: Exception) {
                             withContext(Dispatchers.Main) {
-                                Toast.makeText(this@StickerMakerActivity, "Failed to add sticker", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(this@StickerMakerActivity, getString(R.string.error_add_sticker_failed), Toast.LENGTH_SHORT).show()
                             }
                         }
                     }
@@ -1429,6 +1456,8 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
                     }
                     val connection = java.net.URL(url).openConnection() as java.net.HttpURLConnection
                     connection.requestMethod = "GET"
+                    connection.connectTimeout = 15000
+                    connection.readTimeout = 20000
                     connection.connect()
                     val response = connection.inputStream.bufferedReader().readText()
                     connection.disconnect()
@@ -1450,7 +1479,7 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
                     }
                 } catch (e: Exception) {
                     withContext(Dispatchers.Main) {
-                        Toast.makeText(this@StickerMakerActivity, "Error loading stickers", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(this@StickerMakerActivity, getString(R.string.error_loading_stickers), Toast.LENGTH_SHORT).show()
                     }
                 }
             }
@@ -1472,15 +1501,19 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
                     items.addAll(newItems)
                     adapter.notifyDataSetChanged()
                     if (newItems.isEmpty()) {
-                        Toast.makeText(this@StickerMakerActivity, "You have no stickers of your own yet", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(this@StickerMakerActivity, getString(R.string.no_own_stickers_yet), Toast.LENGTH_SHORT).show()
                     }
                 }
             }
         }
 
         val categories = listOf("mystickers", "trending", "effects", "bubble", "love", "funny", "animals", "food")
-        // English literal to match the sibling tabs (Trending/Effects/…), which are hardcoded English.
-        val displayNames = listOf("My Stickers", "Trending", "Effects", "Bubble", "Love", "Funny", "Animals", "Food")
+        // The GIPHY query stays English (it is a search term); only the visible label is translated.
+        val displayNames = listOf(
+            R.string.my_stickers_tab, R.string.giphy_trending, R.string.giphy_effects,
+            R.string.giphy_bubble, R.string.category_love, R.string.giphy_funny,
+            R.string.category_animals, R.string.category_food
+        ).map { getString(it) }
         var selectedTabView: TextView? = null
 
         categories.forEachIndexed { index, cat ->
@@ -2178,7 +2211,9 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
 
     override fun onDestroy() {
         super.onDestroy()
-        subjectSegmenter.close()
+        if (::subjectSegmenter.isInitialized) {
+            try { subjectSegmenter.close() } catch (_: Exception) {}
+        }
     }
 
     // ==================== Tool Highlight ====================
@@ -2287,7 +2322,7 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
         override fun onBindViewHolder(holder: PackViewHolder, position: Int) {
             val pack = packs[position]
             holder.tvPackName.text = pack.name
-            holder.tvStickerCount.text = "${pack.stickerCount}${getString(R.string.sticker_count_suffix)}"
+            holder.tvStickerCount.text = holder.itemView.context.getString(R.string.sticker_count, pack.stickerCount)
 
             if (pack.stickerCount > 0) {
                 val stickerFile = CustomStickerManager.getCustomStickerPath(

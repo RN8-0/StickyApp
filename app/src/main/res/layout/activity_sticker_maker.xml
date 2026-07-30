@@ -435,7 +435,7 @@
                         android:src="@drawable/ic_sticker"
                         android:padding="2dp"
                         android:scaleType="centerInside"
-                        android:contentDescription="Sticker" />
+                        android:contentDescription="@string/sticker_short" />
 
                     <TextView
                         android:id="@+id/labelToolSticker"

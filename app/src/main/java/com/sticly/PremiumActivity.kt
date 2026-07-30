@@ -354,7 +354,7 @@ class PremiumActivity : AppCompatActivity() {
             FirebaseAuth.getInstance().signInWithCredential(credential)
                 .addOnCompleteListener(this) { authTask ->
                     if (authTask.isSuccessful) {
-                        Toast.makeText(this, "Signed in as ${account.email}. Restoring purchases...", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(this, getString(R.string.signed_in_restoring, account.email), Toast.LENGTH_SHORT).show()
                         billingManager?.restorePurchases { restoreResult ->
                             val msg = when (restoreResult) {
                                 BillingManager.RestoreResult.SUCCESS -> { updateUI(); R.string.restore_success }
@@ -379,7 +379,7 @@ class PremiumActivity : AppCompatActivity() {
                 Toast.makeText(this, R.string.restore_error, Toast.LENGTH_SHORT).show()
                 return
             }
-            Toast.makeText(this, "Signed in as ${currentUser.email ?: currentUser.displayName}. Restoring...", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.signed_in_restoring, currentUser.email ?: currentUser.displayName), Toast.LENGTH_SHORT).show()
             billingManager?.restorePurchases { result ->
                 val messageRes = when (result) {
                     BillingManager.RestoreResult.SUCCESS -> { updateUI(); R.string.restore_success }

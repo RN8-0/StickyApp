@@ -33,25 +33,43 @@ class StickerAdapter(
     private val onSelectionChanged: ((Int) -> Unit)? = null
 ) : RecyclerView.Adapter<StickerAdapter.VH>() {
 
-    private val clearBgBitmapListener = object : RequestListener<Bitmap> {
-        override fun onLoadFailed(e: GlideException?, model: Any?, target: Target<Bitmap>, isFirstResource: Boolean): Boolean = false
+    /**
+     * Marks [h] ready for the animated upgrade once its static frame settles.
+     *
+     * This captures the holder instead of looking it up with findContainingViewHolder(): when the
+     * thumb is already in Glide's memory cache the callback fires synchronously from inside
+     * onBindViewHolder, while the item view is not attached to the RecyclerView yet, so the lookup
+     * returned null and the cell stayed static forever. That is why animated packs animated on the
+     * first visit but not on later ones.
+     *
+     * A FAILED static load also unblocks the upgrade — the original may still decode fine.
+     */
+    private fun staticFrameListener(h: VH) = object : RequestListener<Bitmap> {
+        override fun onLoadFailed(e: GlideException?, model: Any?, target: Target<Bitmap>, isFirstResource: Boolean): Boolean {
+            h.staticReady = true
+            scheduleAnimateVisible()
+            return false
+        }
         override fun onResourceReady(resource: Bitmap, model: Any, target: Target<Bitmap>, dataSource: DataSource, isFirstResource: Boolean): Boolean {
-            val view = (target as? com.bumptech.glide.request.target.ImageViewTarget<*>)?.view ?: return false
-            view.background = null
-            // Statik kare ekranda: bu holder artık animasyona yükseltilebilir.
-            (recyclerView?.findContainingViewHolder(view) as? VH)?.let { holder ->
-                holder.staticReady = true
-                scheduleAnimateVisible()
-            }
+            (target as? com.bumptech.glide.request.target.ImageViewTarget<*>)?.view?.background = null
+            h.staticReady = true
+            scheduleAnimateVisible()
             return false
         }
     }
 
-    // Same background-clear behaviour as above, but for the animated Drawable upgrade.
-    private val clearBgDrawableListener = object : RequestListener<Drawable> {
-        override fun onLoadFailed(e: GlideException?, model: Any?, target: Target<Drawable>, isFirstResource: Boolean): Boolean = false
+    /** Same background-clear behaviour, but for one holder's animated Drawable upgrade. */
+    private fun animatedUpgradeListener(h: VH) = object : RequestListener<Drawable> {
+        override fun onLoadFailed(e: GlideException?, model: Any?, target: Target<Drawable>, isFirstResource: Boolean): Boolean {
+            // Let a later pass try again rather than leaving the cell marked "animated" forever.
+            h.animated = false
+            return false
+        }
         override fun onResourceReady(resource: Drawable, model: Any, target: Target<Drawable>, dataSource: DataSource, isFirstResource: Boolean): Boolean {
             (target as? com.bumptech.glide.request.target.ImageViewTarget<*>)?.view?.background = null
+            // Glide starts animated drawables itself, but a drawable restored from the memory cache
+            // can come back paused — make playback unconditional.
+            (resource as? android.graphics.drawable.Animatable)?.let { if (!it.isRunning) it.start() }
             return false
         }
     }
@@ -191,7 +209,7 @@ class StickerAdapter(
                         .placeholder(R.drawable.sticker_placeholder)
                         .error(R.drawable.sticker_placeholder)
                         .diskCacheStrategy(DiskCacheStrategy.RESOURCE)
-                        .listener(clearBgBitmapListener)
+                        .listener(staticFrameListener(h))
                         .into(h.img)
                 } else {
                     h.img.setImageResource(R.drawable.sticker_placeholder)
@@ -206,7 +224,7 @@ class StickerAdapter(
                     .placeholder(R.drawable.sticker_placeholder)
                     .error(R.drawable.sticker_placeholder)
                     .diskCacheStrategy(DiskCacheStrategy.RESOURCE)
-                    .listener(clearBgBitmapListener)
+                    .listener(staticFrameListener(h))
                     .into(h.img)
             }
             // 2. Firebase URL varsa oradan yükle
@@ -219,7 +237,7 @@ class StickerAdapter(
                     .placeholder(R.drawable.sticker_placeholder)
                     .error(R.drawable.sticker_placeholder)
                     .diskCacheStrategy(DiskCacheStrategy.AUTOMATIC)
-                    .listener(clearBgBitmapListener)
+                    .listener(staticFrameListener(h))
                     .into(h.img)
             }
             // 3. URL yoksa direkt storage URL hesapla ve yükle
@@ -233,7 +251,7 @@ class StickerAdapter(
                     .placeholder(R.drawable.sticker_placeholder)
                     .error(R.drawable.sticker_placeholder)
                     .diskCacheStrategy(DiskCacheStrategy.AUTOMATIC)
-                    .listener(clearBgBitmapListener)
+                    .listener(staticFrameListener(h))
                     .into(h.img)
             }
             // 4. Lokal assets'ten yükle
@@ -245,7 +263,7 @@ class StickerAdapter(
                     .placeholder(R.drawable.sticker_placeholder)
                     .error(R.drawable.sticker_placeholder)
                     .diskCacheStrategy(DiskCacheStrategy.RESOURCE)
-                    .listener(clearBgBitmapListener)
+                    .listener(staticFrameListener(h))
                     .into(h.img)
             }
         }
@@ -263,6 +281,11 @@ class StickerAdapter(
         rv.post {
             animateScheduled = false
             if (rv.scrollState == RecyclerView.SCROLL_STATE_IDLE) upgradeVisibleToAnimated()
+            // Safety net: a pass can run before every visible cell has its static frame, and the
+            // last cell to settle has nothing left to re-trigger it. Sweep once more shortly after.
+            rv.postDelayed({
+                if (rv.scrollState == RecyclerView.SCROLL_STATE_IDLE) upgradeVisibleToAnimated()
+            }, 450L)
         }
     }
 
@@ -298,7 +321,7 @@ class StickerAdapter(
             // Thumb'lar ~5KB olduğu için kuyruk hemen boşalıyor; animasyonlar gecikmesin.
             .priority(com.bumptech.glide.Priority.NORMAL)
             .diskCacheStrategy(DiskCacheStrategy.AUTOMATIC)
-            .listener(clearBgDrawableListener)
+            .listener(animatedUpgradeListener(h))
         if (source is java.io.File) req = req.signature(ObjectKey(source.lastModified()))
         req.into(h.img)
     }

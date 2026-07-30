@@ -59,7 +59,7 @@
             android:background="@drawable/bg_close_circle"
             android:padding="6dp"
             app:tint="@color/text_secondary"
-            android:contentDescription="Close" />
+            android:contentDescription="@string/close" />
 
     </LinearLayout>
 
@@ -130,7 +130,7 @@
             android:src="@drawable/ic_close"
             android:padding="2dp"
             app:tint="@color/text_secondary"
-            android:contentDescription="Cancel reply" />
+            android:contentDescription="@string/cd_cancel_reply" />
 
     </LinearLayout>
 

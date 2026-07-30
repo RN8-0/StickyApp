@@ -17,6 +17,7 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
 import com.sticly.LocaleHelper
+import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -221,16 +222,14 @@ class SettingsActivity : AppCompatActivity() {
                 authWithPocketBase(account)
             } catch (e: com.google.android.gms.common.api.ApiException) {
                 val msg = when (e.statusCode) {
-                    10 -> "Google sign-in config error (SHA-1)"
-                    7 -> "Network error, try again"
-                    12501 -> null
-                    else -> "Sign-in failed: ${e.statusCode}"
+                    12501 -> null // user cancelled
+                    else -> getString(R.string.sign_in_failed)
                 }
                 if (msg != null) Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
                 findViewById<androidx.appcompat.widget.SwitchCompat>(R.id.switchGoogle).isChecked = false
                 updateLoginSwitches()
             } catch (e: Exception) {
-                Toast.makeText(this, "Google sign-in failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, getString(R.string.sign_in_failed), Toast.LENGTH_SHORT).show()
                 findViewById<androidx.appcompat.widget.SwitchCompat>(R.id.switchGoogle).isChecked = false
                 updateLoginSwitches()
             }
@@ -241,7 +240,7 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun authWithPocketBase(account: com.google.android.gms.auth.api.signin.GoogleSignInAccount) {
-        CoroutineScope(Dispatchers.Main).launch {
+        lifecycleScope.launch {
             try {
                 // Save profile locally first
                 PreferencesHelper.setUserProfile(
@@ -264,14 +263,14 @@ class SettingsActivity : AppCompatActivity() {
                 } catch (_: Exception) {}
                 val deviceId = PreferencesHelper.getDeviceId(this@SettingsActivity)
                 PreferencesHelper.syncUserDataWithPocketBase(this@SettingsActivity, deviceId)
-                Toast.makeText(this@SettingsActivity, "Signed in with Google", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@SettingsActivity, getString(R.string.signed_in_google), Toast.LENGTH_SHORT).show()
                 updateLoginSwitches()
                 if (restoreAfterGoogleLogin) {
                     restoreAfterGoogleLogin = false
                     performRestore()
                 }
             } catch (e: Exception) {
-                Toast.makeText(this@SettingsActivity, "Sign-in failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@SettingsActivity, getString(R.string.sign_in_failed), Toast.LENGTH_SHORT).show()
                 findViewById<androidx.appcompat.widget.SwitchCompat>(R.id.switchGoogle).isChecked = false
                 updateLoginSwitches()
                 restoreAfterGoogleLogin = false
@@ -334,7 +333,7 @@ class SettingsActivity : AppCompatActivity() {
                 getSharedPreferences("sticky_prefs", MODE_PRIVATE).edit()
                     .remove("user_email").remove("user_display_name").remove("user_photo_url").apply()
                 PreferencesHelper.setPocketBaseAuth(this, null, null)
-                Toast.makeText(this, "Logged out from Google", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, getString(R.string.signed_out_google), Toast.LENGTH_SHORT).show()
                 updateNotificationStatus()
                 updateLoginSwitches()
             }
@@ -342,7 +341,7 @@ class SettingsActivity : AppCompatActivity() {
             getSharedPreferences("sticky_prefs", MODE_PRIVATE).edit()
                 .remove("user_email").remove("user_display_name").remove("user_photo_url").apply()
             PreferencesHelper.setPocketBaseAuth(this, null, null)
-            Toast.makeText(this, "Logged out", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.signed_out), Toast.LENGTH_SHORT).show()
         }
     }
 

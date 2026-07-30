@@ -335,7 +335,7 @@ class MainActivity : AppCompatActivity() {
             com.google.firebase.auth.FirebaseAuth.getInstance().signInWithCredential(credential)
                 .addOnCompleteListener(this) { authTask ->
                     if (authTask.isSuccessful) {
-                        Toast.makeText(this, "Signed in as ${account.email}. Restoring purchases...", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(this, getString(R.string.signed_in_restoring, account.email), Toast.LENGTH_SHORT).show()
                         billingManager?.restorePurchases { restoreResult ->
                             val msg = when (restoreResult) {
                                 BillingManager.RestoreResult.SUCCESS -> { loadPacks(forceRefresh = true); R.string.restore_success }
@@ -364,7 +364,7 @@ class MainActivity : AppCompatActivity() {
             com.google.firebase.auth.FirebaseAuth.getInstance().signInWithCredential(credential)
                 .addOnCompleteListener(this) { authTask ->
                     if (authTask.isSuccessful) {
-                        Toast.makeText(this, "✅ Signed in as ${account.email}", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(this, getString(R.string.signed_in_as, account.email), Toast.LENGTH_SHORT).show()
                         lifecycleScope.launch {
                             try {
                                 val idToken = account.idToken ?: return@launch
@@ -382,11 +382,11 @@ class MainActivity : AppCompatActivity() {
                             aiUpdateGenerateButton?.invoke()
                         }
                     } else {
-                        Toast.makeText(this, "Sign-in failed", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(this, getString(R.string.sign_in_failed), Toast.LENGTH_SHORT).show()
                     }
                 }
         } catch (e: Exception) {
-            Toast.makeText(this, "Sign-in failed", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.sign_in_failed), Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -1082,7 +1082,7 @@ class MainActivity : AppCompatActivity() {
             // Check queue limit
             val active = aiActiveGenerations.get()
             if (active >= AI_MAX_QUEUE) {
-                Toast.makeText(this, "⏳ Maximum $AI_MAX_QUEUE generations at once. Please wait.", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, getString(R.string.ai_queue_full, AI_MAX_QUEUE), Toast.LENGTH_SHORT).show()
                 return
             }
             // Dismiss keyboard
@@ -1098,7 +1098,7 @@ class MainActivity : AppCompatActivity() {
             if (aiActiveGenerations.get() == 1) {
                 setAiGenerating(true)
             } else {
-                Toast.makeText(this, "✨ Queued! (${aiActiveGenerations.get()}/$AI_MAX_QUEUE)", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, getString(R.string.ai_queued, aiActiveGenerations.get(), AI_MAX_QUEUE), Toast.LENGTH_SHORT).show()
             }
 
             lifecycleScope.launch {
@@ -1112,7 +1112,7 @@ class MainActivity : AppCompatActivity() {
 
                     withContext(Dispatchers.Main) {
                         val queueCount = aiActiveGenerations.get()
-                        aiTvLoadingStatus?.text = if (queueCount > 1) "✨ Generating... ($queueCount active)" else "✨ Generating..."
+                        aiTvLoadingStatus?.text = if (queueCount > 1) "✨ ${getString(R.string.ai_generating)} ($queueCount)" else "✨ ${getString(R.string.ai_generating)}"
                     }
 
                     val bitmap = aiGenerateImage(optimizedPrompt) {}
@@ -1143,7 +1143,7 @@ class MainActivity : AppCompatActivity() {
                         if (savedPath != null) aiSyncHistoryToFirebase(queuedPrompt, savedPath)
                     } else {
                         withContext(Dispatchers.Main) {
-                            aiTvError?.text = "⚠️ Server busy, please try again in a few seconds"
+                            aiTvError?.text = getString(R.string.ai_server_busy)
                             aiTvError?.visibility = View.VISIBLE
                         }
                     }
@@ -1185,7 +1185,7 @@ class MainActivity : AppCompatActivity() {
                     }
                 } catch (e: Exception) {
                     withContext(Dispatchers.Main) {
-                        Toast.makeText(this@MainActivity, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(this@MainActivity, getString(R.string.error_generic, e.message), Toast.LENGTH_SHORT).show()
                     }
                 }
             }
@@ -1223,7 +1223,7 @@ class MainActivity : AppCompatActivity() {
             aiRawBitmap = null
             aiGeneratedBitmap = null
             // Restore Regenerate button for next generation
-            aiBtnTryAgain?.text = "🔄 Regenerate"
+            aiBtnTryAgain?.text = getString(R.string.regenerate)
             aiBtnTryAgain?.icon = null
             aiBtnTryAgain?.setTextColor(androidx.core.content.ContextCompat.getColor(this, R.color.primary))
             aiBtnTryAgain?.strokeColor = android.content.res.ColorStateList.valueOf(androidx.core.content.ContextCompat.getColor(this, R.color.primary))
@@ -1890,7 +1890,7 @@ Rules:
             promptSection?.setOnClickListener {
                 val clipboard = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
                 clipboard.setPrimaryClip(android.content.ClipData.newPlainText("AI Prompt", item.prompt))
-                Toast.makeText(this, "📋 Prompt copied!", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, getString(R.string.ai_prompt_copied), Toast.LENGTH_SHORT).show()
             }
         }
 
@@ -1916,7 +1916,7 @@ Rules:
                     }
                 } catch (e: Exception) {
                     withContext(Dispatchers.Main) {
-                        Toast.makeText(this@MainActivity, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(this@MainActivity, getString(R.string.error_generic, e.message), Toast.LENGTH_SHORT).show()
                     }
                 }
             }
@@ -1943,7 +1943,7 @@ Rules:
         // Delete
         btnDelete?.setOnClickListener {
             if (item.isAsset) {
-                Toast.makeText(this, "Sample images can't be deleted", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, getString(R.string.ai_sample_not_deletable), Toast.LENGTH_SHORT).show()
             } else {
                 aiDeleteHistoryItem(item)
                 dialog.dismiss()
@@ -2072,7 +2072,7 @@ Rules:
         override fun onBindViewHolder(holder: VH, position: Int) {
             val pack = packs[position]
             holder.tvName.text = pack.name
-            holder.tvCount.text = "${pack.stickerCount}${getString(R.string.sticker_count_suffix)}"
+            holder.tvCount.text = getString(R.string.sticker_count, pack.stickerCount)
 
             if (pack.stickerCount > 0) {
                 val stickerFile = CustomStickerManager.getCustomStickerPath(
@@ -2818,7 +2818,7 @@ Rules:
                 "approved"   -> Triple(getString(R.string.status_approved),   0x1A2ECC71, 0xFF2ECC71.toInt())
                 "rejected"   -> Triple(getString(R.string.status_rejected),   0x1AE74C3C, 0xFFE74C3C.toInt())
                 "flagged"    -> Triple(getString(R.string.status_flagged),    0x1AE67E22, 0xFFE67E22.toInt())
-                "processing" -> Triple("Processing 🔄",                       0x1A3498DB, 0xFF3498DB.toInt())
+                "processing" -> Triple(getString(R.string.status_processing) + " 🔄", 0x1A3498DB, 0xFF3498DB.toInt())
                 else         -> Triple(getString(R.string.status_pending),    0x1AF39C12, 0xFFF39C12.toInt())
             }
             holder.tvStatus.text = statusLabel
@@ -2832,7 +2832,7 @@ Rules:
                         .format(java.util.Date.from(instant))
                 } catch (_: Exception) { "" }
             } ?: ""
-            holder.tvMeta.text = "${item.stickerCount} stickers" + if (dateStr.isNotEmpty()) "  ·  $dateStr" else ""
+            holder.tvMeta.text = getString(R.string.sticker_count, item.stickerCount) + if (dateStr.isNotEmpty()) "  ·  $dateStr" else ""
 
             // Rejection reason
             if (item.status == "rejected" && !item.rejectionReason.isNullOrBlank()) {
@@ -2894,11 +2894,11 @@ Rules:
             holder.btnDelete.visibility = View.VISIBLE
             holder.btnDelete.setOnClickListener {
                 val msg = if (item.status == "approved")
-                    "Delete \"${item.name}\"? This will also remove it from the public sticker store."
+                    getString(R.string.delete_submission_confirm_public, item.name)
                 else
-                    "Delete \"${item.name}\"? This cannot be undone."
+                    getString(R.string.delete_submission_confirm, item.name)
                 showModernDeleteDialog(
-                    title = "Delete Submission",
+                    title = getString(R.string.delete_submission),
                     message = msg,
                     onConfirm = {
                         lifecycleScope.launch {
@@ -2963,7 +2963,7 @@ Rules:
                                 StickerRepository.allPacksCache = StickerRepository.allPacksCache
                                     .filter { it.id != targetId && it.id != item.id }
                             }
-                            Toast.makeText(this@MainActivity, "Submission deleted", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(this@MainActivity, getString(R.string.submission_deleted), Toast.LENGTH_SHORT).show()
                             profileSocialJson = null
                             loadProfileData()
                         }
@@ -3032,20 +3032,17 @@ Rules:
                         loadProfileData()
                         runOnUiThread { aiUpdateGenerateButton?.invoke() }
                     } catch (e: Exception) {
-                        Toast.makeText(this@MainActivity, "Sign-in failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(this@MainActivity, getString(R.string.sign_in_failed), Toast.LENGTH_SHORT).show()
                     }
                 }
             } catch (e: com.google.android.gms.common.api.ApiException) {
                 val message = when (e.statusCode) {
-                    10 -> "Google sign-in configuration error. Check SHA-1 and OAuth client."
-                    7 -> "Network error. Please try again."
-                    12500 -> "Google Play Services configuration error."
-                    12501 -> null
-                    else -> "Sign-in failed: ${e.statusCode}"
+                    12501 -> null // user cancelled
+                    else -> getString(R.string.sign_in_failed)
                 }
                 if (message != null) Toast.makeText(this, message, Toast.LENGTH_LONG).show()
             } catch (e: Exception) {
-                Toast.makeText(this, "Sign-in failed: ${e.message ?: "Unknown error"}", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, getString(R.string.sign_in_failed), Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -3340,7 +3337,7 @@ Rules:
         data class FilterChipInfo(val id: String, val label: String, val filterType: FilterType)
         val filterChips = listOf(
             FilterChipInfo("filter_all", "✨ ${getString(R.string.filter_all)}", FilterType.ALL),
-            FilterChipInfo("filter_premium", "👑 Premium", FilterType.PREMIUM)
+            FilterChipInfo("filter_premium", "👑 ${getString(R.string.premium)}", FilterType.PREMIUM)
         )
 
         filterChips.forEach { info ->
@@ -4410,7 +4407,7 @@ Rules:
                 Toast.makeText(this, R.string.restore_error, Toast.LENGTH_SHORT).show()
                 return
             }
-            Toast.makeText(this, "Signed in as ${currentUser.email ?: currentUser.displayName}. Restoring...", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.signed_in_restoring, currentUser.email ?: currentUser.displayName), Toast.LENGTH_SHORT).show()
             billingManager?.restorePurchases { result ->
                 val messageRes = when (result) {
                     BillingManager.RestoreResult.SUCCESS -> {

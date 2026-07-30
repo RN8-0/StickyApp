@@ -32,30 +32,27 @@ class LoginActivity : AppCompatActivity() {
         try {
             val account = task.getResult(ApiException::class.java)
             if (account == null) {
-                Toast.makeText(this, "Google Error: Account is null", Toast.LENGTH_LONG).show()
+                Toast.makeText(this, getString(R.string.sign_in_failed), Toast.LENGTH_LONG).show()
                 return@registerForActivityResult
             }
             val idToken = account.idToken
             if (idToken != null) {
                 firebaseAuthWithGoogle(idToken)
             } else {
-                Toast.makeText(this, "Google Error: ID Token is null", Toast.LENGTH_LONG).show()
+                Toast.makeText(this, getString(R.string.sign_in_failed), Toast.LENGTH_LONG).show()
             }
         } catch (e: ApiException) {
             val progress = result.resultCode
             val msg = when (e.statusCode) {
-                10 -> "Developer error (SHA-1 mismatch?)"
-                7 -> "Network error (No internet?)"
-                12500 -> "Google Play Services outdated or configuration error"
-                12501 -> "Sign in cancelled"
-                else -> "Google Error: ${e.statusCode} - ${e.message}"
+                12501 -> null // user cancelled
+                else -> getString(R.string.sign_in_failed)
             }
-            if (e.statusCode != 12501) { // User cancel is not an error to toast usually
+            if (msg != null) { // user cancel is not worth a toast
                 Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
             }
             android.util.Log.e("LoginActivity", "Google sign in failed: ${e.statusCode}", e)
         } catch (e: Exception) {
-            Toast.makeText(this, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.error_generic, e.message), Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -173,7 +170,7 @@ class LoginActivity : AppCompatActivity() {
                 }
             } else {
                 setLoading(false)
-                Toast.makeText(this, "Firebase Auth failed: ${task.exception?.message}", Toast.LENGTH_LONG).show()
+                Toast.makeText(this, getString(R.string.sign_in_failed), Toast.LENGTH_LONG).show()
             }
         }
     }

@@ -626,6 +626,47 @@ object StickerRepository {
         original.recycle()
     }
 
+    /** Memo for [looksAnimated] so the byte sniff runs at most once per pack. */
+    private val animatedPackMemo = java.util.concurrent.ConcurrentHashMap<String, Boolean>()
+
+    /**
+     * Whether a pack should be rendered with animation.
+     *
+     * The `is_animated` DB flag has false negatives (packs that genuinely animate but were never
+     * flagged), which is why some animated packs showed a single frame on the home/popular cards.
+     * When the flag says no, a locally cached sticker is sniffed for the WebP ANIM chunk as a
+     * second opinion. Result is memoised — this runs on the bind path.
+     */
+    fun looksAnimated(context: Context, pack: Pack): Boolean {
+        if (pack.isAnimated) return true
+        animatedPackMemo[pack.id]?.let { return it }
+        val first = pack.stickers.firstOrNull() ?: return false
+        val cached = getCachedStickerPath(context, pack.id, first.file)
+        val animated = cached.exists() && cached.length() > 0 && isAnimatedWebpHeader(cached)
+        animatedPackMemo[pack.id] = animated
+        return animated
+    }
+
+    /**
+     * Header-only animation check, safe to call from a bind.
+     *
+     * An animated WebP always carries a VP8X chunk with the ANIMATION flag right after the RIFF
+     * header, so 32 bytes are enough — unlike [isAnimatedWebpFile], which reads the whole file.
+     */
+    private fun isAnimatedWebpHeader(file: File): Boolean {
+        if (!file.name.endsWith(".webp", ignoreCase = true) || file.length() < 32) return false
+        return try {
+            val head = ByteArray(32)
+            file.inputStream().use { if (it.read(head) < 32) return false }
+            if (String(head, 0, 4, Charsets.US_ASCII) != "RIFF") return false
+            if (String(head, 8, 4, Charsets.US_ASCII) != "WEBP") return false
+            if (String(head, 12, 4, Charsets.US_ASCII) != "VP8X") return false
+            (head[20].toInt() and 0x02) != 0 // ANIMATION flag
+        } catch (_: Exception) {
+            false
+        }
+    }
+
     fun isAnimatedWebpFile(file: File): Boolean {
         if (!file.name.endsWith(".webp", ignoreCase = true) || file.length() < 32) return false
         return try {

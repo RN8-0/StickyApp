@@ -42,7 +42,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
-            android:text="Delete Submission"
+            android:text="@string/delete_submission"
             android:textSize="18sp"
             android:textStyle="bold"
             android:textColor="@color/text_primary"

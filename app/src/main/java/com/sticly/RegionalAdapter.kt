@@ -47,6 +47,8 @@ class RegionalAdapter(
         override fun onLoadFailed(e: GlideException?, model: Any?, target: Target<Drawable>, isFirstResource: Boolean): Boolean = false
         override fun onResourceReady(resource: Drawable, model: Any, target: Target<Drawable>, dataSource: DataSource, isFirstResource: Boolean): Boolean {
             (target as? com.bumptech.glide.request.target.ImageViewTarget<*>)?.view?.background = null
+            // A drawable restored from the memory cache can come back paused.
+            (resource as? android.graphics.drawable.Animatable)?.let { if (!it.isRunning) it.start() }
             return false
         }
     }
@@ -146,7 +148,7 @@ class RegionalAdapter(
         h.downloadCount.text = if (pack.downloadCount > 0) {
             "↓ ${formatDownloadValue(pack.downloadCount)}"
         } else {
-            "${pack.stickers.size} stickers"
+            context.getString(R.string.sticker_count, pack.stickers.size)
         }
 
         // Durumlar
@@ -211,7 +213,7 @@ class RegionalAdapter(
 
             when {
                 urlToLoad.isNotEmpty() -> {
-                    if (pack.isAnimated) {
+                    if (StickerRepository.looksAnimated(context, pack)) {
                         // Animasyonlu paket: önizleme oynasın; thumb anında, orijinal arkadan.
                         glide.load(urlToLoad)
                             .thumbnail(

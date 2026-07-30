@@ -19,19 +19,20 @@ if (localPropertiesFile.exists()) {
 
 android {
     namespace 'com.sticly'
-    compileSdk 35
+    compileSdk 36
 
     defaultConfig {
         applicationId "com.sticly"
         minSdk 24
-        targetSdk 35
-        versionCode 65
-        versionName "6.0.5"
+        targetSdk 36
+        versionCode 67
+        versionName "6.0.7"
 
         buildConfigField "String", "DEEPSEEK_API_KEY", "\"${localProperties.getProperty('DEEPSEEK_API_KEY', '')}\""
         buildConfigField "String", "POCKETBASE_URL", "\"${localProperties.getProperty('POCKETBASE_URL', 'NOT_SET')}\""
         buildConfigField "String", "WORKER_URL", "\"${localProperties.getProperty('WORKER_URL', 'NOT_SET')}\""
         buildConfigField "String", "NTFY_URL", "\"${localProperties.getProperty('NTFY_URL', 'NOT_SET')}\""
+        buildConfigField "String", "GIPHY_API_KEY", "\"${localProperties.getProperty('GIPHY_API_KEY', '')}\""
 
         // Sadece ARM mimarileri (MediaPipe x86_64 desteklemiyor)
         ndk {
@@ -115,8 +116,8 @@ dependencies {
     // AdMob
     implementation 'com.google.android.gms:play-services-ads:23.6.0'
 
-    // Google Play Billing
-    implementation 'com.android.billingclient:billing-ktx:7.1.1'
+    // Google Play Billing (8.x — Billing 7 desteği 31 Ağu 2026'da bitiyor)
+    implementation 'com.android.billingclient:billing-ktx:8.0.0'
 
     // Image loading
     implementation 'com.github.bumptech.glide:glide:4.16.0'

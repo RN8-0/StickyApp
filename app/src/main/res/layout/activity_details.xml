@@ -35,7 +35,7 @@
                 android:background="?selectableItemBackgroundBorderless"
                 android:src="@drawable/ic_back"
                 app:tint="@color/text_on_primary"
-                android:contentDescription="Back" />
+                android:contentDescription="@string/back" />
 
             <ImageView
                 android:layout_width="24dp"
@@ -110,7 +110,7 @@
                 android:src="@drawable/ic_delete"
                 app:tint="@color/delete_red"
                 android:visibility="gone"
-                android:contentDescription="Seçilenleri Sil" />
+                android:contentDescription="@string/delete" />
 
         </LinearLayout>
 
@@ -157,7 +157,7 @@
                 android:id="@+id/tvPublisherHint"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="View profile"
+                android:text="@string/view_profile"
                 android:textColor="@color/text_on_primary_secondary"
                 android:textSize="9sp"
                 android:visibility="gone" />
@@ -248,7 +248,7 @@
             android:layout_width="wrap_content"
             android:layout_height="28dp"
             android:minWidth="64dp"
-            android:text="Follow"
+            android:text="@string/follow"
             android:textAllCaps="false"
             android:textSize="10sp"
             app:cornerRadius="14dp"

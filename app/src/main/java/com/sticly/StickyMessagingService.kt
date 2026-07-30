@@ -19,7 +19,7 @@ class StickyMessagingService : FirebaseMessagingService() {
 
     companion object {
         const val CHANNEL_ID = "sticky_notifications"
-        const val CHANNEL_NAME = "Sticker Bildirimleri"
+        // Resolved from resources at channel-creation time so it follows the app language.
     }
 
     override fun onNewToken(token: String) {
@@ -147,7 +147,7 @@ class StickyMessagingService : FirebaseMessagingService() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
-                CHANNEL_NAME,
+                getString(R.string.notification_channel_name),
                 NotificationManager.IMPORTANCE_HIGH
             ).apply {
                 description = getString(R.string.notification_channel_desc)
