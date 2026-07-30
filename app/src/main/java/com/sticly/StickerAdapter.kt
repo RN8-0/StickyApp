@@ -25,7 +25,7 @@ class StickerAdapter(
     private val isPackPremium: Boolean = false,
     private val hasAccess: Boolean = true,
     private val storagePath: String = "stickers",
-    private val isAnimated: Boolean = false,
+    private var isAnimated: Boolean = false,
     var isSelectionMode: Boolean = false,
     val selectedPositions: MutableSet<Int> = mutableSetOf(),
     private val onStickerClick: ((Sticker, Int) -> Unit)? = null,
@@ -197,6 +197,16 @@ class StickerAdapter(
         // Hide progressBar (placeholder is enough)
         h.progressBar.visibility = View.GONE
 
+        // Known-animated pack: go straight to the animated request instead of static frame ->
+        // idle -> second request. Static packs keep the cheap static-first path below.
+        if (isAnimated && animateOnIdle && !isSelectionMode) {
+            val animSource = resolveSource(context, pos)
+            if (animSource != null) {
+                bindAnimated(h, animSource)
+                return
+            }
+        }
+
         when {
             // 0. Özel paket kontrolü
             packId.startsWith("custom_") -> {
@@ -271,6 +281,48 @@ class StickerAdapter(
         // After the static frame is bound, queue an idle upgrade of the visible items to animated.
         if (animateOnIdle && !isSelectionMode) scheduleAnimateVisible()
     }
+
+    /** Called when the server probe confirms a pack the DB flag got wrong. */
+    fun setAnimatedPack(animated: Boolean) {
+        if (isAnimated == animated) return
+        isAnimated = animated
+        notifyDataSetChanged()
+    }
+
+    /**
+     * One-request bind for a pack we KNOW animates.
+     *
+     * The static-first path exists to keep decodes bounded, but for an animated pack it means the
+     * cell waits for the thumb, then for idle, then starts a second request for the ~164KB
+     * original — which is why packs sat still for many seconds before moving. Here the original is
+     * requested at bind time with the thumb chained in front of it, so the cell paints just as
+     * fast and starts animating as soon as the bytes land.
+     */
+    private fun bindAnimated(h: VH, source: Any) {
+        val glide = getGlide(h.itemView.context)
+        val thumb = thumbSourceFor(source)
+        var req = glide.asDrawable()
+            .load(source)
+            .override(256, 256)
+            .dontTransform()
+            .priority(com.bumptech.glide.Priority.HIGH)
+            .placeholder(R.drawable.sticker_placeholder)
+            .diskCacheStrategy(DiskCacheStrategy.AUTOMATIC)
+            .listener(animatedUpgradeListener(h))
+        if (thumb != null) {
+            req = req.thumbnail(
+                glide.asDrawable().load(thumb).override(256, 256).dontTransform()
+            )
+        }
+        if (source is java.io.File) req = req.signature(ObjectKey(source.lastModified()))
+        h.animated = true
+        h.staticReady = true
+        req.into(h.img)
+    }
+
+    /** The cheap first-paint model for [bindAnimated]; null when the source is already local. */
+    private fun thumbSourceFor(source: Any): Any? =
+        if (source is String) StickerRepository.thumbUrl(source) else null
 
     /** Posts a single debounced pass that animates the visible items once scrolling is idle. */
     private fun scheduleAnimateVisible() {

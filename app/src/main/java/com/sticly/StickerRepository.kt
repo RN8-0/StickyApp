@@ -629,6 +629,66 @@ object StickerRepository {
     /** Memo for [looksAnimated] so the byte sniff runs at most once per pack. */
     private val animatedPackMemo = java.util.concurrent.ConcurrentHashMap<String, Boolean>()
 
+    private const val ANIM_PROBE_PREFS = "sticky_anim_probe"
+    private val animProbeInFlight = java.util.Collections.synchronizedSet(mutableSetOf<String>())
+
+    /**
+     * Resolves whether a pack animates when nothing local can answer it.
+     *
+     * On a fresh install there is no cached sticker to sniff, so a pack whose `is_animated` flag is
+     * a false negative would render static on the home/popular cards until the user opened it. This
+     * fetches the first 32 bytes of the first sticker with a Range request — enough for the WebP
+     * VP8X ANIMATION flag — caches the answer on disk, and calls [onResolved] on the main thread
+     * only when the answer flips the pack to animated (so the card can rebind).
+     */
+    fun probeAnimated(context: Context, pack: Pack, onResolved: (String) -> Unit) {
+        if (pack.isAnimated || pack.id.startsWith("custom_")) return
+        if (animatedPackMemo.containsKey(pack.id)) return
+
+        val prefs = context.getSharedPreferences(ANIM_PROBE_PREFS, Context.MODE_PRIVATE)
+        if (prefs.contains(pack.id)) {
+            animatedPackMemo[pack.id] = prefs.getBoolean(pack.id, false)
+            return
+        }
+        val sticker = pack.stickers.firstOrNull() ?: return
+        val url = sticker.url.ifBlank {
+            if (pack.storagePath.isNotBlank()) getStickerDirectUrl(pack.id, sticker.file, pack.storagePath) else ""
+        }
+        if (url.isBlank() || !animProbeInFlight.add(pack.id)) return
+
+        repositoryScope.launch {
+            val animated = try {
+                val conn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+                conn.connectTimeout = 10_000
+                conn.readTimeout = 10_000
+                conn.setRequestProperty("Range", "bytes=0-31")
+                conn.connect()
+                val head = ByteArray(32)
+                var read = 0
+                conn.inputStream.use { input ->
+                    while (read < 32) {
+                        val n = input.read(head, read, 32 - read)
+                        if (n <= 0) break
+                        read += n
+                    }
+                }
+                conn.disconnect()
+                read >= 32 &&
+                    String(head, 0, 4, Charsets.US_ASCII) == "RIFF" &&
+                    String(head, 8, 4, Charsets.US_ASCII) == "WEBP" &&
+                    String(head, 12, 4, Charsets.US_ASCII) == "VP8X" &&
+                    (head[20].toInt() and 0x02) != 0
+            } catch (_: Exception) {
+                false
+            }
+
+            animatedPackMemo[pack.id] = animated
+            prefs.edit().putBoolean(pack.id, animated).apply()
+            animProbeInFlight.remove(pack.id)
+            if (animated) withContext(Dispatchers.Main) { onResolved(pack.id) }
+        }
+    }
+
     /**
      * Whether a pack should be rendered with animation.
      *

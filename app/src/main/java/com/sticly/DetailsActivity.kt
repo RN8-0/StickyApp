@@ -57,6 +57,8 @@ class DetailsActivity : AppCompatActivity() {
 
     private lateinit var packId: String
     private var isAnimatedPack: Boolean = false
+    /** True once anything (flag, cached bytes, or server probe) says this pack animates. */
+    private var animatedPackResolved: Boolean = false
     private lateinit var btnAction: MaterialButton
     private lateinit var btnWatchAd: MaterialButton
     private lateinit var premiumButtonsContainer: LinearLayout
@@ -258,6 +260,18 @@ class DetailsActivity : AppCompatActivity() {
     private fun setupUI(pack: Pack) {
         currentPack = pack
         isAnimatedPack = pack.isAnimated
+        // pack.isAnimated has false negatives, so also trust a locally cached file. The server
+        // probe (32-byte Range request) refines this for packs nothing local can answer for.
+        animatedPackResolved = pack.isAnimated || StickerRepository.looksAnimated(this, pack)
+        if (!animatedPackResolved) {
+            StickerRepository.probeAnimated(this, pack) {
+                if (!isFinishing && !isDestroyed) {
+                    animatedPackResolved = true
+                    isAnimatedPack = true
+                    adapter?.setAnimatedPack(true)
+                }
+            }
+        }
         isPackReady = false // Reset state when setting up new pack
 
         if (pack.isAnimated && !pack.id.startsWith("custom_")) {
@@ -351,7 +365,7 @@ class DetailsActivity : AppCompatActivity() {
             isPackPremium = pack.isPremium,
             hasAccess = hasAccess,
             storagePath = pack.storagePath,
-            isAnimated = pack.isAnimated,
+            isAnimated = animatedPackResolved,
             selectedPositions = selectedIndices,
             onStickerClick = { sticker, _ ->
                 val isLocked = !PreferencesHelper.hasAccessToPack(this, pack.id)
@@ -412,6 +426,33 @@ class DetailsActivity : AppCompatActivity() {
         lifecycleScope.launch(Dispatchers.IO) {
             delay(150)
             val glide = Glide.with(appContext)
+
+            // Animated packs FIRST. Animation cannot start until the full ~164KB file has landed,
+            // and this used to queue behind 36 thumbnail requests at LOW priority — which is why
+            // a pack sat static for many seconds before it began moving. The thumbnails only
+            // matter for the first paint, and the grid gets those from its own thumbnail chain.
+            if (animatedPackResolved) {
+                stickers.take(24).chunked(6).forEach { batch ->
+                    if (isDestroyed || isFinishing) return@launch
+                    val futures = batch.mapNotNull { sticker ->
+                        val url = sticker.url.takeIf { it.isNotBlank() }
+                            ?: pack.storagePath.takeIf { it.isNotBlank() }
+                                ?.let { StickerRepository.getStickerDirectUrl(pack.id, sticker.file, it) }
+                            ?: return@mapNotNull null
+                        try {
+                            glide.asFile()
+                                .load(url)
+                                .priority(com.bumptech.glide.Priority.HIGH)
+                                .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.DATA)
+                                .submit()
+                        } catch (_: Exception) { null }
+                    }
+                    futures.forEach { f ->
+                        try { f.get(15, java.util.concurrent.TimeUnit.SECONDS) } catch (_: Exception) {}
+                    }
+                }
+            }
+
             stickers.take(36).chunked(6).forEach { batch ->
                 if (isDestroyed || isFinishing) return@launch
                 val futures = batch.mapNotNull { sticker ->
@@ -427,27 +468,6 @@ class DetailsActivity : AppCompatActivity() {
                 }
                 futures.forEach { f ->
                     try { f.get(8, java.util.concurrent.TimeUnit.SECONDS) } catch (_: Exception) {}
-                }
-            }
-
-            // Animasyonlu pakette TAM dosyaları da peşin indir: görünür hücrelerin
-            // yükseltmeleri ve önizleme cache'ten anında oynasın, alta kaydırınca beklenmesin.
-            if (pack.isAnimated) {
-                stickers.take(18).chunked(3).forEach { batch ->
-                    if (isDestroyed || isFinishing) return@launch
-                    val futures = batch.mapNotNull { sticker ->
-                        val url = sticker.url.takeIf { it.isNotBlank() } ?: return@mapNotNull null
-                        try {
-                            glide.asFile()
-                                .load(url)
-                                .priority(com.bumptech.glide.Priority.LOW)
-                                .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.DATA)
-                                .submit()
-                        } catch (_: Exception) { null }
-                    }
-                    futures.forEach { f ->
-                        try { f.get(15, java.util.concurrent.TimeUnit.SECONDS) } catch (_: Exception) {}
-                    }
                 }
             }
         }

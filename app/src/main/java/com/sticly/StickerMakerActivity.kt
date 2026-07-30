@@ -281,6 +281,12 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
             .build()
         photoEditor.setOnPhotoEditorListener(this)
 
+        // PhotoEditorView ships CENTER_INSIDE, which refuses to scale an image UP — anything
+        // smaller than the canvas (the crop is capped at MAX_EDIT_SIZE) was drawn tiny in the
+        // middle. FIT_CENTER makes the photo fill the canvas; the eraser reads the scale type
+        // back, so the two cannot drift apart again.
+        photoEditorView.source.scaleType = ImageView.ScaleType.FIT_CENTER
+
         // Deselect when tapping an EMPTY area of the canvas (the transparent margin around the
         // photo). onTouchSourceImage only covers taps ON the photo; this covers the rest. The
         // listener is only reached when no overlay/source consumed the touch, so the library's
@@ -334,26 +340,24 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
 
             if (viewWidth == 0f || viewHeight == 0f) return@setOnTouchListener false
 
-            // Direct coordinates — eraserOverlay and photoEditorView are same-size siblings
+            // Direct coordinates — eraserOverlay and photoEditorView are same-size siblings, and
+            // the pinch-zoom transform lives on the parent card, so Android has already mapped the
+            // event into this view's untransformed local space.
             val localX = event.x
             val localY = event.y
 
-            // Calculate FitCenter scale
-            val viewRatio = viewWidth / viewHeight
-            val bitmapRatio = bitmapWidth / bitmapHeight
-            val scale: Float
-            val offsetX: Float
-            val offsetY: Float
-
-            if (bitmapRatio > viewRatio) {
-                scale = viewWidth / bitmapWidth
-                offsetX = 0f
-                offsetY = (viewHeight - bitmapHeight * scale) / 2f
+            // Mirror the ImageView's OWN mapping. This used to hardcode FIT_CENTER, but
+            // PhotoEditorView sets the source to CENTER_INSIDE, which never scales an image UP.
+            // For any bitmap smaller than the canvas the real scale is 1.0 while this computed
+            // viewWidth/bitmapWidth (>1), so every erase landed away from the finger.
+            val fitScale = minOf(viewWidth / bitmapWidth, viewHeight / bitmapHeight)
+            val scale = if (imageView.scaleType == ImageView.ScaleType.CENTER_INSIDE) {
+                minOf(1f, fitScale)
             } else {
-                scale = viewHeight / bitmapHeight
-                offsetX = (viewWidth - bitmapWidth * scale) / 2f
-                offsetY = 0f
+                fitScale
             }
+            val offsetX = (viewWidth - bitmapWidth * scale) / 2f
+            val offsetY = (viewHeight - bitmapHeight * scale) / 2f
 
             // Transform touch coords to bitmap coords
             val touchX = (localX - offsetX) / scale
@@ -665,6 +669,7 @@ class StickerMakerActivity : AppCompatActivity(), OnPhotoEditorListener {
     private fun setEditorImage(bitmap: Bitmap) {
         try {
             currentBitmap = bitmap.copy(Bitmap.Config.ARGB_8888, true)
+            photoEditorView.source.scaleType = ImageView.ScaleType.FIT_CENTER
             photoEditorView.source.setImageBitmap(currentBitmap)
         } catch (e: Exception) {
             e.printStackTrace()

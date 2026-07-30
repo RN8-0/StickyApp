@@ -213,6 +213,10 @@ class RegionalAdapter(
 
             when {
                 urlToLoad.isNotEmpty() -> {
+                    StickerRepository.probeAnimated(context, pack) { id ->
+                        val idx = packs.indexOfFirst { it.id == id }
+                        if (idx >= 0) notifyItemChanged(idx)
+                    }
                     if (StickerRepository.looksAnimated(context, pack)) {
                         // Animasyonlu paket: önizleme oynasın; thumb anında, orijinal arkadan.
                         glide.load(urlToLoad)

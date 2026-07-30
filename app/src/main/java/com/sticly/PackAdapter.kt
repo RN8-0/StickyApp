@@ -541,6 +541,12 @@ class PackAdapter(
                 }
 
                 if (urlToLoad.isNotEmpty()) {
+                    // Nothing local can tell us yet on a fresh install; probe the server and
+                    // rebind this card if the pack turns out to animate.
+                    StickerRepository.probeAnimated(context, pack) { id ->
+                        val idx = items.indexOfFirst { it is Pack && it.id == id }
+                        if (idx >= 0) notifyItemChanged(idx)
+                    }
                     val req = if (StickerRepository.looksAnimated(context, pack)) {
                         // Animasyonlu paket kartı OYNAMALI (kullanıcı animated olduğunu görsün).
                         // Küçük resim (thumbnail zinciri) anında gelir; tam animasyon inince
